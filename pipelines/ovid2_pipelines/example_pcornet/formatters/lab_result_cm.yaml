@@ -1,0 +1,45 @@
+# Example PCORnet-native passthrough spec.
+v: 1
+formatter: lab_result_cm
+adapter: pcornet_passthrough
+input_file_name: "*Lab_Result_CM_*.txt"
+
+sources:
+  lab_result_cm:
+    glob: "*Lab_Result_CM_*.txt"
+    lowercase_columns: true
+
+projections:
+  ABN_IND: abn_ind
+  ENCOUNTERID: encounterid
+  LAB_LOINC: lab_loinc
+  LAB_LOINC_SOURCE: 'LM'
+  LAB_ORDER_DATE: lab_order_date
+  LAB_PX: lab_px
+  LAB_PX_TYPE: lab_px_type
+  LAB_RESULT_CM_ID: lab_result_cm_id
+  LAB_RESULT_SOURCE: 'OD'
+  NORM_MODIFIER_HIGH: norm_modifier_high
+  NORM_MODIFIER_LOW: norm_modifier_low
+  NORM_RANGE_HIGH: norm_range_high
+  NORM_RANGE_LOW: norm_range_low
+  PATID: patid
+  PRIORITY: priority
+  RAW_FACILITY_CODE: raw_facility_code
+  RAW_LAB_CODE: raw_lab_code
+  RAW_LAB_NAME: raw_lab_name
+  RAW_ORDER_DEPT: raw_order_dept
+  RAW_PANEL: raw_panel
+  RAW_RESULT: raw_result
+  RAW_UNIT: raw_unit
+  RESULT_DATE: result_date
+  RESULT_LOC: result_loc
+  RESULT_MODIFIER: result_modifier
+  RESULT_NUM: result_num
+  RESULT_QUAL: result_qual
+  RESULT_SNOMED: result_snomed
+  RESULT_TIME: result_time
+  RESULT_UNIT: result_unit
+  SPECIMEN_DATE: specimen_date
+  SPECIMEN_SOURCE: specimen_source
+  SPECIMEN_TIME: specimen_time

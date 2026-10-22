@@ -1,0 +1,29 @@
+v: 1
+name: pcornet_7_0.pat_relationship.relationship_type
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 PAT_RELATIONSHIP.RELATIONSHIP_TYPE code set.
+code_column: code
+description_column: label
+items:
+- code: '01'
+  label: 01=Birth mother-child
+  order: 13963
+- code: '02'
+  label: 02=Parent-child
+  order: 13964
+- code: '03'
+  label: 03 = Legal guardian - child
+  order: 13965
+- code: '04'
+  label: 04=Spouse or pipeline
+  order: 13966
+- code: '05'
+  label: 05=Sibling
+  order: 13967
+- code: '06'
+  label: 06= Grandparent-grandchild
+  order: 13968
+- code: '07'
+  label: 07=Other
+  order: 13969

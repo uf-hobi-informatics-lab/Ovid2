@@ -1,0 +1,64 @@
+name: Bug report
+description: Report a defect in Ovid2
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. **Do not include credentials, tokens, or real
+        patient data.** Reduce reproductions to synthetic, non-sensitive inputs.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and its impact.
+      placeholder: When I run `ovid2 etl ...`, the run fails at ...
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The exact command / config / minimal spec. Scrub secrets and hostnames.
+      placeholder: |
+        1. `ovid2 etl --local --pipeline demo ...`
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / traceback
+      description: Paste relevant output. Scrub hostnames, paths, and account identifiers.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      placeholder: e.g. 0.1.0 or a commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - CLI (ovid2 etl / tools / ...)
+        - Web control panel
+        - MCP server
+        - Scheduler
+        - Library / API
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: OS, Python version, engine (pyspark/snowpark), Docker vs --local.

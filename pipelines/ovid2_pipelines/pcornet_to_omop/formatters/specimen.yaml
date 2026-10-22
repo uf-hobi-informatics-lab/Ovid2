@@ -1,0 +1,7 @@
+# PCORnet LAB_RESULT_CM specimen fields -> OMOP specimen.
+# specimen_id = LAB_RESULT_CM_ID; specimen_concept_id from the static
+# specimen_to_specimen_concept_id_dict.
+v: 1
+formatter: specimen
+adapter: custom
+class: ovid2_pipelines.pcornet_to_omop.formatters_custom.specimen_formatter.SpecimenFormatter

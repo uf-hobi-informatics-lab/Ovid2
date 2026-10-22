@@ -1,0 +1,40 @@
+id: "4.01"
+name: DC 4.01
+part: part4
+edc_table: Table VA
+description: A table's record or patient count dropped to zero or decreased >5% vs the prior refresh
+operator: refresh_trend
+source_tables:
+  - DEMOGRAPHIC
+  - ENROLLMENT
+  - ENCOUNTER
+  - DIAGNOSIS
+  - PROCEDURES
+  - VITAL
+  - LAB_RESULT_CM
+  - PRESCRIBING
+  - DISPENSING
+  - DEATH
+  - CONDITION
+  - PRO_CM
+  - MED_ADMIN
+  - OBS_CLIN
+  - OBS_GEN
+  - IMMUNIZATION
+params: {}
+metrics:
+  - CURRENT_ROWS
+  - PRIOR_ROWS
+  - RECORD_DELTA_PCT
+exception_metrics:
+  - RECORD_DELTA_PCT
+thresholds:
+  decrease_pct_lt: -5.0
+enabled: true
+doc_summary: >-
+  DC 4.01 (Table VA): a table's record count did not drop to zero (having been
+  positive) or decrease more than 5% versus the previous data refresh.
+  Requires a prior-refresh input (--prev_input_address).
+doc_interpretation: >-
+  RECORD_DELTA_PCT below -5% or a drop to zero (EXCEPTION) means records
+  disappeared between refreshes (persistence failure).

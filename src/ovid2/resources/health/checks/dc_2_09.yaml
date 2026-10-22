@@ -1,0 +1,28 @@
+id: "2.09"
+name: DC 2.09
+part: part2
+edc_table: Table IB
+description: Fewer than 80% of patients with encounters also have DIAGNOSIS and VITAL data
+operator: patient_coverage
+source_tables:
+  - ENCOUNTER
+  - DIAGNOSIS
+  - VITAL
+params:
+  denominator_table: ENCOUNTER
+  related:
+    - DIAGNOSIS
+    - VITAL
+metrics:
+  - PATIENT_COVERAGE_PCT
+exception_metrics:
+  - PATIENT_COVERAGE_PCT
+thresholds:
+  coverage_pct_lt: 80.0
+enabled: true
+doc_summary: >-
+  DC 2.09 (Table IB): at least 80% of patients who have encounters also have
+  DIAGNOSIS and VITAL records (expected co-presence of core clinical data).
+doc_interpretation: >-
+  PATIENT_COVERAGE_PCT below 80% (EXCEPTION) means many patients with
+  encounters are missing diagnosis or vital records.

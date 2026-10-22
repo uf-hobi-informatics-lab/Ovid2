@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}{{ 'New warehouse' if mode == 'new' else 'Edit warehouse ' + name }} &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <p><a href="/warehouses">&larr; all warehouses</a></p>
+  <h1>
+    {% if mode == 'new' %}New warehouse
+    {% else %}Edit warehouse: <span class="mono">{{ name }}</span>{% endif %}
+  </h1>
+
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+  <p class="note">
+    Warehouses control <em>compute only</em> &mdash; the JVM heap, executor
+    count, Databricks cluster, or Snowflake warehouse. Application
+    logic (formatters, mappers, fixers) is identical regardless of the
+    warehouse you pick. Snowpark disables Spark-only capabilities
+    (broadcast hints, <code>input_file_name()</code>, pandas UDFs);
+    pipelines that depend on those must run under a Spark-family
+    warehouse.
+  </p>
+
+  <form method="get" action="/engines/new" class="edit-form" style="margin-bottom: 1em;">
+    {% if mode == 'new' %}
+      <div class="form-row">
+        <label for="type_selector">Warehouse type</label>
+        <select id="type_selector" name="type" onchange="this.form.submit()">
+          {% for t in all_types %}
+            <option value="{{ t }}" {% if type == t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+        <span class="small">Change the type to reveal the matching fields.</span>
+      </div>
+    {% endif %}
+  </form>
+
+  <form method="post"
+        action="{% if mode == 'new' %}/engines{% else %}/engines/{{ name }}{% endif %}"
+        class="edit-form">
+    {% if mode == 'new' %}
+      <div class="form-row">
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" required
+               pattern="[A-Za-z0-9._-]+"
+               placeholder="e.g. pyspark_prod, databricks_dev">
+      </div>
+    {% endif %}
+
+    <input type="hidden" name="type" value="{{ type }}">
+
+    <h2>Arguments</h2>
+    <table class="kv-table edit">
+      <thead><tr><th>Key</th><th>Value</th><th>Help</th></tr></thead>
+      <tbody>
+        {% for f in spec.args %}
+          <tr>
+            <td class="mono">{{ f.name }}{% if f.required %} <span class="danger">*</span>{% endif %}</td>
+            <td>
+              <input type="text" name="arg_{{ f.name }}"
+                     value="{{ args.get(f.name, '') }}"
+                     class="mono wide"
+                     {% if f.required %}required{% endif %}
+                     placeholder="{{ f.default or '' }}">
+            </td>
+            <td class="small">{{ f.help }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if spec.secrets %}
+      <h2>Secrets</h2>
+      <p class="note">
+        Values are written to <code>$XDG_CONFIG_HOME/ovid2/secrets.d/</code>
+        with mode <code>0600</code>. Leave a field at <code>***</code> to
+        preserve the existing value.
+      </p>
+      <table class="kv-table edit">
+        <thead><tr><th>Key</th><th>Value</th><th>Help</th></tr></thead>
+        <tbody>
+          {% for f in spec.secrets %}
+            <tr>
+              <td class="mono">{{ f.name }}{% if f.required %} <span class="danger">*</span>{% endif %}</td>
+              <td>
+                {% if f.multiline %}
+                  <textarea name="sec_{{ f.name }}"
+                            class="mono wide"
+                            rows="8"
+                            spellcheck="false"
+                            autocomplete="off"
+                            placeholder="{% if mode == 'edit' %}***{% else %}Paste the full contents here, or use the file picker below.{% endif %}">{{ secrets.get(f.name, '') }}</textarea>
+                  <div class="small">
+                    <label class="mono" style="cursor: pointer;">
+                      <input type="file"
+                             accept=".p8,.pem,.key,.json,text/plain,application/x-pem-file"
+                             onchange="(function(el){
+                               var f = el.files && el.files[0];
+                               if (!f) return;
+                               var r = new FileReader();
+                               r.onload = function(){
+                                 var ta = el.closest('td').querySelector('textarea');
+                                 if (ta) ta.value = r.result;
+                               };
+                               r.readAsText(f);
+                             })(this);">
+                      &hellip; or upload a file
+                    </label>
+                  </div>
+                {% else %}
+                  <input type="text" name="sec_{{ f.name }}"
+                         value="{{ secrets.get(f.name, '') }}"
+                         class="mono wide"
+                         placeholder="{{ '***' if mode == 'edit' else '' }}">
+                {% endif %}
+              </td>
+              <td class="small">{{ f.help }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+
+    <div class="form-row">
+      <button type="submit" class="button primary">Save</button>
+      {% if mode == 'edit' %}
+        <a href="/engines/{{ name }}" class="button">Cancel</a>
+      {% else %}
+        <a href="/warehouses" class="button">Cancel</a>
+      {% endif %}
+    </div>
+  </form>
+
+  {% if mode == 'edit' %}
+    <form method="post" action="/engines/{{ name }}/test" class="edit-form" style="margin-top: 1em;">
+      <p class="note">
+        Probe the on-disk configuration by launching
+        <code>ovid2 tools test-engine {{ name }}</code> in a subprocess.
+        The probe builds a session, runs <code>SELECT 1</code>, and
+        tears the session down. Unsaved edits above are <em>not</em>
+        tested &mdash; save first, then test.
+      </p>
+      <button type="submit" class="button">Test warehouse</button>
+    </form>
+  {% endif %}
+</section>
+{% endblock %}

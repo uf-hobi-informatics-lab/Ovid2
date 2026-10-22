@@ -1,0 +1,754 @@
+v: 1
+name: pcornet_7_0.demographic.pat_pref_language_spoken
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 DEMOGRAPHIC.PAT_PREF_LANGUAGE_SPOKEN code set.
+code_column: code
+description_column: label
+items:
+- code: AAR
+  label: AAR=Afar
+- code: ABK
+  label: ABK=Abkhazian
+- code: ACE
+  label: ACE=Achinese
+- code: ACH
+  label: ACH=Acoli
+- code: ADA
+  label: ADA=Adangme
+- code: ADY
+  label: ADY=Adyghe; Adygei
+- code: AFR
+  label: AFR=Afrikaans
+- code: AIN
+  label: AIN=Ainu
+- code: AKA
+  label: AKA=Akan
+- code: ALE
+  label: ALE=Aleut
+- code: ALT
+  label: ALT=Southern Altai
+- code: AMH
+  label: AMH=Amharic
+- code: ANP
+  label: ANP=Angika
+- code: ARA
+  label: ARA=Arabic
+- code: ARG
+  label: ARG=Aragonese
+- code: ARN
+  label: ARN=Mapudungun; Mapuche
+- code: ARP
+  label: ARP=Arapaho
+- code: ARW
+  label: ARW=Arawak
+- code: ASL
+  label: ASL=American Sign Language
+- code: ASM
+  label: ASM=Assamese
+- code: AST
+  label: AST=Asturian; Bable; Leonese; Asturleonese
+- code: AVA
+  label: AVA=Avaric
+- code: AWA
+  label: AWA=Awadhi
+- code: AYM
+  label: AYM=Aymara
+- code: AZE
+  label: AZE=Azerbaijani
+- code: BAK
+  label: BAK=Bashkir
+- code: BAL
+  label: BAL=Baluchi
+- code: BAM
+  label: BAM=Bambara
+- code: BAN
+  label: BAN=Balinese
+- code: BAS
+  label: BAS=Basa
+- code: BEJ
+  label: BEJ=Beja; Bedawiyet
+- code: BEL
+  label: BEL=Belarusian
+- code: BEM
+  label: BEM=Bemba
+- code: BEN
+  label: BEN=Bengali
+- code: BHO
+  label: BHO=Bhojpuri
+- code: BIK
+  label: BIK=Bikol
+- code: BIN
+  label: BIN=Bini; Edo
+- code: BIS
+  label: BIS=Bislama
+- code: BLA
+  label: BLA=Siksika
+- code: BOD
+  label: BOD=Tibetan
+- code: BOS
+  label: BOS=Bosnian
+- code: BRA
+  label: BRA=Braj
+- code: BRE
+  label: BRE=Breton
+- code: BUA
+  label: BUA=Buriat
+- code: BUG
+  label: BUG=Buginese
+- code: BUL
+  label: BUL=Bulgarian
+- code: BYN
+  label: BYN=Bilin; Blin
+- code: CAD
+  label: CAD=Caddo
+- code: CAR
+  label: CAR=Galibi Carib
+- code: CAT
+  label: CAT=Catalan; Valencian
+- code: CEB
+  label: CEB=Cebuano
+- code: CES
+  label: CES=Czech
+- code: CHA
+  label: CHA=Chamorro
+- code: CHE
+  label: CHE=Chechen
+- code: CHK
+  label: CHK=Chuukese
+- code: CHM
+  label: CHM=Mari
+- code: CHN
+  label: CHN=Chinook jargon
+- code: CHO
+  label: CHO=Choctaw
+- code: CHP
+  label: CHP=Chipewyan; Dene Suline
+- code: CHR
+  label: CHR=Cherokee
+- code: CHV
+  label: CHV=Chuvash
+- code: CHY
+  label: CHY=Cheyenne
+- code: CNR
+  label: CNR=Montenegrin
+- code: COR
+  label: COR=Cornish
+- code: COS
+  label: COS=Corsican
+- code: CRE
+  label: CRE=Cree
+- code: CRH
+  label: CRH=Crimean Tatar; Crimean Turkish
+- code: CSB
+  label: CSB=Kashubian
+- code: CYM
+  label: CYM=Welsh
+- code: DAK
+  label: DAK=Dakota
+- code: DAN
+  label: DAN=Danish
+- code: DAR
+  label: DAR=Dargwa
+- code: DEL
+  label: DEL=Delaware
+- code: DEN
+  label: DEN=Slave (Athapascan)
+- code: DEU
+  label: DEU=German
+- code: DGR
+  label: DGR=Dogrib
+- code: DIN
+  label: DIN=Dinka
+- code: DIV
+  label: DIV=Dhivehi; Dhivehi; Maldivian
+- code: DOI
+  label: DOI=Dogri
+- code: DSB
+  label: DSB=Lower Sorbian
+- code: DUA
+  label: DUA=Duala
+- code: DYU
+  label: DYU=Dyula
+- code: DZO
+  label: DZO=Dzongkha
+- code: EFI
+  label: EFI=Efik
+- code: EKA
+  label: EKA=Ekajuk
+- code: ELL
+  label: ELL=Modern Greek (1453–)
+- code: ENG
+  label: ENG=English
+- code: EST
+  label: EST=Estonian
+- code: EUS
+  label: EUS=Basque
+- code: EWE
+  label: EWE=Ewe
+- code: EWO
+  label: EWO=Ewondo
+- code: FAN
+  label: FAN=Fang
+- code: FAO
+  label: FAO=Faroese
+- code: FAS
+  label: FAS=Persian
+- code: FAT
+  label: FAT=Fanti
+- code: FIJ
+  label: FIJ=Fijian
+- code: FIL
+  label: FIL=Filipino; Pilipino
+- code: FIN
+  label: FIN=Finnish
+- code: FON
+  label: FON=Fon
+- code: FRA
+  label: FRA=French
+- code: FRR
+  label: FRR=Northern Frisian
+- code: FRS
+  label: FRS=Eastern Frisian
+- code: FRY
+  label: FRY=Western Frisian
+- code: FUL
+  label: FUL=Fulah
+- code: FUR
+  label: FUR=Friulian
+- code: GAA
+  label: GAA=Ga
+- code: GAY
+  label: GAY=Gayo
+- code: GBA
+  label: GBA=Gbaya
+- code: GIL
+  label: GIL=Gilbertese
+- code: GLA
+  label: GLA=Gaelic; Scottish Gaelic
+- code: GLE
+  label: GLE=Irish
+- code: GLG
+  label: GLG=Galician
+- code: GLV
+  label: GLV=Manx
+- code: GON
+  label: GON=Gondi
+- code: GOR
+  label: GOR=Gorontalo
+- code: GRB
+  label: GRB=Grebo
+- code: GRN
+  label: GRN=Guarani
+- code: GSW
+  label: GSW=Swiss German; Alemannic; Alsatian
+- code: GUJ
+  label: GUJ=Gujarati
+- code: GWI
+  label: GWI=Gwich'in
+- code: HAI
+  label: HAI=Haida
+- code: HAT
+  label: HAT=Haitian; Haitian Creole
+- code: HAU
+  label: HAU=Hausa
+- code: HAW
+  label: HAW=Hawaiian
+- code: HEB
+  label: HEB=Hebrew
+- code: HER
+  label: HER=Herero
+- code: HIL
+  label: HIL=Hiligaynon
+- code: HIN
+  label: HIN=Hindi
+- code: HMN
+  label: HMN=Hmong; Mong
+- code: HMO
+  label: HMO=Hiri Motu
+- code: HRV
+  label: HRV=Croatian
+- code: HSB
+  label: HSB=Upper Sorbian
+- code: HUN
+  label: HUN=Hungarian
+- code: HUP
+  label: HUP=Hupa
+- code: HYE
+  label: HYE=Armenian
+- code: IBA
+  label: IBA=Iban
+- code: IBO
+  label: IBO=Igbo
+- code: III
+  label: III=Sichuan Yi; Nuosu
+- code: IKU
+  label: IKU=Inuktitut
+- code: ILO
+  label: ILO=Iloko
+- code: IND
+  label: IND=Indonesian
+- code: INH
+  label: INH=Ingush
+- code: IPK
+  label: IPK=Inupiaq
+- code: ISL
+  label: ISL=Icelandic
+- code: ITA
+  label: ITA=Italian
+- code: JAV
+  label: JAV=Javanese
+- code: JPN
+  label: JPN=Japanese
+- code: JPR
+  label: JPR=Judeo-Persian
+- code: JRB
+  label: JRB=Judeo-Arabic
+- code: KAA
+  label: KAA=Kara-Kalpak
+- code: KAB
+  label: KAB=Kabyle
+- code: KAC
+  label: KAC=Kachin; Jingpho
+- code: KAL
+  label: KAL=Kalaallisut; Greenlandic
+- code: KAM
+  label: KAM=Kamba
+- code: KAN
+  label: KAN=Kannada
+- code: KAS
+  label: KAS=Kashmiri
+- code: KAT
+  label: KAT=Georgian
+- code: KAU
+  label: KAU=Kanuri
+- code: KAZ
+  label: KAZ=Kazakh
+- code: KBD
+  label: KBD=Kabardian
+- code: KHA
+  label: KHA=Khasi
+- code: KHM
+  label: KHM=Central Khmer
+- code: KIK
+  label: KIK=Kikuyu; Gikuyu
+- code: KIN
+  label: KIN=Kinyarwanda
+- code: KIR
+  label: KIR=Kirghiz; Kyrgyz
+- code: KMB
+  label: KMB=Kimbundu
+- code: KOK
+  label: KOK=Konkani
+- code: KOM
+  label: KOM=Komi
+- code: KON
+  label: KON=Kongo
+- code: KOR
+  label: KOR=Korean
+- code: KOS
+  label: KOS=Kosraean
+- code: KPE
+  label: KPE=Kpelle
+- code: KRC
+  label: KRC=Karachay-Balkar
+- code: KRL
+  label: KRL=Karelian
+- code: KRU
+  label: KRU=Kurukh
+- code: KUA
+  label: KUA=Kuanyama; Kwanyama
+- code: KUM
+  label: KUM=Kumyk
+- code: KUR
+  label: KUR=Kurdish
+- code: KUT
+  label: KUT=Kutenai
+- code: LAD
+  label: LAD=Ladino
+- code: LAH
+  label: LAH=Lahnda
+- code: LAM
+  label: LAM=Lamba
+- code: LAO
+  label: LAO=Lao
+- code: LAV
+  label: LAV=Latvian
+- code: LEZ
+  label: LEZ=Lezghian
+- code: LIM
+  label: LIM=Limburgan; Limburger; Limburgish
+- code: LIN
+  label: LIN=Lingala
+- code: LIT
+  label: LIT=Lithuanian
+- code: LOL
+  label: LOL=Mongo
+- code: LOZ
+  label: LOZ=Lozi
+- code: LTZ
+  label: LTZ=Luxembourgish; Letzeburgesch
+- code: LUA
+  label: LUA=Luba-Lulua
+- code: LUB
+  label: LUB=Luba-Katanga
+- code: LUG
+  label: LUG=Ganda
+- code: LUI
+  label: LUI=Luiseno
+- code: LUN
+  label: LUN=Lunda
+- code: LUO
+  label: LUO=Luo (Kenya and Tanzania)
+- code: LUS
+  label: LUS=Lushai
+- code: MAD
+  label: MAD=Madurese
+- code: MAG
+  label: MAG=Magahi
+- code: MAH
+  label: MAH=Marshallese
+- code: MAI
+  label: MAI=Maithili
+- code: MAK
+  label: MAK=Makasar
+- code: MAL
+  label: MAL=Malayalam
+- code: MAN
+  label: MAN=Mandingo
+- code: MAR
+  label: MAR=Marathi
+- code: MAS
+  label: MAS=Masai
+- code: MDF
+  label: MDF=Moksha
+- code: MDR
+  label: MDR=Mandar
+- code: MEN
+  label: MEN=Mende
+- code: MIC
+  label: MIC=Mi'kmaq; Micmac
+- code: MIN
+  label: MIN=Minangkabau
+- code: MKD
+  label: MKD=Macedonian
+- code: MLG
+  label: MLG=Malagasy
+- code: MLT
+  label: MLT=Maltese
+- code: MNC
+  label: MNC=Manchu
+- code: MNI
+  label: MNI=Manipuri
+- code: MOH
+  label: MOH=Mohawk
+- code: MON
+  label: MON=Mongolian
+- code: MOS
+  label: MOS=Mossi
+- code: MRI
+  label: MRI=Maori
+- code: MSA
+  label: MSA=Malay
+- code: MUS
+  label: MUS=Creek
+- code: MWL
+  label: MWL=Mirandese
+- code: MWR
+  label: MWR=Marwari
+- code: MYA
+  label: MYA=Burmese
+- code: MYV
+  label: MYV=Erzya
+- code: NAP
+  label: NAP=Neapolitan
+- code: NAU
+  label: NAU=Nauru
+- code: NAV
+  label: NAV=Navajo; Navaho
+- code: NBL
+  label: NBL=South Ndebele
+- code: NDE
+  label: NDE=North Ndebele
+- code: NDO
+  label: NDO=Ndonga
+- code: NDS
+  label: NDS=Low German; Low Saxon
+- code: NEP
+  label: NEP=Nepali
+- code: NEW
+  label: NEW=Nepal Bhasa; Newari
+- code: NIA
+  label: NIA=Nias
+- code: NIU
+  label: NIU=Niuean
+- code: NLD
+  label: NLD=Dutch; Flemish
+- code: NNO
+  label: NNO=Norwegian Nynorsk
+- code: NOB
+  label: NOB=Norwegian Bokmål
+- code: NOG
+  label: NOG=Nogai
+- code: NOR
+  label: NOR=Norwegian
+- code: NQO
+  label: NQO=N'Ko
+- code: NSO
+  label: NSO=Pedi; Sepedi; Northern Sotho
+- code: NYA
+  label: NYA=Chichewa; Chewa; Nyanja
+- code: NYM
+  label: NYM=Nyamwezi
+- code: NYN
+  label: NYN=Nyankole
+- code: NYO
+  label: NYO=Nyoro
+- code: NZI
+  label: NZI=Nzima
+- code: OCI
+  label: OCI=Occitan (post 1500)
+- code: OJI
+  label: OJI=Ojibwa
+- code: ORI
+  label: ORI=Oriya
+- code: ORM
+  label: ORM=Oromo
+- code: OSA
+  label: OSA=Osage
+- code: OSS
+  label: OSS=Ossetian; Ossetic
+- code: PAG
+  label: PAG=Pangasinan
+- code: PAM
+  label: PAM=Pampanga; Kapampangan
+- code: PAN
+  label: PAN=Panjabi; Punjabi
+- code: PAP
+  label: PAP=Papiamento
+- code: PAU
+  label: PAU=Palauan
+- code: POL
+  label: POL=Polish
+- code: PON
+  label: PON=Pohnpeian
+- code: POR
+  label: POR=Portuguese
+- code: PR
+  label: PR=Patient Refused
+- code: PUS
+  label: PUS=Pushto; Pashto
+- code: QUE
+  label: QUE=Quechua
+- code: RAJ
+  label: RAJ=Rajasthani
+- code: RAP
+  label: RAP=Rapanui
+- code: RAR
+  label: RAR=Rarotongan; Cook Islands Maori
+- code: ROH
+  label: ROH=Romansh
+- code: ROM
+  label: ROM=Romany
+- code: RON
+  label: RON=Romanian; Moldavian; Moldovan
+- code: RUN
+  label: RUN=Rundi
+- code: RUP
+  label: RUP=Aromanian; Arumanian; Macedo-Romanian
+- code: RUS
+  label: RUS=Russian
+- code: SAD
+  label: SAD=Sandawe
+- code: SAG
+  label: SAG=Sango
+- code: SAH
+  label: SAH=Yakut
+- code: SAS
+  label: SAS=Sasak
+- code: SAT
+  label: SAT=Santali
+- code: SCN
+  label: SCN=Sicilian
+- code: SCO
+  label: SCO=Scots
+- code: SEL
+  label: SEL=Selkup
+- code: SHN
+  label: SHN=Shan
+- code: SID
+  label: SID=Sidamo
+- code: SIN
+  label: SIN=Sinhala; Sinhalese
+- code: SLK
+  label: SLK=Slovak
+- code: SLV
+  label: SLV=Slovenian
+- code: SMA
+  label: SMA=Southern Sami
+- code: SME
+  label: SME=Northern Sami
+- code: SMJ
+  label: SMJ=Lule Sami
+- code: SMN
+  label: SMN=Inari Sami
+- code: SMO
+  label: SMO=Samoan
+- code: SMS
+  label: SMS=Skolt Sami
+- code: SNA
+  label: SNA=Shona
+- code: SND
+  label: SND=Sindhi
+- code: SNK
+  label: SNK=Soninke
+- code: SOM
+  label: SOM=Somali
+- code: SOT
+  label: SOT=Southern Sotho
+- code: SPA
+  label: SPA=Spanish; Castilian
+- code: SQI
+  label: SQI=Albanian
+- code: SRD
+  label: SRD=Sardinian
+- code: SRN
+  label: SRN=Sranan Tongo
+- code: SRP
+  label: SRP=Serbian
+- code: SRR
+  label: SRR=Serer
+- code: SSW
+  label: SSW=Swati
+- code: SUK
+  label: SUK=Sukuma
+- code: SUN
+  label: SUN=Sundanese
+- code: SUS
+  label: SUS=Susu
+- code: SWA
+  label: SWA=Swahili
+- code: SWE
+  label: SWE=Swedish
+- code: SYR
+  label: SYR=Syriac
+- code: TAH
+  label: TAH=Tahitian
+- code: TAM
+  label: TAM=Tamil
+- code: TAT
+  label: TAT=Tatar
+- code: TEL
+  label: TEL=Telugu
+- code: TEM
+  label: TEM=Timne
+- code: TER
+  label: TER=Tereno
+- code: TET
+  label: TET=Tetum
+- code: TGK
+  label: TGK=Tajik
+- code: TGL
+  label: TGL=Tagalog
+- code: THA
+  label: THA=Thai
+- code: TIG
+  label: TIG=Tigre
+- code: TIR
+  label: TIR=Tigrinya
+- code: TIV
+  label: TIV=Tiv
+- code: TKL
+  label: TKL=Tokelau
+- code: TLI
+  label: TLI=Tlingit
+- code: TMH
+  label: TMH=Tamashek
+- code: TOG
+  label: TOG=Tonga (Nyasa)
+- code: TON
+  label: TON=Tonga (Tonga Islands)
+- code: TPI
+  label: TPI=Tok Pisin
+- code: TSI
+  label: TSI=Tsimshian
+- code: TSN
+  label: TSN=Tswana
+- code: TSO
+  label: TSO=Tsonga
+- code: TUK
+  label: TUK=Turkmen
+- code: TUM
+  label: TUM=Tumbuka
+- code: TUR
+  label: TUR=Turkish
+- code: TVL
+  label: TVL=Tuvalua
+- code: TWI
+  label: TWI=Twi
+- code: TYV
+  label: TYV=Tuvinian
+- code: UDM
+  label: UDM=Udmurt
+- code: UIG
+  label: UIG=Uighur; Uyghur
+- code: UKR
+  label: UKR=Ukrainian
+- code: UMB
+  label: UMB=Umbundu
+- code: URD
+  label: URD=Urdu
+- code: UZB
+  label: UZB=Uzbek
+- code: VAI
+  label: VAI=Vai
+- code: VEN
+  label: VEN=Venda
+- code: VIE
+  label: VIE=Vietnamese
+- code: VOT
+  label: VOT=Votic
+- code: WAL
+  label: WAL=Wolaitta; Wolaytta
+- code: WAR
+  label: WAR=Waray
+- code: WAS
+  label: WAS=Washo
+- code: WLN
+  label: WLN=Walloon
+- code: WOL
+  label: WOL=Wolof
+- code: XAL
+  label: XAL=Kalmyk; Oirat
+- code: XHO
+  label: XHO=Xhosa
+- code: YAO
+  label: YAO=Yao
+- code: YAP
+  label: YAP=Yapese
+- code: YID
+  label: YID=Yiddish
+- code: YOR
+  label: YOR=Yoruba
+- code: ZAP
+  label: ZAP=Zapotec
+- code: ZEN
+  label: ZEN=Zenaga
+- code: ZGH
+  label: ZGH=Standard Moroccan Tamazight
+- code: ZHA
+  label: ZHA=Zhuang; Chuang
+- code: ZHO
+  label: ZHO=Chinese
+- code: ZUL
+  label: ZUL=Zulu
+- code: ZUN
+  label: ZUN=Zuni
+- code: ZZA
+  label: ZZA=Zaza; Dimili; Dimli; Kirdki; Kirmanjki; Zazaki
+- code: NI
+  label: NI=No information
+- code: UN
+  label: UN=Unknown
+- code: OT
+  label: OT=Other

@@ -1,0 +1,29 @@
+id: "3.02"
+name: DC 3.02
+part: part3
+edc_table: Table IVB
+description: Too few procedure records with a known type per encounter
+operator: records_per_encounter
+source_tables:
+  - ENCOUNTER
+  - PROCEDURES
+params:
+  child_table: PROCEDURES
+  type_column: PX_TYPE
+  min_per_type:
+    AV: 0.75
+    ED: 0.75
+    EI: 1.0
+    IP: 1.0
+metrics:
+  - RECORDS_PER_ENCOUNTER
+exception_metrics:
+  - RECORDS_PER_ENCOUNTER
+thresholds: {}
+enabled: true
+doc_summary: >-
+  DC 3.02 (Table IVB): sufficient PROCEDURES records with a known PX_TYPE per
+  encounter (AV/ED at least 0.75; EI/IP at least 1.0).
+doc_interpretation: >-
+  RECORDS_PER_ENCOUNTER below the per-type minimum (EXCEPTION) means procedure
+  capture is low for that encounter type.

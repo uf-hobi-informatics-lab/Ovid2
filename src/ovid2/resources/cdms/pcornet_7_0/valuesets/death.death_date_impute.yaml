@@ -1,0 +1,29 @@
+v: 1
+name: pcornet_7_0.death.death_date_impute
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 DEATH.DEATH_DATE_IMPUTE code set.
+code_column: code
+description_column: label
+items:
+- code: B
+  label: B=Both month and day imputed
+  order: 7156
+- code: D
+  label: D=Day imputed
+  order: 7157
+- code: M
+  label: M=Month imputed
+  order: 7158
+- code: N
+  label: N=Not imputed
+  order: 7159
+- code: NI
+  label: NI=No information
+  order: 7160
+- code: UN
+  label: UN=Unknown
+  order: 7161
+- code: OT
+  label: OT=Other
+  order: 7162

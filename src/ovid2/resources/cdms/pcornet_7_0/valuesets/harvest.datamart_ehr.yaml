@@ -1,0 +1,23 @@
+v: 1
+name: pcornet_7_0.harvest.datamart_ehr
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 HARVEST.DATAMART_EHR code set.
+code_column: code
+description_column: label
+items:
+- code: '01'
+  label: 01=Not present
+  order: 12847
+- code: '02'
+  label: 02=Present
+  order: 12848
+- code: NI
+  label: NI=No information
+  order: 12849
+- code: UN
+  label: UN=Unknown
+  order: 12850
+- code: OT
+  label: OT=Other
+  order: 12851

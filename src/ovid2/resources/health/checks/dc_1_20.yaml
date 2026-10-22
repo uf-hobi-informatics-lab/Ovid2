@@ -1,0 +1,43 @@
+id: "1.20"
+name: DC 1.20
+part: part1
+edc_table: Table IIG
+description: More than 5% of LOINC records are LOINC panel codes
+operator: panel_loinc_rate
+source_tables:
+  - LAB_RESULT_CM
+  - OBS_CLIN
+  - PRO_CM
+na_when_empty:
+  - LAB_RESULT_CM
+  - OBS_GEN
+  - OBS_CLIN
+params:
+  loinc_column: LAB_LOINC
+  # Curated panel-LOINC reference (subset). The authoritative PCORnet package
+  # ships the full LOINC panel list; extend this list from that reference.
+  panel_loincs:
+    - "24323-8"
+    - "24356-8"
+    - "24357-6"
+    - "24362-6"
+    - "57021-8"
+    - "57782-5"
+    - "58410-2"
+    - "24320-4"
+    - "24321-2"
+    - "24322-0"
+metrics:
+  - LOINC_ROWS
+  - PANEL_LOINC_PCT
+exception_metrics:
+  - PANEL_LOINC_PCT
+thresholds:
+  panel_pct_gt: 5.0
+enabled: true
+doc_summary: >-
+  DC 1.20 (Table IIG): fewer than 5% of LOINC-coded records use a LOINC
+  panel/order code (panels do not carry individual results).
+doc_interpretation: >-
+  PANEL_LOINC_PCT above 5% (EXCEPTION) means panel-order LOINCs are common in
+  a results table and should be split into component results.

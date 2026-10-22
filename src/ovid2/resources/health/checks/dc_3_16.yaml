@@ -1,0 +1,26 @@
+id: "3.16"
+name: DC 3.16
+part: part3
+edc_table: Table IVI
+description: Fewer than 80% of OBS_CLIN results map to a known code and carry a known result
+operator: known_value_coverage
+source_tables:
+  - OBS_CLIN
+na_when_empty:
+  - OBS_CLIN
+params:
+  coverage:
+    - {table: OBS_CLIN, column: OBSCLIN_CODE, require_also: [OBSCLIN_RESULT_QUAL]}
+metrics:
+  - COVERAGE_PCT
+exception_metrics:
+  - COVERAGE_PCT
+thresholds:
+  coverage_pct_lt: 80.0
+enabled: true
+doc_summary: >-
+  DC 3.16 (Table IVI): at least 80% of OBS_CLIN records map to a known
+  OBSCLIN_CODE and carry a known result.
+doc_interpretation: >-
+  COVERAGE_PCT below 80% (EXCEPTION) means clinical observations frequently
+  lack a code or a result value.

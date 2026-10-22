@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Pipeline {{ pipeline.name }} &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <p><a href="/pipeline-packages">&larr; all pipelines</a></p>
+  <h1>Pipeline: {{ pipeline.name }}</h1>
+  <p class="mono small">{{ pipeline.path }}</p>
+
+  {% if pipeline_config %}
+    <section class="card" style="margin-bottom: 1rem;">
+      <h2>Pipeline definition
+        <a href="/pipelines/{{ pipeline_config.name }}" class="button small">edit definition &rarr;</a>
+      </h2>
+      <table class="kv-table">
+        <tbody>
+          <tr><th>Kind</th><td class="mono small">{{ pipeline_config.kind }}</td></tr>
+          {% if pipeline_config.cdm %}<tr><th>CDM</th><td class="mono small">{{ pipeline_config.cdm }}</td></tr>{% endif %}
+          <tr><th>Input</th><td class="mono small">{{ pipeline_config.input_address }}</td></tr>
+          <tr><th>Output</th><td class="mono small">{{ pipeline_config.output_address }}</td></tr>
+          <tr><th>Trigger</th><td class="mono small">{{ pipeline_config.trigger_type }}</td></tr>
+          <tr><th>Enabled</th><td class="mono small">{{ pipeline_config.enabled }}</td></tr>
+        </tbody>
+      </table>
+    </section>
+  {% else %}
+    <p class="note">
+      No runnable pipeline definition yet.
+      <a href="/pipelines/new">Create one &rarr;</a>
+      to wire input / output storage and a warehouse.
+    </p>
+  {% endif %}
+
+  <div class="grid two-col">
+    <section class="card">
+      <h2>pipeline_settings.py</h2>
+      {% if pipeline.settings %}
+        <table class="kv-table">
+          <tbody>
+            {% for key, value in pipeline.settings.items() %}
+              <tr><th class="mono">{{ key }}</th><td class="mono small">{{ value }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="empty">No settings module found.</p>
+      {% endif %}
+      {% if pipeline.pipeline_settings_file %}
+        <p class="more">
+          <a href="/pipeline-packages/{{ pipeline.name }}/file?relative_path=pipeline_settings.py">view file &rarr;</a>
+          <span class="small mono">({{ pipeline.pipeline_settings_file.line_count }} lines)</span>
+        </p>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h2>Python sources</h2>
+      <ul class="check-list compact">
+        {% for src in [pipeline.dictionaries_file, pipeline.fixer_configs_file] if src %}
+          <li>
+            <span class="check-name mono">{{ src.name }}</span>
+            <span class="check-message">
+              <a href="/pipeline-packages/{{ pipeline.name }}/file?relative_path={{ src.name }}">view</a>
+              <span class="small mono">({{ src.line_count }} lines, {{ src.size_bytes }} B, mtime {{ src.mtime | localtime }})</span>
+            </span>
+          </li>
+        {% endfor %}
+      </ul>
+      <p class="note">
+        Python sources are read-only in the UI. Edit on disk (git) or via
+        pull request — the "configuration as data" rule in AGENTS.md
+        preserves the audit trail.
+      </p>
+    </section>
+  </div>
+
+  <section class="card" style="margin-top: 1rem;">
+    <h2>Formatters
+      <a href="/pipeline-packages/{{ pipeline.name }}/formatters/new"
+         class="button primary small">+ New</a>
+      <button type="button"
+              class="secondary small"
+              hx-post="/pipeline-packages/{{ pipeline.name }}/formatters/validate"
+              hx-target="#formatter-validation"
+              hx-swap="innerHTML">
+        Validate all
+      </button>
+    </h2>
+    <div id="formatter-validation"></div>
+    {% if pipeline.formatters %}
+      <table class="runs-table">
+        <thead>
+          <tr><th>Table</th><th>Kind</th><th class="num">Lines</th><th class="num">Bytes</th><th>Modified</th></tr>
+        </thead>
+        <tbody>
+          {% for f in pipeline.formatters %}
+            <tr>
+              <td>
+                <a href="/pipeline-packages/{{ pipeline.name }}/formatters/{{ f.name.rsplit('.', 1)[0] }}">
+                  {{ f.name.rsplit('.', 1)[0] }}
+                </a>
+              </td>
+              <td class="mono small">{{ f.name.rsplit('.', 1)[1] }}</td>
+              <td class="num">{{ f.line_count }}</td>
+              <td class="num">{{ f.size_bytes }}</td>
+              <td class="small">{{ f.mtime | localtime }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="empty">No formatter specs in <code>formatters/</code>.</p>
+    {% endif %}
+  </section>
+
+  <section class="card" style="margin-top: 1rem;">
+    <h2>Mappers
+      <a href="/pipeline-packages/{{ pipeline.name }}/mappers/new"
+         class="button primary small">+ New</a>
+      <button type="button"
+              class="secondary small"
+              hx-post="/pipeline-packages/{{ pipeline.name }}/mappers/validate"
+              hx-target="#mapper-validation"
+              hx-swap="innerHTML">
+        Validate all
+      </button>
+    </h2>
+    <div id="mapper-validation"></div>
+    {% if pipeline.mappers %}
+      <table class="runs-table">
+        <thead>
+          <tr><th>Table</th><th>Kind</th><th class="num">Lines</th><th class="num">Bytes</th><th>Modified</th></tr>
+        </thead>
+        <tbody>
+          {% for m in pipeline.mappers %}
+            <tr>
+              <td>
+                <a href="/pipeline-packages/{{ pipeline.name }}/mappers/{{ m.name.rsplit('.', 1)[0] }}">
+                  {{ m.name.rsplit('.', 1)[0] }}
+                </a>
+              </td>
+              <td class="mono small">{{ m.name.rsplit('.', 1)[1] }}</td>
+              <td class="num">{{ m.line_count }}</td>
+              <td class="num">{{ m.size_bytes }}</td>
+              <td class="small">{{ m.mtime | localtime }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="empty">
+        No mapper specs in <code>mappers/</code>. Pipeline falls back to
+        the legacy class-based mapper (<code>{{ pipeline.settings.get('mappers_type', '?') }}</code>).
+      </p>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

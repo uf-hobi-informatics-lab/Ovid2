@@ -1,0 +1,18 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://ovid2.dev/schemas/dictionaries.v1.json",
+    "title": "Ovid2 pipeline dictionaries — documented convention",
+    "description": "Documents the naming convention for per-pipeline value-mapping dictionaries. NOT enforced at runtime (dictionaries live in Python modules where any dict[str, str] name is legal). Used by tooling (`ovid2 pipeline validate`) and by contract tests that opt in.",
+    "type": "object",
+    "additionalProperties": false,
+    "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*_[a-z][a-z0-9_]*_dict$",
+        "description": "Naming convention: `<table>_<column>_dict` — both segments snake_case."
+    },
+    "additionalProperties": {
+        "type": "object",
+        "description": "Source-value → CDM-code mapping. All keys and values are strings.",
+        "additionalProperties": {"type": "string"}
+    },
+    "$comment": "Example: `demographic_race_dict = {'01': '01', 'Asian': '02', ...}`. Applied via the `translate_by_dict` map op with `dict: demographic_race_dict`."
+}

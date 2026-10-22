@@ -1,0 +1,58 @@
+v: 1
+name: note
+composite_key:
+- note_id
+domain_description: OMOP CDM 5.3 clinical data table.
+domain_order: 15
+fields:
+- name: note_id
+  rdbms_type: RDBMS Number
+  order: 1
+- name: person_id
+  rdbms_type: RDBMS Number
+  order: 2
+- name: note_date
+  rdbms_type: RDBMS Date
+  order: 3
+- name: note_datetime
+  rdbms_type: RDBMS Text(50)
+  order: 4
+- name: note_type_concept_id
+  rdbms_type: RDBMS Number
+  order: 5
+- name: note_class_concept_id
+  rdbms_type: RDBMS Number
+  order: 6
+- name: note_title
+  rdbms_type: RDBMS Text(250)
+  order: 7
+- name: note_text
+  rdbms_type: RDBMS Text(250)
+  order: 8
+- name: encoding_concept_id
+  rdbms_type: RDBMS Number
+  order: 9
+- name: language_concept_id
+  rdbms_type: RDBMS Number
+  order: 10
+- name: provider_id
+  rdbms_type: RDBMS Number
+  order: 11
+- name: visit_occurrence_id
+  rdbms_type: RDBMS Number
+  order: 12
+- name: visit_detail_id
+  rdbms_type: RDBMS Number
+  order: 13
+- name: note_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 14
+- name: updated
+  rdbms_type: RDBMS Text(50)
+  order: 15
+- name: source
+  rdbms_type: RDBMS Text(10)
+  order: 16
+- name: mapped_from
+  rdbms_type: RDBMS Text(50)
+  order: 17

@@ -1,0 +1,36 @@
+id: "2.01"
+name: DC 2.01
+part: part2
+edc_table: Table IIIA
+description: More than 5% of a table's dates are in the future
+operator: future_date
+source_tables:
+  - ENCOUNTER
+  - DIAGNOSIS
+  - PROCEDURES
+  - VITAL
+  - LAB_RESULT_CM
+  - PRESCRIBING
+  - DISPENSING
+  - DEATH
+  - PRO_CM
+  - MED_ADMIN
+  - OBS_CLIN
+  - OBS_GEN
+  - IMMUNIZATION
+params: {}
+metrics:
+  - TOTAL_ROWS
+  - FUTURE_DATE_ROWS
+  - FUTURE_DATE_PCT
+exception_metrics:
+  - FUTURE_DATE_PCT
+thresholds:
+  future_date_pct_gt: 5.0
+enabled: true
+doc_summary: >-
+  DC 2.01 (Table IIIA): the share of rows carrying a date later than the
+  report/refresh date must not exceed 5%.
+doc_interpretation: >-
+  FUTURE_DATE_PCT above 5% (EXCEPTION) means future-dated records are common
+  enough to signal a systematic date error.

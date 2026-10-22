@@ -1,0 +1,41 @@
+v: 1
+name: pcornet_7_0.demographic.gender_identity
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 DEMOGRAPHIC.GENDER_IDENTITY code set.
+code_column: code
+description_column: label
+items:
+- code: M
+  label: M=Man
+  order: 21
+- code: F
+  label: F=Woman
+  order: 22
+- code: TM
+  label: TM=Transgender male/Trans man/Female-to-male
+  order: 23
+- code: TF
+  label: TF=Transgender female/Trans woman/Male-to-female
+  order: 24
+- code: GQ
+  label: GQ=Genderqueer/Non-Binary
+  order: 25
+- code: SE
+  label: SE=Something else
+  order: 26
+- code: MU
+  label: MU=Multiple gender categories
+  order: 27
+- code: DC
+  label: DC=Decline to answer
+  order: 28
+- code: NI
+  label: NI=No information
+  order: 29
+- code: UN
+  label: UN=Unknown
+  order: 30
+- code: OT
+  label: OT=Other
+  order: 31

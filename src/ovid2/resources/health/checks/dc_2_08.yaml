@@ -1,0 +1,57 @@
+id: "2.08"
+name: DC 2.08
+part: part2
+edc_table: Table IIIG
+description: A monthly record-volume series has an outlier month (7+ SDs below the 12-month benchmark or zero)
+operator: monthly_volume_zscore
+source_tables:
+  - ENCOUNTER
+  - DIAGNOSIS
+  - PROCEDURES
+  - VITAL
+  - PRESCRIBING
+  - LAB_RESULT_CM
+  - MED_ADMIN
+  - PRO_CM
+params:
+  nback: 12
+  nsd: -7.0
+  lag_avg_floor: 500.0
+  excluded_months:
+    - "2020-03"
+    - "2020-04"
+  enc_type_tables:
+    - ENCOUNTER
+    - DIAGNOSIS
+    - PROCEDURES
+  enc_types:
+    - AV
+    - ED
+    - IP
+    - EI
+    - TH
+  date_columns:
+    ENCOUNTER: ADMIT_DATE
+    DIAGNOSIS: ADMIT_DATE
+    PROCEDURES: ADMIT_DATE
+    VITAL: MEASURE_DATE
+    PRESCRIBING: RX_ORDER_DATE
+    LAB_RESULT_CM: RESULT_DATE
+    MED_ADMIN: MEDADMIN_START_DATE
+    PRO_CM: PRO_DATE
+metrics:
+  - MONTHLY_VOLUME_OUTLIER
+exception_metrics:
+  - MONTHLY_VOLUME_OUTLIER
+thresholds:
+  nsd: -7.0
+enabled: true
+doc_summary: >-
+  DC 2.08 (Table IIIG): monthly record volumes are stable. For each table (and
+  each ENC_TYPE in AV/ED/IP/EI/TH for ENCOUNTER/DIAGNOSIS/PROCEDURES), a month
+  is an outlier when its count is zero or falls 7+ standard deviations below the
+  lagged 12-month moving average. Months with a benchmark under 500 records, the
+  earliest/most-recent months, and 2020-03/2020-04 are excluded (SAS rule).
+doc_interpretation: >-
+  MONTHLY_VOLUME_OUTLIER above zero (EXCEPTION) means at least one month's record
+  volume collapsed relative to the trailing-12-month benchmark.

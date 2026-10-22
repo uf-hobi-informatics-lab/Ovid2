@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Jobs &mdash; Ovid2{% endblock %}
+{% block content %}
+{#
+  Merged runs workspace (formerly the separate /jobs + /runs list pages
+  plus the standalone /runs/{id} detail page).
+
+  Left  — a scrollable vertical list of the run history, newest first,
+          with infinite-scroll paging into older runs.
+  Right — the live run console ("canvas"): _run_console.html, driven by
+          live.js / mount.js. Fills all available space and grows with
+          the viewport.
+
+  Clicking a list row swaps only the right region in place (live.js
+  data-run-nav handler); without JS the link is an ordinary navigation
+  to /runs/{id}.
+#}
+<section class="page runs-workspace">
+  <aside class="run-list" aria-label="Job history">
+    <div class="run-list-head">
+      <h1 class="run-list-heading">Jobs</h1>
+      <a href="/submit" class="button primary small">+ New job</a>
+    </div>
+    <form method="get" action="/runs" class="run-list-filters">
+      <label class="sr-only" for="run-filter-status">Status</label>
+      <select id="run-filter-status" name="status">
+        <option value="">any status</option>
+        {% for opt in ["DRAFT", "NEW", "PROCESSING", "PROCESSED", "ERROR", "CANCELLED"] %}
+          <option value="{{ opt }}" {% if status == opt %}selected{% endif %}>{{ opt }}</option>
+        {% endfor %}
+      </select>
+      <label class="sr-only" for="run-filter-pipeline">Pipeline</label>
+      <input id="run-filter-pipeline" type="text" name="pipeline"
+             value="{{ pipeline or '' }}" placeholder="pipeline…">
+      <button type="submit" class="secondary small">Filter</button>
+    </form>
+
+    {% if runs.runs %}
+      <ul class="run-list-items" id="run-list-items">
+        {% include "_runs_list_rows.html" with context %}
+      </ul>
+    {% else %}
+      <p class="empty small">No jobs matching those filters.</p>
+    {% endif %}
+  </aside>
+
+  <div class="run-detail-region" id="run-detail-region">
+    {% if run or job %}
+      {% include "_run_console.html" with context %}
+    {% else %}
+      <div class="run-detail-placeholder">
+        <p class="muted">Select a job to view its console.</p>
+      </div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

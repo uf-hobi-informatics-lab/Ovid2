@@ -1,0 +1,30 @@
+id: "3.01"
+name: DC 3.01
+part: part3
+edc_table: Table IVA
+description: Fewer than 1 diagnosis record per encounter for face-to-face encounter types
+operator: records_per_encounter
+source_tables:
+  - ENCOUNTER
+  - DIAGNOSIS
+params:
+  child_table: DIAGNOSIS
+  type_column: DX_TYPE
+  min_per_type:
+    AV: 1.0
+    ED: 1.0
+    EI: 1.0
+    IP: 1.0
+    TH: 1.0
+metrics:
+  - RECORDS_PER_ENCOUNTER
+exception_metrics:
+  - RECORDS_PER_ENCOUNTER
+thresholds: {}
+enabled: true
+doc_summary: >-
+  DC 3.01 (Table IVA): at least 1 DIAGNOSIS record with a known DX_TYPE per
+  encounter for face-to-face encounter types (AV, ED, EI, IP, TH).
+doc_interpretation: >-
+  RECORDS_PER_ENCOUNTER below 1.0 (EXCEPTION) means face-to-face encounters
+  frequently lack a coded diagnosis.

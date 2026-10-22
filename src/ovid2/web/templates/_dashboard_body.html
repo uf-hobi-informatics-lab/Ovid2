@@ -1,0 +1,162 @@
+{#
+  Dashboard body — HTMX-polled every ``poll_ms`` (default 3 s).
+
+  Layout is a responsive card grid:
+
+    - Row 1: four compact KPI cards (health, queue, runs, jobs total).
+    - Row 2: two panels side-by-side on wide viewports, stacked on narrow:
+        * Environment checks (top 6, link to /health for the full report).
+        * Recent jobs table (top 10, link to /jobs).
+    - Row 3: full-width recent-runs table (top 10, link to /runs).
+
+  All cards use ``.card``; grids use ``.card-grid`` / ``.grid.two-col``
+  which flow from four → two → one column based on the viewport, so this
+  layout works from 375 px phones up to ultra-wide monitors without any
+  additional media queries.
+#}
+
+{% set queued  = jobs.jobs|selectattr('status', 'equalto', 'queued')|list|length if jobs and jobs.jobs else 0 %}
+{% set running = jobs.jobs|selectattr('status', 'equalto', 'running')|list|length if jobs and jobs.jobs else 0 %}
+{% set failed  = jobs.jobs|selectattr('status', 'equalto', 'failed')|list|length if jobs and jobs.jobs else 0 %}
+
+{# "Cooking now" one-liner — only rendered when there's something.
+   Kept above the KPI cards so it's the first thing an operator sees
+   when a run is in flight. Idle dashboard remains calm. #}
+{% if cooking %}
+<div class="cooking-now" role="status" aria-live="polite">
+  <span class="cooking-now-label">Cooking now:</span>
+  {% for c in cooking[:4] %}
+    <span class="cooking-now-item">
+      <a href="/runs/{{ c.instance_id }}">{{ c.pipeline or c.instance_id[:8] }}</a>
+      {%- if c.sample and c.sample.get('tasks_active') is not none %}
+        <span class="cooking-now-pct">
+          {{ c.sample.tasks_active }} task{{ '' if c.sample.tasks_active == 1 else 's' }}
+        </span>
+      {%- endif %}
+    </span>
+  {% endfor %}
+  {% if cooking|length > 4 %}<span class="small muted">+{{ cooking|length - 4 }} more</span>{% endif %}
+</div>
+{% endif %}
+
+<div class="card-grid" style="margin-bottom: 1rem;">
+  <section class="card">
+    <h2 class="small muted" style="margin: 0; text-transform: uppercase; letter-spacing: 0.06em;">Environment</h2>
+    <div class="kpi">
+      <span class="kpi-value">{{ health.worst|upper }}</span>
+    </div>
+    <p class="small muted" style="margin: 0;">
+      <span class="badge severity-{{ health.worst }}">{{ health.worst }}</span>
+      &middot; {{ health.checks|length }} checks
+    </p>
+    <p class="more"><a href="/health">details &rarr;</a></p>
+  </section>
+
+  <section class="card">
+    <h2 class="small muted" style="margin: 0; text-transform: uppercase; letter-spacing: 0.06em;">Queued</h2>
+    <div class="kpi"><span class="kpi-value">{{ queued }}</span><span class="kpi-label">waiting</span></div>
+    <p class="small muted" style="margin: 0;">{{ running }} running &middot; {{ failed }} failed (recent)</p>
+    <p class="more"><a href="/runs">jobs &rarr;</a></p>
+  </section>
+
+  <section class="card">
+    <h2 class="small muted" style="margin: 0; text-transform: uppercase; letter-spacing: 0.06em;">Jobs total</h2>
+    <div class="kpi"><span class="kpi-value">{{ jobs.total if jobs else 0 }}</span><span class="kpi-label">all-time</span></div>
+    <p class="more"><a href="/submit">submit new &rarr;</a></p>
+  </section>
+
+  <section class="card">
+    <h2 class="small muted" style="margin: 0; text-transform: uppercase; letter-spacing: 0.06em;">Runs tracked</h2>
+    <div class="kpi"><span class="kpi-value">{{ runs.total if runs else 0 }}</span><span class="kpi-label">batches</span></div>
+    <p class="more"><a href="/runs">all runs &rarr;</a></p>
+  </section>
+</div>
+
+<div class="grid two-col">
+  <section class="card">
+    <h2>Environment checks</h2>
+    <p><span class="badge severity-{{ health.worst }}">worst: {{ health.worst|upper }}</span></p>
+    <ul class="check-list compact">
+      {% for check in health.checks[:6] %}
+        <li class="severity-{{ check.severity }}">
+          <span class="check-name">{{ check.name }}</span>
+          <span class="check-message">{{ check.message }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+    <p class="more"><a href="/health">full report &rarr;</a></p>
+  </section>
+
+  <section class="card">
+    <h2>Queue &amp; recent jobs</h2>
+    {% if jobs and jobs.jobs %}
+      <div class="table-wrap">
+        <table class="runs-table">
+          <thead>
+            <tr>
+              <th>Pipeline</th>
+              <th>Batch</th>
+              <th>Status</th>
+              <th>Submitted</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for j in jobs.jobs %}
+              <tr>
+                <td>{{ j.pipeline }}</td>
+                <td>
+                  <a href="/runs/{{ j.instance_id or j.batch_id }}">
+                    <span class="mono small">{{ j.batch_id }}</span>
+                  </a>
+                </td>
+                <td><span class="badge status-{{ j.status }}">{{ j.status }}</span></td>
+                <td class="small">{{ j.submitted_at | localtime }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="more">
+        <a href="/runs">all jobs &rarr;</a>
+        &middot;
+        <a href="/submit">submit new run &rarr;</a>
+      </p>
+    {% else %}
+      <p class="empty">No jobs submitted yet.</p>
+      <p class="more"><a href="/submit">submit a run &rarr;</a></p>
+    {% endif %}
+  </section>
+</div>
+
+<div class="grid one-col" style="margin-top: 1rem;">
+  <section class="card">
+    <h2>Recent runs (tracker)</h2>
+    {% if runs.runs %}
+      <div class="table-wrap">
+        <table class="runs-table">
+          <thead>
+            <tr>
+              <th>Batch</th>
+              <th>Pipeline</th>
+              <th>Status</th>
+              <th>Received</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for run in runs.runs %}
+              <tr>
+                <td><a href="/runs/{{ run.batch_id }}">{{ run.batch_id }}</a></td>
+                <td>{{ run.pipeline or "&mdash;"|safe }}</td>
+                <td><span class="badge status-{{ run.status|lower }}">{{ run.status }}</span></td>
+                <td>{{ run.received_time | localtime }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    <p class="more"><a href="/runs">all jobs &rarr;</a></p>
+    {% else %}
+      <p class="empty">No runs registered with the batch tracker yet.</p>
+    {% endif %}
+  </section>
+</div>

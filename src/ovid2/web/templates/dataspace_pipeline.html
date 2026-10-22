@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Data Space &middot; /{{ listing.pipeline }}{% endblock %}
+{% block content %}
+<section class="page-header">
+  <p><a href="/dataspace">&larr; data space root</a></p>
+  <h1><span class="muted mono">/</span>{{ listing.pipeline }}</h1>
+  <p class="muted">Batches known for pipeline
+    <a href="/pipelines/{{ listing.pipeline }}"><code>{{ listing.pipeline }}</code></a>.
+  </p>
+</section>
+
+<section>
+  {% if listing.batches %}
+    <table class="data">
+      <thead>
+        <tr>
+          <th>Batch</th>
+          <th>Dimensions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in listing.batches %}
+          <tr>
+            <td class="mono">
+              <a href="/dataspace/{{ listing.pipeline }}/{{ b.batch_id }}">/{{ listing.pipeline }}/{{ b.batch_id }}</a>
+            </td>
+            <td>
+              {% for d in b.dimensions %}
+                <code class="pill">{{ d }}</code>
+              {% endfor %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">
+      No batches yet for <code>{{ listing.pipeline }}</code>. Batches
+      appear here when a disc address's root directory contains
+      <code>{{ listing.pipeline }}/&lt;batch_id&gt;/</code>. Non-disc
+      dimensions are read-only in v1 &mdash; see the
+      <a href="/settings">settings page</a>.
+    </p>
+  {% endif %}
+</section>
+{% endblock %}

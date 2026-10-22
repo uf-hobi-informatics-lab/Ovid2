@@ -1,0 +1,29 @@
+v: 1
+name: pcornet_7_0.lab_history.norm_modifier_low
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 LAB_HISTORY.NORM_MODIFIER_LOW code set.
+code_column: code
+description_column: label
+items:
+- code: EQ
+  label: EQ=Equal
+  order: 13949
+- code: GE
+  label: GE=Greater than or equal to
+  order: 13950
+- code: GT
+  label: GT=Greater than
+  order: 13951
+- code: 'NO'
+  label: NO=No lower limit
+  order: 13952
+- code: NI
+  label: NI=No information
+  order: 13953
+- code: UN
+  label: UN=Unknown
+  order: 13954
+- code: OT
+  label: OT=Other
+  order: 13955

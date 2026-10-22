@@ -1,0 +1,389 @@
+{#
+  Ovid2 control panel — responsive shell (v2).
+
+  Layout regions:
+
+  - ``.topbar``    — sticky top-of-viewport bar, holds the brand, a
+                     drawer-toggle button (visible < 900 px), a page
+                     title placeholder for narrow layouts, and the
+                     day/night theme toggle.
+  - ``.drawer``    — left navigation. Three responsive modes:
+                       * ≥ 1200 px : 240 px expanded rail with labels.
+                       * 900–1199 px: 64 px icon rail; labels appear
+                         on hover / focus.
+                       * < 900 px : hidden by default, overlays the
+                         viewport when ``<html>.drawer-open`` is set.
+  - ``.main``      — page content. Owns its own scroll.
+  - ``.site-footer`` — attribution / trust-boundary reminder.
+
+  Every ``<img>`` in this template also carries HTML ``width`` /
+  ``height`` attributes so the browser has intrinsic dimensions even
+  before CSS parses — that is the safety net that closes the
+  "logo renders at native 1254 px" bug.
+
+  The pre-paint theme setter runs *inline in <head>*, before the
+  stylesheet loads, so dark-mode users never see a flash of light.
+#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}Ovid2 control panel{% endblock %}</title>
+
+  {# Prefer SVG favicon; browsers that cannot render SVG fall back to PNG. #}
+  <link rel="icon" type="image/svg+xml" href="/branding/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/branding/favicon.png">
+  <link rel="apple-touch-icon" sizes="128x128" href="/branding/ovid_logo_128.png">
+
+  <script>
+    /* Pre-paint theme + drawer state.
+     *
+     * Must run BEFORE the stylesheet loads so users never see a flash
+     * of the wrong theme (any of the six named themes) or a flash of
+     * their custom colours resetting, nor a flash-of-open drawer on
+     * mobile. Wrapped in try/catch because localStorage can be
+     * disabled (Safari private mode, corporate policy, …). The full
+     * interactive logic lives in theme.js; this snippet only needs to
+     * settle the initial paint. */
+    (function () {
+      var root = document.documentElement;
+      var KNOWN = ["clinical", "matrix", "super-mario-world",
+                   "tatooine", "financial", "lego",
+                   /* legacy light/dark aliases (map to clinical/matrix) */
+                   "light", "dark"];
+      /* Legacy slugs whose CSS block was replaced in the movie/game
+       * theme pass; remap so a stored old value still resolves to a
+       * real theme (mirrors LEGACY_ALIASES in theme.js). */
+      var ALIASES = { dune: "tatooine", industry: "lego" };
+      try {
+        var stored = localStorage.getItem("ovid2Theme");
+        if (stored && ALIASES[stored]) { stored = ALIASES[stored]; }
+        var prefersDark = window.matchMedia
+          && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        if (stored && KNOWN.indexOf(stored) !== -1) {
+          root.setAttribute("data-theme", stored);
+        } else {
+          root.setAttribute("data-theme", prefersDark ? "matrix" : "clinical");
+        }
+      } catch (e) {
+        root.setAttribute("data-theme", "clinical");
+      }
+      try {
+        /* Re-apply saved custom colour overrides before first paint so
+         * a customised accent/background does not flash back to the
+         * base theme. Mirrors applyCustomOverrides() in theme.js. */
+        var raw = localStorage.getItem("ovid2ThemeCustom");
+        if (raw) {
+          var c = JSON.parse(raw);
+          var hex = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+          var ok = function (v) { return typeof v === "string" && hex.test(v); };
+          if (c && typeof c === "object") {
+            if (ok(c.accent)) { root.style.setProperty("--accent", c.accent); }
+            if (ok(c.bg)) { root.style.setProperty("--bg", c.bg); }
+            if (ok(c.surface)) {
+              root.style.setProperty("--bg-elev", c.surface);
+              root.style.setProperty("--card-bg", c.surface);
+            }
+            if (ok(c.fg)) { root.style.setProperty("--fg", c.fg); }
+          }
+        }
+      } catch (e) { /* ignore malformed overrides */ }
+      try {
+        /* Re-apply per-component appearance overrides (colours, font
+         * sizes/weights/families) before first paint. Stored as a flat
+         * map of CSS custom-property name -> value by appearance.js.
+         * Only whitelisted --token names are honoured to keep the
+         * inline write safe. Mirrors applyAppearance() in appearance.js. */
+        var araw = localStorage.getItem("ovid2Appearance");
+        if (araw) {
+          var a = JSON.parse(araw);
+          var allow = /^--[a-z0-9-]+$/;
+          if (a && typeof a === "object") {
+            Object.keys(a).forEach(function (k) {
+              if (allow.test(k) && typeof a[k] === "string") {
+                root.style.setProperty(k, a[k]);
+              }
+            });
+          }
+        }
+      } catch (e) { /* ignore malformed appearance overrides */ }
+      try {
+        /* Right tools panel open state (all viewports; on mobile the
+         * panel overlays rather than shrinking main — handled in CSS). */
+        if (localStorage.getItem("ovid2RightPanelOpen") === "1") {
+          root.classList.add("right-panel-open");
+        } else if (localStorage.getItem("ovid2LlmPanelOpen") === "1") {
+          root.classList.add("llm-panel-open");
+        }
+      } catch (e) { /* ignore */ }
+      try {
+        /* Drawer collapsed state only applies to the medium
+         * breakpoint. Mobile always starts closed. */
+        if (localStorage.getItem("ovid2DrawerCollapsed") === "1") {
+          root.classList.add("drawer-collapsed");
+        }
+      } catch (e) { /* ignore */ }
+      try {
+        /* Wide-viewport (>= 900px) collapse uses ``drawer-open``. Restore
+         * it before first paint so navigating via a collapsed rail icon
+         * keeps the drawer collapsed instead of springing back open.
+         * Never restore on mobile: there ``drawer-open`` is the transient
+         * off-canvas state and must start closed. */
+        var wideCollapse = false;
+        try { wideCollapse = window.matchMedia("(min-width: 900px)").matches; }
+        catch (e2) { wideCollapse = false; }
+        if (wideCollapse &&
+            localStorage.getItem("ovid2DrawerWideCollapsed") === "1") {
+          root.classList.add("drawer-open");
+        }
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
+
+  <link rel="stylesheet" href="/static/ovid2.css">
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/theme.js" defer></script>
+  <script src="/static/appearance.js" defer></script>
+  <script src="/static/cmdk.js" defer></script>
+  <script src="/static/nav.js" defer></script>
+  {# D3 v7 self-hosted; used by /static/live.js and the display bus.
+     Loaded before live.js so window.d3 is available when the module
+     bootstraps. #}
+  <script src="/static/vendor/d3.v7.min.js" defer></script>
+  <script src="/static/live.js" type="module"></script>
+</head>
+<body>
+  {% import "_icons.html" as icons %}
+
+  {# Derive active-nav marker from the request path (first match wins). #}
+  {% set path = request.url.path %}
+  {% set nav_active = 'console' %}
+  {% if path == '/dashboard' %}{% set nav_active = 'dashboard' %}
+  {% elif path.startswith('/submit') %}{% set nav_active = 'submit' %}
+  {% elif path.startswith('/jobs') %}{% set nav_active = 'runs' %}
+  {% elif path.startswith('/runs') %}{% set nav_active = 'runs' %}
+  {% elif path.startswith('/pipeline-packages') or path.startswith('/pipelines') %}{% set nav_active = 'pipelines' %}
+  {% elif path.startswith('/dataspace') %}{% set nav_active = 'dataspace' %}
+  {% elif path.startswith('/storage') or path.startswith('/connections') or path.startswith('/addresses') %}{% set nav_active = 'storage' %}
+  {% elif path.startswith('/warehouses') or path.startswith('/engines') %}{% set nav_active = 'warehouses' %}
+  {% elif path.startswith('/llms') %}{% set nav_active = 'llms' %}
+  {% elif path.startswith('/secrets') %}{% set nav_active = 'secrets' %}
+  {% elif path.startswith('/users') %}{% set nav_active = 'users' %}
+  {% elif path.startswith('/cdms') %}{% set nav_active = 'cdms' %}
+  {% elif path.startswith('/settings') %}{% set nav_active = 'settings' %}
+  {% elif path.startswith('/install') %}{% set nav_active = 'install' %}
+  {% elif path.startswith('/health') %}{% set nav_active = 'health' %}
+  {% endif %}
+
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <header class="topbar" role="banner">
+    <button id="drawer-toggle" class="drawer-toggle icon-button" type="button"
+            aria-label="Toggle navigation" aria-controls="site-nav"
+            aria-expanded="false">
+      <span class="drawer-toggle-open"  aria-hidden="true">{{ icons.icon("menu", size=22) }}</span>
+      <span class="drawer-toggle-close" aria-hidden="true">{{ icons.icon("close", size=22) }}</span>
+    </button>
+
+    <span class="brand">
+      <a class="brand-mark-link" href="/" aria-label="Ovid2 home">
+        <span class="brand-text">Ovid<span class="brand-accent">2</span></span>
+      </a>
+    </span>
+
+    <div class="topbar-spacer"></div>
+
+    {% set _user_ctx = current_user_ctx(request) %}
+    {% if auth_enabled() and _user_ctx and not _user_ctx.anonymous_bypass %}
+      <div class="user-chip" title="{{ _user_ctx.email or _user_ctx.user_id }}">
+        <span class="user-chip-name">{{ _user_ctx.email or _user_ctx.user_id }}</span>
+        <span class="user-chip-role">{{ _user_ctx.role.value }}</span>
+      </div>
+      <a class="nav-logout icon-button" href="/logout" title="Sign out" aria-label="Sign out">
+        <span class="nav-label">Logout</span>
+      </a>
+    {% endif %}
+  </header>
+
+  {# Scrim: dimmed backdrop shown behind the drawer on mobile. Click
+     to close. Non-interactive at wide viewports. #}
+  <div class="drawer-scrim" data-drawer-close></div>
+
+  <aside id="site-nav" class="drawer" role="navigation" aria-label="Primary">
+    <nav class="drawer-nav">
+      <div class="side-group">Operate</div>
+      <a href="/" class="nav-item {% if nav_active == 'console' %}active{% endif %}" data-nav="console">
+        {{ icons.icon("dashboard", size=18, cls="nav-icon") }}<span class="nav-label">Console</span>
+      </a>
+      <a href="/dashboard" class="nav-item {% if nav_active == 'dashboard' %}active{% endif %}" data-nav="dashboard">
+        {{ icons.icon("dashboard", size=18, cls="nav-icon") }}<span class="nav-label">Dashboard</span>
+      </a>
+      {% if has_cap(request, 'submit_jobs') %}
+      <a href="/submit" class="nav-item {% if nav_active == 'submit' %}active{% endif %}" data-nav="submit">
+        {{ icons.icon("submit", size=18, cls="nav-icon") }}<span class="nav-label">Submit</span>
+      </a>
+      {% endif %}
+      {% if has_cap(request, 'view_pipeline_data') %}
+      <a href="/pipelines" class="nav-item {% if nav_active == 'pipelines' %}active{% endif %}" data-nav="pipelines">
+        {{ icons.icon("submit", size=18, cls="nav-icon") }}<span class="nav-label">Pipelines</span>
+      </a>
+      {% endif %}
+      {% if has_cap(request, 'view_runs') %}
+      <a href="/runs" class="nav-item {% if nav_active == 'runs' %}active{% endif %}" data-nav="runs">
+        {{ icons.icon("runs", size=18, cls="nav-icon") }}<span class="nav-label">Jobs</span>
+      </a>
+      {% endif %}
+
+      {% if has_cap(request, 'view_pipeline_data') %}
+      <div class="side-group">Explore</div>
+      <a href="/dataspace" class="nav-item {% if nav_active == 'dataspace' %}active{% endif %}" data-nav="dataspace">
+        {{ icons.icon("pipelines", size=18, cls="nav-icon") }}<span class="nav-label">Data Space</span>
+      </a>
+      {% endif %}
+
+      <div class="side-group">Configure</div>
+      {% if has_cap(request, 'view_pipeline_data') %}
+      <a href="/storage" class="nav-item {% if nav_active == 'storage' %}active{% endif %}" data-nav="storage">
+        {{ icons.icon("addresses", size=18, cls="nav-icon") }}<span class="nav-label">Storage accounts</span>
+      </a>
+      <a href="/warehouses" class="nav-item {% if nav_active == 'warehouses' %}active{% endif %}" data-nav="warehouses">
+        {{ icons.icon("engines", size=18, cls="nav-icon") }}<span class="nav-label">Warehouses</span>
+      </a>
+      {% endif %}
+      {% if has_cap(request, 'manage_config') %}
+      <a href="/llms" class="nav-item {% if nav_active == 'llms' %}active{% endif %}" data-nav="llms">
+        {{ icons.icon("llm", size=18, cls="nav-icon") }}<span class="nav-label">LLMs</span>
+      </a>
+      {% endif %}
+      {% if has_cap(request, 'manage_secrets') %}
+      <a href="/secrets" class="nav-item {% if nav_active == 'secrets' %}active{% endif %}" data-nav="secrets">
+        {{ icons.icon("secrets", size=18, cls="nav-icon") }}<span class="nav-label">Secrets</span>
+      </a>
+      {% endif %}
+      <a href="/cdms" class="nav-item {% if nav_active == 'cdms' %}active{% endif %}" data-nav="cdms">
+        {{ icons.icon("cdms", size=18, cls="nav-icon") }}<span class="nav-label">CDMs</span>
+      </a>
+      {% if has_cap(request, 'admin_all') %}
+      <a href="/settings" class="nav-item {% if nav_active == 'settings' %}active{% endif %}" data-nav="settings">
+        {{ icons.icon("install", size=18, cls="nav-icon") }}<span class="nav-label">Settings</span>
+      </a>
+      <a href="/install" class="nav-item {% if nav_active == 'install' %}active{% endif %}" data-nav="install">
+        {{ icons.icon("install", size=18, cls="nav-icon") }}<span class="nav-label">Setup wizard</span>
+      </a>
+      {% endif %}
+
+      {% if has_cap(request, 'manage_users') %}
+      <div class="side-group">Access</div>
+      <a href="/users" class="nav-item {% if nav_active == 'users' %}active{% endif %}" data-nav="users">
+        {{ icons.icon("pipelines", size=18, cls="nav-icon") }}<span class="nav-label">Users</span>
+      </a>
+      {% endif %}
+
+      <div class="side-group">System</div>
+      <a href="/health" class="nav-item {% if nav_active == 'health' %}active{% endif %}" data-nav="health">
+        {{ icons.icon("health", size=18, cls="nav-icon") }}<span class="nav-label">Health</span>
+      </a>
+      <a href="/docs" class="nav-item" title="OpenAPI docs" data-nav="api">
+        {{ icons.icon("api", size=18, cls="nav-icon") }}<span class="nav-label">API</span>
+      </a>
+    </nav>
+
+    <button id="drawer-collapse" class="drawer-collapse icon-button" type="button"
+            aria-label="Collapse navigation rail" title="Collapse / expand">
+      {{ icons.icon("chevron-right", size=16) }}
+    </button>
+  </aside>
+
+  <main id="main" class="main" tabindex="-1">
+    {% block content %}{% endblock %}
+  </main>
+
+  {# Right scrim: dimmed backdrop behind the tools panel on mobile
+     (where the panel overlays instead of shrinking main). Click to
+     close. Inert at wide viewports. #}
+  <div class="right-scrim" data-tools-close></div>
+
+  {# Right tools rail: a thin, always-visible vertical bar of tool
+     buttons pinned to the right edge. Clicking a tool button toggles
+     the expandable panel, which shrinks .main rather than covering it.
+     Built to hold more tools (typography, layout density, …) later. #}
+  <aside id="tools-rail" class="tools-rail" role="toolbar"
+         aria-label="Appearance and tools" aria-orientation="vertical">
+    <button id="tool-palette" class="rail-button icon-button" type="button"
+            aria-controls="command-palette" aria-haspopup="dialog"
+            aria-expanded="false" data-tool="palette"
+            aria-label="Command palette" title="Search &amp; jump (Ctrl-K)">
+      {{ icons.icon("search", size=20) }}
+    </button>
+
+    <button id="tool-appearance" class="rail-button icon-button" type="button"
+            aria-controls="tools-panel" aria-expanded="false"
+            data-tool="appearance" aria-label="Appearance" title="Appearance">
+      {{ icons.icon("sliders", size=20) }}
+    </button>
+
+    {% if has_cap(request, 'use_llm') %}
+    <button id="tool-llm" class="rail-button icon-button" type="button"
+            aria-controls="llm-panel" aria-expanded="false"
+            data-tool="llm" aria-label="Agent Ovid" title="Agent Ovid">
+      {{ icons.icon("llm", size=20) }}
+    </button>
+    {% endif %}
+  </aside>
+
+  <aside id="tools-panel" class="tools-panel" role="region"
+         aria-label="Appearance" aria-hidden="true">
+    <div class="tools-panel-inner">
+      <h2 class="tools-panel-title">Appearance</h2>
+      <div id="appearance-editor"></div>
+    </div>
+  </aside>
+
+  {% if has_cap(request, 'use_llm') %}
+  {# Assistant panel: canvas (answer blocks / System 1 decision cards) on
+     top, chat box below. Driven by /static/llm_panel.js; talks to
+     /api/v1/llm/status + /api/v1/llm/chat/stream. Conversation lives in
+     sessionStorage only — nothing is stored server-side. #}
+  <aside id="llm-panel" class="llm-panel" role="region"
+         aria-label="Agent Ovid" aria-hidden="true"
+         data-manage="{{ 'true' if has_cap(request, 'manage_config') else 'false' }}">
+    <div class="llm-panel-inner">
+      <header class="llm-head">
+        <span class="llm-head-title">{{ icons.icon("llm", size=18) }} Agent Ovid</span>
+        <span class="llm-head-spacer"></span>
+        <button type="button" id="llm-clear" class="link-button small" title="Clear conversation">clear</button>
+      </header>
+      <div id="llm-canvas" class="llm-canvas" aria-live="polite"></div>
+      <form id="llm-form" class="llm-form" autocomplete="off">
+        <textarea id="llm-input" class="llm-input" rows="3"
+                  placeholder="Ask Agent Ovid… (Enter to send, Shift+Enter for newline)"></textarea>
+        <div class="llm-form-row">
+          <span class="llm-head-spacer"></span>
+          <button type="button" id="llm-stop" class="button small" hidden>Stop</button>
+          <button type="submit" id="llm-send" class="button primary small">Send</button>
+        </div>
+      </form>
+      <div id="llm-route" class="llm-route" aria-label="Models in use"></div>
+    </div>
+  </aside>
+  <script src="/static/llm_panel.js" defer></script>
+  {% endif %}
+
+  {# Command palette (Ctrl-K): a centred, client-only fuzzy launcher over
+     the nav links already rendered in the drawer (so it inherits RBAC
+     for free) plus a localStorage-backed recent-pages list. Rendered and
+     driven entirely by /static/cmdk.js — no backend route. #}
+  <div id="command-palette" class="cmdk" role="dialog" aria-modal="true"
+       aria-label="Command palette" aria-hidden="true"></div>
+
+  <footer class="site-footer" role="contentinfo">
+    {% if auth_enabled() %}
+    <span>Ovid2 &mdash; internal use only.</span>
+    {% else %}
+    <span>Ovid2 &mdash; internal use only. No auth: bind to a trusted network.</span>
+    {% endif %}
+  </footer>
+</body>
+</html>

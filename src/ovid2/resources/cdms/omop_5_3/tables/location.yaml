@@ -1,0 +1,40 @@
+v: 1
+name: location
+composite_key:
+- location_id
+domain_description: OMOP CDM 5.3 clinical data table.
+domain_order: 1
+fields:
+- name: location_id
+  rdbms_type: RDBMS Number
+  order: 1
+- name: address_1
+  rdbms_type: RDBMS Text(50)
+  order: 2
+- name: address_2
+  rdbms_type: RDBMS Text(50)
+  order: 3
+- name: city
+  rdbms_type: RDBMS Text(50)
+  order: 4
+- name: state
+  rdbms_type: RDBMS Text(2)
+  order: 5
+- name: zip
+  rdbms_type: RDBMS Text(9)
+  order: 6
+- name: county
+  rdbms_type: RDBMS Text(100)
+  order: 7
+- name: location_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 8
+- name: updated
+  rdbms_type: RDBMS Text(50)
+  order: 9
+- name: source
+  rdbms_type: RDBMS Text(10)
+  order: 10
+- name: mapped_from
+  rdbms_type: RDBMS Text(50)
+  order: 11

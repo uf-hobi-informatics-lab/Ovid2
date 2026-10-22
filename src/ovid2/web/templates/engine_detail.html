@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Warehouse {{ engine.name }} &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <p><a href="/warehouses">&larr; all warehouses</a></p>
+  <h1>Warehouse: <span class="mono">{{ engine.name }}</span></h1>
+
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+  <table class="kv-table">
+    <tbody>
+      <tr><th>Type</th><td>{{ engine.type }}</td></tr>
+      <tr><th>Path</th><td class="mono small">{{ engine.path }}</td></tr>
+      <tr><th>Secret ref</th><td class="mono">{{ engine.secret_ref or '(none)' }}</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Arguments</h2>
+  {% if engine.args %}
+    <table class="kv-table">
+      <thead><tr><th>Key</th><th>Value</th></tr></thead>
+      <tbody>
+        {% for k, v in engine.args.items() %}
+          <tr><td class="mono">{{ k }}</td><td class="mono small">{{ v }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="empty">
+      No overrides &mdash; the engine uses the built-in defaults for
+      <code>{{ engine.type }}</code>.
+    </p>
+  {% endif %}
+
+  <h2>Secrets</h2>
+  {% if engine.secrets %}
+    <table class="kv-table">
+      <thead><tr><th>Key</th><th>Value</th></tr></thead>
+      <tbody>
+        {% for k, v in engine.secrets.items() %}
+          <tr><td class="mono">{{ k }}</td><td class="mono small">{{ v }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="note">Values are masked. Edit the warehouse to change them.</p>
+  {% else %}
+    <p class="empty">No secret fields configured.</p>
+  {% endif %}
+
+  <div class="page-actions">
+    <a href="/engines/{{ engine.name }}/edit" class="button primary">Edit</a>
+    <form action="/engines/{{ engine.name }}/test" method="post" style="display: inline;">
+      <button type="submit" class="button">Test warehouse</button>
+    </form>
+    <form action="/engines/{{ engine.name }}/delete" method="post" style="display: inline;"
+          onsubmit="return confirm('Delete warehouse {{ engine.name }}?')">
+      <button type="submit" class="button danger">Delete</button>
+    </form>
+  </div>
+
+  {% if test_result %}
+    <h2>Test result</h2>
+    <div class="flash {% if test_result.ok %}ok{% else %}error{% endif %}">
+      <strong>{{ test_result.code }}</strong>: {{ test_result.message }}
+    </div>
+    {% if test_result.detail %}
+      <table class="kv-table">
+        <thead><tr><th>Key</th><th>Value</th></tr></thead>
+        <tbody>
+          {% for k, v in test_result.detail.items() %}
+            <tr><td class="mono">{{ k }}</td><td class="mono small">{{ v }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,20 @@
+v: 1
+name: pcornet_7_0.lab_history.sex
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 LAB_HISTORY.SEX code set.
+code_column: code
+description_column: label
+items:
+- code: A
+  label: A=Ambiguous
+  order: 13069
+- code: F
+  label: F=Female
+  order: 13070
+- code: M
+  label: M=Male
+  order: 13071
+- code: NS
+  label: NS=Not specified
+  order: 13072

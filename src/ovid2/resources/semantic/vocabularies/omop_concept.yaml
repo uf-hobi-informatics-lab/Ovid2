@@ -1,0 +1,20 @@
+v: 1
+kind: vocabulary
+name: omop_concept
+version: "5.3"
+description: >-
+  OMOP Standardized Vocabularies CONCEPT table. Provides concept_id,
+  concept_code, concept_name, vocabulary_id, domain_id, concept_class_id
+  for every clinical code the OMOP vocabulary bundle covers (SNOMED,
+  LOINC, ICD10CM, ICD9CM, RxNorm, NDC, and 60+ others).
+view_name: concept
+code_column: concept_code
+description_column: concept_name
+domain_column: domain_id
+shared_view:
+  cdm: pcornet_7_0
+  view: concept
+tags:
+  - clinical
+  - omop_native
+  - multi_vocabulary

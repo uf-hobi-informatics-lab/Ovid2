@@ -1,0 +1,55 @@
+id: "1.01"
+name: DC 1.01
+part: part1
+edc_table: Table IID
+description: Required tables are not present
+operator: table_present
+source_tables:
+  - DEMOGRAPHIC
+  - ENROLLMENT
+  - ENCOUNTER
+  - DIAGNOSIS
+  - PROCEDURES
+  - HARVEST
+  - LAB_RESULT_CM
+  - PRESCRIBING
+  - VITAL
+  - DEATH
+  - CONDITION
+  - DEATH_CAUSE
+  - PRO_CM
+  - PCORNET_TRIAL
+  - PROVIDER
+  - MED_ADMIN
+  - OBS_CLIN
+  - OBS_GEN
+  - HASH_TOKEN
+  - LDS_ADDRESS_HISTORY
+  - IMMUNIZATION
+  - LAB_HISTORY
+  - EXTERNAL_MEDS
+  - PAT_RELATIONSHIP
+params:
+  required:
+    - DEMOGRAPHIC
+    - ENROLLMENT
+    - ENCOUNTER
+    - DIAGNOSIS
+    - PROCEDURES
+    - HARVEST
+metrics:
+  - TABLE_EXISTS_FLAG
+  - MISSING_REQUIRED_TABLE_FLAG
+exception_metrics:
+  - MISSING_REQUIRED_TABLE_FLAG
+thresholds:
+  missing_required_table_flag_eq: 1
+enabled: true
+doc_summary: >-
+  DC 1.01 (Table IID): checks whether the PCORnet CDM tables exist for the
+  input source. Core required tables (DEMOGRAPHIC, ENROLLMENT, ENCOUNTER,
+  DIAGNOSIS, PROCEDURES, HARVEST) missing raises an exception; the remaining
+  tables are checked informationally.
+doc_interpretation: >-
+  Per source table: MISSING_REQUIRED_TABLE_FLAG=1 (EXCEPTION_FLAG=TRUE) means a
+  required table is absent.

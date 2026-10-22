@@ -1,0 +1,17 @@
+# Example PCORnet-native passthrough spec.
+v: 1
+formatter: provider
+adapter: pcornet_passthrough
+input_file_name: "*Provider_*.txt"
+
+sources:
+  provider:
+    glob: "*Provider_*.txt"
+    lowercase_columns: true
+
+projections:
+  PROVIDERID: providerid
+  PROVIDER_NPI: provider_npi
+  PROVIDER_NPI_FLAG: provider_npi_flag
+  PROVIDER_SEX: provider_sex
+  RAW_PROVIDER_SPECIALTY_PRIMARY: raw_provider_specialty_primary

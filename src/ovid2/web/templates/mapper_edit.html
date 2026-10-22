@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}
+  {% if mode == 'new' %}New mapper{% else %}Edit {{ pipeline }}/{{ table }}{% endif %} &mdash; Ovid2
+{% endblock %}
+{% block content %}
+<section class="page">
+  <p><a href="/pipeline-packages/{{ pipeline }}">&larr; back to {{ pipeline }}</a></p>
+  <h1>
+    {% if mode == 'new' %}
+      New mapper for <span class="mono">{{ pipeline }}</span>
+    {% else %}
+      Edit mapper: <span class="mono">{{ pipeline }}/{{ table }}</span>
+    {% endif %}
+  </h1>
+
+  {% if error %}
+    <div class="flash error">{{ error }}</div>
+  {% endif %}
+
+  <p class="note">
+    Saved YAML is validated against
+    <code>ovid2/resources/schemas/mapper_spec.v1.json</code> before
+    the file is written.
+  </p>
+
+  <form method="post"
+        action="{% if mode == 'new' %}/pipeline-packages/{{ pipeline }}/mappers/new{% else %}/pipeline-packages/{{ pipeline }}/mappers/{{ table }}/edit{% endif %}"
+        class="edit-form">
+    {% if mode == 'new' %}
+      <div class="form-row">
+        <label for="table">Table name</label>
+        <input type="text" id="table" name="table" required
+               pattern="[A-Za-z0-9._-]+"
+               placeholder="e.g. demographic, encounter">
+      </div>
+    {% endif %}
+
+    <div class="form-row">
+      <label for="raw_text">YAML source</label>
+      <textarea id="raw_text" name="raw_text" rows="20" class="mono wide"
+                spellcheck="false">{{ raw_text }}</textarea>
+    </div>
+
+    <div class="form-row">
+      <button type="submit" class="button primary">Save</button>
+      {% if mode == 'edit' %}
+        <a href="/pipeline-packages/{{ pipeline }}/mappers/{{ table }}" class="button">Cancel</a>
+      {% else %}
+        <a href="/pipeline-packages/{{ pipeline }}" class="button">Cancel</a>
+      {% endif %}
+    </div>
+  </form>
+</section>
+{% endblock %}

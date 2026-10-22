@@ -1,0 +1,42 @@
+id: "1.06"
+name: DC 1.06
+part: part1
+edc_table: Table IIB
+description: A field contains values that do not conform to CDM specifications
+operator: valueset_membership
+source_tables:
+  - DEMOGRAPHIC
+  - ENCOUNTER
+  - DIAGNOSIS
+  - PROCEDURES
+  - VITAL
+  - LAB_RESULT_CM
+  - PRESCRIBING
+  - DISPENSING
+  - CONDITION
+  - PRO_CM
+  - DEATH
+  - DEATH_CAUSE
+  - MED_ADMIN
+  - OBS_CLIN
+  - OBS_GEN
+  - IMMUNIZATION
+  - LDS_ADDRESS_HISTORY
+  - ENROLLMENT
+params:
+  case_insensitive: false
+metrics:
+  - OUT_OF_VALUESET_ROWS
+  - OUT_OF_VALUESET_PCT
+exception_metrics:
+  - OUT_OF_VALUESET_PCT
+thresholds:
+  out_of_valueset_pct_gt: 0.0
+enabled: true
+doc_summary: >-
+  DC 1.06 (Table IIB): every column bound to a CDM-declared bounded valueset
+  holds only permissible values (excluding flavour-of-null sentinels).
+  Non-conformance is a conformance exception (any occurrence flags).
+doc_interpretation: >-
+  OUT_OF_VALUESET_ROWS > 0 (EXCEPTION) means a field carries values that do
+  not conform to the CDM specification.

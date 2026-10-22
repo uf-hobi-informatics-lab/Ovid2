@@ -1,0 +1,31 @@
+id: health.valueset_conformance
+name: VALUESET_CONFORMANCE
+part: semantic
+edc_table: ""
+description: Values are outside of the specified value set (native conformance panel)
+operator: valueset_membership
+source_tables:
+  - DEMOGRAPHIC
+  - ENCOUNTER
+  - DIAGNOSIS
+  - PROCEDURES
+  - VITAL
+params:
+  case_insensitive: true
+metrics:
+  - TOTAL_ROWS
+  - OUT_OF_VALUESET_ROWS
+  - OUT_OF_VALUESET_PCT
+exception_metrics:
+  - OUT_OF_VALUESET_PCT
+thresholds:
+  out_of_valueset_pct_gt: 5.0
+enabled: true
+doc_summary: >-
+  Native valueset-conformance panel: for every column with a CDM-declared
+  bounded valueset (SEX, DX_TYPE, ...), the fraction of rows whose value falls
+  outside the valueset (excluding flavour-of-null sentinels). The EDC-report
+  equivalent is DC 1.06 (Table IIB), which flags at any occurrence.
+doc_interpretation: >-
+  OUT_OF_VALUESET_PCT above the threshold (EXCEPTION) means non-conformant
+  coded values are common.

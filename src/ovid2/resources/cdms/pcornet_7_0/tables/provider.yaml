@@ -1,0 +1,69 @@
+v: 1
+name: provider
+composite_key:
+- PROVIDERID
+domain_description: Data about the providers who are involved in the care processes documented in the
+  CDM.
+domain_order: 16
+constraints:
+- field: PROVIDERID
+  rule: unique
+  order: 67
+- field: PROVIDERID
+  rule: required, not null
+  order: 68
+relations:
+- relation: PK
+  details: PROVIDERID
+  order: 43
+- relation: FK (one to many)
+  details: PROVIDER.PROVIDERID references ENCOUNTER.PROVIDERID
+  order: 44
+- relation: FK (one to many)
+  details: PROVIDER.PROVIDERID references DIAGNOSIS.PROVIDERID
+  order: 45
+- relation: FK (one to many)
+  details: PROVIDER.PROVIDERID references PROCEDURES.PROVIDERID
+  order: 46
+- relation: FK (one to many)
+  details: PROVIDER.PROVIDERID references PRESCRIBING.RX_PROVIDERID
+  order: 47
+- relation: FK (one to many)
+  details: PROVIDER.PROVIDERID references MEDADMIN.MEDADMIN_PROVIDERID
+  order: 48
+fields:
+- name: PROVIDERID
+  rdbms_type: RDBMS Text(x)
+  order: 263
+  sas_type: SAS Char(x)
+  definition: Arbitrary identifier for each unique PROVIDER record. Does not need to be persistent across
+    refreshes, and may be created by methods such as sequence or GUID.
+- name: PROVIDER_SEX
+  rdbms_type: RDBMS Text(2)
+  order: 264
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.provider.provider_sex
+  definition: Sex assigned at birth.
+- name: PROVIDER_SPECIALTY_PRIMARY
+  rdbms_type: RDBMS Text(x)
+  order: 265
+  sas_type: SAS Char(x)
+  definition: Primary specialty of the provider
+- name: PROVIDER_NPI
+  rdbms_type: RDBMS Number(x)
+  order: 266
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: National Provider Identifier (NPI) of the provider.
+- name: PROVIDER_NPI_FLAG
+  rdbms_type: RDBMS Text(1)
+  order: 267
+  sas_type: SAS Char(1)
+  valueset: pcornet_7_0.provider.provider_npi_flag
+  definition: Flag to indicate whether pipeline has access to the National Provider Identifier (NPI) of
+    the provider.
+- name: RAW_PROVIDER_SPECIALTY_PRIMARY
+  rdbms_type: RDBMS Text(x)
+  order: 268
+  sas_type: SAS Char(x)
+  definition: Field for originating value of field, prior to mapping into the PCORnet CDM value set.

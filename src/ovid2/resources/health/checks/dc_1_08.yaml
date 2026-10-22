@@ -1,0 +1,55 @@
+id: "1.08"
+name: DC 1.08
+part: part1
+edc_table: Table IIE
+description: Orphan PATID(s) - a PATID appears in a data table but not in DEMOGRAPHIC
+operator: orphan_fk
+source_tables:
+  - DEMOGRAPHIC
+  - ENROLLMENT
+  - ENCOUNTER
+  - DIAGNOSIS
+  - PROCEDURES
+  - VITAL
+  - LAB_RESULT_CM
+  - PRESCRIBING
+  - DISPENSING
+  - DEATH
+  - CONDITION
+  - PRO_CM
+  - MED_ADMIN
+  - OBS_CLIN
+  - OBS_GEN
+  - IMMUNIZATION
+  - HASH_TOKEN
+params:
+  relationships:
+    - {child: ENROLLMENT, child_key: PATID, parent: DEMOGRAPHIC, parent_key: PATID}
+    - {child: ENCOUNTER, child_key: PATID, parent: DEMOGRAPHIC, parent_key: PATID}
+    - {child: DIAGNOSIS, child_key: PATID, parent: DEMOGRAPHIC, parent_key: PATID}
+    - {child: PROCEDURES, child_key: PATID, parent: DEMOGRAPHIC, parent_key: PATID}
+    - {child: VITAL, child_key: PATID, parent: DEMOGRAPHIC, parent_key: PATID}
+    - {child: LAB_RESULT_CM, child_key: PATID, parent: DEMOGRAPHIC, parent_key: PATID}
+    - {child: PRESCRIBING, child_key: PATID, parent: DEMOGRAPHIC, parent_key: PATID}
+    - {child: DISPENSING, child_key: PATID, parent: DEMOGRAPHIC, parent_key: PATID}
+    - {child: DEATH, child_key: PATID, parent: DEMOGRAPHIC, parent_key: PATID}
+    - {child: CONDITION, child_key: PATID, parent: DEMOGRAPHIC, parent_key: PATID}
+    - {child: PRO_CM, child_key: PATID, parent: DEMOGRAPHIC, parent_key: PATID}
+    - {child: MED_ADMIN, child_key: PATID, parent: DEMOGRAPHIC, parent_key: PATID}
+    - {child: OBS_CLIN, child_key: PATID, parent: DEMOGRAPHIC, parent_key: PATID}
+    - {child: OBS_GEN, child_key: PATID, parent: DEMOGRAPHIC, parent_key: PATID}
+    - {child: IMMUNIZATION, child_key: PATID, parent: DEMOGRAPHIC, parent_key: PATID}
+metrics:
+  - CHILD_ROWS
+  - ORPHAN_ROWS
+  - ORPHAN_PCT
+exception_metrics:
+  - ORPHAN_ROWS
+thresholds:
+  orphan_rows_gt: 0
+enabled: true
+doc_summary: >-
+  DC 1.08 (Table IIE): every PATID in a data table is present in DEMOGRAPHIC.
+doc_interpretation: >-
+  ORPHAN_ROWS > 0 (EXCEPTION) means a table references a PATID that has no
+  DEMOGRAPHIC record.

@@ -1,0 +1,32 @@
+v: 1
+name: pcornet_7_0.pro_cm.pro_source
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 PRO_CM.PRO_SOURCE code set.
+code_column: code
+description_column: label
+items:
+- code: OD
+  label: OD=Order/EHR
+  order: 5906
+- code: BI
+  label: BI=Billing
+  order: 5907
+- code: CL
+  label: CL=Claim
+  order: 5908
+- code: SR
+  label: SR=Survey system/mobile app
+  order: 5909
+- code: DR
+  label: DR=Derived
+  order: 5910
+- code: NI
+  label: NI=No information
+  order: 5911
+- code: UN
+  label: UN=Unknown
+  order: 5912
+- code: OT
+  label: OT=Other
+  order: 5913

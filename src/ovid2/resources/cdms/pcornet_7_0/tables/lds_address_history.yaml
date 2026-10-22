@@ -1,0 +1,146 @@
+v: 1
+name: lds_address_history
+composite_key:
+- ADDRESSID
+domain_description: Longitudinal record of a patient’s address that adheres to the requirements of a Limited
+  Data Set.
+domain_order: 20
+constraints:
+- field: ADDRESSID
+  rule: unique
+  order: 80
+- field: ADDRESSID
+  rule: required, not null
+  order: 81
+- field: PATID
+  rule: required, not null
+  order: 82
+- field: ADDRESS_USE
+  rule: required, not null
+  order: 83
+- field: ADDRESS_TYPE
+  rule: required, not null
+  order: 84
+- field: ADDRESS_PREFERRED
+  rule: required, not null
+  order: 85
+relations:
+- relation: PK
+  details: ADDRESSID
+  order: 59
+- relation: FK (many to one)
+  details: ADDRESS_HISTORY.PATID references DEMOGRAPHIC.PATID
+  order: 60
+fields:
+- name: ADDRESSID
+  rdbms_type: RDBMS Text(x)
+  order: 351
+  sas_type: SAS Char(x)
+  definition: Arbitrary identifier for each unique address record.
+- name: PATID
+  rdbms_type: RDBMS Text(x)
+  order: 352
+  sas_type: SAS Char(x)
+  definition: Arbitrary person-level identifier. Used to link across tables.
+- name: ADDRESS_USE
+  rdbms_type: RDBMS Text(2)
+  order: 353
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.lds_address_history.address_use
+  definition: 'Purpose of the address.
+
+
+    Details of categorical definitions:
+
+    Home: A communication address at home.
+
+    Work: An office address.  First choice for business-related contacts during business hours.
+
+    Temp: A temporary address.
+
+    Old/Incorrect: This address is no longer in use (or was never correct but retained for records).
+
+    Other Home: An address where the patient resides, but is not considered the primary home address.'
+- name: ADDRESS_TYPE
+  rdbms_type: RDBMS Text(2)
+  order: 354
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.lds_address_history.address_type
+  definition: 'Type of address.
+
+    Details of categorical definitions:
+
+    Postal: mailing address – PO Boxes and care-of addresses.
+
+    Physical: A physical address that can be visited.
+
+    Both: An address that is both physical and postal.'
+- name: ADDRESS_PREFERRED
+  rdbms_type: RDBMS Text(2)
+  order: 355
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.lds_address_history.address_preferred
+  definition: Indicates whether this address is the preferred one for a given patient, address use and
+    address type within a given address period.
+- name: ADDRESS_CITY
+  rdbms_type: RDBMS Text(x)
+  order: 356
+  sas_type: SAS Char(x)
+  definition: The name of the city, town, village or other community.
+- name: ADDRESS_STATE
+  rdbms_type: RDBMS Text(2)
+  order: 357
+  sas_type: SAS Char(2)
+  definition: State, as represented by 2-digit postal abbreviation.
+- name: ADDRESS_ZIP5
+  rdbms_type: RDBMS Text(5)
+  order: 358
+  sas_type: SAS Char(5)
+  definition: 5-digit postal code for the address.
+- name: ADDRESS_ZIP9
+  rdbms_type: RDBMS Text(9)
+  order: 359
+  sas_type: SAS Char(9)
+  definition: 9-digit postal code for the address.
+- name: ADDRESS_COUNTY
+  rdbms_type: RDBMS Text(x)
+  order: 360
+  sas_type: SAS Char(x)
+  definition: The name of the county associated with the address.
+- name: ADDRESS_PERIOD_START
+  rdbms_type: RDBMS Date
+  order: 361
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Initial date when the address is known to be in use.
+- name: ADDRESS_PERIOD_END
+  rdbms_type: RDBMS Date
+  order: 362
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Date when address was no longer in use.
+- name: STATE_FIPS
+  rdbms_type: RDBMS Text(2)
+  order: 363
+  sas_type: SAS Char(2)
+  definition: Two-digit Federal Information Processing System (FIPS) code for the state associated with
+    the address record.
+- name: COUNTY_FIPS
+  rdbms_type: RDBMS Text(5)
+  order: 364
+  sas_type: SAS Char(5)
+  definition: Five-digit Federal Information Processing System (FIPS) code for the county associated with
+    the address record.  The first two digits of the county FIPS code correspond to the state.
+- name: RUCA_ZIP
+  rdbms_type: RDBMS Text(2)
+  order: 365
+  sas_type: SAS Char(2)
+  definition: Rural Urban Commuting Area (RUCA) code for the 5-digit zip code associated with the address
+    record.
+- name: CURRENT_ADDRESS_FLAG
+  rdbms_type: RDBMS Text(1)
+  order: 366
+  sas_type: SAS Char(1)
+  valueset: pcornet_7_0.lds_address_history.current_address_flag
+  definition: Flag to indicate whether this address record should be considered as the patient’s current
+    physical home address.

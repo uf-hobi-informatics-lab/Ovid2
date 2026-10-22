@@ -1,0 +1,28 @@
+id: "4.02"
+name: DC 4.02
+part: part4
+edc_table: Table VB
+description: Encounter-type domain counts dropped to zero or decreased >5% vs the prior refresh
+operator: refresh_trend
+source_tables:
+  - DIAGNOSIS
+  - PROCEDURES
+  - LAB_RESULT_CM
+  - PRESCRIBING
+params: {}
+metrics:
+  - CURRENT_ROWS
+  - PRIOR_ROWS
+  - RECORD_DELTA_PCT
+exception_metrics:
+  - RECORD_DELTA_PCT
+thresholds:
+  decrease_pct_lt: -5.0
+enabled: true
+doc_summary: >-
+  DC 4.02 (Table VB): selected encounter-linked domain record counts
+  (diagnoses, procedures, labs, prescriptions) did not drop to zero or
+  decrease more than 5% versus the previous refresh.
+doc_interpretation: >-
+  RECORD_DELTA_PCT below -5% or a drop to zero (EXCEPTION) means an
+  encounter-linked domain lost records between refreshes.

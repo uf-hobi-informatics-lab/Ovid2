@@ -1,0 +1,9 @@
+# PCORnet PROVIDER -> OMOP provider.
+# provider_id = hash_key_id(PROVIDERID) (deterministic numeric surrogate);
+# provider_source_value = PROVIDERID. Gender from the static dicts.
+# specialty_concept_id left at '0' in M2 (NUCC-taxonomy resolution is a
+# later milestone); specialty_source_value carries the raw code.
+v: 1
+formatter: provider
+adapter: custom
+class: ovid2_pipelines.pcornet_to_omop.formatters_custom.provider_formatter.ProviderFormatter

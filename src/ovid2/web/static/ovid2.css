@@ -1,0 +1,4562 @@
+/*
+ * Ovid2 control panel — stylesheet v2.
+ *
+ * A device-agnostic, dependency-free stylesheet for the FastAPI +
+ * Jinja + HTMX control panel. Ships with the wheel; no bundler.
+ *
+ * Design goals
+ * ------------
+ *
+ *  1. Safety-net first.   Nothing on the page should ever render at
+ *                         its intrinsic pixel size — not even if the
+ *                         rest of this file fails to load. See the
+ *                         "Reset + safety net" section below.
+ *
+ *  2. Responsive shell.   One HTML skeleton, three viewport modes:
+ *                            ≥ 1200 px  — 240 px expanded drawer.
+ *                           900–1199 px — 64 px icon rail.
+ *                            < 900 px   — hidden drawer + hamburger.
+ *
+ *  3. Theming via tokens. Every colour, radius, shadow and z-index is
+ *                         a CSS custom property. Day/night is a
+ *                         single ``data-theme`` attribute flip on the
+ *                         ``<html>`` element; a pre-paint script in
+ *                         ``base.html`` sets it before first paint.
+ *
+ *  4. Accessible defaults. Visible ``:focus-visible`` rings, colour
+ *                         contrast tuned for WCAG AA, reduced-motion
+ *                         support, keyboard-friendly drawer.
+ *
+ * File map
+ * --------
+ *
+ *   1. Reset + safety net.
+ *   2. Tokens (light + dark).
+ *   3. Base typography.
+ *   4. Layout shell (topbar, drawer, main, footer).
+ *   5. Buttons and interactive controls.
+ *   6. Cards, grids, page headers.
+ *   7. Tables.
+ *   8. Forms.
+ *   9. Badges, flashes, empty states.
+ *  10. Events + timelines.
+ *  11. Code + log blocks.
+ *  12. Responsive breakpoints.
+ *  13. Utilities.
+ *  14. Print + reduced-motion.
+ */
+
+
+/* ------------------------------------------------------------------ *
+ * 0. Bundled webfont — Space Grotesk (SIL Open Font License 1.1)
+ *
+ * Self-hosted under ``/static/fonts/`` so the modern, geometric
+ * "space age" UI face renders identically on every OS with no
+ * external network dependency. ``font-display: swap`` keeps first
+ * paint instant, falling back to the system stack until the woff2
+ * arrives. Weights: 300 / 400 / 500 / 700.
+ * ------------------------------------------------------------------ */
+
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url("/static/fonts/space-grotesk-300.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/space-grotesk-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/static/fonts/space-grotesk-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/static/fonts/space-grotesk-700.woff2") format("woff2");
+}
+
+/* Orbitron — self-hosted (no CDN), variable weight. Used ONLY for the
+ * "Ovid2" wordmark and the "ovid2" console / terminal prompt labels to
+ * give them a space-theme feel. The body font stays Space Grotesk. */
+@font-face {
+  font-family: "Orbitron";
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url("/static/fonts/orbitron.woff2") format("woff2");
+}
+
+/* Per-theme personality faces — self-hosted (no CDN), SIL OFL 1.1.
+ * These are wired into the individual [data-theme] blocks below via the
+ * per-theme --font-display / --body-ff tokens so each shipped theme
+ * "feels" like its namesake. Latin-subset variable woff2 (single file
+ * per family carries the whole weight axis). See fonts/OFL.txt. */
+
+/* Fredoka — rounded, bubbly cartoon display (Super Mario World). */
+@font-face {
+  font-family: "Fredoka";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("/static/fonts/fredoka.woff2") format("woff2");
+}
+
+/* VT323 — DEC-VT320 terminal bitmap face (Matrix). Single weight. */
+@font-face {
+  font-family: "VT323";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/vt323.woff2") format("woff2");
+}
+
+/* Inter — crisp neutral dashboard sans, tabular figures (Clinical). */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/static/fonts/inter.woff2") format("woff2");
+}
+
+/* Exo 2 — techno-geometric body face (Star Wars / Tatooine). */
+@font-face {
+  font-family: "Exo 2";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/static/fonts/exo2.woff2") format("woff2");
+}
+
+/* Baloo 2 — heavy chunky rounded display (LEGO). */
+@font-face {
+  font-family: "Baloo 2";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("/static/fonts/baloo2.woff2") format("woff2");
+}
+
+/* Nunito — rounded geometric body sans (LEGO). */
+@font-face {
+  font-family: "Nunito";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("/static/fonts/nunito.woff2") format("woff2");
+}
+
+
+/* ------------------------------------------------------------------ *
+ * 1. Reset + safety net
+ *
+ * These rules apply even if every subsequent section fails to
+ * cascade. In particular: ``img { max-width: 100%; height: auto }``
+ * makes it impossible for a raster asset to render at its intrinsic
+ * pixel size in this document, even if the CSS load races the HTML.
+ * ------------------------------------------------------------------ */
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { min-height: 100vh; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  font-family: var(--body-ff);
+  font-size: var(--body-fs);
+  font-weight: var(--body-fw);
+  line-height: 1.55;
+  letter-spacing: 0.01em;
+  color: var(--fg);
+  background: var(--bg);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Never let raster assets overflow their container. */
+img, svg, video, canvas { max-width: 100%; height: auto; display: block; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+button { font: inherit; color: inherit; }
+
+hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
+
+/* Keyboard skip-link: only visible when focused. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  padding: 0.5rem 0.75rem;
+  background: var(--accent);
+  color: var(--accent-fg);
+  z-index: 1000;
+}
+.skip-link:focus-visible {
+  left: 0.5rem;
+  top: 0.5rem;
+  outline: 2px solid var(--accent-fg);
+}
+
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+
+/* ------------------------------------------------------------------ *
+ * 2. Tokens
+ *
+ * Both themes MUST declare the same set of tokens. A contract test
+ * (``tests/contract/test_web_templates.py``) asserts this invariant.
+ * ------------------------------------------------------------------ */
+
+/* Theme-independent brand tokens. Declared in a standalone :root block
+ * (NOT the [data-theme="light"] block) so they stay constant across
+ * every theme and do not break the light/dark token-symmetry contract
+ * (tests/contract/test_web_shell_v2.py). */
+:root {
+  /* Space-theme display face — brand wordmark + prompt labels only. */
+  --font-display: "Orbitron", "Space Grotesk", var(--mono);
+   /* Matrix green — used for the Ovid wordmark, the "ovid2" prompt glyphs
+   * / labels, and the live terminal cursor. Softened toward a terminal
+   * phosphor green (was the near-neon #00c936, which read as "blinding"
+   * next to the muted UI). The glow alpha is dialled back to match. */
+  --matrix-green: #3fae5a;
+  --matrix-glow: rgba(63, 174, 90, 0.22);
+
+  /* ---------------------------------------------------------------- *
+   * Right tools rail + panel geometry.
+   *
+   * Theme-independent (kept out of the per-theme blocks so they do
+   * not have to be duplicated across all eight palettes and do not
+   * disturb the light/dark token-symmetry contract in
+   * tests/contract/test_web_shell_v2.py). The rail is always visible;
+   * the panel width is only consumed when <html>.right-panel-open. */
+  --rail-w: 56px;
+  --right-panel-w: 320px;
+
+  /* ---------------------------------------------------------------- *
+   * Per-component appearance tokens (the "grouped components" the
+   * appearance editor lets a user restyle independently). Each group
+   * has a font-size, font-weight and font-family knob; colours reuse
+   * the semantic tokens (--fg, --accent, --card-bg, …) which the
+   * editor overrides inline on <html>.
+   *
+   * Defaults deliberately ALIAS the existing --fs-* / font tokens so
+   * an unedited page is pixel-identical to before. They are declared
+   * here (theme-independent) with `var(...)` fallbacks that resolve
+   * against whichever theme block is active. Font-family choices are a
+   * curated, locally-available set (no web-font fetch). */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-serif: Georgia, Cambria, "Times New Roman", Times, serif;
+  /* The historic body font stack — kept as the body group's default so
+   * an unedited page is pixel-identical to before this feature. */
+  --font-body-default: "Space Grotesk", "SF Pro Display", "Segoe UI Variable",
+                       system-ui, -apple-system, "Segoe UI", Roboto,
+                       "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+
+  /* Body / text group. */
+  --body-ff: var(--font-body-default);
+  --body-fs: 13px;
+  --body-fw: 400;
+
+  /* Navigation group. */
+  --nav-ff: var(--font-sans);
+  --nav-fs: var(--fs-md);
+  --nav-fw: 500;
+
+  /* Accent / buttons group. */
+  --btn-ff: var(--font-sans);
+  --btn-fs: var(--fs-sm);
+  --btn-fw: 500;
+
+  /* Cards & tables group. Defaults inherit (cards/tables historically
+   * took the body font); the editor overrides these inline. */
+  --card-ff: inherit;
+  --card-fs: inherit;
+  --card-fw: inherit;
+  --table-fs: var(--fs-sm);
+
+  /* Surface group has no typography of its own; its colours are the
+   * existing --bg / --bg-elev / --card-bg tokens, overridden inline. */
+}
+
+/* ------------------------------------------------------------------ *
+ * 2.  Shipped themes
+ *
+ * Six curated named themes ship by default: Clinical, Matrix,
+ * Super Mario World, Star Wars / Tatooine, Financial, LEGO.
+ *
+ * The ``light`` and ``dark`` selectors are kept as ALIASES on the
+ * Clinical (light baseline) and Matrix (dark baseline) blocks. Two
+ * reasons: (1) the pre-paint snippet in base.html falls back to
+ * ``light`` / ``dark`` from the OS ``prefers-color-scheme`` when no
+ * theme is stored; (2) the light/dark token-symmetry contract in
+ * ``tests/contract/test_web_shell_v2.py`` requires both selectors to
+ * exist and declare an identical token set.
+ *
+ * Every block below declares the COMPLETE token set of the baseline
+ * (same contract). Only colour tokens change per palette; geometry /
+ * typography / motion tokens are verbatim copies so layout is
+ * identical across themes.
+ * ------------------------------------------------------------------ */
+
+/* --- Clinical (light baseline + default). Alias: light.
+ *     Clean modern medical-dashboard look: cool off-white canvas,
+ *     crisp teal-blue accent, soft low-contrast borders. ----------- */
+:root,
+[data-theme="clinical"],
+[data-theme="light"] {
+  /* Semantic colours. Vivid but calm medical palette: deeper ink for
+     tighter body contrast, a brighter cyan-teal accent. */
+  --fg: #0f1b26;
+  --fg-muted: #4a5b6d;
+  --fg-subtle: #8595a6;
+  --bg: #eef4f9;
+  --bg-elev: #ffffff;
+  --card-bg: #ffffff;
+  --border: #dbe4ee;
+  --border-strong: #c2d0dd;
+  --accent: #0891b2;
+  --accent-hover: #0e7490;
+  --accent-fg: #ffffff;
+  --accent-subtle: rgba(8, 145, 178, 0.11);
+  --ok: #059669;
+  --warn: #d97706;
+  --err: #dc2626;
+  --info: #0891b2;
+
+  /* Chrome. */
+  --topbar-bg: rgba(255, 255, 255, 0.9);
+  --topbar-fg: #0f1b26;
+  --topbar-border: #dbe4ee;
+  --drawer-bg: #ffffff;
+  --drawer-fg: #3c4b5b;
+  --drawer-fg-muted: #8595a6;
+  --drawer-hover-bg: #eef4f8;
+  --drawer-active-bg: #dcf1f6;
+  --drawer-active-fg: #0891b2;
+  --drawer-active-border: #0891b2;
+  --drawer-border: #e9eef4;
+  --scrim-bg: rgba(16, 32, 48, 0.42);
+
+  /* Blocks. */
+  --code-bg: #0f1b26;
+  --code-fg: #e9eef4;
+  --log-bg: rgba(16, 32, 48, 0.04);
+
+  /* Row overlays. */
+  --overlay-err:  rgba(220, 38, 38, 0.06);
+  --overlay-warn: rgba(217, 119, 6, 0.06);
+  --overlay-ok:   rgba(5, 150, 105, 0.06);
+  --flash-ok-bg:  rgba(5, 150, 105, 0.10);
+  --flash-err-bg: rgba(220, 38, 38, 0.10);
+
+  /* Elevation. */
+  --shadow-1: 0 1px 2px rgba(16, 32, 48, 0.05),
+              0 1px 3px rgba(16, 32, 48, 0.04);
+  --shadow-2: 0 6px 16px rgba(16, 32, 48, 0.07),
+              0 2px 5px  rgba(16, 32, 48, 0.05);
+  --shadow-3: 0 14px 32px rgba(16, 32, 48, 0.12),
+              0 5px 14px  rgba(16, 32, 48, 0.07);
+
+  /* Typography. */
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.85rem;
+  --fs-md: 0.95rem;
+  --fs-lg: 1.15rem;
+  --fs-xl: 1.5rem;
+
+  /* Geometry. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  --topbar-h: 56px;
+  --drawer-w: 240px;
+  --drawer-rail-w: 64px;
+  --page-max: 1400px;
+
+  /* Motion. */
+  --dur-fast: 120ms;
+  --dur-med: 200ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Clinical typography — crisp neutral dashboard sans (Inter) for both
+ * the brand wordmark and the body. Scoped to clinical/light only (NOT
+ * the :root default) so the other shipped themes keep their own faces.
+ * The appearance editor can still override --body-ff inline. */
+[data-theme="clinical"],
+[data-theme="light"] {
+  --font-display: "Inter", "Space Grotesk", var(--mono);
+  --body-ff: "Inter", var(--font-body-default);
+}
+
+/* --- Matrix (dark baseline). Black terminal + phosphor green.
+ *     Alias: dark. ------------------------------------------------- */
+[data-theme="matrix"],
+[data-theme="dark"] {
+  --fg: #b6ffc4;
+  --fg-muted: #45d95f;
+  --fg-subtle: #2f9c44;
+  --bg: #000000;
+  --bg-elev: #030a04;
+  --card-bg: #050f07;
+  --border: #0f3d1c;
+  --border-strong: #1a5e2c;
+  --accent: #00ff41;
+  --accent-hover: #57ff85;
+  --accent-fg: #001005;
+  --accent-subtle: rgba(0, 255, 65, 0.16);
+  --ok: #00ff41;
+  --warn: #c6ff33;
+  --err: #ff4d4d;
+  --info: #00ff41;
+
+  --topbar-bg: rgba(0, 8, 2, 0.94);
+  --topbar-fg: #b6ffc4;
+  --topbar-border: #0f3d1c;
+  --drawer-bg: #020602;
+  --drawer-fg: #7dff98;
+  --drawer-fg-muted: #2f9c44;
+  --drawer-hover-bg: #08200e;
+  --drawer-active-bg: #0d3a1b;
+  --drawer-active-fg: #57ff85;
+  --drawer-active-border: #00ff41;
+  --drawer-border: #0a2c13;
+  --scrim-bg: rgba(0, 0, 0, 0.74);
+
+  --code-bg: #000300;
+  --code-fg: #00ff41;
+  --log-bg: rgba(0, 255, 65, 0.06);
+
+  --overlay-err:  rgba(255, 77, 77, 0.12);
+  --overlay-warn: rgba(198, 255, 51, 0.12);
+  --overlay-ok:   rgba(0, 255, 65, 0.12);
+  --flash-ok-bg:  rgba(0, 255, 65, 0.18);
+  --flash-err-bg: rgba(255, 77, 77, 0.18);
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.6),
+              0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.7),
+              0 2px 4px  rgba(0, 0, 0, 0.5);
+  --shadow-3: 0 10px 28px rgba(0, 0, 0, 0.8),
+              0 4px 12px  rgba(0, 0, 0, 0.6);
+
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.85rem;
+  --fs-md: 0.95rem;
+  --fs-lg: 1.15rem;
+  --fs-xl: 1.5rem;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  --topbar-h: 56px;
+  --drawer-w: 240px;
+  --drawer-rail-w: 64px;
+  --page-max: 1400px;
+
+  --dur-fast: 120ms;
+  --dur-med: 200ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Matrix typography — DEC-VT320 terminal face (VT323) for the wordmark,
+ * prompt and body, so the whole shell reads like a CRT console. Scoped
+ * to matrix/dark only (NOT the dark baseline block itself) to preserve
+ * the light/dark token-symmetry contract. VT323 renders small, so the
+ * body/nav sizes are bumped a notch for legibility. */
+[data-theme="matrix"],
+[data-theme="dark"] {
+  --font-display: "VT323", ui-monospace, "SF Mono", Menlo, monospace;
+  --body-ff: "VT323", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --mono: "VT323", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --body-fs: 15px;
+  --nav-ff: "VT323", ui-monospace, monospace;
+  --nav-fs: 1.05rem;
+  --matrix-green: #00ff41;
+  --matrix-glow: rgba(0, 255, 65, 0.35);
+}
+
+/* --- Super Mario World. Bright sky blue + brick red / coin gold. -- */
+[data-theme="super-mario-world"] {
+  --fg: #1b1b2f;
+  --fg-muted: #45508a;
+  --fg-subtle: #7b86b8;
+  --bg: #6bb6ff;
+  --bg-elev: #eaf4ff;
+  --card-bg: #ffffff;
+  --border: #b8d8ff;
+  --border-strong: #8fbdf5;
+  --accent: #e52521;
+  --accent-hover: #c31c19;
+  --accent-fg: #ffffff;
+  --accent-subtle: rgba(229, 37, 33, 0.12);
+  --ok: #43b047;
+  --warn: #fbd000;
+  --err: #e52521;
+  --info: #049cd8;
+
+  --topbar-bg: rgba(4, 156, 216, 0.95);
+  --topbar-fg: #ffffff;
+  --topbar-border: #0384b8;
+  --drawer-bg: #ffffff;
+  --drawer-fg: #1b1b2f;
+  --drawer-fg-muted: #7b86b8;
+  --drawer-hover-bg: #fff4cc;
+  --drawer-active-bg: #ffe08a;
+  --drawer-active-fg: #b3401a;
+  --drawer-active-border: #e52521;
+  --drawer-border: #ffe08a;
+  --scrim-bg: rgba(27, 27, 47, 0.45);
+
+  --code-bg: #1b1b2f;
+  --code-fg: #fbd000;
+  --log-bg: rgba(4, 156, 216, 0.06);
+
+  --overlay-err:  rgba(229, 37, 33, 0.08);
+  --overlay-warn: rgba(251, 208, 0, 0.14);
+  --overlay-ok:   rgba(67, 176, 71, 0.08);
+  --flash-ok-bg:  rgba(67, 176, 71, 0.14);
+  --flash-err-bg: rgba(229, 37, 33, 0.12);
+
+  --shadow-1: 0 1px 2px rgba(27, 27, 47, 0.10),
+              0 1px 3px rgba(27, 27, 47, 0.08);
+  --shadow-2: 0 4px 12px rgba(27, 27, 47, 0.14),
+              0 2px 4px  rgba(27, 27, 47, 0.08);
+  --shadow-3: 0 10px 28px rgba(27, 27, 47, 0.22),
+              0 4px 12px  rgba(27, 27, 47, 0.12);
+
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.85rem;
+  --fs-md: 0.95rem;
+  --fs-lg: 1.15rem;
+  --fs-xl: 1.5rem;
+
+  /* Cartoonish rounded display + body face (Fredoka), heavier nav/brand
+     weights and chunkier radii for a playful, game-menu feel. */
+  --font-display: "Fredoka", "Baloo 2", var(--font-body-default);
+  --body-ff: "Fredoka", var(--font-body-default);
+  --body-fw: 500;
+  --nav-ff: "Fredoka", var(--font-body-default);
+  --nav-fw: 600;
+  --btn-ff: "Fredoka", var(--font-body-default);
+  --btn-fw: 600;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+
+  --topbar-h: 56px;
+  --drawer-w: 240px;
+  --drawer-rail-w: 64px;
+  --page-max: 1400px;
+
+  --dur-fast: 120ms;
+  --dur-med: 200ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --- Star Wars / Tatooine. Deep space-night ink, dusty desert panels,
+ *     twin-sun amber accent. Orbitron display + Exo 2 body. ---------- */
+[data-theme="tatooine"] {
+  --fg: #f3e2c2;
+  --fg-muted: #b79a6d;
+  --fg-subtle: #8a7350;
+  --bg: #14100b;
+  --bg-elev: #1e1710;
+  --card-bg: #221a11;
+  --border: #3a2c1a;
+  --border-strong: #55401f;
+  --accent: #f2a935;
+  --accent-hover: #ffc25a;
+  --accent-fg: #1a1104;
+  --accent-subtle: rgba(242, 169, 53, 0.15);
+  --ok: #c9a24b;
+  --warn: #e8862a;
+  --err: #e5533b;
+  --info: #6fb2c4;
+
+  --topbar-bg: rgba(20, 16, 11, 0.94);
+  --topbar-fg: #f3e2c2;
+  --topbar-border: #3a2c1a;
+  --drawer-bg: #1a140d;
+  --drawer-fg: #d9c19a;
+  --drawer-fg-muted: #8a7350;
+  --drawer-hover-bg: #261d12;
+  --drawer-active-bg: #3a2a13;
+  --drawer-active-fg: #ffc25a;
+  --drawer-active-border: #f2a935;
+  --drawer-border: #2c2114;
+  --scrim-bg: rgba(0, 0, 0, 0.62);
+
+  --code-bg: #0d0a06;
+  --code-fg: #f2a935;
+  --log-bg: rgba(242, 169, 53, 0.05);
+
+  --overlay-err:  rgba(229, 83, 59, 0.12);
+  --overlay-warn: rgba(232, 134, 42, 0.12);
+  --overlay-ok:   rgba(201, 162, 75, 0.12);
+  --flash-ok-bg:  rgba(201, 162, 75, 0.16);
+  --flash-err-bg: rgba(229, 83, 59, 0.16);
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5),
+              0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.6),
+              0 2px 4px  rgba(0, 0, 0, 0.45);
+  --shadow-3: 0 10px 28px rgba(0, 0, 0, 0.7),
+              0 4px 12px  rgba(0, 0, 0, 0.5);
+
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.85rem;
+  --fs-md: 0.95rem;
+  --fs-lg: 1.15rem;
+  --fs-xl: 1.5rem;
+
+  /* Retro-future sci-fi display (Orbitron) + techno-geometric body
+     (Exo 2), with a touch of letter-spacing on the brand. */
+  --font-display: "Orbitron", "Exo 2", var(--font-body-default);
+  --body-ff: "Exo 2", var(--font-body-default);
+  --nav-ff: "Exo 2", var(--font-body-default);
+  --nav-fw: 600;
+  --btn-ff: "Orbitron", "Exo 2", var(--font-body-default);
+  --btn-fw: 600;
+
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
+  --radius-pill: 999px;
+
+  --topbar-h: 56px;
+  --drawer-w: 240px;
+  --drawer-rail-w: 64px;
+  --page-max: 1400px;
+
+  --dur-fast: 120ms;
+  --dur-med: 200ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --- Financial. Dark trading-desk charcoal, gain-green accent. ---- */
+[data-theme="financial"] {
+  --fg: #e8edf2;
+  --fg-muted: #9fb0c0;
+  --fg-subtle: #6b7c8c;
+  --bg: #0d141b;
+  --bg-elev: #131d27;
+  --card-bg: #131d27;
+  --border: #21303d;
+  --border-strong: #2f4353;
+  --accent: #16b877;
+  --accent-hover: #1ad089;
+  --accent-fg: #04140d;
+  --accent-subtle: rgba(22, 184, 119, 0.14);
+  --ok: #16b877;
+  --warn: #e0a53b;
+  --err: #e8524a;
+  --info: #3d97d6;
+
+  --topbar-bg: rgba(13, 20, 27, 0.94);
+  --topbar-fg: #e8edf2;
+  --topbar-border: #21303d;
+  --drawer-bg: #0f1821;
+  --drawer-fg: #c2ced9;
+  --drawer-fg-muted: #6b7c8c;
+  --drawer-hover-bg: #17232e;
+  --drawer-active-bg: #123128;
+  --drawer-active-fg: #1ad089;
+  --drawer-active-border: #16b877;
+  --drawer-border: #182530;
+  --scrim-bg: rgba(0, 0, 0, 0.6);
+
+  --code-bg: #080f15;
+  --code-fg: #e8edf2;
+  --log-bg: rgba(255, 255, 255, 0.04);
+
+  --overlay-err:  rgba(232, 82, 74, 0.12);
+  --overlay-warn: rgba(224, 165, 59, 0.12);
+  --overlay-ok:   rgba(22, 184, 119, 0.12);
+  --flash-ok-bg:  rgba(22, 184, 119, 0.18);
+  --flash-err-bg: rgba(232, 82, 74, 0.18);
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45),
+              0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.55),
+              0 2px 4px  rgba(0, 0, 0, 0.4);
+  --shadow-3: 0 10px 28px rgba(0, 0, 0, 0.65),
+              0 4px 12px  rgba(0, 0, 0, 0.45);
+
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.85rem;
+  --fs-md: 0.95rem;
+  --fs-lg: 1.15rem;
+  --fs-xl: 1.5rem;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  --topbar-h: 56px;
+  --drawer-w: 240px;
+  --drawer-rail-w: 64px;
+  --page-max: 1400px;
+
+  --dur-fast: 120ms;
+  --dur-med: 200ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --- LEGO. Bright primary toy-brick palette on a clean light surface,
+ *     chunky rounded studs. Baloo 2 display + Nunito body. ---------- */
+[data-theme="lego"] {
+  --fg: #14202e;
+  --fg-muted: #45566a;
+  --fg-subtle: #7c8da0;
+  --bg: #eef3f7;
+  --bg-elev: #ffffff;
+  --card-bg: #ffffff;
+  --border: #d6e0ea;
+  --border-strong: #b9c8d8;
+  --accent: #d01012;
+  --accent-hover: #b00d0f;
+  --accent-fg: #ffffff;
+  --accent-subtle: rgba(208, 16, 18, 0.12);
+  --ok: #237841;
+  --warn: #f5c518;
+  --err: #d01012;
+  --info: #0055bf;
+
+  --topbar-bg: rgba(0, 85, 191, 0.96);
+  --topbar-fg: #ffffff;
+  --topbar-border: #0047a0;
+  --drawer-bg: #ffffff;
+  --drawer-fg: #14202e;
+  --drawer-fg-muted: #7c8da0;
+  --drawer-hover-bg: #fff3c4;
+  --drawer-active-bg: #ffe066;
+  --drawer-active-fg: #a80d0f;
+  --drawer-active-border: #d01012;
+  --drawer-border: #ffe066;
+  --scrim-bg: rgba(20, 32, 46, 0.45);
+
+  --code-bg: #14202e;
+  --code-fg: #f5c518;
+  --log-bg: rgba(0, 85, 191, 0.06);
+
+  --overlay-err:  rgba(208, 16, 18, 0.08);
+  --overlay-warn: rgba(245, 197, 24, 0.16);
+  --overlay-ok:   rgba(35, 120, 65, 0.09);
+  --flash-ok-bg:  rgba(35, 120, 65, 0.14);
+  --flash-err-bg: rgba(208, 16, 18, 0.12);
+
+  --shadow-1: 0 1px 2px rgba(20, 32, 46, 0.10),
+              0 1px 3px rgba(20, 32, 46, 0.08);
+  --shadow-2: 0 4px 12px rgba(20, 32, 46, 0.14),
+              0 2px 4px  rgba(20, 32, 46, 0.08);
+  --shadow-3: 0 10px 28px rgba(20, 32, 46, 0.22),
+              0 4px 12px  rgba(20, 32, 46, 0.12);
+
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.85rem;
+  --fs-md: 0.95rem;
+  --fs-lg: 1.15rem;
+  --fs-xl: 1.5rem;
+
+  /* Chunky moulded-brick display (Baloo 2) + rounded body (Nunito),
+     with fat radii so cards read like plastic bricks. */
+  --font-display: "Baloo 2", "Fredoka", var(--font-body-default);
+  --body-ff: "Nunito", var(--font-body-default);
+  --body-fw: 500;
+  --nav-ff: "Baloo 2", "Nunito", var(--font-body-default);
+  --nav-fw: 700;
+  --btn-ff: "Baloo 2", "Nunito", var(--font-body-default);
+  --btn-fw: 700;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+
+  --topbar-h: 56px;
+  --drawer-w: 240px;
+  --drawer-rail-w: 64px;
+  --page-max: 1400px;
+
+  --dur-fast: 120ms;
+  --dur-med: 200ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+
+/* ------------------------------------------------------------------ *
+ * 13.a  Full-width run console (run-detail page)
+ *
+ * The run-detail page is a single terminal console that fills the
+ * whole main content area (everything right of the left nav). It
+ * replaces the previous two-column grid (D3 metrics tiles + job
+ * status card + Timeline / Tables / Fixes / Events tables).
+ *
+ * ``.terminal-pane`` is styled like a monospace terminal (dark
+ * background, colour-coded line prefixes, blinking block cursor) so
+ * the operator sees exactly what the backend is doing. On top it
+ * carries an ovid-style job-details header block, a live meta strip
+ * (pipeline · batch · path · current-table timer · total elapsed),
+ * the tail-f body, and a total-elapsed footer.
+ * ------------------------------------------------------------------ */
+
+/* Console page shell — the terminal fills the main area edge to edge.
+   ``.main`` already reserves the drawer width on the left, so the
+   console just stretches to fill the remaining viewport height. */
+.console-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.console-backlink {
+  margin: 0 0 0.5rem;
+  font-size: var(--fs-sm);
+}
+
+/* The hidden job-status shim keeps the HTMX status poll + failure
+   banner contract alive without occupying layout space; the visible
+   status is rendered as a pill in the console header block. */
+.run-job-status-shim {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ------------------------------------------------------------------ *
+ * Runs workspace — merged master-detail layout.
+ *
+ * Left  : a scrollable vertical run-history list (newest first) with
+ *         HTMX infinite-scroll paging into older runs.
+ * Right : the live run console ("canvas"), which fills all available
+ *         space and grows with the viewport.
+ *
+ * The two old list pages (/jobs, /runs) and the standalone /runs/{id}
+ * detail page collapsed into this single surface.
+ * ------------------------------------------------------------------ */
+
+/* Visually-hidden label helper (used by the compact filter row). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The workspace owns the full height below the topbar and lays out the
+   list + console as a two-column grid. */
+.runs-workspace {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: stretch;
+  height: calc(100vh - var(--topbar-h) - 3rem);
+  min-height: 0;
+  max-width: none;
+}
+
+/* Left column: the run-history list. Its own scroll; header + filters
+   pinned, the item list flexes and scrolls. */
+.run-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.run-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.run-list-heading {
+  margin: 0;
+  font-size: var(--fs-md);
+}
+
+.run-list-filters {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.run-list-filters select,
+.run-list-filters input {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.run-list-filters button { flex: 0 0 auto; }
+
+.run-list-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+/* Each run row: pipeline name on top, batch + status sub-bar below. A
+   hover-delayed tooltip (.run-tip) reveals the job id + timestamps. */
+.run-list-item {
+  position: relative;
+  border-bottom: 1px solid var(--border);
+}
+.run-list-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.55rem 0.75rem;
+  color: var(--fg);
+  text-decoration: none;
+  border-left: 3px solid transparent;
+}
+.run-list-link:hover {
+  background: var(--accent-subtle);
+}
+.run-list-item.is-selected > .run-list-link {
+  background: var(--accent-subtle);
+  border-left-color: var(--accent);
+}
+.run-list-name {
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.run-list-sub {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.run-list-batch {
+  color: var(--fg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Hover/focus tooltip — appears after a ~1s delay so a quick pass over
+   the list does not flash tooltips, but resting on a row reveals the
+   job id + received/start/end times. Pure CSS (transition-delay). */
+.run-tip {
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  top: 100%;
+  z-index: 30;
+  margin-top: -0.2rem;
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.5rem 0.6rem;
+  background: var(--bg-elev);
+  color: var(--fg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+  font-size: 0.72rem;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.12s ease, visibility 0s linear 1s;
+  transition-delay: 1s;
+}
+.run-list-item:hover > .run-tip,
+.run-list-item:focus-within > .run-tip {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 1s;
+}
+.run-tip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.run-tip-k {
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.run-tip-v {
+  color: var(--fg);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.run-list-sentinel {
+  padding: 0.6rem 0.75rem;
+  text-align: center;
+}
+.run-list-loading { color: var(--fg-muted); }
+
+/* Right column: the console region. A flex column that owns its height
+   so the console pane fills it and grows with the viewport. */
+.run-detail-region {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.run-console {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  align-self: stretch;
+}
+/* Inside the workspace the console pane fills the flex parent rather
+   than the fixed viewport-height calc it uses on its own. */
+.run-detail-region .console-fill {
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  align-self: stretch;
+}
+.run-detail-region .terminal-pane {
+  max-height: none;
+  margin-top: 0;
+}
+.run-detail-placeholder {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+}
+
+/* Stack the list above the console on narrow viewports. */
+@media (max-width: 899.98px) {
+  .runs-workspace {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .run-list {
+    max-height: 40vh;
+  }
+  .run-detail-region {
+    min-height: 60vh;
+  }
+}
+
+.console-fill {
+  flex: 1 1 auto;
+  /* Fill the viewport below the topbar; the small subtractions leave
+     room for the back-link + page padding. Inside the runs workspace
+     the parent (.run-detail-region) is a flex column that owns the
+     height, so there the pane just fills its parent (see the
+     .runs-workspace override below). */
+  height: calc(100vh - var(--topbar-h) - 4.5rem);
+  min-height: 360px;
+  max-height: none;
+  margin-top: 0;
+}
+
+@media (min-width: 900px) {
+  .console-fill {
+    position: static;
+  }
+}
+
+/* Job-details header block (ovid pipeline-summary style) ---------- */
+
+.term-summary {
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid rgba(120, 200, 160, 0.14);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.term-summary-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+}
+
+.term-summary-title .term-flex { flex: 1 1 auto; }
+
+.term-summary-run {
+  color: #cfe3d5;
+  font-size: 0.82rem;
+}
+
+.term-summary-fields {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.1rem 0.75rem;
+  margin: 0;
+  font-size: 0.74rem;
+}
+
+.term-summary-fields dt {
+  color: #7f9db0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.term-summary-fields dd {
+  margin: 0;
+  color: #cfe3d5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+}
+
+/* Output artifacts strip — icon-only links (report / worker log / raw
+   log) living in the right-pane header. Compact square icon buttons
+   with a subtle border + hover, sitting opposite the "Detail" title. */
+.term-output-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: auto;
+}
+.term-output-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  color: #7f9db0;
+  border: 1px solid rgba(120, 200, 160, 0.18);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.18);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.term-output-link:hover {
+  color: #7fe0a5;
+  border-color: rgba(127, 224, 165, 0.45);
+  background: rgba(127, 224, 165, 0.12);
+}
+.term-output-link .icon { display: block; }
+
+/* Status pill removed — the "ovid2" prompt label now carries run
+   status (see .term-prompt-label[data-status]). */
+
+/* Total-elapsed footer (ovid parity). */
+.term-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.35rem 0.8rem;
+  border-top: 1px solid rgba(120, 200, 160, 0.14);
+  background: rgba(0, 0, 0, 0.22);
+  font-size: 0.74rem;
+}
+
+.term-total-label { color: #7f9db0; }
+
+/* Footer "Total Elapsed Time" clock — the primary run timer. A calm,
+ * refined teal-green numeric readout (distinct from the cooler slate of
+ * the per-table detail clock) so the two clocks are never confused.
+ * Slightly larger than the detail-list clock to read as the headline
+ * timer. Format is unchanged (MM:SS.s). */
+.term-total {
+  color: #7fd0b0;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  font-size: 0.9rem;
+  min-width: 6ch;
+  text-align: right;
+  transition: color 0.25s ease;
+}
+
+/* Stopped (frozen) total-elapsed — the run has reached a terminal state
+ * so the clock no longer ticks. Recolour it to the run outcome (reusing
+ * the prompt-label palette) so the operator can see at a glance that the
+ * timer has stopped instead of it staying the live teal-green colour.
+ * Format is unchanged (MM:SS.s); colour alone signals the stop. */
+.term-total.is-stopped {
+  color: var(--matrix-green);
+}
+.term-total.is-stopped[data-final-status="failed"] {
+  color: var(--err);
+}
+.term-total.is-stopped[data-final-status="cancelled"] {
+  color: var(--fg-muted);
+  opacity: 0.75;
+}
+
+.terminal-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 320px;
+  max-height: 620px;
+  margin-top: 1rem;
+  background: #0b0f14;
+  color: #cfe3d5;
+  border: 1px dashed #1e2a35;
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08),
+              inset 0 0 24px rgba(20, 40, 60, 0.15);
+}
+
+@media (min-width: 900px) {
+  .terminal-pane:not(.console-fill) {
+    margin-top: 0;
+    position: sticky;
+    top: 0.5rem;
+    align-self: start;
+    max-height: calc(100vh - 1rem);
+  }
+}
+
+/* Subtle "spacey" scanline overlay — very faint, no animation.  */
+.terminal-pane::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.015) 0 1px,
+    transparent 1px 3px
+  );
+  z-index: 0;
+}
+
+.terminal-pane > * {
+  position: relative;
+  z-index: 1;
+}
+
+.term-prompt {
+  color: var(--matrix-green);
+  letter-spacing: 0.04em;
+}
+/* The "ovid2" label wears the space-theme display face. It sits beside
+ * the transport button as *inert* text (clicking it does nothing) and
+ * doubles as the run-status indicator via ``data-status``:
+ *   queued    -> dim/idle matrix-green, static
+ *   running   -> full-brightness matrix-green, static
+ *   done      -> solid matrix-green, static
+ *   failed    -> solid red, static
+ *   cancelled -> muted grey, static (quiet / inactive)
+ * The status is set server-side on first render and flipped live by
+ * mount.js. */
+.term-prompt-label {
+  font-family: var(--font-display);
+  color: var(--matrix-green);
+  letter-spacing: 0.04em;
+  margin-left: 0.3rem;
+  cursor: default;
+  user-select: none;
+}
+/* Queued / ready-to-run — dim, idle green (no glow). */
+.term-prompt-label[data-status="queued"],
+.term-prompt-label[data-status="unknown"] {
+  opacity: 0.55;
+}
+/* Running — full-brightness matrix-green, static (no animation, no glow). */
+.term-prompt-label[data-status="running"] {
+  color: var(--matrix-green);
+}
+/* Stopping (pending cancel) — the user clicked ■ Stop but the worker
+ * hasn't torn the run down yet. Dim the wordmark harder than the queued
+ * idle state so it reads as "winding down / stop pending". UI-only
+ * pseudo-status, never stored server-side. */
+.term-prompt-label[data-status="stopping"] {
+  color: var(--matrix-green);
+  opacity: 0.4;
+}
+/* Terminal states — solid, static colour. */
+.term-prompt-label[data-status="done"] {
+  color: var(--matrix-green);
+}
+.term-prompt-label[data-status="failed"] {
+  color: var(--err);
+}
+/* Cancelled — a quiet, inactive terminal state (no purple). Muted grey
+ * so a stopped run reads as "done / inactive" rather than alarming. */
+.term-prompt-label[data-status="cancelled"] {
+  color: var(--fg-muted);
+  opacity: 0.7;
+  text-shadow: none;
+}
+
+/* The prompt glyph — and *only* the glyph — is the run/stop transport
+ * control: a borderless icon-only button carrying the ▶/■/▽ glyph. It
+ * also doubles as a live run-state indicator via ``data-run-state``. */
+.term-prompt-form { margin: 0; display: inline-flex; }
+button.term-prompt-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 0;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, text-shadow 0.15s ease;
+}
+.term-prompt-glyph {
+  display: inline-flex;
+  align-items: center;
+}
+.term-prompt-glyph .icon { display: block; }
+/* The transport glyphs are the ▶ Play (triangle) and ■ Stop (square).
+ * The shared icon macro renders every glyph with fill="none"; override
+ * that for these two so the shapes are solid/filled. Outline icons
+ * elsewhere are untouched. */
+.icon-play, .icon-stop { fill: currentColor; }
+.term-prompt-btn .icon-play { margin-left: 0.06rem; } /* optical centring */
+button.term-prompt-btn:hover { background: rgba(127, 224, 165, 0.12); }
+
+/* ------------------------------------------------------------------ *
+ * The prompt glyph is ALWAYS a soft, muted green and carries no run
+ * status: while the run is in-flight it is a ■ Stop square, once
+ * terminal a ▶ Play triangle. No animation — the shape simply switches.
+ * Run status is shown on the "ovid2" label, never on this button. When
+ * a stop is pending the button is made inert (see [data-pending]).
+ * ------------------------------------------------------------------ */
+.term-prompt-btn {
+  color: #5fbf83;
+}
+/* Stop pending — the ■ glyph is inert until the run terminates. */
+.term-prompt-btn[data-pending] {
+  pointer-events: none;
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* ------------------------------------------------------------------ *
+ * DRAFT "ready to run" — the one documented exception to the
+ * cursor-only animation policy. A draft job (e.g. prepared by the
+ * assistant) is fully specified but not queued; its ▶ is the human
+ * approval gate, so it "breathes" — a soft green halo plus a gentle
+ * scale — to signal it is waiting to be executed. The animation stops
+ * the moment it is pressed (mount.js drops .run-ready) and is disabled
+ * entirely under prefers-reduced-motion (a static halo remains).
+ * ------------------------------------------------------------------ */
+.term-prompt-label[data-status="draft"] { opacity: 0.75; }
+.term-draft-note { margin-left: 0.5rem; font-style: italic; }
+/* Launched but waiting for a worker slot — distinct from a draft so the
+ * operator can tell "not launched" from "launched, waiting its turn". */
+.term-queue-note { margin-left: 0.5rem; color: var(--warn, var(--fg-muted)); }
+.term-queue-note[hidden] { display: none; }
+.term-draft-discard { margin: 0 0 0 0.5rem; display: inline-flex; }
+.term-draft-discard button.link {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--fg-muted); text-decoration: underline;
+}
+button.term-prompt-btn.run-ready {
+  color: var(--matrix-green, #3fae5a);
+  border-radius: 999px;
+  padding: 0.25rem;
+  animation: run-ready-breathe 2s ease-in-out infinite;
+}
+button.term-prompt-btn.run-ready:hover,
+button.term-prompt-btn.run-ready:focus-visible {
+  animation-play-state: paused;
+  background: rgba(95, 191, 131, 0.22);
+  box-shadow: 0 0 0 3px rgba(95, 191, 131, 0.45);
+}
+@keyframes run-ready-breathe {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(95, 191, 131, 0.0);
+    background: rgba(95, 191, 131, 0.06);
+  }
+  50% {
+    transform: scale(1.14);
+    box-shadow: 0 0 10px 3px rgba(95, 191, 131, 0.45);
+    background: rgba(95, 191, 131, 0.18);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  button.term-prompt-btn.run-ready {
+    animation: none;
+    box-shadow: 0 0 0 2px rgba(95, 191, 131, 0.45);
+  }
+}
+.llm-tool.rejected summary { white-space: normal; }
+
+.term-noscript {
+  padding: 0.75rem 0.85rem;
+  color: #cfe3d5;
+  font-family: inherit;
+}
+.term-noscript a { color: #7fe0a5; }
+
+/* ------------------------------------------------------------------ *
+ * Transport-control colour for the prompt button. The glyph is always
+ * a soft, muted green (no glow) — a ▶ Play (/rerun) once terminal or a
+ * ■ Stop (/cancel) while queued/running. No danger/red state.
+ * ------------------------------------------------------------------ */
+.term-btn-primary { color: #5fbf83; }
+.term-btn-primary:hover { background: rgba(95, 191, 131, 0.16); }
+
+/* ------------------------------------------------------------------ *
+ * Split lower region — left per-table summary, right table detail.
+ * The right column is intentionally a little larger (it carries the
+ * event detail); on narrow viewports the columns stack. With the
+ * scrolling terminal body removed, the split fills the whole pane.
+ * ------------------------------------------------------------------ */
+.term-split {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 0;
+  min-height: 8rem;
+  border-top: 1px solid rgba(120, 200, 160, 0.14);
+  overflow: hidden;
+}
+
+.term-split-left,
+.term-split-right {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.term-split-left {
+  border-right: 1px solid rgba(120, 200, 160, 0.10);
+}
+
+.term-split-title {
+  margin: 0;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #7f9db0;
+  background: rgba(0, 0, 0, 0.20);
+  border-bottom: 1px solid rgba(120, 200, 160, 0.10);
+}
+.term-split-title #table-detail-name,
+.term-split-title #check-detail-name { color: #cfe3d5; }
+
+/* Right pane head: title on the left, action menu (Cancel/Rerun) on
+   the right, sharing one row above the detail area. */
+.term-split-righthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.25rem 0.6rem;
+  background: rgba(0, 0, 0, 0.20);
+  border-bottom: 1px solid rgba(120, 200, 160, 0.10);
+}
+.term-split-righthead .term-split-title {
+  padding: 0;
+  background: transparent;
+  border-bottom: none;
+}
+
+.table-summary,
+.table-detail {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0.35rem 0.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: #2a3e50 transparent;
+}
+.table-summary-empty,
+.table-detail-empty,
+.run-detail-empty { color: #6f8394; }
+
+/* Shared "waiting for data" placeholder — the single empty-state
+   component used by every panel type (ETL tables, health/dq_checks, and
+   any future pipeline type) so they all look identical. Fonts + colour
+   match the panels' other empty-state text (`small mono`, #6f8394); the
+   only motion is a subtle three-dot pulse in the run's accent colour
+   that reads as "data flowing in". Panels overwrite it on their first
+   event. */
+.data-waiting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0.5rem;
+  color: #6f8394;
+}
+.data-waiting-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.data-waiting-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.35;
+  animation: data-waiting-pulse 1.2s ease-in-out infinite;
+}
+.data-waiting-dot:nth-child(2) { animation-delay: 0.18s; }
+.data-waiting-dot:nth-child(3) { animation-delay: 0.36s; }
+.data-waiting-label { color: #6f8394; }
+
+@keyframes data-waiting-pulse {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40%           { opacity: 1;   transform: scale(1.2); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .data-waiting-dot {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* Tiny auto-follow toggle, tucked into the bottom-right corner of the
+   summary list. Pale by default but clearly a button (subtle chip:
+   border + surface), so it reads as an affordance without competing
+   with the roster. Its pressed state (follow active) is tinted green. */
+.term-split-left { position: relative; }
+.table-follow-toggle {
+  position: absolute;
+  right: 0.4rem;
+  bottom: 0.4rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  color: #6f8394;
+  background: rgba(12, 20, 28, 0.82);
+  border: 1px solid rgba(120, 200, 160, 0.22);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  opacity: 0.75;
+  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.table-follow-toggle .icon { display: block; }
+.table-follow-toggle:hover {
+  opacity: 1;
+  color: #cfe3d5;
+  border-color: rgba(120, 200, 160, 0.4);
+}
+.table-follow-toggle:focus-visible {
+  outline: 2px solid rgba(143, 224, 176, 0.6);
+  outline-offset: 1px;
+}
+.table-follow-toggle[aria-pressed="true"] {
+  color: #8fe0b0;
+  border-color: rgba(143, 224, 176, 0.45);
+  opacity: 0.9;
+}
+
+/* Left column: one clickable row per table. */
+.table-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.28rem 0.4rem;
+  margin: 0 0 0.15rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: #cfe3d5;
+  font-family: inherit;
+  font-size: 0.74rem;
+  text-align: left;
+  cursor: pointer;
+}
+.table-row:hover { background: rgba(120, 200, 160, 0.08); }
+.table-row.selected {
+  background: rgba(120, 200, 160, 0.14);
+  border-color: rgba(120, 200, 160, 0.35);
+}
+/* Very subtle zebra striping so adjacent rows are distinguishable
+   without a heavy divider. Hover / selected states override it. */
+.table-row:nth-of-type(even) { background: rgba(255, 255, 255, 0.022); }
+.table-row:nth-of-type(even):hover { background: rgba(120, 200, 160, 0.08); }
+.table-row:nth-of-type(even).selected { background: rgba(120, 200, 160, 0.14); }
+.table-row-name,
+.run-row-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+
+/* Row status tint — a faint status wash + text colour so each row's
+   state reads at a glance. Queued rows are dimmed (not reached yet);
+   running/done/failed carry a subtle, static tint. No animation. */
+.table-row.status-pending { opacity: 0.55; }
+.table-row.status-pending .table-row-name { color: #7c8a99; }
+.table-row.status-running {
+  background: var(--accent-subtle);
+  color: #dcefe0;
+}
+.table-row.status-running:nth-of-type(even) { background: var(--accent-subtle); }
+.table-row.status-completed .table-row-name { color: #bfe0c8; }
+.table-row.status-failed {
+  background: rgba(176, 58, 46, 0.10);
+  color: #f0c4bd;
+}
+.table-row.status-failed:nth-of-type(even) { background: rgba(176, 58, 46, 0.12); }
+/* Hover / selected still win over the status tint. */
+.table-row.status-running:hover,
+.table-row.status-failed:hover { background: rgba(120, 200, 160, 0.12); }
+.table-row.selected { background: rgba(120, 200, 160, 0.14); }
+
+/* Status dot — a small, static, pale indicator sized to feel like the
+   ▶ transport glyph (soft/muted like the run button, no glow, no
+   animation). Colours key off theme vars so every palette works. The
+   same dot vocabulary is shared by every pipeline type's console (ETL
+   tables *and* health/dq_checks), so the two look identical. */
+.table-row-dot,
+.check-row-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.8;
+}
+.table-row-dot.status-pending,
+.table-row-dot.status-queued,
+.check-row-dot.status-pending,
+.check-row-dot.status-queued {
+  color: var(--warn);
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+  opacity: 0.55;
+}
+.table-row-dot.status-running,
+.check-row-dot.status-running        { color: var(--matrix-green); }
+.table-row-dot.status-completed,
+.table-row-dot.status-done,
+.check-row-dot.status-completed,
+.check-row-dot.status-passed         { color: var(--ok); }
+/* ``exception`` is a soft-fail state unique to health checks: amber, so
+   it reads as "needs attention" without the alarm of a hard failure. */
+.table-row-dot.status-exception,
+.check-row-dot.status-exception      { color: var(--warn); }
+.table-row-dot.status-failed,
+.table-row-dot.status-error,
+.check-row-dot.status-failed,
+.check-row-dot.status-error          { color: var(--err); }
+.table-row-dot.status-cancelled,
+.check-row-dot.status-cancelled      { color: var(--fg-muted); opacity: 0.6; }
+
+/* Right column: item detail. Sections flow continuously with no
+   extra gap between items. Shared by every pipeline type's console. */
+.run-detail-section { margin-top: 0; }
+.run-detail-section:first-child { margin-top: 0; }
+.run-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.15rem;
+}
+/* Differentiate the item name from its event log elegantly: no harsh
+   bright bold. A muted accent tint + subtle letter-spacing reads as a
+   quiet section label rather than shouting white text. */
+.run-detail-name {
+  font-weight: 500;
+  color: #8fb8a0;
+  letter-spacing: 0.03em;
+}
+/* Live/frozen per-item clock — a calm slate/teal numeric readout,
+   deliberately a *different* hue from the footer total-elapsed clock
+   (teal-green) so the operator never confuses the per-item timer with
+   the run total. Format is MM:SS.s. Only shown for timed panels
+   (tables); checks omit it. */
+.run-detail-dur {
+  margin-left: auto;
+  color: #8fb8c8;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-align: right;
+}
+/* Indent the per-item event list so the timestamps / event lines sit
+   tabbed-in under the item-name header instead of aligning to the same
+   left edge as the item name. */
+.run-detail-log {
+  display: flex;
+  flex-direction: column;
+  margin-left: 1.1rem;
+  padding-left: 0.6rem;
+}
+.run-detail-line {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.05rem 0.3rem;
+  font-size: 0.74rem;
+  color: #cfe3d5;
+}
+.run-detail-line.is-error { color: #f78579; }
+/* Warning lines read in the theme's warning yellow, matching the
+   footer/per-item clock and the queued dot. */
+.run-detail-line.is-warning { color: var(--warn); }
+.run-detail-ts {
+  color: #cfe3d5;
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+/* The leading timestamp inherits the line's status colour so an
+   error/warning line reads in one colour end-to-end. */
+.run-detail-line.is-error .run-detail-ts { color: inherit; }
+.run-detail-line.is-warning .run-detail-ts { color: inherit; }
+
+/* Selected detail section (clicked in the left list) gets a faint
+   accent frame so the operator sees which item is in view. */
+.run-detail-section.selected .run-detail-name { color: #cfe3d5; }
+/* Grouped summary rows (health checks group by CDC part; tables are
+   flat and emit no group). The heading is a quiet mono label. */
+.run-group { margin-bottom: 0.5rem; }
+.run-group-head {
+  color: #8fb0c4;
+  padding: 0.2rem 0.4rem;
+  border-bottom: 1px solid rgba(120, 200, 160, 0.10);
+  margin-bottom: 0.2rem;
+}
+.run-group-counts { color: #6f8394; }
+
+@media (max-width: 720px) {
+  .term-split { grid-template-columns: 1fr; }
+  .term-split-left { border-right: none; border-bottom: 1px solid rgba(120, 200, 160, 0.10); }
+}
+
+
+h1, h2, h3, h4 { margin: 0 0 0.5rem; font-weight: 600; line-height: 1.3; }
+h1 { font-size: var(--fs-xl); letter-spacing: -0.01em; }
+h2 { font-size: var(--fs-lg); margin-top: 1.5rem; }
+h3 { font-size: 1.05rem; margin-top: 1.25rem; }
+h4 { font-size: var(--fs-md); }
+
+p { margin: 0.5rem 0; }
+
+code, kbd, samp {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  background: var(--log-bg);
+  padding: 0.05em 0.35em;
+  border-radius: var(--radius-sm);
+}
+
+
+/* ------------------------------------------------------------------ *
+ * 4. Layout shell
+ *
+ * The shell uses ``position: fixed`` for the topbar and drawer and
+ * pushes the main region with ``padding``. This keeps scrolling
+ * independent per region (helpful for long event logs) and avoids the
+ * subtle grid-template-rows footer bug when tables overflow.
+ * ------------------------------------------------------------------ */
+
+.topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--topbar-h);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 1rem;
+  background: var(--topbar-bg);
+  backdrop-filter: saturate(180%) blur(10px);
+  -webkit-backdrop-filter: saturate(180%) blur(10px);
+  color: var(--topbar-fg);
+  border-bottom: 1px solid var(--topbar-border);
+  z-index: 30;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  color: var(--topbar-fg);
+  text-decoration: none;
+  /* The wordmark is inert — it is no longer a hyperlink, so it must not
+   * present a pointer/link affordance on hover. */
+  cursor: default;
+  user-select: none;
+}
+.brand:hover { text-decoration: none; }
+
+/* The wordmark links home; it is the only interactive part of the brand. */
+.brand-mark-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+.brand-mark-link:hover { text-decoration: none; }
+ .brand-text {
+   /* Plain, inert wordmark — not a link. The space-theme Orbitron display
+    * face is pinned here (NOT the per-theme --font-display) so the "Ovid2"
+    * wordmark always keeps its spacey look regardless of the active theme.
+    * Space Grotesk / mono fall back if the webfont fails to load. */
+   font-family: "Orbitron", "Space Grotesk", var(--mono);
+   font-size: 1.15rem;
+   font-weight: 600;
+   letter-spacing: 0.04em;
+   color: var(--topbar-fg);
+ }
+.brand-accent {
+  color: inherit;
+}
+.brand-tag {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding-left: 0.75rem;
+  margin-left: 0.25rem;
+}
+
+.topbar-spacer { flex: 1; }
+
+/* Drawer toggle: shown at all widths so the left menu can be toggled
+ * on desktop as well as mobile. */
+.drawer-toggle { display: inline-flex; }
+.drawer-toggle-close { display: none; }
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  min-height: 36px;
+  background: transparent;
+  color: var(--topbar-fg);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+.icon-button:hover {
+  background: var(--drawer-hover-bg);
+  border-color: var(--border);
+}
+
+/* Theme switcher: a top-right icon button that opens a popover for
+ * picking one of the eight themes and editing a few custom colours.
+ * Replaces the former day/night-only toggle. */
+.theme-switcher {
+  position: relative;
+  display: inline-flex;
+}
+
+.theme-switcher-popover {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 200;
+  width: 260px;
+  max-width: calc(100vw - 1rem);
+  padding: 0.6rem;
+  background: var(--card-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+}
+
+.theme-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.theme-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--dur-fast) var(--ease);
+}
+.theme-row:hover { background: var(--accent-subtle); }
+.theme-row.active {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+.theme-swatch-strip {
+  display: inline-flex;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.theme-swatch {
+  display: block;
+  width: 12px;
+  height: 18px;
+}
+
+.theme-row-label {
+  font-size: var(--fs-sm);
+  flex: 1 1 auto;
+}
+
+.theme-custom {
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+}
+.theme-custom-head {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+  margin-bottom: 0.45rem;
+}
+.theme-color-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem 0.6rem;
+}
+.theme-color-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  font-size: var(--fs-sm);
+}
+.theme-color-input {
+  width: 30px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+}
+.theme-contrast-warning {
+  margin: 0.5rem 0 0;
+  font-size: var(--fs-xs);
+  color: var(--warn);
+}
+.theme-reset {
+  margin-top: 0.6rem;
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  font-size: var(--fs-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+.theme-reset:hover { background: var(--accent-subtle); }
+
+
+/* Drawer. */
+.drawer {
+  position: fixed;
+  top: var(--topbar-h);
+  left: 0;
+  bottom: 0;
+  width: var(--drawer-w);
+  background: var(--drawer-bg);
+  border-right: 1px solid var(--drawer-border);
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: width var(--dur-med) var(--ease),
+              transform var(--dur-med) var(--ease);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+}
+
+.drawer-nav {
+  display: flex;
+  flex-direction: column;
+  padding: 0.75rem 0;
+  flex: 1;
+}
+
+.side-group {
+  padding: 0.9rem 1.25rem 0.3rem;
+  color: var(--drawer-fg-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.side-group:first-child { padding-top: 0.25rem; }
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.55rem 1.25rem;
+  color: var(--drawer-fg);
+  text-decoration: none;
+  font-family: var(--nav-ff);
+  font-size: var(--nav-fs);
+  font-weight: var(--nav-fw);
+  border-left: 3px solid transparent;
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+.nav-item:hover {
+  background: var(--drawer-hover-bg);
+  color: var(--fg);
+  text-decoration: none;
+}
+.nav-item.active {
+  background: var(--drawer-active-bg);
+  color: var(--drawer-active-fg);
+  border-left-color: var(--drawer-active-border);
+}
+.nav-item .nav-icon {
+  flex: 0 0 auto;
+  width: 18px; height: 18px;
+  color: currentColor;
+  opacity: 0.85;
+}
+.nav-item.active .nav-icon { opacity: 1; }
+
+/* Rail-collapse toggle (medium breakpoint only). */
+.drawer-collapse {
+  display: none;
+  margin: 0.5rem;
+  align-self: flex-end;
+  padding: 0.25rem 0.4rem;
+  color: var(--drawer-fg-muted);
+  transition: transform var(--dur-med) var(--ease);
+}
+.drawer-collapse:hover { color: var(--fg); }
+
+/* Scrim: only shown when drawer is open on mobile. */
+.drawer-scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: var(--scrim-bg);
+  z-index: 15;
+  opacity: 0;
+  transition: opacity var(--dur-med) var(--ease);
+}
+
+/* Main content area.
+ *
+ * Left padding clears the fixed left drawer; right padding clears the
+ * always-visible right tools rail. When the tools panel is open
+ * (<html>.right-panel-open) the right padding grows by the panel width
+ * so the content SHRINKS to make room rather than being covered. */
+.main {
+  padding: calc(var(--topbar-h) + 1.25rem)
+           calc(var(--rail-w) + 1.5rem)
+           1.5rem
+           calc(var(--drawer-w) + 1.5rem);
+  min-height: 100vh;
+  outline: none;
+  transition: padding-right var(--dur-med) var(--ease);
+}
+html.right-panel-open .main {
+  padding-right: calc(var(--rail-w) + var(--right-panel-w) + 1.5rem);
+}
+.main > * { max-width: var(--page-max); }
+/* The runs workspace is a full-bleed two-column master-detail view: it
+   must span the whole content area, so it opts out of the `--page-max`
+   cap that `.main > *` applies to ordinary pages. Scoping the override to
+   `.main >` raises its specificity above the `.main > *` rule (both are
+   otherwise a single class), so the console canvas can expand fully to
+   the right instead of stopping at 1400px. */
+.main > .runs-workspace { max-width: none; }
+
+.site-footer {
+  padding: 1rem calc(var(--rail-w) + 1.5rem) 1rem calc(var(--drawer-w) + 1.5rem);
+  border-top: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  text-align: center;
+  background: var(--bg);
+  transition: padding-right var(--dur-med) var(--ease);
+}
+html.right-panel-open .site-footer {
+  padding-right: calc(var(--rail-w) + var(--right-panel-w) + 1.5rem);
+}
+
+/* ------------------------------------------------------------------ *
+ * 4b. Right tools rail + expandable panel
+ *
+ * A thin, always-visible vertical rail pinned to the right edge holds
+ * one icon-button per "tool" (Appearance first; more later). Clicking a
+ * tool button toggles the panel, which slides in from the right and
+ * shrinks .main (see the padding-right rule above) instead of
+ * overlaying it. A dedicated collapse button shows a chevron whose
+ * direction indicates where the panel will go on the next toggle:
+ * chevron-left when closed (panel comes IN from the right), chevron-
+ * right when open (panel retracts OUT to the right).
+ *
+ * Mirrors the left .drawer conventions (fixed position, class on
+ * <html>, localStorage persistence in appearance.js).
+ * ------------------------------------------------------------------ */
+.tools-rail {
+  position: fixed;
+  top: var(--topbar-h);
+  right: 0;
+  bottom: 0;
+  width: var(--rail-w);
+  background: var(--drawer-bg);
+  border-left: 1px solid var(--drawer-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.6rem 0;
+  z-index: 25;
+}
+.tools-rail .rail-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  color: var(--drawer-fg);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+.tools-rail .rail-button:hover {
+  background: var(--drawer-hover-bg);
+  color: var(--fg);
+}
+.tools-rail .rail-button.active {
+  background: var(--drawer-active-bg);
+  color: var(--drawer-active-fg);
+  border-color: var(--drawer-active-border);
+}
+
+.tools-panel {
+  position: fixed;
+  top: var(--topbar-h);
+  right: var(--rail-w);
+  bottom: 0;
+  width: var(--right-panel-w);
+  max-width: calc(100vw - var(--rail-w));
+  background: var(--card-bg);
+  color: var(--fg);
+  border-left: 1px solid var(--drawer-border);
+  overflow-y: auto;
+  overflow-x: hidden;
+  transform: translateX(100%);
+  transition: transform var(--dur-med) var(--ease);
+  z-index: 24;
+  box-shadow: var(--shadow-2);
+}
+html.right-panel-open .tools-panel { transform: translateX(0); }
+
+.tools-panel-inner { padding: 0.9rem 1rem 2rem; }
+.tools-panel-title {
+  margin: 0 0 0.75rem;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
+/* Right scrim: only shown when the panel overlays on mobile. */
+.right-scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: var(--scrim-bg);
+  z-index: 23;
+  opacity: 0;
+  transition: opacity var(--dur-med) var(--ease);
+}
+
+/* ------------------------------------------------------------------ *
+ * 4c. Assistant (LLM) panel — right rail, wider than the tools panel.
+ *
+ * Canvas (answer blocks + System 1 decision cards) on top, chat box
+ * below. Toggled by #tool-llm via /static/llm_panel.js, state in
+ * <html>.llm-panel-open (mutually exclusive with right-panel-open).
+ * ------------------------------------------------------------------ */
+html.llm-panel-open .main,
+html.llm-panel-open .site-footer {
+  padding-right: calc(var(--rail-w) + min(520px, 45vw) + 1.5rem);
+}
+.llm-panel {
+  position: fixed;
+  top: var(--topbar-h);
+  right: var(--rail-w);
+  bottom: 0;
+  width: min(520px, 45vw);
+  max-width: calc(100vw - var(--rail-w));
+  background: var(--card-bg);
+  color: var(--fg);
+  border-left: 1px solid var(--drawer-border);
+  transform: translateX(100%);
+  transition: transform var(--dur-med) var(--ease);
+  z-index: 24;
+  box-shadow: var(--shadow-2);
+  visibility: hidden;
+}
+html.llm-panel-open .llm-panel { transform: translateX(0); visibility: visible; }
+.llm-panel-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.llm-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+.llm-head-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+}
+.llm-route {
+  padding: 0.15rem 0.9rem 0.35rem;
+  font-size: 0.68rem;
+  line-height: 1.3;
+  color: var(--fg-muted);
+  opacity: 0.8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.llm-route:empty { display: none; }
+.llm-head-spacer { flex: 1; }
+.llm-canvas {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.8rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.llm-empty { color: var(--fg-muted); font-size: var(--fs-sm); }
+.llm-empty.welcome { font-size: var(--fs-lg); color: var(--fg); text-align: center; margin: auto 0; }
+.llm-msg {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.55rem 0.7rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.llm-msg.user { background: var(--accent-subtle); align-self: flex-end; max-width: 88%; white-space: pre-wrap; }
+.llm-msg.assistant { background: var(--card-bg); }
+.llm-msg.error { border-color: var(--warn); }
+.llm-msg-meta { font-size: var(--fs-sm); color: var(--fg-muted); margin-bottom: 0.3rem; }
+.llm-msg p { margin: 0.25rem 0; }
+.llm-msg pre, .llm-msg code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+}
+.llm-msg pre {
+  background: var(--code-bg);
+  color: var(--code-fg);
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+}
+.llm-msg ul, .llm-msg ol { margin: 0.25rem 0 0.25rem 1.2rem; padding: 0; }
+.llm-msg table { border-collapse: collapse; margin: 0.4rem 0; font-size: var(--fs-sm); }
+.llm-msg th, .llm-msg td { border: 1px solid var(--border); padding: 0.2rem 0.45rem; text-align: left; }
+.llm-reasoning { font-size: var(--fs-sm); color: var(--fg-muted); margin-bottom: 0.3rem; }
+.llm-reasoning summary { cursor: pointer; }
+.llm-reasoning div { white-space: pre-wrap; max-height: 12rem; overflow-y: auto; }
+.llm-block {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.65rem;
+  margin: 0.45rem 0;
+}
+.llm-block-title { font-weight: 600; margin-bottom: 0.3rem; }
+.llm-kpis { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.llm-kpi { min-width: 6rem; padding: 0.35rem 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.llm-kpi-value { font-size: var(--fs-lg); font-weight: 600; }
+.llm-kpi-label { font-size: var(--fs-sm); color: var(--fg-muted); }
+.llm-status-list { list-style: none; margin: 0; padding: 0; }
+.llm-status-list li { display: flex; gap: 0.5rem; align-items: baseline; padding: 0.15rem 0; }
+.llm-decision { border-left: 3px solid var(--accent); }
+.llm-decision.rejected { border-left-color: var(--warn); opacity: 0.85; }
+.llm-conf { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 0.35rem; }
+.llm-conf > span { display: block; height: 100%; background: var(--accent); }
+.llm-notice { font-size: var(--fs-sm); color: var(--fg-muted); font-style: italic; }
+.llm-tool { font-size: var(--fs-sm); border: 1px solid var(--border); border-radius: 4px; padding: 0.2rem 0.45rem; margin: 0.25rem 0; }
+.llm-tool > summary { cursor: pointer; list-style: none; }
+.llm-tool.failed { border-color: var(--error, var(--warn)); }
+.llm-tool-out { max-height: 14rem; overflow: auto; font-size: var(--fs-xs, 0.75rem); white-space: pre-wrap; word-break: break-word; margin: 0.3rem 0 0; }
+.llm-proposal { border-left: 3px solid var(--warn); }
+.llm-proposal.done { border-left-color: var(--ok, var(--accent)); }
+.llm-proposal.failed { border-left-color: var(--error, var(--warn)); }
+.llm-proposal.dismissed { opacity: 0.6; }
+.llm-proposal-actions { display: flex; gap: 0.4rem; margin: 0.4rem 0 0.2rem; }
+/* Assistant UI action (set_appearance …): applied in-browser, with Undo. */
+.llm-ui-action { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; font-size: var(--fs-sm); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 4px; padding: 0.25rem 0.45rem; margin: 0.25rem 0; }
+.llm-ui-action.undone { opacity: 0.6; border-left-color: var(--border); }
+.llm-ui-action.refused { border-left-color: var(--warn); }
+.llm-ui-action-text { min-width: 0; overflow-wrap: anywhere; }
+.llm-msg.user.action { opacity: 0.75; font-size: var(--fs-sm); white-space: pre-wrap; }
+.llm-cursor::after { content: "\258B"; animation: llm-blink 1s steps(1) infinite; margin-left: 1px; }
+@keyframes llm-blink { 50% { opacity: 0; } }
+.llm-form {
+  border-top: 1px solid var(--border);
+  padding: 0.6rem 0.9rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.llm-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 3.2rem;
+  max-height: 14rem;
+  font: inherit;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--fg);
+  box-sizing: border-box;
+}
+.llm-form-row { display: flex; align-items: center; gap: 0.5rem; }
+.llm-form-row > .small { flex: 1; }
+
+/* ------------------------------------------------------------------
+ * Command palette (Ctrl-K).
+ *
+ * A centred, client-only fuzzy launcher (see /static/cmdk.js). Hidden
+ * by default; shown when <html> gains .cmdk-open. Uses the theme
+ * custom-properties so it themes automatically across all palettes.
+ * ------------------------------------------------------------------ */
+.cmdk {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+html.cmdk-open .cmdk { display: block; }
+html.cmdk-open { overflow: hidden; }
+
+.cmdk-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim-bg);
+}
+.cmdk-box {
+  position: absolute;
+  top: 14vh;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 2rem));
+  max-height: 66vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--card-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+  overflow: hidden;
+}
+.cmdk-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.8rem 1rem;
+  font-size: var(--fs-lg);
+  color: var(--fg);
+  background: var(--bg-elev);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  outline: none;
+}
+.cmdk-results {
+  list-style: none;
+  margin: 0;
+  padding: 0.3rem;
+  overflow-y: auto;
+}
+.cmdk-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.cmdk-row:hover { background: var(--drawer-hover-bg); }
+.cmdk-row.active {
+  background: var(--drawer-active-bg);
+  color: var(--drawer-active-fg);
+}
+.cmdk-row-label { font-weight: 600; }
+.cmdk-row-href {
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+.cmdk-row.active .cmdk-row-href { color: inherit; opacity: 0.8; }
+.cmdk-empty {
+  padding: 0.8rem 0.9rem;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cmdk-box { transition: none; }
+}
+
+/* Appearance editor internals. */
+.appearance-section { margin-bottom: 1rem; }
+.appearance-section-head {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-muted);
+  margin: 0 0 0.5rem;
+}
+.comp-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.55rem 0.6rem;
+  margin-bottom: 0.5rem;
+  background: var(--bg-elev);
+}
+.comp-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+}
+.comp-group-name { font-size: var(--fs-sm); font-weight: 600; }
+.comp-group-reset {
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.1rem 0.25rem;
+  border-radius: var(--radius-sm);
+}
+.comp-group-reset:hover { color: var(--accent); background: var(--accent-subtle); }
+.comp-controls {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.35rem 0.55rem;
+}
+.comp-control-label { font-size: var(--fs-xs); color: var(--fg-muted); }
+.comp-controls input[type="color"] {
+  width: 32px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+  justify-self: start;
+}
+.comp-controls select,
+.comp-controls input[type="number"] {
+  width: 100%;
+  padding: 0.2rem 0.35rem;
+  font-size: var(--fs-xs);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  color: var(--fg);
+}
+.appearance-saved-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.saved-theme-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.saved-theme-row .saved-theme-name {
+  flex: 1;
+  font-size: var(--fs-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.saved-theme-row button {
+  font-size: var(--fs-xs);
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+.saved-theme-row button:hover { background: var(--accent-subtle); }
+.appearance-save-row {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+.appearance-save-row input[type="text"] {
+  flex: 1;
+  padding: 0.25rem 0.4rem;
+  font-size: var(--fs-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  color: var(--fg);
+}
+.appearance-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+}
+.appearance-contrast-warning {
+  margin: 0.4rem 0 0;
+  font-size: var(--fs-xs);
+  color: var(--warn);
+}
+
+
+/* ------------------------------------------------------------------ *
+ * 5. Buttons and interactive controls
+ * ------------------------------------------------------------------ */
+
+.button, a.button, button.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.9rem;
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: var(--btn-ff);
+  font-size: var(--btn-fs);
+  font-weight: var(--btn-fw);
+  color: var(--fg);
+  background: var(--bg-elev);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+.button:hover, a.button:hover, button.button:hover {
+  border-color: var(--border-strong);
+  background: var(--drawer-hover-bg);
+  text-decoration: none;
+}
+
+.button.primary, a.button.primary, button.button.primary {
+  color: var(--accent-fg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.button.primary:hover, a.button.primary:hover, button.button.primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.button.danger, a.button.danger, button.button.danger {
+  color: var(--err);
+  border-color: var(--err);
+  background: transparent;
+}
+.button.danger:hover, a.button.danger:hover, button.button.danger:hover {
+  background: var(--err);
+  color: var(--accent-fg);
+}
+
+.button.small, a.button.small, button.button.small {
+  font-size: var(--fs-xs);
+  padding: 0.25rem 0.6rem;
+  min-height: 28px;
+}
+
+/* Inline table-action button. Uses the shared outline-button treatment
+ * (matches ``.button.small``) rather than its own shadowed/animated
+ * style, so table actions read the same as buttons elsewhere. */
+button.secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--bg-elev);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  padding: 0.25rem 0.6rem;
+  min-height: 28px;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  cursor: pointer;
+  margin-left: 0.5rem;
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+button.secondary:hover { background: var(--accent); color: var(--accent-fg); }
+
+button.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0 0 0 0.5rem;
+  cursor: pointer;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  transition: color var(--dur-fast) var(--ease);
+}
+button.link-button:hover { color: var(--accent-hover); }
+button.link-button.danger { color: var(--err); }
+button.link-button.danger:hover { color: var(--err); text-decoration: underline; }
+
+a.button-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--accent);
+  background: var(--bg-elev);
+  text-decoration: none;
+  padding: 0.4rem 0.9rem;
+  min-height: 34px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+a.button-link:hover { background: var(--accent); color: var(--accent-fg); text-decoration: none; }
+
+
+/* ------------------------------------------------------------------ *
+ * 6. Cards, grids, page headers
+ * ------------------------------------------------------------------ */
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 0 0 1.25rem;
+}
+.page-header h1 { margin: 0; flex: 1; min-width: 0; }
+.page-header .page-actions {
+  display: flex; gap: 0.5rem; flex-wrap: wrap;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  box-shadow: var(--shadow-1);
+  font-family: var(--card-ff);
+  font-size: var(--card-fs);
+  font-weight: var(--card-fw);
+}
+.card h2 { margin-top: 0; font-size: var(--fs-lg); }
+
+.grid { display: grid; gap: 1rem; }
+.grid.two-col { grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
+.grid.one-col { grid-template-columns: 1fr; }
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.kpi {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin: 0.25rem 0 0.5rem;
+}
+.kpi-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+.kpi-label { color: var(--fg-muted); font-size: var(--fs-sm); }
+
+
+/* ------------------------------------------------------------------ *
+ * 7. Tables
+ * ------------------------------------------------------------------ */
+
+.table-wrap { overflow-x: auto; margin-top: 0.5rem; }
+
+table.runs-table,
+table.check-table,
+table.kv-table,
+table.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--card-ff);
+  font-size: var(--table-fs);
+}
+table.runs-table th,
+table.check-table th,
+table.kv-table th,
+table.data-table th {
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+  font-weight: 600;
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+table.runs-table td,
+table.check-table td,
+table.kv-table td,
+table.data-table td {
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+table.runs-table tbody tr:hover,
+table.data-table tbody tr:hover {
+  background: var(--drawer-hover-bg);
+}
+table.kv-table th { width: 20ch; }
+
+th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+tr.severity-error   td { background: var(--overlay-err); }
+tr.severity-warning td { background: var(--overlay-warn); }
+
+
+/* ------------------------------------------------------------------ *
+ * 8. Forms
+ * ------------------------------------------------------------------ */
+
+form.filters {
+  display: flex; gap: 1rem; align-items: end;
+  margin: 0.75rem 0 1rem;
+  flex-wrap: wrap;
+}
+form.filters label {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--fs-sm);
+  color: var(--fg-muted);
+  gap: 0.25rem;
+}
+form.filters button {
+  padding: 0.4rem 0.9rem;
+  background: var(--accent);
+  color: var(--accent-fg);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+form.filters button:hover { background: var(--accent-hover); }
+
+input[type="text"], input[type="password"], input[type="number"],
+input[type="email"], input[type="search"], select, textarea {
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  background: var(--bg-elev);
+  color: var(--fg);
+  transition: border-color var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease);
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+form.submit-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: var(--fs-md);
+  color: var(--fg-muted);
+}
+form.submit-form label.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+form.submit-form button[type="submit"] {
+  padding: 0.45rem 1.2rem;
+  background: var(--accent);
+  color: var(--accent-fg);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-weight: 600;
+}
+form.submit-form button[type="submit"]:hover { background: var(--accent-hover); }
+
+form.edit-form .form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0.75rem 0;
+}
+form.edit-form .form-row label {
+  font-size: var(--fs-sm);
+  color: var(--fg-muted);
+}
+form.edit-form textarea.wide {
+  font-family: var(--mono);
+  width: 100%;
+  min-height: 20em;
+}
+
+table.kv-table.edit td { padding: 0.2rem 0.3rem; }
+table.kv-table.edit input[type="text"],
+table.kv-table.edit input[type="password"] {
+  width: 100%;
+}
+table.kv-table.edit input.wide { min-width: 32ch; }
+
+.job-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin: 0.5rem 0 1rem;
+  flex-wrap: wrap;
+}
+
+
+/* ------------------------------------------------------------------ *
+ * 9. Badges, flashes, empty states
+ * ------------------------------------------------------------------ */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  line-height: 1.4;
+}
+.badge::before {
+  content: "";
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.85;
+}
+
+.badge.severity-ok, .badge.status-processed, .badge.status-completed,
+.badge.status-done, .badge.status-ok, .badge.status-passed
+                                              { color: var(--ok);  border-color: var(--ok); }
+.badge.severity-warning, .badge.status-new,
+.badge.status-queued, .badge.status-exception { color: var(--warn); border-color: var(--warn); }
+.badge.status-draft { color: var(--matrix-green, #3fae5a); border-color: var(--matrix-green, #3fae5a); border-style: dashed; }
+.badge.severity-error, .badge.status-error,
+.badge.status-failed                          { color: var(--err); border-color: var(--err); }
+.badge.status-processing, .badge.status-running { color: var(--accent); border-color: var(--accent); }
+.badge.status-pending                         { color: var(--fg-muted); border-color: var(--border); }
+.badge.status-cancelled                       { color: var(--fg-muted); border-color: var(--fg-muted); }
+
+/* A cancelled run/job is terminal and inactive — quiet the whole row so it
+   no longer reads as bright/active next to running rows. */
+tr.status-cancelled td { opacity: 0.55; }
+.run-list-item.status-cancelled > .run-list-link { opacity: 0.6; }
+
+.flash {
+  padding: 0.6rem 0.9rem;
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius-md);
+  margin: 0.5rem 0 1rem;
+  font-size: var(--fs-md);
+  background: var(--bg-elev);
+}
+.flash.error, p.flash-error {
+  background: var(--flash-err-bg);
+  border-left-color: var(--err);
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--radius-md);
+}
+.flash.ok, p.flash-ok {
+  background: var(--flash-ok-bg);
+  border-left-color: var(--ok);
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--radius-md);
+}
+
+.empty {
+  padding: 1.5rem;
+  color: var(--fg-muted);
+  text-align: center;
+  font-style: italic;
+  background: var(--bg-elev);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+}
+
+.note { color: var(--fg-muted); font-size: var(--fs-sm); }
+
+
+/* ------------------------------------------------------------------ *
+ * 10. Events + timelines
+ * ------------------------------------------------------------------ */
+
+ul.check-list { list-style: none; padding: 0; margin: 0.5rem 0; }
+ul.check-list li {
+  padding: 0.4rem 0;
+  border-bottom: 1px dashed var(--border);
+  display: flex; gap: 0.75rem;
+}
+ul.check-list li:last-child { border-bottom: none; }
+.check-name  {
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  min-width: 20ch;
+}
+.check-message { flex: 1; }
+
+.event {
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  display: flex; gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.event-ts    { color: var(--fg-muted); }
+.event-kind  { font-weight: 600; }
+.event-error { color: var(--err); }
+.event.kind-table-failed, .event.kind-batch-failed,
+.event.kind-fix-failed, .event.kind-error {
+  background: var(--overlay-err);
+}
+.event.kind-instance-finished { background: var(--overlay-ok); }
+
+.timeline-summary {
+  display: flex; gap: 0.75rem; align-items: center;
+  margin: 0.5rem 0;
+  flex-wrap: wrap;
+}
+
+
+/* ------------------------------------------------------------------ *
+ * 11. Code + log blocks
+ * ------------------------------------------------------------------ */
+
+pre.code-preview {
+  background: var(--code-bg);
+  color: var(--code-fg);
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  max-height: 60vh;
+  line-height: 1.5;
+}
+pre.code-preview code { background: transparent; padding: 0; color: inherit; }
+
+pre.log-block {
+  background: var(--log-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.75rem;
+  max-height: 40em;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+
+
+/* Detail lists. */
+dl.detail {
+  display: grid;
+  grid-template-columns: 14ch 1fr;
+  gap: 0.35rem 1rem;
+  margin: 0.5rem 0;
+}
+dl.detail dt { color: var(--fg-muted); }
+
+.pagination { color: var(--fg-muted); font-size: var(--fs-sm); margin-top: 0.75rem; }
+.more { margin-top: 0.5rem; text-align: right; }
+
+td.danger { color: var(--err); font-weight: 600; }
+
+
+/* ------------------------------------------------------------------ *
+ * 12. Responsive breakpoints
+ *
+ * Three modes:
+ *
+ *   ≥ 1200 px   default styles above (full drawer, full main).
+ *   900 – 1199  icon rail: drawer collapses to 64 px; labels hidden
+ *               unless the drawer is hover-expanded or the user
+ *               un-collapses it with the chevron button.
+ *   < 900 px    drawer hides off-canvas; a ``.drawer-open`` class on
+ *               <html> slides it in with a scrim.
+ * ------------------------------------------------------------------ */
+
+/* --- Medium: icon rail --- */
+@media (max-width: 1199.98px) and (min-width: 900px) {
+  html.drawer-collapsed .drawer { width: var(--drawer-rail-w); }
+  html.drawer-collapsed .drawer .nav-label,
+  html.drawer-collapsed .drawer .side-group { display: none; }
+  html.drawer-collapsed .drawer .nav-item {
+    justify-content: center;
+    padding: 0.55rem 0;
+    border-left-width: 3px;
+  }
+  html.drawer-collapsed .main,
+  html.drawer-collapsed .site-footer {
+    padding-left: calc(var(--drawer-rail-w) + 1.5rem);
+  }
+  html.drawer-collapsed .drawer-collapse { transform: rotate(180deg); }
+
+  .drawer-collapse { display: inline-flex; }
+}
+
+/* --- Medium & large: the top-left button collapses the drawer to an
+ * icon rail. The menu itself STAYS visible; only the text labels and
+ * group headings disappear, and the content reflows to reclaim the
+ * freed width. ``html.drawer-open`` drives this collapsed state on
+ * these widths. --- */
+@media (min-width: 900px) {
+  html.drawer-open .drawer { width: var(--drawer-rail-w); }
+  html.drawer-open .drawer .nav-label,
+  html.drawer-open .drawer .side-group { display: none; }
+  html.drawer-open .drawer .nav-item {
+    justify-content: center;
+    padding: 0.55rem 0;
+    border-left-width: 3px;
+  }
+  html.drawer-open .main,
+  html.drawer-open .site-footer {
+    padding-left: calc(var(--drawer-rail-w) + 1.5rem);
+  }
+}
+
+/* --- Small: hidden drawer, hamburger reveal --- */
+@media (max-width: 899.98px) {
+  .brand-tag { display: none; }
+
+  .drawer {
+    transform: translateX(-100%);
+    width: min(85vw, 320px);
+    box-shadow: var(--shadow-3);
+  }
+  html.drawer-open .drawer { transform: translateX(0); }
+
+  html.drawer-open .drawer-scrim {
+    display: block;
+    opacity: 1;
+  }
+  html.drawer-open body { overflow: hidden; }
+
+  html.drawer-open .drawer-toggle-open  { display: none; }
+  html.drawer-open .drawer-toggle-close { display: inline-flex; }
+
+  .main {
+    padding: calc(var(--topbar-h) + 1rem) calc(var(--rail-w) + 1rem) 1rem 1rem;
+  }
+  .site-footer { padding-left: 1rem; padding-right: calc(var(--rail-w) + 1rem); }
+
+  /* On mobile there is no room to shrink: the panel overlays with a
+   * scrim (like the left drawer) and .main keeps its rail-only right
+   * padding regardless of the open state. */
+  html.right-panel-open .main,
+  html.right-panel-open .site-footer {
+    padding-right: calc(var(--rail-w) + 1rem);
+  }
+  .tools-panel {
+    width: min(85vw, 320px);
+    max-width: min(85vw, 320px);
+  }
+  html.right-panel-open .right-scrim {
+    display: block;
+    opacity: 1;
+  }
+  html.right-panel-open body { overflow: hidden; }
+  html.llm-panel-open .main,
+  html.llm-panel-open .site-footer {
+    padding-right: calc(var(--rail-w) + 1rem);
+  }
+  .llm-panel { width: calc(100vw - var(--rail-w)); }
+  html.llm-panel-open .right-scrim { display: block; opacity: 1; }
+  html.llm-panel-open body { overflow: hidden; }
+
+  .drawer-collapse { display: none; }
+  html.drawer-collapsed .drawer { width: min(85vw, 320px); }  /* ignore rail state on mobile */
+  html.drawer-collapsed .drawer .nav-label,
+  html.drawer-collapsed .drawer .side-group { display: block; }
+  html.drawer-collapsed .drawer .nav-item { justify-content: flex-start; padding: 0.55rem 1.25rem; }
+}
+
+/* --- Very small phones: tighten typography a hair --- */
+@media (max-width: 400px) {
+  body { font-size: 12.5px; }
+  .brand-text { font-size: 1.05rem; }
+  .page-header h1 { font-size: 1.25rem; }
+}
+
+
+/* ------------------------------------------------------------------ *
+ * 13. Utilities
+ * ------------------------------------------------------------------ */
+
+.mono   { font-family: var(--mono); }
+.small  { font-size: var(--fs-sm); }
+.muted  { color: var(--fg-muted); }
+.right  { text-align: right; }
+.center { text-align: center; }
+.nowrap { white-space: nowrap; }
+.hidden { display: none !important; }
+
+.stack > * + * { margin-top: 1rem; }
+.stack-sm > * + * { margin-top: 0.5rem; }
+
+
+/* ------------------------------------------------------------------ *
+ * 14. Print + reduced motion
+ * ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------ *
+ * 13b. Live display canvas — D3-powered widget surface for run detail.
+ *
+ * The run-detail page hands off to /static/live.js which mounts a
+ * canvas (see /static/display/canvas.js) into #ovid2-canvas. The
+ * canvas fills six named slots with widgets; every widget draws
+ * inside its slot with inline SVG (via D3) or plain HTML.
+ *
+ *   .live-canvas[data-state]
+ *   ├── .live-slot.slot-pulse        edge-to-edge 4 px pulse bar
+ *   ├── .live-slot.slot-ring         executors radial gauge (SVG)
+ *   ├── .live-slot.slot-throughput   rows/sec area chart + counter (SVG)
+ *   ├── .live-slot.slot-elapsed      big elapsed-time counter
+ *   ├── .live-slot.slot-gantt        stage progress bar (SVG)
+ *   └── .live-slot.slot-banner       retrying / failed status pill
+ *
+ * The state attribute drives the pulse colour and card accents:
+ *   idle | cooking | retrying | done | failed
+ *
+ * Everything animated obeys ``prefers-reduced-motion``. Transitions
+ * capped at 220 ms. Widgets prefer SVG viewBox for resize.
+ * ------------------------------------------------------------------ */
+
+.live-shell {
+  display: block;
+  margin: 0.5rem 0 1rem;
+}
+
+.live-canvas {
+  --pulse-color: var(--fg-subtle);
+  --pulse-glow: transparent;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  grid-template-rows: auto auto auto;
+  grid-template-areas:
+    "pulse pulse"
+    "ring  throughput"
+    "elapsed gantt";
+  gap: 0.75rem;
+  position: relative;
+}
+
+.live-canvas[data-state="cooking"]  { --pulse-color: var(--accent); --pulse-glow: var(--accent-subtle); }
+.live-canvas[data-state="retrying"] { --pulse-color: var(--warn);   --pulse-glow: rgba(184, 134, 11, 0.18); }
+.live-canvas[data-state="done"]     { --pulse-color: var(--ok);     --pulse-glow: rgba(46, 139, 87, 0.18); }
+.live-canvas[data-state="failed"]   { --pulse-color: var(--err);    --pulse-glow: rgba(176, 58, 46, 0.20); }
+.live-canvas[data-state="idle"]     { --pulse-color: var(--fg-subtle); --pulse-glow: transparent; }
+
+@media (max-width: 900px) {
+  .live-canvas {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "pulse"
+      "ring"
+      "throughput"
+      "elapsed"
+      "gantt";
+  }
+}
+
+.live-slot { min-width: 0; }
+.live-slot.slot-pulse      { grid-area: pulse; }
+.live-slot.slot-ring       { grid-area: ring; }
+.live-slot.slot-throughput { grid-area: throughput; }
+.live-slot.slot-elapsed    { grid-area: elapsed; }
+.live-slot.slot-gantt      { grid-area: gantt; }
+.live-slot.slot-banner     { position: absolute; top: 0.5rem; right: 0.5rem; z-index: 5; }
+
+.live-slot.slot-ring,
+.live-slot.slot-throughput,
+.live-slot.slot-elapsed,
+.live-slot.slot-gantt {
+  padding: 0.85rem 1rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-height: 116px;
+  transition: border-color 200ms ease-out, background 200ms ease-out;
+}
+
+.live-canvas[data-state="cooking"] .slot-ring,
+.live-canvas[data-state="cooking"] .slot-throughput,
+.live-canvas[data-state="cooking"] .slot-elapsed,
+.live-canvas[data-state="cooking"] .slot-gantt {
+  border-color: color-mix(in srgb, var(--pulse-color) 40%, var(--border));
+}
+
+/* ---- Pulse bar --------------------------------------------------- */
+
+.pulse-bar {
+  position: relative;
+  height: 4px;
+  width: 100%;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pulse-color) 22%, transparent);
+  overflow: hidden;
+  transition: background 200ms ease-out;
+}
+
+.pulse-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--pulse-color) 45%,
+    color-mix(in srgb, var(--pulse-color) 90%, white 25%) 55%,
+    var(--pulse-color) 65%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  opacity: 0.85;
+  filter: drop-shadow(0 0 6px var(--pulse-glow));
+}
+
+/* Motion disabled: the live terminal cursor is the only moving element.
+ * The bar still tints per-state, it just no longer sweeps. */
+.live-canvas[data-state="cooking"]  .pulse-bar::before,
+.live-canvas[data-state="retrying"] .pulse-bar::before {
+  animation: none;
+}
+
+.live-canvas[data-state="done"]   .pulse-bar,
+.live-canvas[data-state="failed"] .pulse-bar {
+  background: var(--pulse-color);
+}
+
+.live-canvas[data-state="done"]   .pulse-bar::before,
+.live-canvas[data-state="failed"] .pulse-bar::before {
+  display: none;
+}
+
+@keyframes pulse-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%);  }
+}
+
+/* ---- Widget primitives ------------------------------------------- */
+
+.widget-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  font-weight: 500;
+  margin-bottom: 0.35rem;
+}
+
+.widget-number {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 1.6rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  color: var(--fg);
+}
+
+.widget-sub {
+  font-size: 0.9rem;
+  color: var(--fg-muted);
+  min-height: 1.2rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  transition: opacity 160ms ease-out;
+}
+
+.widget-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* ---- executors_ring ---------------------------------------------- */
+
+.widget-executors {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  height: 100%;
+}
+.widget-executors-svg { max-height: 160px; }
+.arc-bg {
+  fill: color-mix(in srgb, var(--fg-subtle) 20%, transparent);
+}
+.arc-fg {
+  fill: var(--pulse-color);
+  transition: fill 220ms ease-out;
+}
+.ring-number {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 26px;
+  font-weight: 600;
+  fill: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+.ring-sub {
+  font-size: 11px;
+  fill: var(--fg-muted);
+  letter-spacing: 0.05em;
+}
+
+/* ---- throughput -------------------------------------------------- */
+
+.widget-throughput { display: flex; flex-direction: column; }
+.widget-throughput-svg { height: 60px; margin-top: 0.35rem; }
+.throughput-number { color: var(--fg); }
+.throughput-line {
+  fill: none;
+  stroke: var(--pulse-color);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  transition: stroke 220ms ease-out;
+}
+.throughput-area {
+  fill: color-mix(in srgb, var(--pulse-color) 22%, transparent);
+  transition: fill 220ms ease-out;
+}
+
+/* ---- stage_gantt ------------------------------------------------- */
+
+.widget-gantt { display: flex; flex-direction: column; }
+.widget-gantt-svg { height: 22px; margin-top: 0.35rem; }
+.gantt-bg      { fill: color-mix(in srgb, var(--fg-subtle) 18%, transparent); }
+.gantt-completed { fill: var(--ok); transition: fill 220ms ease-out; }
+.gantt-running   { fill: var(--pulse-color); transition: fill 220ms ease-out; }
+.gantt-stage { margin-top: 0.5rem; }
+
+/* ---- elapsed_tile ------------------------------------------------ */
+
+.widget-elapsed { display: flex; flex-direction: column; justify-content: center; }
+.elapsed-number { font-size: 1.9rem; letter-spacing: 0.02em; }
+
+/* Dashboard "cooking now" one-liner. Only rendered when there's
+ * something to say — the row is absent from the DOM otherwise. */
+.cooking-now {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding: 0.7rem 1rem;
+  margin-bottom: 1rem;
+  background: color-mix(in srgb, var(--accent) 4%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border-radius: 10px;
+  font-size: 0.92rem;
+}
+.cooking-now .cooking-now-label {
+  font-weight: 500;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+.cooking-now .cooking-now-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.cooking-now .cooking-now-item a {
+  color: var(--fg);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--fg-subtle);
+}
+.cooking-now .cooking-now-item a:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.cooking-now .cooking-now-pct {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-muted);
+}
+
+/* ---- Retrying banner --------------------------------------------- */
+
+.live-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warn) 12%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--border));
+  color: color-mix(in srgb, var(--warn) 90%, var(--fg));
+  font-size: 0.9rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+.live-banner[hidden] { display: none; }
+.live-banner[data-state="failed"] {
+  background: color-mix(in srgb, var(--err) 12%, var(--card-bg));
+  border-color: color-mix(in srgb, var(--err) 45%, var(--border));
+  color: color-mix(in srgb, var(--err) 90%, var(--fg));
+}
+.live-banner[data-state="failed"] .live-banner-dot {
+  background: var(--err);
+}
+.live-banner .live-banner-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--warn);
+  flex: 0 0 auto;
+  /* Motion disabled: cursor-only animation policy. */
+  animation: none;
+}
+
+@keyframes stage-breathe {
+  0%, 100% { opacity: 0.75; }
+  50%      { opacity: 1;    }
+}
+
+/* ---- JS-off / <noscript> fallback -------------------------------- */
+
+.live-noscript {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+@media (max-width: 900px) {
+  .live-noscript { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 500px) {
+  .live-noscript { grid-template-columns: 1fr; }
+}
+.live-noscript-tile {
+  padding: 0.85rem 1rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-height: 92px;
+}
+
+/* ------------------------------------------------------------------ *
+ * 14. Print + reduced motion
+ * ------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  .topbar, .drawer, .drawer-scrim, .drawer-toggle,
+  .theme-switcher, .site-footer, .page-actions { display: none !important; }
+  .main { padding: 0 !important; }
+  body { background: #fff; color: #000; }
+  .card { box-shadow: none; border-color: #999; }
+  a { color: #000; text-decoration: underline; }
+}
+
+/* ------------------------------------------------------------------ */
+/* Storage-account folder browser (pipeline submit page, Phase 5).    */
+/* ------------------------------------------------------------------ */
+.storage-picker { min-width: 0; }
+.storage-picker h3 { margin: 0.25em 0 0.5em; }
+.storage-listing {
+  max-height: 18em;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5em 0.75em;
+  margin-top: 0.5em;
+}
+.storage-list { list-style: none; margin: 0; padding: 0; }
+.storage-list li { padding: 0.15em 0; line-height: 1.5; }
+.storage-list a { text-decoration: none; }
+.storage-list a:hover { text-decoration: underline; }
+.crumbs { margin-top: 0.5em; }
+.crumbs .crumb { text-decoration: none; }
+.crumbs .crumb:hover { text-decoration: underline; }
+
+/* ==================================================================
+   Submit-a-job page (redesigned)
+   ================================================================== */
+
+.submit-page { max-width: 1100px; }
+.submit-head h1 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.submit-head .head-icon { color: var(--accent); }
+.submit-head .note { margin-top: -0.4rem; }
+
+.submit-form { display: flex; flex-direction: column; gap: 1.1rem; }
+.submit-card { margin: 0; }
+.submit-card .card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.9rem;
+  font-size: var(--fs-md, 1rem);
+  font-weight: 600;
+  color: var(--fg);
+}
+.submit-card .card-title .icon { color: var(--accent); flex: none; }
+details.submit-card > summary.card-title {
+  cursor: pointer;
+  margin-bottom: 0;
+  list-style: none;
+}
+details.submit-card[open] > summary.card-title { margin-bottom: 0.9rem; }
+details.submit-card > summary.card-title::-webkit-details-marker { display: none; }
+
+/* Sub-sections inside the Advanced-options drawer (Tables /
+   Transformations / Report cycle / Checks / Engine). Each is a lightly
+   separated block so the drawer reads as a stack of pickers rather than
+   one dense form. */
+.submit-subcard {
+  margin: 0 0 1.1rem;
+  padding: 0 0 1.1rem;
+  border-bottom: 1px solid var(--border, rgba(120, 140, 160, 0.18));
+}
+.submit-subcard:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+.subcard-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.6rem;
+  font-size: var(--fs-sm, 0.9rem);
+  font-weight: 600;
+  color: var(--fg);
+}
+.subcard-title .icon { color: var(--accent); flex: none; }
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.9rem 1.1rem;
+}
+.field-grid > label,
+.submit-form > label:not(.checkbox) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: var(--fs-sm, 0.875rem);
+  color: var(--fg-muted);
+}
+.submit-form label.checkbox {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  color: var(--fg-muted);
+}
+
+/* --- Storage cards --- */
+.storage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.1rem;
+}
+.storage-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0.9rem 1rem;
+  background: var(--bg-elev);
+  min-width: 0;
+}
+.storage-card > h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.7rem;
+  font-size: var(--fs-sm, 0.875rem);
+  color: var(--fg);
+}
+.mode-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-bottom: 0.8rem;
+}
+.mode-btn {
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+  font-size: var(--fs-sm, 0.85rem);
+  transition: background var(--dur-fast, .12s) var(--ease, ease),
+              color var(--dur-fast, .12s) var(--ease, ease);
+}
+.mode-btn + .mode-btn { border-left: 1px solid var(--border); }
+.mode-btn.active { background: var(--accent); color: var(--accent-fg); }
+.mode-btn:not(.active):hover { background: var(--accent-subtle); color: var(--fg); }
+
+.chosen-chip {
+  margin-top: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--accent-subtle);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm, 0.85rem);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  word-break: break-all;
+}
+.chosen-chip .icon { color: var(--accent); flex: none; }
+
+/* Submit-page browse validation: highlight a card whose "Browse
+   storage" side has no account chosen, and show a compact inline
+   error under its picker. */
+.storage-card.invalid {
+  border-color: var(--err);
+  box-shadow: 0 0 0 1px var(--err);
+}
+.picker-error {
+  margin-top: 0.6rem;
+  font-size: var(--fs-sm, 0.85rem);
+  border-left: 3px solid var(--err);
+}
+
+.storage-list .entry {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.storage-list .entry .icon {
+  flex: none;
+  color: var(--fg-subtle);
+}
+.storage-list .entry-dir .icon { color: var(--accent); }
+.storage-list .storage-use-here { margin-bottom: 0.4rem; }
+
+/* --- Tables checkbox grid --- */
+.picker-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.8rem;
+  flex-wrap: wrap;
+}
+.picker-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.1rem 0.5rem;
+  color: var(--fg-subtle);
+  margin-left: auto;
+}
+.picker-search input {
+  border: none;
+  background: transparent;
+  padding: 0.25rem 0;
+  font-size: var(--fs-sm, 0.85rem);
+}
+.picker-search input:focus { outline: none; box-shadow: none; }
+.count-badge {
+  font-size: var(--fs-sm, 0.8rem);
+  font-weight: 400;
+  color: var(--fg-subtle);
+  margin-left: 0.4rem;
+}
+
+.check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.35rem 0.75rem;
+}
+.check-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.4rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--fs-sm, 0.9rem);
+  color: var(--fg);
+}
+.check-item:hover { background: var(--accent-subtle); }
+.check-item input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; }
+.check-item .box {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  background: var(--bg-elev);
+  transition: background var(--dur-fast, .12s) var(--ease, ease),
+              border-color var(--dur-fast, .12s) var(--ease, ease);
+}
+.check-item .box .icon { width: 14px; height: 14px; }
+.check-item input:checked + .box {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+.check-item input:focus-visible + .box {
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+.check-item .check-label { flex: 1 1 auto; }
+.check-item.no-formatter .check-label { color: var(--fg-subtle); }
+.src-tag {
+  font-size: 0.7rem;
+  color: var(--fg-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.src-tag.muted { color: var(--warn); }
+
+/* --- Transformation stages --- */
+.stage-list { display: flex; flex-direction: column; gap: 0.6rem; }
+.stage-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.7rem;
+  background: var(--bg-elev);
+}
+.stage-card .stage-head { font-weight: 600; text-transform: capitalize; }
+.fixer-detail { margin: 0.4rem 0 0 1.9rem; font-size: var(--fs-sm, 0.85rem); }
+.fixer-detail summary { cursor: pointer; color: var(--fg-muted); }
+.fixer-note { margin: 0.3rem 0 0 1.9rem; }
+.fixer-table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+.fixer-table td { padding: 0.2rem 0.4rem; vertical-align: top; }
+.fixer-table td.mono { color: var(--fg-muted); white-space: nowrap; }
+.fixer-pill {
+  display: inline-block;
+  background: var(--accent-subtle);
+  border-radius: 4px;
+  padding: 0.05rem 0.4rem;
+  margin: 0.1rem 0.15rem;
+  font-size: 0.78rem;
+}
+
+.submit-actions { margin-top: 0.4rem; }
+.submit-actions .button { display: inline-flex; align-items: center; gap: 0.4rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mode-btn, .check-item .box { transition: none; }
+}
+
+
+/* ================================================================== */
+/* Data-health checks — run console (left/right) + report viewer      */
+/* ================================================================== */
+
+/* Reuse the terminal split for the per-check console. */
+.check-summary,
+.check-detail {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0.35rem 0.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: #2a3e50 transparent;
+}
+.check-summary-empty,
+.check-detail-empty { color: #6f8394; }
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.26rem 0.4rem;
+  margin: 0 0 0.12rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: #cfe3d5;
+  font-family: inherit;
+  font-size: 0.74rem;
+  text-align: left;
+  cursor: pointer;
+}
+.check-row:hover { background: rgba(120, 200, 160, 0.08); }
+/* Subtle zebra striping within each check group. */
+.check-row:nth-of-type(even) { background: rgba(255, 255, 255, 0.022); }
+.check-row:nth-of-type(even):hover { background: rgba(120, 200, 160, 0.08); }
+.check-row.selected {
+  background: rgba(120, 200, 160, 0.14);
+  border-color: rgba(120, 200, 160, 0.35);
+}
+.check-row-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
+.check-row-exc { color: var(--warn); font-variant-numeric: tabular-nums; }
+
+/* Row status tint — mirror the ETL table rows so the two consoles read
+   identically. Queued rows dimmed; running/exception/failed carry a
+   subtle, static tint (no animation). */
+.check-row.status-pending { opacity: 0.55; }
+.check-row.status-pending .run-row-name { color: #7c8a99; }
+.check-row.status-running {
+  background: var(--accent-subtle);
+  color: #dcefe0;
+}
+.check-row.status-running:nth-of-type(even) { background: var(--accent-subtle); }
+.check-row.status-completed .run-row-name,
+.check-row.status-passed .run-row-name { color: #bfe0c8; }
+.check-row.status-exception {
+  background: rgba(191, 149, 63, 0.10);
+  color: #e6d2a6;
+}
+.check-row.status-exception:nth-of-type(even) { background: rgba(191, 149, 63, 0.12); }
+.check-row.status-failed,
+.check-row.status-error {
+  background: rgba(176, 58, 46, 0.10);
+  color: #f0c4bd;
+}
+.check-row.status-failed:nth-of-type(even),
+.check-row.status-error:nth-of-type(even) { background: rgba(176, 58, 46, 0.12); }
+.check-row.status-running:hover,
+.check-row.status-exception:hover,
+.check-row.status-failed:hover,
+.check-row.status-error:hover { background: rgba(120, 200, 160, 0.12); }
+
+/* Status badges shared by console + report. Token-driven so they follow
+ * the active theme (and read softly on both the themed shell and the
+ * dark terminal pane) instead of the old hardcoded saturated fills. */
+.check-badge {
+  display: inline-block;
+  padding: 0.02rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  border: 1px solid currentColor;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+.check-badge-running   { color: var(--info); }
+.check-badge-passed    { color: var(--ok); }
+.check-badge-exception { color: var(--warn); }
+.check-badge-error     { color: var(--err); }
+.check-badge-not_applicable { color: var(--fg-muted); }
+
+.check-detail-item {
+  padding: 0.4rem 0.5rem;
+  margin-bottom: 0.4rem;
+  border-left: 3px solid transparent;
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.02);
+}
+.check-detail-item.check-detail-exception { border-left-color: var(--warn); }
+.check-detail-item.check-detail-error     { border-left-color: var(--err); }
+.check-detail-item.check-detail-passed    { border-left-color: var(--ok); }
+.check-detail-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; }
+.check-detail-error { color: var(--err); }
+/* Motion disabled: cursor-only animation policy (was a green flash). */
+.check-detail-flash { animation: none; }
+
+/* ---- Report viewer ---- */
+.health-report-head { margin-bottom: 1rem; }
+.health-kpis { display: flex; gap: 1rem; margin-top: 0.6rem; flex-wrap: wrap; }
+.health-kpi {
+  display: flex; flex-direction: column; align-items: center;
+  min-width: 5rem; padding: 0.5rem 0.8rem;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.health-kpi-n { font-size: 1.4rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.health-kpi-l { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fg-muted); }
+.health-kpi-ok  { border-color: var(--ok); }
+.health-kpi-exc { border-color: var(--warn); }
+.health-kpi-err { border-color: var(--err); }
+.health-kpi-na  { border-color: var(--fg-muted); }
+
+.health-report-body {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+.health-nav {
+  position: sticky; top: 1rem;
+  max-height: calc(100vh - 3rem); overflow-y: auto;
+  border-right: 1px solid var(--border);
+  padding-right: 0.6rem;
+}
+.health-nav-group { margin-bottom: 0.7rem; }
+.health-nav-part { color: var(--fg-muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 0.25rem; }
+.health-nav-list { list-style: none; margin: 0; padding: 0; }
+.health-nav-link {
+  display: flex; align-items: center; gap: 0.4rem;
+  padding: 0.2rem 0.35rem; border-radius: var(--radius-sm);
+  text-decoration: none; color: inherit;
+}
+.health-nav-link:hover { background: var(--drawer-hover-bg); }
+.health-nav-link.is-active { background: var(--accent-subtle); }
+
+.health-check-card {
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 0.8rem;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: var(--radius-sm);
+  scroll-margin-top: 1rem;
+}
+.health-check-card.health-status-exception { border-left-color: var(--warn); }
+.health-check-card.health-status-error     { border-left-color: var(--err); }
+.health-check-card.health-status-passed    { border-left-color: var(--ok); }
+.health-check-card.health-status-not_applicable { border-left-color: var(--fg-muted); }
+.health-check-head { display: flex; align-items: baseline; gap: 0.6rem; }
+.health-check-head h2 { margin: 0; font-size: 1rem; }
+.health-check-id { color: var(--fg-muted); }
+.health-check-desc { margin: 0.3rem 0; }
+.health-check-interp { color: var(--fg-muted); }
+
+.health-metric-table { width: 100%; border-collapse: collapse; margin-top: 0.4rem; }
+.health-metric-table th, .health-metric-table td {
+  text-align: left; padding: 0.2rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.health-metric-table tr.health-metric-exc { background: var(--overlay-warn); }
+
+@media (max-width: 720px) {
+  .health-report-body { grid-template-columns: 1fr; }
+  .health-nav { position: static; max-height: none; border-right: none; }
+}
+
+/* ==========================================================================
+   Console landing (``/``)
+   A self-contained dark terminal surface. Uses design tokens for accents
+   but pins its own dark background + monospace so it reads as a console in
+   both themes, without coupling to the run-detail ``.term-*`` classes.
+   ========================================================================== */
+
+.console-landing-page {
+  position: relative;
+  min-height: calc(100vh - var(--topbar-h) - 2rem);
+  padding: 1.25rem clamp(1rem, 3vw, 2rem) 6rem;
+  background: #0b0f16;
+  color: #d7e2ec;
+  font-family: var(--mono);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.console-landing-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.02) 0px,
+    rgba(255, 255, 255, 0.02) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+.console-landing-page > * { position: relative; z-index: 1; }
+
+.console-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+  font-size: var(--fs-sm, 0.85rem);
+  letter-spacing: 0.04em;
+}
+.console-prompt-mark { color: var(--matrix-green); text-shadow: 0 0 4px var(--matrix-glow); }
+.console-head-text {
+  font-family: var(--font-display);
+  color: var(--matrix-green);
+  text-shadow: 0 0 6px var(--matrix-glow);
+  text-transform: lowercase;
+}
+.console-head-links { margin-left: auto; display: flex; gap: 1rem; }
+.console-head-links a { color: #7fa8c9; text-decoration: none; }
+.console-head-links a:hover { color: #a9cdea; text-decoration: underline; }
+
+/* Terminal log stream: sections print as command + output, no cards. */
+.console-stream {
+  display: grid;
+  gap: 1.1rem;
+}
+
+.console-block { display: block; }
+.console-stream > .console-block + .console-block {
+  border-top: 1px solid rgba(120, 160, 200, 0.12);
+  padding-top: 1.1rem;
+}
+
+.console-line {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  margin: 0 0 0.5rem;
+  font-size: var(--fs-sm, 0.85rem);
+  letter-spacing: 0.02em;
+}
+.console-line-prompt { color: var(--ok); white-space: nowrap; }
+.console-line-cmd { color: #9fb2c2; }
+.console-out { padding-left: 1.1rem; }
+
+.console-panel-lead { margin: 0 0 0.5rem; display: flex; gap: 0.5rem; align-items: center; }
+
+.console-check-list,
+.console-cooking-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.3rem; }
+.console-check-list li { display: flex; justify-content: space-between; gap: 0.75rem; font-size: 0.82rem; }
+.console-check-list .check-message { color: #7f8da0; }
+.console-cooking-list li { display: flex; gap: 0.5rem; align-items: center; }
+.console-cooking-list a { color: #a9cdea; text-decoration: none; }
+.console-cooking-pct { color: var(--ok); font-size: 0.8rem; }
+
+.console-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 0.6rem;
+}
+.console-kpi { display: flex; flex-direction: column; align-items: flex-start; }
+.console-kpi-value { font-size: 1.4rem; font-weight: 700; color: #e6eef6; }
+.console-kpi-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #7f8da0; }
+
+.console-noscript { margin: 1rem 0; }
+
+.console-cmd {
+  position: sticky;
+  bottom: 0;
+  margin-top: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 0.25rem 0.7rem 0;
+  background: linear-gradient(to top, #0b0f16 70%, rgba(11, 15, 22, 0));
+  border-top: 1px solid rgba(120, 160, 200, 0.18);
+  font-family: var(--mono);
+}
+.console-cmd-prompt { font-family: var(--font-display); color: var(--matrix-green); text-shadow: 0 0 4px var(--matrix-glow); white-space: nowrap; }
+.console-cmd-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #e6eef6;
+  font-family: var(--mono);
+  font-size: 0.95rem;
+}
+.console-cmd-input::placeholder { color: #566374; }
+.console-cursor {
+  width: 0.6ch;
+  height: 1.1em;
+  background: var(--matrix-green);
+  box-shadow: 0 0 6px var(--matrix-glow);
+  animation: console-cursor-blink 1.05s steps(2, start) infinite;
+}
+.console-cmd-hint { margin-left: auto; font-size: 0.72rem; white-space: nowrap; }
+
+.console-cmd-results {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 0.4rem);
+  list-style: none;
+  margin: 0;
+  padding: 0.3rem;
+  background: #0e1420;
+  border: 1px solid rgba(120, 160, 200, 0.26);
+  border-radius: var(--radius-md);
+  max-height: 260px;
+  overflow-y: auto;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
+}
+.console-cmd-option {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.console-cmd-option.is-active,
+.console-cmd-option:hover { background: rgba(74, 158, 218, 0.16); }
+.console-cmd-option-label { color: #e6eef6; }
+.console-cmd-option-kind { color: #6f7f92; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+
+@keyframes console-cursor-blink {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
+}
+
+/* Live terminal cursor — the ONLY moving element while a run is in
+ * flight. It is an animated, filled matrix-green square appended to the
+ * end of the terminal log stream by terminal/mount.js. When the run
+ * reaches a terminal state, mount.js sets `animation: none` inline so
+ * the square stops blinking (and stays solid). */
+.term-cursor {
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  vertical-align: text-bottom;
+  background: var(--matrix-green);
+  box-shadow: 0 0 6px var(--matrix-glow);
+  animation: console-cursor-blink 1.05s steps(2, start) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .console-cursor { animation: none; opacity: 1; }
+  .term-cursor { animation: none; opacity: 1; }
+}
+
+/* Pipelines list — filter bar + per-type collapsible blocks (Phase D) */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.75rem 0 1rem;
+}
+.filter-bar input[type="search"],
+.filter-bar select {
+  padding: 0.35rem 0.5rem;
+}
+.pipeline-group {
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.pipeline-group > summary {
+  cursor: pointer;
+  padding: 0.5rem 0.75rem;
+  font-weight: 600;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.pipeline-group > summary::before {
+  content: "\25B8";
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+.pipeline-group[open] > summary::before {
+  transform: rotate(90deg);
+}
+.pipeline-group .group-count {
+  color: var(--fg-muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pipeline-group > summary::before { transition: none; }
+}
+
+/* ==================================================================
+   New-pipeline builder — two-pane layout (left pickers, right canvas).
+   Mirrors the .runs-workspace grid so the create page feels like the
+   run console: the form scrolls on the left; the "ovid2" canvas is a
+   sticky panel on the right that redraws the pipeline live.
+   ================================================================== */
+
+.builder-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 460px);
+  gap: 1.25rem;
+  align-items: start;
+  max-width: none;
+}
+
+/* Left column — the settings form. */
+.builder-form { min-width: 0; }
+.builder-form-head { margin-bottom: 0.5rem; }
+.builder-back { margin: 0 0 0.25rem; }
+.builder-heading { margin: 0; }
+
+.builder-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+}
+
+/* Each settings group is a compact card, spaced like the run list. */
+.builder-card {
+  margin: 0;
+  padding: 0.75rem 0.9rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card-bg);
+}
+.builder-card > legend {
+  padding: 0 0.4rem;
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  color: var(--fg);
+}
+.builder-card .form-row { margin-bottom: 0.55rem; }
+.builder-card .form-row:last-child { margin-bottom: 0; }
+.builder-card .note.small { margin: 0 0 0.6rem; }
+
+/* Radio / checkbox "picker" list — a robust, tappable replacement for
+   the old dense radio table. */
+.picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 15rem;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.picker-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.picker-option:hover { background: var(--accent-subtle); }
+.picker-option:focus-within { border-color: var(--accent); }
+.picker-option > input { margin-top: 0.2rem; flex: 0 0 auto; }
+.picker-option:has(> input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
+.picker-option-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.picker-option-title { font-weight: 600; }
+.picker-option-sub { color: var(--fg-muted); }
+.picker-option-desc { color: var(--fg-muted); }
+
+/* Right column — the "ovid2" canvas. Sticky so it stays in view while
+   the operator scrolls the form. */
+.builder-canvas {
+  position: sticky;
+  top: calc(var(--topbar-h) + 1rem);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: #0b0f14;
+  overflow: hidden;
+}
+
+.builder-canvas-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid rgba(120, 200, 160, 0.14);
+  background: rgba(0, 0, 0, 0.22);
+}
+.builder-canvas-head .term-flex { flex: 1 1 auto; }
+.builder-wordmark {
+  font-family: var(--font-display);
+  color: var(--matrix-green);
+}
+/* The play button is inert during creation — a pipeline can only run
+   once saved. Keep it visibly disabled. */
+.builder-play[disabled] {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.builder-status-chip {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(120, 200, 160, 0.3);
+  color: #7f9db0;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+
+/* The status chip doubles as the sole submit control. Enabled it reads as
+   an actionable green pill; disabled it dims like the inert play button. */
+.builder-save-chip {
+  cursor: pointer;
+  font: inherit;
+  text-transform: lowercase;
+  background: var(--matrix-green);
+  border-color: var(--matrix-green);
+  color: #06120b;
+  font-weight: 600;
+}
+.builder-save-chip:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.builder-save-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  background: transparent;
+  border-color: rgba(120, 200, 160, 0.3);
+  color: #7f9db0;
+  font-weight: 400;
+}
+
+/* The SVG stage. Desaturated + dashed while incomplete. */
+.builder-stage {
+  padding: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.builder-svg {
+  width: 100%;
+  height: auto;
+  max-height: 320px;
+}
+
+.builder-pipes line { stroke: #2f3a44; }
+.builder-canvas[data-complete="true"] .builder-pipes line { stroke: var(--matrix-green); }
+
+.builder-node-box {
+  fill: #10161d;
+  stroke: #3a4650;
+}
+.builder-node[data-set="true"] .builder-node-box { stroke: #7fbf9a; }
+/* "Open" node: bound-later. Solid box (it is a satisfied choice) but a
+   muted amber stroke so it reads as deferred, not concrete. */
+.builder-node[data-open="true"] .builder-node-box {
+  stroke: var(--warn, #d9a441);
+  stroke-dasharray: 3 4;
+}
+.builder-node[data-open="true"] .builder-node-label { fill: var(--warn, #d9a441); }
+.builder-glyph-path {
+  fill: none;
+  stroke: #8aa0ad;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.builder-node[data-set="true"] .builder-glyph-path { stroke: #cfe3d5; }
+.builder-node-label,
+.builder-body-kind,
+.builder-body-cdm {
+  fill: #cfe3d5;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.builder-body-kind { font-weight: 700; font-size: 13px; }
+.builder-body-cdm { fill: #7f9db0; }
+.builder-node[data-set="false"] .builder-node-label { fill: #63727d; }
+
+.builder-body-fill { stroke: rgba(0, 0, 0, 0.25); stroke-width: 1.5; }
+.builder-body-stroke {
+  fill: none;
+  stroke: #0b0f14;
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Incomplete pipeline: the whole drawing dims + dashes so it reads as a
+   draft at a glance. */
+.builder-canvas[data-complete="false"] .builder-svg {
+  opacity: 0.72;
+  filter: saturate(0.55);
+}
+.builder-canvas[data-complete="false"] .builder-body-shape { opacity: 0.85; }
+
+.builder-checklist {
+  padding: 0.6rem 0.8rem 0.85rem;
+  border-top: 1px solid rgba(120, 200, 160, 0.14);
+  background: rgba(0, 0, 0, 0.22);
+}
+.builder-checklist-title {
+  margin: 0 0 0.35rem;
+  color: #7f9db0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.builder-req-list { list-style: none; margin: 0; padding: 0; }
+.builder-req {
+  color: #d8b26a;
+  padding: 0.1rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.builder-req::before { content: "○"; color: #d8b26a; }
+.builder-req-done { color: var(--matrix-green); }
+.builder-req-done::before { content: "✓ "; }
+
+/* Stack the canvas below the form on narrow viewports. */
+@media (max-width: 899.98px) {
+  .builder-workspace { grid-template-columns: 1fr; }
+  .builder-canvas { position: static; }
+}
+
+/* -------------------------------------------------------------------
+ * Pipelines index — per-row icon actions (Run / Edit / Delete) and the
+ * shared "Run" modal that hosts the folder / schema navigator.
+ * ------------------------------------------------------------------- */
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+.runs-table .icon-button {
+  color: var(--fg);
+  min-height: 30px;
+  padding: 0.25rem 0.4rem;
+}
+.runs-table .icon-button .icon { display: block; }
+.icon-button.danger { color: var(--err); }
+.icon-button.danger:hover {
+  background: var(--overlay-err);
+  border-color: var(--err);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 6vh 1rem 1rem;
+  background: var(--scrim-bg);
+  overflow-y: auto;
+}
+.modal-backdrop[hidden] { display: none; }
+body.modal-open { overflow: hidden; }
+.modal-panel {
+  width: min(680px, calc(100vw - 2rem));
+  background: var(--card-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+  padding: 1.2rem 1.4rem 1.4rem;
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+.modal-header .card-title { margin: 0; }
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1.2rem;
+}
+.modal-panel .storage-card { margin-top: 0.9rem; }
+

@@ -1,0 +1,23 @@
+v: 1
+name: pcornet_7_0.diagnosis.pdx
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 DIAGNOSIS.PDX code set.
+code_column: code
+description_column: label
+items:
+- code: P
+  label: P=Principal
+  order: 977
+- code: S
+  label: S=Secondary
+  order: 978
+- code: NI
+  label: NI=No information
+  order: 979
+- code: UN
+  label: UN=Unknown
+  order: 980
+- code: OT
+  label: OT=Other
+  order: 981

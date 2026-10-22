@@ -1,0 +1,13 @@
+flowchart LR
+    RAW["Raw input"] --> FMT["format<br/>(adapter + sources + joins)"]
+    FMT --> DED["deduplicate<br/>(salted dropDuplicates)"]
+    DED --> MAP["map<br/>(mapper ops)"]
+    MAP --> FIX["fix<br/>(fixer chain)"]
+    FIX --> WRITE["write() / persist()<br/>← the ONLY materialization"]
+
+    CDM["CDM handle<br/>(cdm.registry)"] -.-> FMT
+    SEM["Semantic registry<br/>(vocabularies / bindings)"] -.-> FMT
+    ENG["Engine → Stager → Driver"] -.-> WRITE
+
+    classDef term fill:#eef,stroke:#557;
+    class WRITE term;

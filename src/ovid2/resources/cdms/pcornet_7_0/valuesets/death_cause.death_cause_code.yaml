@@ -1,0 +1,23 @@
+v: 1
+name: pcornet_7_0.death_cause.death_cause_code
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 DEATH_CAUSE.DEATH_CAUSE_CODE code set.
+code_column: code
+description_column: label
+items:
+- code: 09
+  label: 09=ICD-9
+  order: 7178
+- code: '10'
+  label: 10=ICD-10
+  order: 7179
+- code: NI
+  label: NI=No information
+  order: 7180
+- code: UN
+  label: UN=Unknown
+  order: 7181
+- code: OT
+  label: OT=Other
+  order: 7182

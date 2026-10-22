@@ -1,0 +1,17 @@
+# Example PCORnet-native passthrough spec.
+v: 1
+formatter: death
+adapter: pcornet_passthrough
+input_file_name: "*Death_*.txt"
+
+sources:
+  death:
+    glob: "*Death_*.txt"
+    lowercase_columns: true
+
+projections:
+  DEATH_DATE: death_date
+  DEATH_DATE_IMPUTE: death_date_impute
+  DEATH_MATCH_CONFIDENCE: death_match_confidence
+  DEATH_SOURCE: death_source
+  PATID: patid

@@ -1,0 +1,29 @@
+v: 1
+name: pcornet_7_0.immunization.vx_status_reason
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 IMMUNIZATION.VX_STATUS_REASON code set.
+code_column: code
+description_column: label
+items:
+- code: IM
+  label: IM=Immunity
+  order: 11623
+- code: MP
+  label: MP=Medical precaution
+  order: 11624
+- code: OS
+  label: OS=Out of stock
+  order: 11625
+- code: PO
+  label: PO=Patient objection
+  order: 11626
+- code: NI
+  label: NI=No information
+  order: 11627
+- code: UN
+  label: UN=Unknown
+  order: 11628
+- code: OT
+  label: OT=Other
+  order: 11629

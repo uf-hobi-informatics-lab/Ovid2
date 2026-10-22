@@ -1,0 +1,66 @@
+v: 1
+cdm: pcornet_7_0
+description: >-
+  Initial S3 column bindings for PCORnet CDM v7.0. Attaches OMOP-derived
+  vocabularies (LOINC, SNOMED, ICD-10-CM, RxNorm, NDC) to the CDM
+  columns that carry standard clinical codes. `required: false` on
+  every row keeps the bindings advisory until S4's `strict_semantic`
+  formatter opt-in lands. Bindings whose vocabulary source file is
+  absent at runtime are still registered (the vocabulary is loaded
+  lazily on first use); missing source data is surfaced at that point.
+bindings:
+  # ---- Diagnoses -------------------------------------------------------
+  # `DX` carries either ICD-10-CM (`DX_TYPE = '10'`) or ICD-9-CM
+  # (`DX_TYPE = '09'`). We bind to ICD-10-CM by default; multi-legged
+  # bindings are a future enhancement (see ADR §Open questions).
+  - table: diagnosis
+    column: DX
+    vocabulary: icd10cm
+    role: diagnosis_code
+
+  # ---- Procedures ------------------------------------------------------
+  # `PX` carries CPT4 / HCPCS / ICD-10-PCS / ICD-9-Proc depending on
+  # `PX_TYPE`. No single OMOP-slice vocabulary matches (CPT4/HCPCS are
+  # not exposed in the LOINC/SNOMED/RxNorm/NDC/ICD10CM set we ship in
+  # S3). Left unbound until we add a CPT4/HCPCS slice or a multi-legged
+  # binding shape.
+
+  # ---- Lab results -----------------------------------------------------
+  - table: lab_result_cm
+    column: LAB_LOINC
+    vocabulary: loinc
+    role: lab_result_loinc
+  - table: lab_result_cm
+    column: RESULT_SNOMED
+    vocabulary: snomed
+    role: lab_result_snomed_qualifier
+
+  # ---- Prescribing / dispensing / administration -----------------------
+  - table: prescribing
+    column: RXNORM_CUI
+    vocabulary: rxnorm
+    role: drug_rxnorm
+  - table: dispensing
+    column: NDC
+    vocabulary: ndc
+    role: drug_ndc
+  # `MEDADMIN_CODE` may be either NDC or RxNorm depending on
+  # `MEDADMIN_TYPE` ('ND' vs 'RX'). We bind the RxNorm case; the NDC
+  # case can be layered on when multi-legged bindings arrive.
+  - table: med_admin
+    column: MEDADMIN_CODE
+    vocabulary: rxnorm
+    role: drug_rxnorm
+
+  # ---- Condition (registry) --------------------------------------------
+  # PCORnet's `CONDITION` uses ICD-10-CM / ICD-9 / SNOMED via the
+  # `CONDITION_TYPE` discriminator. Bind to ICD-10-CM as the default;
+  # SNOMED conditions come in through `RESULT_SNOMED` on labs already.
+  - table: condition
+    column: CONDITION
+    vocabulary: icd10cm
+    role: condition_code
+
+  # ---- Immunization ----------------------------------------------------
+  # `VX_CODE` uses CVX (CDC vaccine codes) primarily. Not shipped in
+  # the S3 slice set. Left unbound.

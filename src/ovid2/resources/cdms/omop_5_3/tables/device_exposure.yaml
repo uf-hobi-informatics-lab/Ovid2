@@ -1,0 +1,61 @@
+v: 1
+name: device_exposure
+composite_key:
+- device_exposure_id
+domain_description: OMOP CDM 5.3 clinical data table.
+domain_order: 11
+fields:
+- name: device_exposure_id
+  rdbms_type: RDBMS Number
+  order: 1
+- name: person_id
+  rdbms_type: RDBMS Number
+  order: 2
+- name: device_concept_id
+  rdbms_type: RDBMS Number
+  order: 3
+- name: device_exposure_start_date
+  rdbms_type: RDBMS Date
+  order: 4
+- name: device_exposure_start_datetime
+  rdbms_type: RDBMS Text(50)
+  order: 5
+- name: device_exposure_end_date
+  rdbms_type: RDBMS Date
+  order: 6
+- name: device_exposure_end_datetime
+  rdbms_type: RDBMS Text(50)
+  order: 7
+- name: device_type_concept_id
+  rdbms_type: RDBMS Number
+  order: 8
+- name: unique_device_id
+  rdbms_type: RDBMS Number
+  order: 9
+- name: quantity
+  rdbms_type: RDBMS Number
+  order: 10
+- name: provider_id
+  rdbms_type: RDBMS Number
+  order: 11
+- name: visit_occurrence_id
+  rdbms_type: RDBMS Number
+  order: 12
+- name: visit_detail_id
+  rdbms_type: RDBMS Number
+  order: 13
+- name: device_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 14
+- name: device_source_concept_id
+  rdbms_type: RDBMS Number
+  order: 15
+- name: updated
+  rdbms_type: RDBMS Text(50)
+  order: 16
+- name: source
+  rdbms_type: RDBMS Text(10)
+  order: 17
+- name: mapped_from
+  rdbms_type: RDBMS Text(50)
+  order: 18

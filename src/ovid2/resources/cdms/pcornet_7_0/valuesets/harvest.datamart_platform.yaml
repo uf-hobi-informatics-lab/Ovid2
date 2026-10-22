@@ -1,0 +1,32 @@
+v: 1
+name: pcornet_7_0.harvest.datamart_platform
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 HARVEST.DATAMART_PLATFORM code set.
+code_column: code
+description_column: label
+items:
+- code: '01'
+  label: 01=SQL Server
+  order: 12824
+- code: '02'
+  label: 02=Oracle
+  order: 12825
+- code: '03'
+  label: 03=PostgreSQL
+  order: 12826
+- code: '04'
+  label: 04=MySQL
+  order: 12827
+- code: '05'
+  label: 05=SAS
+  order: 12828
+- code: NI
+  label: NI=No information
+  order: 12829
+- code: UN
+  label: UN=Unknown
+  order: 12830
+- code: OT
+  label: OT=Other
+  order: 12831

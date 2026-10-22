@@ -1,0 +1,19 @@
+id: 20r1
+label: "2020 R1 (baseline)"
+released: "2026-09-11"
+description: >-
+  Baseline EDC / Data-Characterization Query check cycle ported into Ovid2,
+  plus the Ovid2-native health panels shipped alongside it.
+checks:
+  # PCORnet EDC / DCQ checks
+  - "1.01"
+  - "1.02"
+  - "2.02"
+  # Ovid2-native health panels
+  - health.pk_uniqueness
+  - health.valueset_conformance
+  - health.null_rate
+  - health.future_date
+  - health.freshness
+  - health.mapping_coverage
+  - health.orphan_fk

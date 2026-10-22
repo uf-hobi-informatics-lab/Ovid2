@@ -1,0 +1,23 @@
+v: 1
+name: pcornet_7_0.prescribing.rx_dispense_as_written
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 PRESCRIBING.RX_DISPENSE_AS_WRITTEN code set.
+code_column: code
+description_column: label
+items:
+- code: Y
+  label: Y=Yes
+  order: 7151
+- code: N
+  label: N=No
+  order: 7152
+- code: NI
+  label: NI=No information
+  order: 7153
+- code: UN
+  label: UN=Unknown
+  order: 7154
+- code: OT
+  label: OT=Other
+  order: 7155

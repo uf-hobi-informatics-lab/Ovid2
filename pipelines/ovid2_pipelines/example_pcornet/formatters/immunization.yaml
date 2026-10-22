@@ -1,0 +1,41 @@
+# Example PCORnet-native passthrough spec.
+v: 1
+formatter: immunization
+adapter: pcornet_passthrough
+input_file_name: "*Immunization_*.txt"
+
+sources:
+  immunization:
+    glob: "*Immunization_*.txt"
+    lowercase_columns: true
+
+projections:
+  ENCOUNTERID: encounterid
+  IMMUNIZATIONID: immunizationid
+  PATID: patid
+  PROCEDURESID: proceduresid
+  RAW_VX_BODY_SITE: raw_vx_body_site
+  RAW_VX_CODE: raw_vx_code
+  RAW_VX_CODE_TYPE: raw_vx_code_type
+  RAW_VX_DOSE: raw_vx_dose
+  RAW_VX_DOSE_UNIT: raw_vx_dose_unit
+  RAW_VX_MANUFACTURER: raw_vx_manufacturer
+  RAW_VX_NAME: raw_vx_name
+  RAW_VX_ROUTE: raw_vx_route
+  RAW_VX_STATUS: raw_vx_status
+  RAW_VX_STATUS_REASON: raw_vx_status_reason
+  VX_ADMIN_DATE: vx_admin_date
+  VX_BODY_SITE: vx_body_site
+  VX_CODE: vx_code
+  VX_CODE_TYPE: 'CX'
+  VX_DOSE: vx_dose
+  VX_DOSE_UNIT: vx_dose_unit
+  VX_EXP_DATE: vx_exp_date
+  VX_LOT_NUM: vx_lot_num
+  VX_MANUFACTURER: vx_manufacturer
+  VX_PROVIDERID: vx_providerid
+  VX_RECORD_DATE: vx_record_date
+  VX_ROUTE: vx_route
+  VX_SOURCE: vx_source
+  VX_STATUS: vx_status
+  VX_STATUS_REASON: vx_status_reason

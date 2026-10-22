@@ -1,0 +1,60 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://ovid2.dev/schemas/mapper_spec.v1.json",
+    "title": "Ovid2 mapper spec",
+    "description": "Declarative mapper definition. One spec produces the mapped form of one CDM table for one pipeline. Loaded from pipelines/<pipeline>/mappers/<table>.yaml (or a Python-dict SPEC = {...} module).",
+    "type": "object",
+    "required": ["v", "table"],
+    "additionalProperties": false,
+    "properties": {
+        "v": {
+            "type": "integer",
+            "const": 1,
+            "description": "Schema version. Bumped on breaking changes."
+        },
+        "table": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "Target CDM table name (snake_case)."
+        },
+        "enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "When false, the map stage skips this table for this pipeline."
+        },
+        "ops": {
+            "type": "array",
+            "description": "Ordered list of map ops. Ops are applied in the order listed.",
+            "default": [],
+            "items": {"$ref": "#/$defs/op"}
+        },
+        "class": {
+            "type": "string",
+            "description": "Escape hatch — dotted path to a BaseMapper subclass. When set, `ops` MUST be empty. The engine hands off to the class instead of walking the op list."
+        }
+    },
+    "allOf": [
+        {
+            "if": {"required": ["class"]},
+            "then": {
+                "properties": {
+                    "ops": {"maxItems": 0}
+                }
+            }
+        }
+    ],
+    "$defs": {
+        "op": {
+            "type": "object",
+            "required": ["op"],
+            "additionalProperties": true,
+            "properties": {
+                "op": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "description": "Op name — must be registered in ovid2.mappers.registry.MAP_OPS."
+                }
+            }
+        }
+    }
+}

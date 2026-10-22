@@ -1,0 +1,138 @@
+v: 1
+name: pcornet_7_0.lds_address_history.address_state
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 LDS_ADDRESS_HISTORY.ADDRESS_STATE code set.
+code_column: code
+description_column: label
+items:
+- code: AL
+  label: AL=Alabama
+- code: AK
+  label: AK=Alaska
+- code: AS
+  label: AS=American Samoa
+- code: AZ
+  label: AZ=Arizona
+- code: AR
+  label: AR=Arkansas
+- code: CA
+  label: CA=California
+- code: CO
+  label: CO=Colorado
+- code: CT
+  label: CT=Connecticut
+- code: DE
+  label: DE=Delaware
+- code: DC
+  label: DC=District of Columbia
+- code: FM
+  label: FM=Federated States of Micronesia
+- code: FL
+  label: FL=Florida
+- code: GA
+  label: GA=Georiga
+- code: GU
+  label: GU=Guam
+- code: HI
+  label: HI=Hawaii
+- code: ID
+  label: ID=Idaho
+- code: IL
+  label: IL=Illinois
+- code: IN
+  label: IN=Indiana
+- code: IA
+  label: IA=Iowa
+- code: KS
+  label: KS=Kansas
+- code: KY
+  label: KY=Kentucky
+- code: LA
+  label: LA=Louisiana
+- code: ME
+  label: ME=Maine
+- code: MH
+  label: MH=Marshall Islands
+- code: MD
+  label: MD=Maryland
+- code: MA
+  label: MA=Massachusetts
+- code: MI
+  label: MI=Michigan
+- code: MN
+  label: MN=Minnesota
+- code: MS
+  label: MS=Mississippi
+- code: MO
+  label: MO=Missouri
+- code: MT
+  label: MT=Montana
+- code: NE
+  label: NE=Nebraska
+- code: NV
+  label: NV=Nevada
+- code: NH
+  label: NH=New Hampshire
+- code: NJ
+  label: NJ=New Jersey
+- code: NM
+  label: NM=New Mexico
+- code: NY
+  label: NY=New York
+- code: NC
+  label: NC=North Carolina
+- code: ND
+  label: ND=North Dakota
+- code: MP
+  label: MP=Northern Mariana Islands
+- code: OH
+  label: OH=Ohio
+- code: OK
+  label: OK=Oklahoma
+- code: OR
+  label: OR=Oregon
+- code: PW
+  label: PW=Palau
+- code: PA
+  label: PA=Pennsylvania
+- code: PR
+  label: PR=Puerto Rico
+- code: RI
+  label: RI=Rhode Island
+- code: SC
+  label: SC=South Carolina
+- code: SD
+  label: SD=South Dakota
+- code: TN
+  label: TN=Tennessee
+- code: TX
+  label: TX=Texas
+- code: UT
+  label: UT=Utah
+- code: VT
+  label: VT=Vermont
+- code: VI
+  label: VI=Virgin Islands
+- code: VA
+  label: VA=Virginia
+- code: WA
+  label: WA=Washington
+- code: WV
+  label: WV=West Virginia
+- code: WI
+  label: WI=Wisconsin
+- code: WY
+  label: WY=Wyoming
+- code: AE
+  label: AE=Armed Forces Europe, the Middle East, and Canada
+- code: AP
+  label: AP=Armed Forces Pacific
+- code: AA
+  label: AA=Armed Forces Americas (except Canada)
+- code: NI
+  label: NI=No information
+- code: UN
+  label: UN=Unknown
+- code: OT
+  label: OT=Other

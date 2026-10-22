@@ -1,0 +1,145 @@
+v: 1
+name: med_admin
+composite_key:
+- MEDADMINID
+domain_description: Records of medications administered to patients by healthcare providers.  These administrations
+  may take place in any setting, including inpatient, outpatient or home health encounters.
+domain_order: 15
+constraints:
+- field: MEDADMINID
+  rule: unique
+  order: 63
+- field: MEDADMINID
+  rule: required, not null
+  order: 64
+- field: PATID
+  rule: required, not null
+  order: 65
+- field: MEDADMIN_START_DATE
+  rule: required, not null
+  order: 66
+relations:
+- relation: PK
+  details: MEDADMINID
+  order: 39
+- relation: FK (many to one)
+  details: MEDADMIN.PATID references DEMOGRAPHIC.PATID
+  order: 40
+- relation: FK (many to one)
+  details: MEDADMIN.ENCOUNTERID references ENCOUNTER.ENCOUNTERID
+  order: 41
+- relation: FK (many to one)
+  details: MEDADMIN.MEDADMIN_PROVIDERID references PROVIDER.PROVIDERID
+  order: 42
+fields:
+- name: MEDADMINID
+  rdbms_type: RDBMS Text(x)
+  order: 243
+  sas_type: SAS Char(x)
+  definition: Arbitrary identifier for each unique MED_ADMIN record.
+- name: PATID
+  rdbms_type: RDBMS Text(x)
+  order: 244
+  sas_type: SAS Char(x)
+  definition: Arbitrary person-level identifier used to link across tables.
+- name: ENCOUNTERID
+  rdbms_type: RDBMS Text(x)
+  order: 245
+  sas_type: SAS Char(x)
+  definition: Arbitrary encounter-level identifier. The ENCOUNTERID should be present.
+- name: PRESCRIBINGID
+  rdbms_type: RDBMS Text(x)
+  order: 246
+  sas_type: SAS Char(x)
+  definition: This is an optional relationship to the PRESCRIBING table, and may not be generally available.
+    One prescribing order may generate multiple administration records.
+- name: MEDADMIN_PROVIDERID
+  rdbms_type: RDBMS Text(x)
+  order: 247
+  sas_type: SAS Char(x)
+  definition: Provider code for the provider who prescribed the medication. The provider code is a pseudoidentifier
+    with a consistent crosswalk to the real identifier.
+- name: MEDADMIN_START_DATE
+  rdbms_type: RDBMS Date
+  order: 248
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Date medication administration started/occurred
+- name: MEDADMIN_START_TIME
+  rdbms_type: RDBMS Text(5)
+  order: 249
+  sas_type: SAS Time (Numeric)
+  data_format: HH:MI using 24-hour clock and zero-padding for hour and minute
+  unit_of_measure: TIME
+  definition: Time medication administration started/occurred
+- name: MEDADMIN_STOP_DATE
+  rdbms_type: RDBMS Date
+  order: 250
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Date medication administration ended
+- name: MEDADMIN_STOP_TIME
+  rdbms_type: RDBMS Text(5)
+  order: 251
+  sas_type: SAS Time (Numeric)
+  data_format: HH:MI using 24-hour clock and zero-padding for hour and minute
+  unit_of_measure: TIME
+  definition: Time medication administration ended
+- name: MEDADMIN_TYPE
+  rdbms_type: RDBMS Text(2)
+  order: 252
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.med_admin.medadmin_type
+  definition: Medication code type
+- name: MEDADMIN_CODE
+  rdbms_type: RDBMS Text(11)
+  order: 253
+  sas_type: SAS Char(11)
+  definition: Medication code
+- name: MEDADMIN_DOSE_ADMIN
+  rdbms_type: RDBMS Number(x)
+  order: 254
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: Dose of a given mediation, as administered by the provider
+- name: MEDADMIN_DOSE_ADMIN_UNIT
+  rdbms_type: RDBMS Text(x)
+  order: 255
+  sas_type: SAS Char(x)
+  definition: Units of measure associated with the dose of the medication as administered by the provider
+- name: MEDADMIN_ROUTE
+  rdbms_type: RDBMS Text(x)
+  order: 256
+  sas_type: SAS Char(x)
+  definition: Route of medication delivery.
+- name: MEDADMIN_SOURCE
+  rdbms_type: RDBMS Text(2)
+  order: 257
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.med_admin.medadmin_source
+  definition: Source of the medication administration record.
+- name: RAW_MEDADMIN_MED_NAME
+  rdbms_type: RDBMS Text(x)
+  order: 258
+  sas_type: SAS Char(x)
+  definition: Field for originating, full textual medication name from the source.
+- name: RAW_MEDADMIN_CODE
+  rdbms_type: RDBMS Text(x)
+  order: 259
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.
+- name: RAW_MEDADMIN_DOSE_ADMIN
+  rdbms_type: RDBMS Text(x)
+  order: 260
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.
+- name: RAW_MEDADMIN_DOSE_ADMIN_UNIT
+  rdbms_type: RDBMS Text(x)
+  order: 261
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.
+- name: RAW_MEDADMIN_ROUTE
+  rdbms_type: RDBMS Text(x)
+  order: 262
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.

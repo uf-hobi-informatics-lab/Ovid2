@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Settings &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <div class="page-header"><h1>Global settings</h1></div>
+
+  {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+  <p class="note">
+    Runtime preferences stored at
+    <code>$XDG_CONFIG_HOME/ovid2/settings.json</code>. Consumers pick
+    up changes within one worker poll cycle.
+  </p>
+
+  <form method="post" action="/settings" class="edit-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <h2>Defaults</h2>
+    <div class="form-row">
+      <label for="defaults_engine">Engine</label>
+      <input type="text" id="defaults_engine" name="defaults_engine"
+             value="{{ settings.defaults.engine }}">
+      <label for="defaults_workers">Workers</label>
+      <input type="number" id="defaults_workers" name="defaults_workers"
+             min="1" max="200" value="{{ settings.defaults.workers }}">
+    </div>
+
+    <h2>Worker</h2>
+    <div class="form-row">
+      <label for="worker_poll">Poll interval (s)</label>
+      <input type="number" step="0.1" id="worker_poll" name="worker_poll"
+             min="0.1" max="600" value="{{ settings.worker.poll_interval_seconds }}">
+      <label>
+        <input type="checkbox" name="route_dispatch_enabled"
+               {% if settings.worker.route_dispatch_enabled %}checked{% endif %}>
+        Route dispatch enabled
+      </label>
+    </div>
+
+    <h2>UI</h2>
+    <div class="form-row">
+      <label for="ui_dash">Dashboard poll (ms)</label>
+      <input type="number" id="ui_dash" name="ui_dash"
+             min="250" max="60000" value="{{ settings.ui.dashboard_poll_ms }}">
+      <label for="ui_run">Run events poll (ms)</label>
+      <input type="number" id="ui_run" name="ui_run"
+             min="250" max="60000" value="{{ settings.ui.run_events_poll_ms }}">
+    </div>
+    <div class="form-row">
+      <label for="ui_tz">Display timezone</label>
+      <input type="text" id="ui_tz" name="ui_tz" list="tz-options"
+             value="{{ settings.ui.display_timezone }}"
+             placeholder="America/New_York">
+      <datalist id="tz-options">
+        <option value="America/New_York"></option>
+        <option value="America/Chicago"></option>
+        <option value="America/Denver"></option>
+        <option value="America/Los_Angeles"></option>
+        <option value="America/Phoenix"></option>
+        <option value="America/Anchorage"></option>
+        <option value="Pacific/Honolulu"></option>
+        <option value="UTC"></option>
+        <option value="Europe/London"></option>
+        <option value="Europe/Paris"></option>
+      </datalist>
+      <span class="small note">
+        IANA name. Timestamps are stored in UTC; this only changes display.
+      </span>
+    </div>
+
+    <h2>Notifications</h2>
+    <div class="form-row">
+      <label for="smtp_host">SMTP host</label>
+      <input type="text" id="smtp_host" name="smtp_host"
+             value="{{ settings.notifications.smtp_host }}">
+      <label for="smtp_port">SMTP port</label>
+      <input type="number" id="smtp_port" name="smtp_port"
+             min="1" max="65535" value="{{ settings.notifications.smtp_port }}">
+    </div>
+    <div class="form-row">
+      <label for="smtp_from">From</label>
+      <input type="text" id="smtp_from" name="smtp_from"
+             value="{{ settings.notifications.smtp_from }}">
+      <label for="smtp_to">To (space-separated)</label>
+      <input type="text" id="smtp_to" name="smtp_to"
+             value="{{ settings.notifications.smtp_to | join(' ') }}">
+    </div>
+    <div class="form-row">
+      <label for="smtp_secret_ref">Secret ref (opt)</label>
+      <input type="text" id="smtp_secret_ref" name="smtp_secret_ref"
+             value="{{ settings.notifications.smtp_secret_ref or '' }}"
+             placeholder="e.g. smtp_password">
+    </div>
+
+    <h2>Retention</h2>
+    <div class="form-row">
+      <label for="event_log_days">Event log (days)</label>
+      <input type="number" id="event_log_days" name="event_log_days"
+             min="1" max="3650" value="{{ settings.retention.event_log_days }}">
+      <label for="web_jobs_days">web_jobs rows (days)</label>
+      <input type="number" id="web_jobs_days" name="web_jobs_days"
+             min="1" max="3650" value="{{ settings.retention.web_jobs_days }}">
+    </div>
+
+    <h2>Admin storage account</h2>
+    <div class="form-row">
+      <label for="admin_storage_account">Storage account</label>
+      <select id="admin_storage_account" name="admin_storage_account">
+        <option value=""{% if not settings.admin.storage_account %} selected{% endif %}>
+          (local scheduler.db — default)
+        </option>
+        {% for conn in connections %}
+        <option value="{{ conn.name }}"
+                {% if settings.admin.storage_account == conn.name %}selected{% endif %}>
+          {{ conn.name }} ({{ conn.type }})
+        </option>
+        {% endfor %}
+      </select>
+      <span class="small note">
+        Backs Ovid2's own scheduler/job/audit/watch/run state. Leave on
+        the default to use the local <code>scheduler.db</code>.
+      </span>
+    </div>
+
+    <div class="form-row">
+      <button type="submit" class="button primary">Save</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

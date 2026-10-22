@@ -1,0 +1,8 @@
+# Coded-clinical fan-in -> OMOP procedure_occurrence (domain=Procedure).
+# procedure_occurrence_id = the PCORnet surrogate id. Concept ids resolved
+# against the concept / concept_relationship views; only Procedure-domain
+# codes survive.
+v: 1
+formatter: procedure_occurrence
+adapter: custom
+class: ovid2_pipelines.pcornet_to_omop.formatters_custom.procedure_occurrence_formatter.ProcedureOccurrenceFormatter

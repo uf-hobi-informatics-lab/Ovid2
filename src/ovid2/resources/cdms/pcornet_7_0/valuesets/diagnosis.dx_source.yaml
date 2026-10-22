@@ -1,0 +1,29 @@
+v: 1
+name: pcornet_7_0.diagnosis.dx_source
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 DIAGNOSIS.DX_SOURCE code set.
+code_column: code
+description_column: label
+items:
+- code: AD
+  label: AD=Admitting
+  order: 963
+- code: DI
+  label: DI=Discharge
+  order: 964
+- code: FI
+  label: FI=Final
+  order: 965
+- code: IN
+  label: IN=Interim
+  order: 966
+- code: NI
+  label: NI=No information
+  order: 967
+- code: UN
+  label: UN=Unknown
+  order: 968
+- code: OT
+  label: OT=Other
+  order: 969

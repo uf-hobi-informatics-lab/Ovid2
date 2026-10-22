@@ -1,0 +1,26 @@
+v: 1
+name: pcornet_7_0.condition.condition_status
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 CONDITION.CONDITION_STATUS code set.
+code_column: code
+description_column: label
+items:
+- code: AC
+  label: AC=Active
+  order: 5853
+- code: RS
+  label: RS=Resolved
+  order: 5854
+- code: IN
+  label: IN=Inactive
+  order: 5855
+- code: NI
+  label: NI=No information
+  order: 5856
+- code: UN
+  label: UN=Unknown
+  order: 5857
+- code: OT
+  label: OT=Other
+  order: 5858

@@ -1,0 +1,248 @@
+v: 1
+name: encounter
+composite_key:
+- ENCOUNTERID
+domain_description: Encounters are interactions between patients and providers within the context of healthcare
+  delivery.
+domain_order: 3
+constraints:
+- field: ENCOUNTERID
+  rule: unique
+  order: 7
+- field: ENCOUNTERID
+  rule: required, not null
+  order: 8
+- field: PATID
+  rule: required, not null
+  order: 9
+- field: ADMIT_DATE
+  rule: required, not null
+  order: 10
+- field: ENC_TYPE
+  rule: required, not null
+  order: 11
+relations:
+- relation: PK
+  details: ENCOUNTERID
+  order: 4
+- relation: FK (many to one)
+  details: ENCOUNTER.PATID references DEMOGRAPHIC.PATID
+  order: 5
+- relation: FK (many to one)
+  details: ENCOUNTER.PROVIDERID references PROVIDER.PROVIDERID
+  order: 6
+fields:
+- name: ENCOUNTERID
+  rdbms_type: RDBMS Text(x)
+  order: 25
+  sas_type: SAS Char(x)
+  definition: Arbitrary encounter-level identifier. Used to link across tables, including the ENCOUNTER,
+    DIAGNOSIS, and PROCEDURES tables.
+- name: PATID
+  rdbms_type: RDBMS Text(x)
+  order: 26
+  sas_type: SAS Char(x)
+  definition: Arbitrary person-level identifier used to link across tables.
+- name: ADMIT_DATE
+  rdbms_type: RDBMS Date
+  order: 27
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Encounter or admission date.
+- name: ADMIT_TIME
+  rdbms_type: RDBMS Text(5)
+  order: 28
+  sas_type: SAS Time (Numeric)
+  data_format: HH:MI using 24-hour clock and zero-padding for hour and minute
+  unit_of_measure: TIME
+  definition: Encounter or admission time.
+- name: DISCHARGE_DATE
+  rdbms_type: RDBMS Date
+  order: 29
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Discharge date.
+- name: DISCHARGE_TIME
+  rdbms_type: RDBMS Text(5)
+  order: 30
+  sas_type: SAS Time (Numeric)
+  data_format: HH:MI using 24-hour clock and zero-padding for hour and minute
+  unit_of_measure: TIME
+  definition: Discharge time.
+- name: PROVIDERID
+  rdbms_type: RDBMS Text(x)
+  order: 31
+  sas_type: SAS Char(x)
+  definition: Provider code for the provider who is most responsible for this encounter. For encounters
+    with multiple providers choose one so the encounter can be linked to the diagnosis and procedure tables.
+    As with the PATID, the provider code is a pseudoidentifier with a consistent crosswalk to the real
+    identifier.
+- name: FACILITY_LOCATION
+  rdbms_type: RDBMS Text(5)
+  order: 32
+  sas_type: SAS Char(5)
+  definition: Geographic location (5-digit zip code).
+- name: ENC_TYPE
+  rdbms_type: RDBMS Text(2)
+  order: 33
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.encounter.enc_type
+  definition: "Encounter type. Details of categorical definitions: \nAmbulatory Visit: Includes visits\
+    \ at outpatient clinics, physician offices, same day/ambulatory surgery centers, urgent care facilities,\
+    \ and other same-day ambulatory hospital encounters, but excludes emergency department encounters.\
+    \ \nEmergency Department (ED): Includes ED encounters that become inpatient stays (in which case inpatient\
+    \ stays would be a separate encounter). Excludes urgent care facility visits. ED claims should be\
+    \ pulled before hospitalization claims to ensure that ED with subsequent admission won't be rolled\
+    \ up in the hospital event. Does not include observation stays, where known (guidance added in v3.1).\
+    \ \nEmergency Department Admit to Inpatient Hospital Stay: Permissible substitution for preferred\
+    \ state of separate ED and IP records. Only for use with data sources where the individual records\
+    \ for ED and IP cannot be distinguished.\nInpatient Hospital Stay: Includes all inpatient stays, including:\
+    \ same-day hospital discharges, hospital transfers, and acute hospital care where the discharge is\
+    \ after the admission date. Does not include observation stays, where known (guidance added in v3.1).\n\
+    Observation Stay: “Hospital outpatient services given to help the doctor decide if the patient needs\
+    \ to be admitted as an inpatient or can be discharged. Observations services may be given in the emergency\
+    \ department or another area of the hospital.” Definition from Medicare, CMS Product No. 11435, https://www.medicare.gov/Pubs/pdf/11435.pdf\
+    \ (new value set item added in v3.1).\nInstitutional Professional Consult: Permissible substitution\
+    \ when services provided by a medical professional cannot be combined with the given encounter record,\
+    \ such as a specialist consult in an inpatient setting; this situation can be common with claims data\
+    \ sources. This includes physician consults for patients during inpatient encounters that are not\
+    \ directly related to the cause of the admission (e.g. a ophthalmologist consult for a patient with\
+    \ diabetic ketoacidosis) (guidance updated in v4.0)\nNon-Acute Institutional Stay: Includes inpatient\
+    \ hospice, skilled nursing facility (SNF), inpatient rehab center, nursing home, residential, overnight\
+    \ non-hospital dialysis, and other non-hospital overnight stays.\nTelehealth: Includes telemedicine\
+    \ or virtual visits, which can be conducted via video, phone or other means. \nOther Ambulatory Visit:\
+    \ Includes other non-overnight AV encounters such as hospice visits, rehab visits, home health visits,\
+    \ skilled nursing visits, other non-hospital visits, as well as telephone and email consultations.\
+    \ May also include \"lab only\" visits (when a lab is ordered outside of a patient visit), \"pharmacy\
+    \ only\" (e.g., when a patient has a refill ordered without a face-to-face visit), \"imaging only\"\
+    , etc."
+- name: FACILITYID
+  rdbms_type: RDBMS Text(x)
+  order: 34
+  sas_type: SAS Char(x)
+  definition: Arbitrary local facility code that identifies the hospital or clinic. Used for chart abstraction
+    and validation. FACILITYID can be a true identifier, or a pseudoidentifier with a consistent crosswalk
+    to the true identifier retained by the source data pipeline.
+- name: DISCHARGE_DISPOSITION
+  rdbms_type: RDBMS Text(2)
+  order: 35
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.encounter.discharge_disposition
+  definition: Vital status at discharge.
+- name: DISCHARGE_STATUS
+  rdbms_type: RDBMS Text(2)
+  order: 36
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.encounter.discharge_status
+  definition: Discharge status.
+- name: DRG
+  rdbms_type: RDBMS Text(3)
+  order: 37
+  sas_type: SAS Char(3)
+  definition: 3-digit Diagnosis Related Group (DRG). The DRG is used for reimbursement for inpatient encounters.
+    It is a Medicare requirement that combines diagnoses into clinical concepts for billing. Frequently
+    used in observational data analyses.
+- name: DRG_TYPE
+  rdbms_type: RDBMS Text(2)
+  order: 38
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.encounter.drg_type
+  definition: DRG code version.
+- name: ADMITTING_SOURCE
+  rdbms_type: RDBMS Text(2)
+  order: 39
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.encounter.admitting_source
+  definition: Admitting source.
+- name: PAYER_TYPE_PRIMARY
+  rdbms_type: RDBMS Text(5)
+  order: 40
+  sas_type: SAS Char(5)
+  definition: Categorization of payer type for primary payer associated with the encounter
+- name: PAYER_TYPE_SECONDARY
+  rdbms_type: RDBMS Text(5)
+  order: 41
+  sas_type: SAS Char(5)
+  definition: Categorization of payer type for secondary payer associated with the encounter
+- name: FACILITY_TYPE
+  rdbms_type: RDBMS Text(x)
+  order: 42
+  sas_type: SAS Char(x)
+  definition: Description of the facility where the encounter occurred.
+- name: RAW_SITEID
+  rdbms_type: RDBMS Text(x)
+  order: 43
+  sas_type: SAS Char(x)
+  definition: Optional field for locally-defined identifier intended for local use; for example, where
+    a network may have multiple sites contributing to a central data repository. This attribute may be
+    sensitive in certain contexts; the intent is for internal network use only, and not to enable site
+    quality comparisons.
+- name: RAW_ENC_TYPE
+  rdbms_type: RDBMS Text(x)
+  order: 44
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_DISCHARGE_DISPOSITION
+  rdbms_type: RDBMS Text(x)
+  order: 45
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_DISCHARGE_STATUS
+  rdbms_type: RDBMS Text(x)
+  order: 46
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_DRG_TYPE
+  rdbms_type: RDBMS Text(x)
+  order: 47
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_ADMITTING_SOURCE
+  rdbms_type: RDBMS Text(x)
+  order: 48
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_FACILITY_TYPE
+  rdbms_type: RDBMS Text(x)
+  order: 49
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.
+- name: RAW_PAYER_TYPE_PRIMARY
+  rdbms_type: RDBMS Text(x)
+  order: 50
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.
+- name: RAW_PAYER_NAME_PRIMARY
+  rdbms_type: RDBMS Text(x)
+  order: 51
+  sas_type: SAS Char(x)
+  definition: Primary payer name as denoted in the source system.  Used to derive PAYER_TYPE_PRIMARY if
+    validated process does not exist.
+- name: RAW_PAYER_ID_PRIMARY
+  rdbms_type: RDBMS Text(x)
+  order: 52
+  sas_type: SAS Char(x)
+  definition: Primary PAYER identifier as denoted in the source system.  Used to derive PAYER_TYPE_PRIMARY
+    if validated process does not exist.
+- name: RAW_PAYER_TYPE_SECONDARY
+  rdbms_type: RDBMS Text(x)
+  order: 53
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.
+- name: RAW_PAYER_NAME_SECONDARY
+  rdbms_type: RDBMS Text(x)
+  order: 54
+  sas_type: SAS Char(x)
+  definition: Secondary payer name as denoted in the source system.  Used to derive PAYER_TYPE_SECONDARY
+    if validated process does not exist.
+- name: RAW_PAYER_ID_SECONDARY
+  rdbms_type: RDBMS Text(x)
+  order: 55
+  sas_type: SAS Char(x)
+  definition: Secondary PAYER identifier as denoted in the source system.  Used to derive PAYER_TYPE_SECONDARY
+    if validated process does not exist.

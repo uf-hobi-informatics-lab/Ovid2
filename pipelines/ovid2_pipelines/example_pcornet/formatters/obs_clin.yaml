@@ -1,0 +1,36 @@
+# Example PCORnet-native passthrough spec.
+v: 1
+formatter: obs_clin
+adapter: pcornet_passthrough
+input_file_name: "*OBS_Clin_*.txt"
+
+sources:
+  obs_clin:
+    glob: "*OBS_Clin_*.txt"
+    lowercase_columns: true
+
+projections:
+  ENCOUNTERID: encounterid
+  OBSCLINID: obsclinid
+  OBSCLIN_ABN_IND: ''
+  OBSCLIN_CODE: raw_obsclin_code
+  OBSCLIN_PROVIDERID: obsclin_providerid
+  OBSCLIN_RESULT_MODIFIER: obsclin_result_modifier
+  OBSCLIN_RESULT_NUM: obsclin_result_num
+  OBSCLIN_RESULT_QUAL: obsclin_result_qual
+  OBSCLIN_RESULT_SNOMED: obsclin_result_snomed
+  OBSCLIN_RESULT_TEXT: obsclin_result_text
+  OBSCLIN_RESULT_UNIT: obsclin_result_unit
+  OBSCLIN_SOURCE: obsclin_source
+  OBSCLIN_START_DATE: obsclin_start_date
+  OBSCLIN_START_TIME: obsclin_start_time
+  OBSCLIN_STOP_DATE: obsclin_stop_date
+  OBSCLIN_STOP_TIME: obsclin_stop_time
+  OBSCLIN_TYPE: 'LC'
+  PATID: patid
+  RAW_OBSCLIN_CODE: raw_obsclin_code
+  RAW_OBSCLIN_MODIFIER: raw_obsclin_modifier
+  RAW_OBSCLIN_NAME: raw_obsclin_name
+  RAW_OBSCLIN_RESULT: raw_obsclin_result
+  RAW_OBSCLIN_TYPE: raw_obsclin_type
+  RAW_OBSCLIN_UNIT: raw_obsclin_unit

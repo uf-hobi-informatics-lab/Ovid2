@@ -1,0 +1,21 @@
+{# Rendered both on the initial run-detail page and by every HTMX poll.
+   The "more" placeholder at the bottom carries the updated cursor so the
+   next poll picks up where this one stopped. #}
+{% for ev in page.events %}
+  <div class="event kind-{{ ev.kind|replace('.', '-') }}">
+    <span class="event-ts mono small">{{ ev.ts | localtime_only }}</span>
+    <span class="event-kind mono">{{ ev.kind }}</span>
+    {% if ev.table %}<span class="event-table">{{ ev.table }}</span>{% endif %}
+    {% if ev.stage %}<span class="event-stage">{{ ev.stage }}</span>{% endif %}
+    {% if ev.message %}<span class="event-message">{{ ev.message }}</span>{% endif %}
+    {% if ev.error %}<span class="event-error">{{ ev.error }}</span>{% endif %}
+  </div>
+{% endfor %}
+{% if page.events %}
+  {# Update the polling target with the new cursor. #}
+  <div id="run-events-more"
+       hx-get="/partials/runs/{{ page.instance_id }}/events?after={{ page.next_cursor }}"
+       hx-trigger="every 2000ms"
+       hx-swap="outerHTML"
+       {% if page.finished %}hx-disable="true"{% endif %}></div>
+{% endif %}

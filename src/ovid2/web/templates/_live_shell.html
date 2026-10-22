@@ -1,0 +1,56 @@
+{#
+  Live shell — thin wrapper around the D3 display canvas.
+
+  This template renders:
+    * The canvas root <div id="ovid2-canvas"> that /static/live.js
+      populates on load.
+    * A <noscript> KPI fallback so JS-off users (and search-engine
+      snapshots) still see the numbers.
+
+  The ``sample`` context is the most recent ``engine.metrics`` record
+  (empty ``{}`` when none has been written yet).
+#}
+<section class="live-shell" data-instance-id="{{ instance_id }}">
+  <div id="ovid2-canvas"
+       class="live-canvas"
+       data-instance-id="{{ instance_id }}"
+       data-max-reconnect="5"
+       data-compact="true">
+    {# populated client-side by /static/live.js — the <noscript> block
+       below provides the read-only fallback. The ``data-compact`` flag
+       switches the canvas into a single-row, shorter-tile layout so the
+       run-detail page can pack the metrics above other components (see
+       the compact-variant CSS in ovid2.css §13.a). #}
+  </div>
+
+  <noscript>
+    <div class="live-noscript">
+      <div class="live-noscript-tile">
+        <span class="widget-label">Executors</span>
+        <span class="widget-number">
+          {%- if sample.executors_active is not none and sample.executors_total is not none -%}
+            {{ sample.executors_active }} / {{ sample.executors_total }}
+          {%- else -%}—{%- endif -%}
+        </span>
+      </div>
+      <div class="live-noscript-tile">
+        <span class="widget-label">Rows written</span>
+        <span class="widget-number">
+          {%- if sample.rows_written_total -%}{{ sample.rows_written_total }}{%- else -%}—{%- endif -%}
+        </span>
+      </div>
+      <div class="live-noscript-tile">
+        <span class="widget-label">Stage</span>
+        <span class="widget-sub">
+          {%- if sample.current_stage -%}{{ sample.current_stage }}{%- else -%}—{%- endif -%}
+        </span>
+      </div>
+      <div class="live-noscript-tile">
+        <span class="widget-label">Elapsed</span>
+        <span class="widget-number">
+          {%- if sample.t_ms -%}—{%- else -%}0s{%- endif -%}
+        </span>
+      </div>
+    </div>
+  </noscript>
+</section>

@@ -1,0 +1,226 @@
+v: 1
+name: hash_token
+composite_key:
+- PATID
+- TOKEN_ENCRYPTION_KEY
+domain_description: Encrypted hash tokens that are used to match patient records across DataMarts using
+  privacy-preserving record linkage methods.
+domain_order: 19
+constraints:
+- field: PATID
+  rule: required, not null
+  order: 78
+- field: TOKEN_ENCRYPTION_KEY
+  rule: required, not null
+  order: 79
+relations:
+- relation: Composite Key
+  details: PATID + TOKEN_ENCRYPTION_KEY
+  order: 57
+- relation: FK (many to one)
+  details: HASH_TOKEN.PATID references DEMOGRAPHIC.PATID
+  order: 58
+fields:
+- name: PATID
+  rdbms_type: RDBMS Text(x)
+  order: 317
+  sas_type: SAS Char(x)
+  definition: Arbitrary person-level identifier. Used to link across tables.PATID is passed through the
+    Datavant DeID module in order to be associated with the generated encrypted keyed hashes.
+- name: TOKEN_01
+  rdbms_type: RDBMS Text(x)
+  order: 318
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 01. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_02
+  rdbms_type: RDBMS Text(x)
+  order: 319
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 02. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_03
+  rdbms_type: RDBMS Text(x)
+  order: 320
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 03. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_04
+  rdbms_type: RDBMS Text(x)
+  order: 321
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 04. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_05
+  rdbms_type: RDBMS Text(x)
+  order: 322
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 05. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_06
+  rdbms_type: RDBMS Text(x)
+  order: 323
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 06. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_07
+  rdbms_type: RDBMS Text(x)
+  order: 324
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 07. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_08
+  rdbms_type: RDBMS Text(x)
+  order: 325
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 08. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_09
+  rdbms_type: RDBMS Text(x)
+  order: 326
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 09. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_12
+  rdbms_type: RDBMS Text(x)
+  order: 327
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 12. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_14
+  rdbms_type: RDBMS Text(x)
+  order: 328
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 14. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_15
+  rdbms_type: RDBMS Text(x)
+  order: 329
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 15. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_16
+  rdbms_type: RDBMS Text(x)
+  order: 330
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 16. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_17
+  rdbms_type: RDBMS Text(x)
+  order: 331
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 17. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_18
+  rdbms_type: RDBMS Text(x)
+  order: 332
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 18. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_23
+  rdbms_type: RDBMS Text(x)
+  order: 333
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 23. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_24
+  rdbms_type: RDBMS Text(x)
+  order: 334
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 24. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_25
+  rdbms_type: RDBMS Text(x)
+  order: 335
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 25. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_26
+  rdbms_type: RDBMS Text(x)
+  order: 336
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 26. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_29
+  rdbms_type: RDBMS Text(x)
+  order: 337
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 29. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_30
+  rdbms_type: RDBMS Text(x)
+  order: 338
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 30. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_101
+  rdbms_type: RDBMS Text(x)
+  order: 339
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 101. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_102
+  rdbms_type: RDBMS Text(x)
+  order: 340
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 102. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_103
+  rdbms_type: RDBMS Text(x)
+  order: 341
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 103. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_104
+  rdbms_type: RDBMS Text(x)
+  order: 342
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 104. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_105
+  rdbms_type: RDBMS Text(x)
+  order: 343
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 105. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_106
+  rdbms_type: RDBMS Text(x)
+  order: 344
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 106. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_107
+  rdbms_type: RDBMS Text(x)
+  order: 345
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 107. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_108
+  rdbms_type: RDBMS Text(x)
+  order: 346
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 108. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_109
+  rdbms_type: RDBMS Text(x)
+  order: 347
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 109. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_110
+  rdbms_type: RDBMS Text(x)
+  order: 348
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 110. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_111
+  rdbms_type: RDBMS Text(x)
+  order: 349
+  sas_type: SAS Char(x)
+  definition: Encrypted keyed hash generated from PII using Datavant token strategy 111. Enforced through
+    PCORnet configuration setting.
+- name: TOKEN_ENCRYPTION_KEY
+  rdbms_type: RDBMS Text(x)
+  order: 350
+  sas_type: SAS Char(x)
+  definition: Name of the key used to generate the encrypted hash tokens.

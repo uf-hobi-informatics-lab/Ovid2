@@ -1,0 +1,109 @@
+# Continuous integration for Ovid2.
+#
+# Mirrors the local developer gates (.pre-commit-config.yaml + pyproject.toml)
+# so a green CI run means the same checks a contributor runs locally have
+# passed. Integration / real_connection / real_cluster / perf / endurance
+# tests are excluded here — they require live clusters, cloud credentials, or
+# long run times and are opt-in via their pytest markers.
+
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ruff
+        run: python -m pip install --upgrade pip && pip install "ruff>=0.4"
+      - name: ruff check
+        run: ruff check .
+      - name: ruff format --check
+        run: ruff format --check .
+
+  typecheck:
+    name: Type check (mypy --strict)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install mypy + stubs
+        run: |
+          python -m pip install --upgrade pip
+          pip install "mypy>=1.10" types-pyyaml types-python-dateutil "pydantic>=2.6"
+      - name: mypy
+        run: mypy --config-file=pyproject.toml src/ovid2
+
+  contract:
+    name: Contract tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package (dev extras)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: pytest -m contract
+        run: pytest -q -m contract
+
+  unit:
+    name: Unit tests (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Set up JDK 17 (for the local Spark fixture)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install package (dev + spark extras)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,spark]"
+      - name: Run unit suite (exclude heavyweight / opt-in markers)
+        run: >-
+          pytest -q
+          -m "not contract and not integration and not real_connection
+          and not real_cluster and not perf and not endurance"
+
+  build:
+    name: Build sdist + wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build tooling
+        run: python -m pip install --upgrade pip build twine
+      - name: Build distributions
+        run: python -m build
+      - name: Check metadata
+        run: twine check dist/*

@@ -1,0 +1,54 @@
+v: 1
+name: death
+composite_key:
+- PATID
+- DEATH_SOURCE
+domain_description: Reported mortality information for patients.
+domain_order: 13
+constraints:
+- field: PATID + DEATH_SOURCE
+  rule: unique
+  order: 54
+- field: PATID
+  rule: required, not null
+  order: 55
+- field: DEATH_SOURCE
+  rule: required, not null
+  order: 56
+relations:
+- relation: Composite Key
+  details: PATID + DEATH_SOURCE
+  order: 35
+- relation: FK (many to one)
+  details: DEATH.PATID references DEMOGRAPHIC.PATID
+  order: 36
+fields:
+- name: PATID
+  rdbms_type: RDBMS Text(x)
+  order: 232
+  sas_type: SAS Char(x)
+  definition: Arbitrary person-level identifier used to link across tables.
+- name: DEATH_DATE
+  rdbms_type: RDBMS Date
+  order: 233
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Date of death.
+- name: DEATH_DATE_IMPUTE
+  rdbms_type: RDBMS Text(2)
+  order: 234
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.death.death_date_impute
+  definition: When date of death is imputed, this field indicates which parts of the date were imputed.
+- name: DEATH_SOURCE
+  rdbms_type: RDBMS Text(2)
+  order: 235
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.death.death_source
+- name: DEATH_MATCH_CONFIDENCE
+  rdbms_type: RDBMS Text(2)
+  order: 236
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.death.death_match_confidence
+  definition: For situations where a probabilistic patient matching strategy is used, this field indicates
+    the confidence that the patient drawn from external source data represents the actual patient.

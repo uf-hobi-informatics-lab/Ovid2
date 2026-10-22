@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Storage account {{ connection.name }} &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <p><a href="/storage">&larr; all storage accounts</a></p>
+  <h1>Storage account: <span class="mono">{{ connection.name }}</span></h1>
+
+  {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+
+  <table class="kv-table">
+    <tbody>
+      <tr><th>Type</th><td>{{ connection.type }}</td></tr>
+      <tr><th>Path</th><td class="mono small">{{ connection.path }}</td></tr>
+      <tr><th>Secret ref</th><td class="mono">{{ connection.secret_ref or '(none)' }}</td></tr>
+      {% if connection.auth_mode %}
+        <tr><th>Auth mode</th><td class="mono">{{ connection.auth_mode }}</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+
+  <h2>Arguments</h2>
+  {% if connection.args %}
+    <table class="kv-table">
+      <thead><tr><th>Key</th><th>Value</th></tr></thead>
+      <tbody>
+        {% for k, v in connection.args.items() %}
+          <tr><td class="mono">{{ k }}</td><td class="mono small">{{ v }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="empty">No non-secret arguments defined.</p>
+  {% endif %}
+
+  <h2>Secrets</h2>
+  {% if connection.secrets %}
+    <table class="kv-table">
+      <thead><tr><th>Key</th><th>Value</th></tr></thead>
+      <tbody>
+        {% for k, v in connection.secrets.items() %}
+          <tr><td class="mono">{{ k }}</td><td class="mono small">{{ v }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="note">Values are masked. Edit the storage account to change them.</p>
+  {% else %}
+    <p class="empty">No secret fields configured.</p>
+  {% endif %}
+
+  <div class="page-actions">
+    <a href="/connections/{{ connection.name }}/edit" class="button primary">Edit</a>
+    <form action="/connections/{{ connection.name }}/test" method="post" style="display: inline;">
+      <button type="submit" class="button">Test storage account</button>
+    </form>
+    <form action="/connections/{{ connection.name }}/delete" method="post" style="display: inline;"
+          onsubmit="return confirm('Delete storage account {{ connection.name }}?')">
+      <button type="submit" class="button danger">Delete</button>
+    </form>
+  </div>
+
+  {% if test_result %}
+    <h2>Test result</h2>
+    <div class="flash {% if test_result.ok %}ok{% else %}error{% endif %}">
+      <strong>{{ test_result.code }}</strong>: {{ test_result.message }}
+      {% if test_result.detail and test_result.detail.auth_mode %}
+        <div class="small">Resolved auth mode: <span class="mono">{{ test_result.detail.auth_mode }}</span></div>
+      {% endif %}
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

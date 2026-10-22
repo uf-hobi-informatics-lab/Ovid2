@@ -1,0 +1,177 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://ovid2.dev/schemas/formatter_spec.v1.json",
+    "title": "Ovid2 formatter spec",
+    "description": "Declarative formatter definition. One spec produces one CDM table for one pipeline. Loaded from pipelines/<pipeline>/formatters/<table>.yaml (or a Python-dict `spec(...)` call).",
+    "type": "object",
+    "required": ["v", "formatter", "adapter"],
+    "additionalProperties": false,
+    "properties": {
+        "v": {
+            "type": "integer",
+            "const": 1,
+            "description": "Schema version. Bumped on breaking changes."
+        },
+        "formatter": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "CDM table name this formatter produces (snake_case)."
+        },
+        "adapter": {
+            "type": "string",
+            "enum": ["source_passthrough", "pcornet_passthrough", "omop_concept_join", "semantic_join", "union_of_specs", "custom"]
+        },
+        "enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "When false, this table is skipped (replaces the legacy `_not_provided` filename suffix)."
+        },
+        "input_file_name": {
+            "type": "string",
+            "description": "Glob pattern used by the input address when loading the primary source. Required unless adapter is `union_of_specs` or `custom` (which compute their own)."
+        },
+        "auxiliary_tables": {
+            "type": "array",
+            "items": {"type": "string"},
+            "uniqueItems": true,
+            "default": [],
+            "description": "Table names that must be registered as Spark temp views before this formatter runs."
+        },
+        "sources": {
+            "type": "object",
+            "description": "Named source blocks. Each becomes an aliased DataFrame the joins and projections can reference.",
+            "additionalProperties": {"$ref": "#/$defs/source"}
+        },
+        "joins": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/join"},
+            "default": []
+        },
+        "projections": {
+            "type": "object",
+            "description": "Mapping of output column name (uppercase) -> SQL expression string.",
+            "propertyNames": {"pattern": "^[A-Z][A-Z0-9_]*$"},
+            "additionalProperties": {"type": "string"}
+        },
+        "post_expressions": {
+            "type": "array",
+            "items": {"type": "string"},
+            "default": [],
+            "description": "Extra `selectExpr` items appended after `projections` (e.g. `case when CONDITION_TYPE = 'ICD10CM' then ... end as CONDITION_TYPE`)."
+        },
+        "output_columns_from": {
+            "type": "string",
+            "pattern": "^[a-z_0-9]+\\.[A-Z][A-Z0-9_]*$",
+            "description": "CDM schema reference like `pcornet_7_0.CONDITION`. Enforces the projected columns match the declared CDM table."
+        },
+        "sub_specs": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/sub_spec_ref"},
+            "description": "Only used when `adapter == 'union_of_specs'`. Each entry names another spec whose output is unioned."
+        },
+        "class": {
+            "type": "string",
+            "description": "Only used when `adapter == 'custom'`. Dotted path to a BaseFormatter subclass."
+        }
+    },
+    "allOf": [
+        {
+            "if": {"properties": {"adapter": {"const": "source_passthrough"}}, "required": ["adapter"]},
+            "then": {"required": ["sources", "projections"]}
+        },
+        {
+            "if": {"properties": {"adapter": {"const": "pcornet_passthrough"}}, "required": ["adapter"]},
+            "then": {"required": ["sources", "projections"]}
+        },
+        {
+            "if": {"properties": {"adapter": {"const": "omop_concept_join"}}, "required": ["adapter"]},
+            "then": {"required": ["sources", "joins", "projections"]}
+        },
+        {
+            "if": {"properties": {"adapter": {"const": "semantic_join"}}, "required": ["adapter"]},
+            "then": {"required": ["sources", "joins", "projections"]}
+        },
+        {
+            "if": {"properties": {"adapter": {"const": "union_of_specs"}}, "required": ["adapter"]},
+            "then": {"required": ["sub_specs"]}
+        },
+        {
+            "if": {"properties": {"adapter": {"const": "custom"}}, "required": ["adapter"]},
+            "then": {"required": ["class"]}
+        }
+    ],
+    "$defs": {
+        "source": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["glob"],
+            "properties": {
+                "glob": {
+                    "type": "string",
+                    "description": "File glob relative to the pipeline batch directory."
+                },
+                "exclude": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "default": [],
+                    "description": "Glob patterns to subtract (matched by fnmatch on basename)."
+                },
+                "optional": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "When true, missing files do not fail the run."
+                },
+                "filter": {
+                    "type": "string",
+                    "description": "SQL predicate applied via .filter() before joins."
+                },
+                "lowercase_columns": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Normalize column names to lowercase at read time — fixes the recurring uppercase-header bug."
+                }
+            }
+        },
+        "join": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["with", "on", "prefix"],
+            "properties": {
+                "with": {
+                    "type": "string",
+                    "description": "Name of another source, or the shared temp view (e.g. `concept`)."
+                },
+                "on": {
+                    "type": "string",
+                    "description": "SQL join predicate (e.g. `concept.concept_id = condition_occurrence.condition_concept_id`)."
+                },
+                "how": {
+                    "type": "string",
+                    "enum": ["left", "inner", "right", "full", "left_semi", "left_anti"],
+                    "default": "left"
+                },
+                "prefix": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "description": "Prefix applied to every column of the right side after the join. Guarantees no ambiguous `concept_id` after multiple joins to `concept`."
+                },
+                "domain_filter": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Only used with `with: concept`. Restricts the joined concept view to these `domain_id` values."
+                }
+            }
+        },
+        "sub_spec_ref": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["spec"],
+            "properties": {
+                "spec": {
+                    "type": "string",
+                    "description": "Dotted reference to another spec file (relative to the pipeline's formatters/ dir, without .yaml)."
+                }
+            }
+        }
+    }
+}

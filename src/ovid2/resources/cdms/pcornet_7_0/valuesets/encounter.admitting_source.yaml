@@ -1,0 +1,59 @@
+v: 1
+name: pcornet_7_0.encounter.admitting_source
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 ENCOUNTER.ADMITTING_SOURCE code set.
+code_column: code
+description_column: label
+items:
+- code: AF
+  label: AF=Adult Foster Home
+  order: 480
+- code: AL
+  label: AL=Assisted Living Facility
+  order: 481
+- code: AV
+  label: AV=Ambulatory Visit
+  order: 482
+- code: ED
+  label: ED=Emergency Department
+  order: 483
+- code: ES
+  label: ES=Emergency Medical Service
+  order: 484
+- code: HH
+  label: HH=Home Health
+  order: 485
+- code: HO
+  label: HO=Home / Self Care
+  order: 486
+- code: HS
+  label: HS=Hospice
+  order: 487
+- code: IP
+  label: IP=Other Acute Inpatient Hospital
+  order: 488
+- code: NH
+  label: NH=Nursing Home (Includes ICF)
+  order: 489
+- code: RH
+  label: RH=Rehabilitation Facility
+  order: 490
+- code: RS
+  label: RS=Residential Facility
+  order: 491
+- code: SN
+  label: SN=Skilled Nursing Facility
+  order: 492
+- code: IH
+  label: IH=Intra-hospital
+  order: 493
+- code: NI
+  label: NI=No information
+  order: 494
+- code: UN
+  label: UN=Unknown
+  order: 495
+- code: OT
+  label: OT=Other
+  order: 496

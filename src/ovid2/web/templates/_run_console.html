@@ -1,0 +1,35 @@
+{#
+  Shared run-console block.
+
+  This is the right-hand "canvas" of the merged runs workspace and the
+  body of the standalone /runs/{id} fetch-fragment response. It carries:
+
+    * the hidden job-status shim (preserves the HTMX status poll +
+      failure-banner contract that live.js re-fetches on terminal
+      events), and
+    * the full-bleed terminal console (_terminal_pane.html).
+
+  Rendered both by run_detail.html (fetch-mode fragment consumed by
+  live.js navigateRun) and by runs.html (embedded in the workspace).
+  Requires the run-detail context (run, job, identifier, instance_id,
+  poll_ms, engine, addresses, *_at_ms, display_tz, run_kind,
+  report_available).
+#}
+<div id="run-console" class="run-console" data-instance-id="{{ instance_id }}">
+  {# Hidden job-status shim. The console header renders the visible
+     status pill; this block preserves the HTMX job-status poll
+     (queued -> running -> terminal) and the failure-reason banner
+     contract that the worker + status partial tests rely on. The
+     nudge glue in live.js re-fetches it on terminal-state events. #}
+  <div id="run-job-status"
+       class="run-job-status-shim"
+       {% if job and job.status in ["queued", "running"] %}
+       hx-get="/partials/runs/{{ instance_id }}/status"
+       hx-trigger="every {{ poll_ms }}ms"
+       hx-swap="innerHTML"
+       {% endif %}>
+    {% include "_run_job_status.html" %}
+  </div>
+
+  {% include "_terminal_pane.html" with context %}
+</div>

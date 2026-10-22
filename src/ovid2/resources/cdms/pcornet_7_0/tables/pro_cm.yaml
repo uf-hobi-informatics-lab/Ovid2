@@ -1,0 +1,152 @@
+v: 1
+name: pro_cm
+composite_key:
+- PRO_CM_ID
+domain_description: This table is used to store responses to patient-reported outcome measures (PROs),
+  surveys, and questionnaires.  This table can be used to store item-level responses as well as the overall
+  score for each measure.
+domain_order: 10
+constraints:
+- field: PRO_CM_ID
+  rule: unique
+  order: 43
+- field: PRO_CM_ID
+  rule: required, not null
+  order: 44
+- field: PATID
+  rule: required, not null
+  order: 45
+- field: PRO_DATE
+  rule: required, not null
+  order: 46
+relations:
+- relation: PK
+  details: PRO_CM_ID
+  order: 27
+- relation: FK (many to one)
+  details: PRO_CM.PATID references DEMOGRAPHIC.PATID
+  order: 28
+- relation: FK (zero/many to one)
+  details: PRO_CM.ENCOUNTERID references ENCOUNTER.ENCOUNTERID
+  order: 29
+fields:
+- name: PRO_CM_ID
+  rdbms_type: RDBMS Text(x)
+  order: 176
+  sas_type: SAS Char(x)
+  definition: Arbitrary identifier for each unique record. Does not need to be persistent across refreshes,
+    and may be created by methods such as sequence or GUID.
+- name: PATID
+  rdbms_type: RDBMS Text(x)
+  order: 177
+  sas_type: SAS Char(x)
+  definition: Arbitrary person-level identifier for the patient for whom the PRO response was captured.
+    Used to link across tables.
+- name: ENCOUNTERID
+  rdbms_type: RDBMS Text(x)
+  order: 178
+  sas_type: SAS Char(x)
+  definition: Arbitrary encounter-level identifier used to link across tables. This is an optional field,
+    and should only be populated if the item was collected as part of a healthcare encounter.
+- name: PRO_DATE
+  rdbms_type: RDBMS Date
+  order: 179
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: The date of the response.
+- name: PRO_TIME
+  rdbms_type: RDBMS Text(5)
+  order: 180
+  sas_type: SAS Time (Numeric)
+  data_format: HH:MI using 24-hour clock and zero-padding for hour and minute
+  unit_of_measure: TIME
+  definition: The time of the response.
+- name: PRO_TYPE
+  rdbms_type: RDBMS Text(2)
+  order: 181
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.pro_cm.pro_type
+  definition: 'Terminology / vocabulary used to describe the PRO item or measure.
+
+    More information on PROMIS, Neuro-QoL and ASQC-Me and the NIH Toolbox can be found on the HealthMeasures
+    website. (www.healthmeasures.net)
+
+    The Patient-Reported Outcome version of the Common Terminology Criteria for Adverse Events (PRO-CTCAE™)
+    is maintained by the National Cancer Institute. (https://healthcaredelivery.cancer.gov/pro-ctcae/)
+
+    Information on the Hospital Consumer Assessment of Healthcare Providers and Systems (HPCAHPS) is located
+    here:
+
+    http://www.hcahpsonline.org'
+- name: PRO_NAME
+  rdbms_type: RDBMS Text(x)
+  order: 182
+  sas_type: SAS Char(x)
+  definition: Short name of the PRO item or measure in the vocabulary/terminology specified in PRO_TYPE.
+- name: PRO_CODE
+  rdbms_type: RDBMS Text(50)
+  order: 183
+  sas_type: SAS Char(50)
+  definition: Standardized code for the PRO item or measure, if available.
+- name: PRO_RESPONSE_TEXT
+  rdbms_type: RDBMS Text(x)
+  order: 184
+  sas_type: SAS Char(x)
+  definition: Text version of the response recorded for the item or measure, if available/applicable.
+- name: PRO_RESPONSE_NUM
+  rdbms_type: RDBMS Number(x)
+  order: 185
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: The numeric response recorded for the item or measure, if available/applicable.
+- name: PRO_METHOD
+  rdbms_type: RDBMS Text(2)
+  order: 186
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.pro_cm.pro_method
+  definition: Method of administration. Electronic includes responses captured via a personal or tablet
+    computer, at web kiosks, or via a smartphone.
+- name: PRO_MODE
+  rdbms_type: RDBMS Text(2)
+  order: 187
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.pro_cm.pro_mode
+  definition: The person who responded on behalf of the patient for whom the response was captured. A
+    proxy report is a measurement based on a report by someone other than the patient reporting as if
+    he or she is the patient, such as a parent responding for a child, or a caregiver responding for an
+    individual unable to report for themselves. Assistance excludes providing interpretation of the patient’s
+    response.
+- name: PRO_CAT
+  rdbms_type: RDBMS Text(2)
+  order: 188
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.pro_cm.pro_cat
+  definition: Indicates whether Computer Adaptive Testing (CAT) was used to administer the survey or instrument
+    that the item was part of. May apply to electronic (EC) and telephonic (PH or IV) modes.
+- name: PRO_SOURCE
+  rdbms_type: RDBMS Text(2)
+  order: 189
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.pro_cm.pro_source
+  definition: Source of the information for the PRO result.
+- name: PRO_VERSION
+  rdbms_type: RDBMS Text(x)
+  order: 190
+  sas_type: SAS Char(x)
+  definition: Version of the item/question or measure.
+- name: PRO_SEQ
+  rdbms_type: RDBMS Text(x)
+  order: 191
+  sas_type: SAS Char(x)
+  definition: Arbitrary ID/sequence number used to link PRO item responses that are associated with the
+    same measure/form.
+- name: PRO_FULLNAME
+  rdbms_type: RDBMS Text(x)
+  order: 192
+  sas_type: SAS Char(x)
+  definition: Full name of the PRO item or measure.
+- name: PRO_TEXT
+  rdbms_type: RDBMS Text(x)
+  order: 193
+  sas_type: SAS Char(x)
+  definition: Text of the PRO item question or measure.

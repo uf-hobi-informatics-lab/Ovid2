@@ -1,0 +1,29 @@
+id: "1.17"
+name: DC 1.17
+part: part1
+edc_table: Table IID
+description: A geographic ZIP / FIPS-location field contains non-conforming values
+operator: bad_zip
+source_tables:
+  - ENCOUNTER
+  - LDS_ADDRESS_HISTORY
+params:
+  zip_columns:
+    - {table: ENCOUNTER, column: FACILITY_LOCATION, length: 5}
+    - {table: LDS_ADDRESS_HISTORY, column: ADDRESS_ZIP5, length: 5}
+    - {table: LDS_ADDRESS_HISTORY, column: ADDRESS_ZIP9, length: 9}
+metrics:
+  - BAD_ZIP_ROWS
+exception_metrics:
+  - BAD_ZIP_ROWS
+thresholds:
+  bad_rows_gt: 0.0
+enabled: true
+doc_summary: >-
+  DC 1.17 (Table IID): geographic-code fields conform to the CDM specification —
+  ENCOUNTER.FACILITY_LOCATION and LDS_ADDRESS_HISTORY.ADDRESS_ZIP5 are exactly
+  5 digits, ADDRESS_ZIP9 is exactly 9 digits. A populated value that contains a
+  non-digit character or is the wrong length is non-conforming.
+doc_interpretation: >-
+  BAD_ZIP_ROWS above zero (EXCEPTION) means a geographic-code field carries
+  values that are not the expected number of digits (SAS flags any occurrence).

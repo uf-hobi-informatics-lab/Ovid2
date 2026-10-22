@@ -1,0 +1,14 @@
+v: 1
+name: pcornet_7_0.prescribing.rx_prn_flag
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 PRESCRIBING.RX_PRN_FLAG code set.
+code_column: code
+description_column: label
+items:
+- code: Y
+  label: Y=Yes
+  order: 6969
+- code: N
+  label: N=No
+  order: 6970

@@ -1,0 +1,259 @@
+v: 1
+name: lab_result_cm
+composite_key:
+- LAB_RESULT_CM_ID
+domain_description: This table is used to store quantitative and qualitative measurements from blood and
+  other body specimens.
+domain_order: 8
+constraints:
+- field: LAB_RESULT_CM_ID
+  rule: unique
+  order: 33
+- field: LAB_RESULT_CM_ID
+  rule: required, not null
+  order: 34
+- field: PATID
+  rule: required, not null
+  order: 35
+- field: RESULT_DATE
+  rule: required, not null
+  order: 36
+relations:
+- relation: PK
+  details: LAB_RESULT_CM_ID
+  order: 21
+- relation: FK (many to one)
+  details: LAB_RESULT_CM.PATID references DEMOGRAPHIC.PATID
+  order: 22
+- relation: FK (zero/many to one)
+  details: LAB_RESULT_CM.ENCOUNTERID references ENCOUNTER.ENCOUNTERID
+  order: 23
+fields:
+- name: LAB_RESULT_CM_ID
+  rdbms_type: RDBMS Text(x)
+  order: 129
+  sas_type: SAS Char(x)
+  definition: Arbitrary identifier for each unique LAB_RESULT_CM record. Does not need to be persistent
+    across refreshes, and may be created by methods such as sequence or GUID.
+- name: PATID
+  rdbms_type: RDBMS Text(x)
+  order: 130
+  sas_type: SAS Char(x)
+  definition: Arbitrary person-level identifier. Used to link across tables.
+- name: ENCOUNTERID
+  rdbms_type: RDBMS Text(x)
+  order: 131
+  sas_type: SAS Char(x)
+  definition: Arbitrary encounter-level identifier used to link across tables. This is an optional field,
+    and should only be populated if the lab was collected as part of a healthcare encounter.
+- name: SPECIMEN_SOURCE
+  rdbms_type: RDBMS Text(x)
+  order: 132
+  sas_type: SAS Char(x)
+  definition: Specimen source. All records will have a specimen source; some tests have several possible
+    values for SPECIMEN_SOURCE.
+- name: LAB_LOINC
+  rdbms_type: RDBMS Text(10)
+  order: 133
+  sas_type: SAS Char(10)
+  definition: Logical Observation Identifiers, Names, and Codes (LOINC®) from the Regenstrief Institute.  Current
+    LOINC codes are from 3-8 characters long but Regenstrief suggests a length of 10 for future growth.
+    The last digit of the LOINC code is a check digit and is always preceded by a hyphen. All parts of
+    the LOINC code, including the hyphen, must be included. Do not pad the LOINC code with leading zeros.
+- name: LAB_RESULT_SOURCE
+  rdbms_type: RDBMS Text (2)
+  order: 134
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.lab_result_cm.lab_result_source
+  definition: Source of the information for the lab result
+- name: LAB_LOINC_SOURCE
+  rdbms_type: RDBMS Text(2)
+  order: 135
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.lab_result_cm.lab_loinc_source
+  definition: 'Source/provenance of the LOINC code for this result.
+
+    Details of categorical definitions:
+
+    Instrument: Assigned by the instrument used to process the sample and generate the result.
+
+    Laboratory Information Management System (LIMS): Code is assigned by the system used to manage laboratory
+    results, either stand-alone or as part of the EHR.
+
+    HL7 Feed: Code is assigned from an external HL7 feed (e.g., by a Health Information Exchange).
+
+    Data warehouse: LOINC codes are generated during the extract-transform-load (ETL) procedures used
+    to populate a standalone data warehouse or reporting database.
+
+    PCORnet ETL: LOINC codes are assigned as part of the ETL process used to populate the PCORnet CDM.
+
+    Other CDM: Codes are assigned through the ETL used to populate a CDM that is upstream from the PCORnet
+    ETL.'
+- name: PRIORITY
+  rdbms_type: RDBMS Text(2)
+  order: 136
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.lab_result_cm.priority
+  definition: Immediacy of test. The intent of this variable is to determine whether the test was obtained
+    as part of routine care or as an emergent/urgent diagnostic test (designated as Stat or Expedite).
+- name: RESULT_LOC
+  rdbms_type: RDBMS Text(2)
+  order: 137
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.lab_result_cm.result_loc
+  definition: Location of the test result. Point of Care locations may include anticoagulation clinic,
+    newborn nursery, finger stick in provider office, or home. The default value is ‘L’ unless the result
+    is Point of Care. There should not be any missing values.
+- name: LAB_PX
+  rdbms_type: RDBMS Text(11)
+  order: 138
+  sas_type: SAS Char(11)
+  definition: Optional variable for local and standard procedure codes, used to identify the originating
+    order for the lab test.
+- name: LAB_PX_TYPE
+  rdbms_type: RDBMS Text(2)
+  order: 139
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.lab_result_cm.lab_px_type
+  definition: Procedure code type, if applicable. Value set modified in v3.1 to combine CPT and HCPCS
+    codes into one category; also, ICD-9 value set item typo corrected to specify ICD-9-PCS.
+- name: LAB_ORDER_DATE
+  rdbms_type: RDBMS Date
+  order: 140
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Date test was ordered.
+- name: SPECIMEN_DATE
+  rdbms_type: RDBMS Date
+  order: 141
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Date specimen was collected.
+- name: SPECIMEN_TIME
+  rdbms_type: RDBMS Text(5)
+  order: 142
+  sas_type: SAS Time (Numeric)
+  data_format: HH:MI using 24-hour clock and zero-padding for hour and minute
+  unit_of_measure: TIME
+  definition: Time specimen was collected.
+- name: RESULT_DATE
+  rdbms_type: RDBMS Date
+  order: 143
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Result date.
+- name: RESULT_TIME
+  rdbms_type: RDBMS Text(5)
+  order: 144
+  sas_type: SAS Time (Numeric)
+  data_format: HH:MI using 24-hour clock and zero-padding for hour and minute
+  unit_of_measure: TIME
+  definition: Result time.
+- name: RESULT_QUAL
+  rdbms_type: RDBMS Text(x)
+  order: 145
+  sas_type: SAS Char(x)
+  definition: Standardized result for qualitative results. This variable should be NI for quantitative
+    results.
+- name: RESULT_SNOMED
+  rdbms_type: RDBMS Text(18)
+  order: 146
+  sas_type: SAS Char(18)
+  definition: If the qualitative result has been mapped to SNOMED CT, the corresponding SNOMED code can
+    be placed here.
+- name: RESULT_NUM
+  rdbms_type: RDBMS Number(x)
+  order: 147
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: Standardized/converted result for quantitative results.
+- name: RESULT_MODIFIER
+  rdbms_type: RDBMS Text(2)
+  order: 148
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.lab_result_cm.result_modifier
+  definition: Modifier for result values.
+- name: RESULT_UNIT
+  rdbms_type: RDBMS Text(x)
+  order: 149
+  sas_type: SAS Char(x)
+  definition: Converted/standardized units for the quantitative result.
+- name: NORM_RANGE_LOW
+  rdbms_type: RDBMS Text(10)
+  order: 150
+  sas_type: SAS Char(10)
+  definition: Lower bound of the normal range assigned by the laboratory. Value should only contain the
+    value of the lower bound. The symbols >, <, >=, <= should be removed. For example, if the normal range
+    for a test is >100 and <300, then "100" should be entered.
+- name: NORM_MODIFIER_LOW
+  rdbms_type: RDBMS Text(2)
+  order: 151
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.lab_result_cm.norm_modifier_low
+  definition: 'Modifier for NORM_RANGE_LOW values. For numeric results one of the following needs to be
+    true:  1) Both MODIFIER_LOW and MODIFIER_HIGH contain EQ (e.g. normal values fall in the range 3-10)
+    2) MODIFIER_LOW contains GT or GE and MODIFIER_HIGH contains NO (e.g. normal values are >3 with no
+    upper boundary) 3) MODIFIER_HIGH contains LT or LE and MODIFIER_LOW contains NO (e.g. normal values
+    are <=10 with no lower boundary)'
+- name: NORM_RANGE_HIGH
+  rdbms_type: RDBMS Text(10)
+  order: 152
+  sas_type: SAS Char(10)
+  definition: Upper bound of the normal range assigned by the laboratory. Value should only contain the
+    value of the upper bound. The symbols >, <, >=, <= should be removed. For example, if the normal range
+    for a test is >100 and <300, then "300" should be entered.
+- name: NORM_MODIFIER_HIGH
+  rdbms_type: RDBMS Text(2)
+  order: 153
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.lab_result_cm.norm_modifier_high
+  definition: 'Modifier for NORM_RANGE_HIGH values.  For numeric results one of the following needs to
+    be true:  1) Both MODIFIER_LOW and MODIFIER_HIGH contain EQ (e.g. normal values fall in the range
+    3-10) 2) MODIFIER_LOW contains GT or GE and MODIFIER_HIGH contains NO (e.g. normal values are >3 with
+    no upper boundary) 3) MODIFIER_HIGH contains LT or LE and MODIFIER_LOW contains NO (e.g. normal values
+    are <=10 with no lower boundary)'
+- name: ABN_IND
+  rdbms_type: RDBMS Text(2)
+  order: 154
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.lab_result_cm.abn_ind
+  definition: Abnormal result indicator. This value comes from the source data; do not apply logic to
+    create it. If field is blank in source data, map to the appropriate flavor of null (guidance added
+    in v4.0).
+- name: RAW_LAB_NAME
+  rdbms_type: RDBMS Text(x)
+  order: 155
+  sas_type: SAS Char(x)
+  definition: Local name related to an individual lab test.
+- name: RAW_LAB_CODE
+  rdbms_type: RDBMS Text(x)
+  order: 156
+  sas_type: SAS Char(x)
+  definition: Local code related to an individual lab test.
+- name: RAW_PANEL
+  rdbms_type: RDBMS Text(x)
+  order: 157
+  sas_type: SAS Char(x)
+  definition: Local code related to a battery or panel of lab tests.
+- name: RAW_RESULT
+  rdbms_type: RDBMS Text(x)
+  order: 158
+  sas_type: SAS Char(x)
+  definition: The original test result value as seen in your source data. Values may include a decimal
+    point, a sign or text (e.g., POSITIVE, NEGATIVE, DETECTED). The symbols >, <, >=, <= should be removed
+    from the value and stored in the Modifier variable instead.
+- name: RAW_UNIT
+  rdbms_type: RDBMS Text(x)
+  order: 159
+  sas_type: SAS Char(x)
+  definition: Original units for the result in your source data.
+- name: RAW_ORDER_DEPT
+  rdbms_type: RDBMS Text(x)
+  order: 160
+  sas_type: SAS Char(x)
+  definition: Local code for ordering provider department.
+- name: RAW_FACILITY_CODE
+  rdbms_type: RDBMS Text(x)
+  order: 161
+  sas_type: SAS Char(x)
+  definition: Local facility code that identifies the hospital or clinic. Taken from facility claims.

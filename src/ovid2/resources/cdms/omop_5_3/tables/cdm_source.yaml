@@ -1,0 +1,34 @@
+v: 1
+name: cdm_source
+composite_key:
+- cdm_source_name
+domain_description: OMOP CDM 5.3 clinical data table.
+domain_order: 18
+fields:
+- name: cdm_source_name
+  rdbms_type: RDBMS Text(255)
+  order: 1
+- name: cdm_source_abbreviation
+  rdbms_type: RDBMS Text(25)
+  order: 2
+- name: cdm_holder
+  rdbms_type: RDBMS Text(255)
+  order: 3
+- name: source_documentation_reference
+  rdbms_type: RDBMS Text(255)
+  order: 4
+- name: cdm_etl_reference
+  rdbms_type: RDBMS Text(255)
+  order: 5
+- name: source_release_date
+  rdbms_type: RDBMS Date
+  order: 6
+- name: cdm_release_date
+  rdbms_type: RDBMS Date
+  order: 7
+- name: cdm_version
+  rdbms_type: RDBMS Text(10)
+  order: 8
+- name: vocabulary_version
+  rdbms_type: RDBMS Text(255)
+  order: 9

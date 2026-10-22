@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}{{ 'New storage account' if mode == 'new' else 'Edit storage account ' + name }} &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <p><a href="/storage">&larr; all storage accounts</a></p>
+  <h1>
+    {% if mode == 'new' %}New storage account
+    {% else %}Edit storage account: <span class="mono">{{ name }}</span>{% endif %}
+  </h1>
+
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+  <form method="get" action="/connections/new" class="edit-form" style="margin-bottom: 1em;">
+    {% if mode == 'new' %}
+      <div class="form-row">
+        <label for="type_selector">Storage type</label>
+        <select id="type_selector" name="type" onchange="this.form.submit()">
+          {% for t in all_types %}
+            <option value="{{ t }}" {% if type == t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+        <span class="small">Change the type to reveal the matching fields.</span>
+      </div>
+    {% endif %}
+  </form>
+
+  <form method="post"
+        action="{% if mode == 'new' %}/connections{% else %}/connections/{{ name }}{% endif %}"
+        class="edit-form">
+    {% if mode == 'new' %}
+      <div class="form-row">
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" required
+               pattern="[A-Za-z0-9._-]+"
+               placeholder="e.g. sf_prod, s3_ingest">
+      </div>
+    {% endif %}
+
+    <input type="hidden" name="type" value="{{ type }}">
+
+    {% if spec.note %}
+      <div class="flash">{{ spec.note }}</div>
+    {% endif %}
+
+    <h2>Arguments</h2>
+    <table class="kv-table edit">
+      <thead><tr><th>Key</th><th>Value</th><th>Help</th></tr></thead>
+      <tbody>
+        {% for f in spec.args %}
+          <tr>
+            <td class="mono">{{ f.name }}{% if f.required %} <span class="danger">*</span>{% endif %}</td>
+            <td>
+              {% if f.widget == 'path_picker' %}
+                <div class="path-picker-field" style="display: flex; gap: 0.5em; align-items: center;">
+                  <input type="text" id="arg_{{ f.name }}" name="arg_{{ f.name }}"
+                         value="{{ args.get(f.name, '') }}"
+                         class="mono wide"
+                         {% if f.required %}required{% endif %}
+                         placeholder="{{ f.default or '' }}">
+                  <button type="button" class="button"
+                          hx-get="/fs/picker?target=arg_{{ f.name }}"
+                          hx-target="#fs-picker-modal"
+                          hx-swap="innerHTML"
+                          onclick="document.getElementById('fs-picker-modal').style.display='block';">
+                    Browse&hellip;
+                  </button>
+                </div>
+              {% else %}
+                <input type="text" name="arg_{{ f.name }}"
+                       value="{{ args.get(f.name, '') }}"
+                       class="mono wide"
+                       {% if f.required %}required{% endif %}
+                       placeholder="{{ f.default or '' }}">
+              {% endif %}
+            </td>
+            <td class="small">{{ f.help }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if spec.secrets %}
+      <h2>Secrets</h2>
+      <p class="note">
+        Values are written to <code>$XDG_CONFIG_HOME/ovid2/secrets.d/</code>
+        with mode <code>0600</code>. Leave a field at <code>***</code> to
+        preserve the existing value.
+      </p>
+      <table class="kv-table edit">
+        <thead><tr><th>Key</th><th>Value</th><th>Help</th></tr></thead>
+        <tbody>
+          {% for f in spec.secrets %}
+            <tr>
+              <td class="mono">{{ f.name }}{% if f.required %} <span class="danger">*</span>{% endif %}</td>
+              <td>
+                {% if f.multiline %}
+                  <textarea name="sec_{{ f.name }}"
+                            class="mono wide"
+                            rows="8"
+                            spellcheck="false"
+                            autocomplete="off"
+                            placeholder="{% if mode == 'edit' %}***{% else %}Paste the full contents here, or use the file picker below.{% endif %}">{{ secrets.get(f.name, '') }}</textarea>
+                  <div class="small">
+                    <label class="mono" style="cursor: pointer;">
+                      <input type="file"
+                             accept=".p8,.pem,.key,.json,text/plain,application/x-pem-file"
+                             onchange="(function(el){
+                               var f = el.files && el.files[0];
+                               if (!f) return;
+                               var r = new FileReader();
+                               r.onload = function(){
+                                 var ta = el.closest('td').querySelector('textarea');
+                                 if (ta) ta.value = r.result;
+                               };
+                               r.readAsText(f);
+                             })(this);">
+                      &hellip; or upload a file
+                    </label>
+                  </div>
+                {% else %}
+                  <input type="text" name="sec_{{ f.name }}"
+                         value="{{ secrets.get(f.name, '') }}"
+                         class="mono wide"
+                         placeholder="{{ '***' if mode == 'edit' else '' }}">
+                {% endif %}
+              </td>
+              <td class="small">{{ f.help }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+
+    <div class="form-row">
+      <button type="submit" class="button primary">Save</button>
+      {% if mode == 'edit' %}
+        <a href="/connections/{{ name }}" class="button">Cancel</a>
+      {% else %}
+        <a href="/storage" class="button">Cancel</a>
+      {% endif %}
+    </div>
+  </form>
+
+  {% if mode == 'edit' %}
+    <form method="post" action="/connections/{{ name }}/test" class="edit-form" style="margin-top: 1em;">
+      <p class="note">
+        Probe the on-disk configuration with a lightweight round-trip
+        (e.g. <code>SELECT 1</code>, <code>HEAD</code> on a bucket, or a
+        <code>stat</code> on a filesystem root). Unsaved edits above are
+        <em>not</em> tested &mdash; save first, then test.
+      </p>
+      <button type="submit" class="button">Test storage account</button>
+    </form>
+  {% endif %}
+</section>
+
+{# Filesystem picker modal. Populated by /fs/picker HTMX responses. #}
+<div id="fs-picker-modal"
+     class="fs-picker-modal"
+     style="display: none; position: fixed; inset: 0; z-index: 500;
+            background: rgba(0,0,0,0.35); overflow: auto;"></div>
+{% endblock %}

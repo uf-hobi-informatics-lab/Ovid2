@@ -1,0 +1,30 @@
+# Example PCORnet-native passthrough spec.
+v: 1
+formatter: med_admin
+adapter: pcornet_passthrough
+input_file_name: "*Med_Admin_*.txt"
+
+sources:
+  med_admin:
+    glob: "*Med_Admin_*.txt"
+    lowercase_columns: true
+
+projections:
+  ENCOUNTERID: encounterid
+  MEDADMINID: medadminid
+  MEDADMIN_DOSE_ADMIN: medadmin_dose_admin
+  MEDADMIN_DOSE_ADMIN_UNIT: medadmin_dose_admin_unit
+  MEDADMIN_PROVIDERID: medadmin_providerid
+  MEDADMIN_SOURCE: medadmin_source
+  MEDADMIN_START_DATE: medadmin_ start_date
+  MEDADMIN_START_TIME: medadmin_ start_time
+  MEDADMIN_STOP_DATE: medadmin_stop_date
+  MEDADMIN_STOP_TIME: medadmin_ stop_time
+  MEDADMIN_TYPE: medadmin_type
+  PATID: patid
+  PRESCRIBINGID: prescribingid
+  RAW_MEDADMIN_CODE: raw_medadmin_code
+  RAW_MEDADMIN_DOSE_ADMIN: raw_medadmin_dose_admin
+  RAW_MEDADMIN_DOSE_ADMIN_UNIT: raw_medadmin_dose_admin _unit
+  RAW_MEDADMIN_MED_NAME: raw_medadmin_med_name
+  RAW_MEDADMIN_ROUTE: raw_medadmin_route

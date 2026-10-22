@@ -1,0 +1,37 @@
+# Example PCORnet-native passthrough spec.
+v: 1
+formatter: demographic
+adapter: pcornet_passthrough
+input_file_name: "*Demographic_*.txt"
+
+sources:
+  demographic:
+    glob: "*Demographic_*.txt"
+    lowercase_columns: true
+
+projections:
+  BIOBANK_FLAG: biobank_flag
+  BIRTH_DATE: birth_date
+  BIRTH_TIME: birth_time
+  GENDER_IDENTITY: gender_identity
+  HISPANIC: hispanic
+  PATID: patid
+  PAT_PREF_LANGUAGE_SPOKEN: pat_pref_language_spoken
+  RACE: race
+  RACE_ETH_AI_AN: ''
+  RACE_ETH_ASIAN: ''
+  RACE_ETH_BLACK: ''
+  RACE_ETH_HISPANIC: ''
+  RACE_ETH_ME_NA: ''
+  RACE_ETH_MISSING: ''
+  RACE_ETH_NH_PI: ''
+  RACE_ETH_WHITE: ''
+  RAW_GENDER_IDENTITY: raw_gender_identity
+  RAW_HISPANIC: raw_hispanic
+  RAW_PAT_PREF_LANGUAGE_SPOKEN: raw_pat_pref_language_spoken
+  RAW_RACE: raw_race
+  RAW_SEX: raw_sex
+  RAW_SEXUAL_ORIENTATION: raw_sexual_orientation
+  SEX: sex
+  SEXUAL_ORIENTATION: sexual_orientation
+  ZIP_CODE: ''

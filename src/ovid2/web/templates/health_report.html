@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Health report {{ instance_id }} &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page health-report">
+  <p><a href="/runs/{{ instance_id }}">&larr; back to run</a></p>
+
+  {# ---- Summary header ---- #}
+  <header class="health-report-head">
+    <h1>Data-health report</h1>
+    <dl class="term-summary-fields">
+      <dt>Pipeline</dt><dd class="mono">{{ report.pipeline or "—" }}</dd>
+      <dt>Batch</dt><dd class="mono">{{ report.batch_id or "—" }}</dd>
+      <dt>CDM</dt><dd class="mono">{{ report.cdm or "—" }}</dd>
+      <dt>Input</dt><dd class="mono small">{{ report.input_address or "—" }}</dd>
+      <dt>Output</dt><dd class="mono small">{{ report.output_address or "—" }}</dd>
+      {% if report.results_uri %}
+      <dt>Results table</dt><dd class="mono small">{{ report.results_uri }}</dd>
+      {% endif %}
+      <dt>Generated</dt><dd class="mono small">{{ report.generated_at }}</dd>
+    </dl>
+
+    <div class="health-kpis" aria-label="Summary counts">
+      <div class="health-kpi"><span class="health-kpi-n">{{ summary.checks_total or 0 }}</span><span class="health-kpi-l">checks</span></div>
+      <div class="health-kpi health-kpi-ok"><span class="health-kpi-n">{{ summary.checks_passed or 0 }}</span><span class="health-kpi-l">passed</span></div>
+      <div class="health-kpi health-kpi-exc"><span class="health-kpi-n">{{ summary.checks_exception or 0 }}</span><span class="health-kpi-l">exception</span></div>
+      <div class="health-kpi health-kpi-err"><span class="health-kpi-n">{{ summary.checks_error or 0 }}</span><span class="health-kpi-l">error</span></div>
+      <div class="health-kpi health-kpi-na"><span class="health-kpi-n">{{ summary.checks_not_applicable or 0 }}</span><span class="health-kpi-l">n/a</span></div>
+    </div>
+  </header>
+
+  {# ---- Clickable body: left nav tree | right detail ---- #}
+  <div class="health-report-body">
+    <nav class="health-nav" aria-label="Checks by part">
+      {% for part, part_checks in parts.items() %}
+      <div class="health-nav-group">
+        <div class="health-nav-part small mono">{{ part }}</div>
+        <ul class="health-nav-list">
+          {% for check in part_checks %}
+          <li>
+            <a class="health-nav-link health-status-{{ check.status }}"
+               href="#check-{{ check.id | replace('.', '_') }}"
+               data-check-id="{{ check.id }}">
+              <span class="check-badge check-badge-{{ check.status }}">{{ check.status }}</span>
+              <span class="mono small">{{ check.name }}</span>
+              {% if check.exception_count %}
+              <span class="check-row-exc">{{ check.exception_count }}</span>
+              {% endif %}
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endfor %}
+    </nav>
+
+    <div class="health-detail" aria-live="polite">
+      {% for check in checks %}
+      <section class="health-check-card health-status-{{ check.status }}"
+               id="check-{{ check.id | replace('.', '_') }}">
+        <header class="health-check-head">
+          <span class="check-badge check-badge-{{ check.status }}">{{ check.status }}</span>
+          <h2 class="mono">{{ check.name }}</h2>
+          <span class="small health-check-id mono">{{ check.id }}</span>
+          {% if check.edc_table %}<span class="small">{{ check.edc_table }}</span>{% endif %}
+        </header>
+        <p class="health-check-desc">{{ check.description }}</p>
+        {% if check.doc_interpretation %}
+        <p class="small health-check-interp">{{ check.doc_interpretation }}</p>
+        {% endif %}
+        {% if check.error %}
+        <p class="flash error mono small">{{ check.error }}</p>
+        {% endif %}
+
+        {% if check.metrics %}
+        <table class="health-metric-table">
+          <thead>
+            <tr>
+              <th>Source table</th><th>Metric</th><th>Value</th>
+              <th>Threshold</th><th>Detail</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in check.metrics %}
+            <tr class="{{ 'health-metric-exc' if m.exception_flag else '' }}">
+              <td class="mono small">{{ m.source_table or "—" }}</td>
+              <td class="mono small">{{ m.metric }}</td>
+              <td class="mono small">
+                {%- if m.value_num is not none -%}{{ m.value_num }}
+                {%- elif m.value_str is not none -%}{{ m.value_str }}
+                {%- else -%}—{%- endif -%}
+              </td>
+              <td class="mono small">{{ m.threshold_num if m.threshold_num is not none else "—" }}</td>
+              <td class="mono small">
+                {%- if m.details and m.details.column -%}{{ m.details.column }}{%- endif -%}
+                {%- if m.exception_flag %} <span class="check-badge check-badge-exception">exception</span>{% endif -%}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="small mono">no metrics emitted</p>
+        {% endif %}
+      </section>
+      {% endfor %}
+    </div>
+  </div>
+
+  <p class="small">
+    <a class="mono" href="/api/v1/runs/{{ instance_id }}/report">raw report JSON &rarr;</a>
+  </p>
+</section>
+
+{# Nav-link highlight on click; smooth scroll is handled by the anchor. #}
+<script>
+  (function () {
+    var links = document.querySelectorAll(".health-nav-link");
+    links.forEach(function (a) {
+      a.addEventListener("click", function () {
+        links.forEach(function (x) { x.classList.remove("is-active"); });
+        a.classList.add("is-active");
+      });
+    });
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,26 @@
+id: "3.04"
+name: DC 3.04
+part: part3
+edc_table: Table IB
+description: Fewer than 50% of patients with encounters have a diagnosis
+operator: patient_coverage
+source_tables:
+  - ENCOUNTER
+  - DIAGNOSIS
+params:
+  denominator_table: ENCOUNTER
+  related:
+    - DIAGNOSIS
+metrics:
+  - PATIENT_COVERAGE_PCT
+exception_metrics:
+  - PATIENT_COVERAGE_PCT
+thresholds:
+  coverage_pct_lt: 50.0
+enabled: true
+doc_summary: >-
+  DC 3.04 (Table IB): at least 50% of patients with encounters have at least
+  one DIAGNOSIS record.
+doc_interpretation: >-
+  PATIENT_COVERAGE_PCT below 50% (EXCEPTION) means diagnosis capture is low
+  relative to the encountered population.

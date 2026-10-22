@@ -1,0 +1,79 @@
+v: 1
+name: observation
+composite_key:
+- observation_id
+domain_description: OMOP CDM 5.3 clinical data table.
+domain_order: 13
+fields:
+- name: observation_id
+  rdbms_type: RDBMS Number
+  order: 1
+- name: person_id
+  rdbms_type: RDBMS Number
+  order: 2
+- name: observation_concept_id
+  rdbms_type: RDBMS Number
+  order: 3
+- name: observation_date
+  rdbms_type: RDBMS Date
+  order: 4
+- name: observation_datetime
+  rdbms_type: RDBMS Text(50)
+  order: 5
+- name: observation_type_concept_id
+  rdbms_type: RDBMS Number
+  order: 6
+- name: value_as_number
+  rdbms_type: RDBMS Number
+  order: 7
+- name: value_as_string
+  rdbms_type: RDBMS Text(250)
+  order: 8
+- name: value_as_concept_id
+  rdbms_type: RDBMS Number
+  order: 9
+- name: qualifier_concept_id
+  rdbms_type: RDBMS Number
+  order: 10
+- name: unit_concept_id
+  rdbms_type: RDBMS Number
+  order: 11
+- name: provider_id
+  rdbms_type: RDBMS Number
+  order: 12
+- name: visit_occurrence_id
+  rdbms_type: RDBMS Number
+  order: 13
+- name: visit_detail_id
+  rdbms_type: RDBMS Number
+  order: 14
+- name: observation_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 15
+- name: observation_source_concept_id
+  rdbms_type: RDBMS Number
+  order: 16
+- name: unit_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 17
+- name: qualifier_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 18
+- name: value_source_concept_id
+  rdbms_type: RDBMS Number
+  order: 19
+- name: value_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 20
+- name: questionnaire_response_id
+  rdbms_type: RDBMS Number
+  order: 21
+- name: updated
+  rdbms_type: RDBMS Text(50)
+  order: 22
+- name: source
+  rdbms_type: RDBMS Text(10)
+  order: 23
+- name: mapped_from
+  rdbms_type: RDBMS Text(50)
+  order: 24

@@ -1,0 +1,26 @@
+v: 1
+name: pcornet_7_0.vital.bp_position
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 VITAL.BP_POSITION code set.
+code_column: code
+description_column: label
+items:
+- code: '01'
+  label: 01=Sitting
+  order: 1032
+- code: '02'
+  label: 02=Standing
+  order: 1033
+- code: '03'
+  label: 03=Supine
+  order: 1034
+- code: NI
+  label: NI=No information
+  order: 1035
+- code: UN
+  label: UN=Unknown
+  order: 1036
+- code: OT
+  label: OT=Other
+  order: 1037

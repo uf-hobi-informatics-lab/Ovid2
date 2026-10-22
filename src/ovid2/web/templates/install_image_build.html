@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Image build {{ build.build_id[:8] }} &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <p><a href="/install">&larr; install wizard</a></p>
+  <h1>Docker build: <span class="mono">{{ build.build_id }}</span></h1>
+
+  <table class="kv-table">
+    <tr><th>Tag</th><td class="mono">{{ build.tag }}</td></tr>
+    <tr><th>Context</th><td class="mono">{{ build.context }}</td></tr>
+    <tr><th>Dockerfile</th><td class="mono">{{ build.dockerfile }}</td></tr>
+    <tr>
+      <th>Status</th>
+      <td>
+        <span class="badge severity-{{ 'ok' if build.status == 'succeeded' else ('warning' if build.status == 'running' else 'error') }}">
+          {{ build.status|upper }}
+        </span>
+      </td>
+    </tr>
+    <tr><th>Submitted</th><td class="mono">{{ build.submitted_at | localtime }}</td></tr>
+    {% if build.pid %}<tr><th>PID</th><td class="mono">{{ build.pid }}</td></tr>{% endif %}
+    {% if build.started_at %}<tr><th>Started</th><td class="mono">{{ build.started_at | localtime }}</td></tr>{% endif %}
+    {% if build.ended_at %}<tr><th>Ended</th><td class="mono">{{ build.ended_at | localtime }}</td></tr>{% endif %}
+    {% if build.exit_code is not none %}<tr><th>Exit code</th><td class="mono">{{ build.exit_code }}</td></tr>{% endif %}
+    {% if build.error %}<tr><th>Error</th><td>{{ build.error }}</td></tr>{% endif %}
+  </table>
+
+  <h2>Build log</h2>
+  {% if log_text %}
+    <pre class="mono log-block"><code>{{ log_text }}</code></pre>
+  {% else %}
+    <p class="note">No log output yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

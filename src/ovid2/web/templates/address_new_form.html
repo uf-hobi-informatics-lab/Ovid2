@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}{{ 'New address' if mode == 'new' else 'Edit address ' + name }} &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  {% if mode == 'new' %}
+    <p><a href="/addresses/new">&larr; back to connection picker</a></p>
+    <h1>New address &mdash; step 2 of 2</h1>
+  {% else %}
+    <p><a href="/addresses/{{ name }}">&larr; back to {{ name }}</a></p>
+    <h1>Edit address: <span class="mono">{{ name }}</span></h1>
+  {% endif %}
+
+  {% if error %}
+    <div class="flash error">{{ error }}</div>
+  {% endif %}
+
+  {% if connection is none %}
+    <div class="flash error">
+      Backing connection not found. Return to the
+      <a href="/addresses/new">connection picker</a>.
+    </div>
+  {% else %}
+    <div class="flash">
+      <strong>Connection:</strong>
+      <a href="/connections/{{ connection.name }}" class="mono">{{ connection.name }}</a>
+      &middot; type <span class="badge">{{ connection.type }}</span>
+      {% if connection.auth_mode %}
+        &middot; auth <span class="badge">{{ connection.auth_mode }}</span>
+      {% endif %}
+    </div>
+
+    <form method="post"
+          action="{% if mode == 'new' %}/addresses{% else %}/addresses/{{ name }}{% endif %}"
+          class="edit-form">
+      <input type="hidden" name="connection" value="{{ connection.name }}">
+
+      {% if mode == 'new' %}
+        <div class="form-row">
+          <label for="name">Address name</label>
+          <input type="text" id="name" name="name" required
+                 pattern="[A-Za-z0-9._-]+"
+                 placeholder="e.g. sf_prod_ohdsi, disc_input_demo"
+                 class="mono">
+        </div>
+      {% endif %}
+
+      <h2>Location</h2>
+      {% if location_spec %}
+        <p class="note">
+          Only credentials-free fields here &mdash; account URLs, keys,
+          passwords and tokens live on the
+          <a href="/connections/{{ connection.name }}">connection</a>.
+        </p>
+        <table class="kv-table edit">
+          <thead>
+            <tr><th>Field</th><th>Value</th></tr>
+          </thead>
+          <tbody>
+            {% for f in location_spec %}
+              {% set current = location.get(f.name) if location else none %}
+              {% set placeholder = f.default if f.default is defined else '' %}
+              <tr>
+                <td>
+                  <label for="loc_{{ f.name }}" class="mono">
+                    {{ f.name }}{% if f.required %} <span style="color: var(--err);">*</span>{% endif %}
+                  </label>
+                  {% if f.help %}
+                    <div class="small" style="color: var(--fg-muted);">{{ f.help }}</div>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if f.type == 'bool' %}
+                    <input type="checkbox"
+                           id="loc_{{ f.name }}" name="loc_{{ f.name }}"
+                           value="on"
+                           {% if current %}checked{% endif %}>
+                  {% elif f.type == 'int' %}
+                    <input type="number"
+                           id="loc_{{ f.name }}" name="loc_{{ f.name }}"
+                           value="{{ current if current is not none else '' }}"
+                           placeholder="{{ placeholder }}"
+                           {% if f.required %}required{% endif %}
+                           class="mono wide">
+                  {% else %}
+                    <input type="text"
+                           id="loc_{{ f.name }}" name="loc_{{ f.name }}"
+                           value="{{ current if current is not none else '' }}"
+                           placeholder="{{ placeholder }}"
+                           {% if f.required %}required{% endif %}
+                           class="mono wide">
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="note">
+          This connector type has no per-address location fields. The
+          address simply views the connection as-is.
+        </p>
+      {% endif %}
+
+      <div class="form-row">
+        <button type="submit" class="button primary">Save</button>
+        {% if mode == 'edit' %}
+          <a href="/addresses/{{ name }}" class="button">Cancel</a>
+        {% else %}
+          <a href="/addresses/new" class="button">Cancel</a>
+        {% endif %}
+      </div>
+    </form>
+  {% endif %}
+</section>
+{% endblock %}

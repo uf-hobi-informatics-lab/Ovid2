@@ -1,0 +1,27 @@
+id: health.mapping_coverage
+name: MAPPING_COVERAGE
+part: mapping
+edc_table: ""
+description: Coded values not covered by the pipeline's mapping dictionaries
+operator: mapping_coverage
+source_tables: []
+params:
+  treat_flavour_of_null_as_missing: true
+metrics:
+  - TOTAL_ROWS
+  - UNMAPPED_DISTINCT
+  - UNMAPPED_ROWS
+  - UNMAPPED_PCT
+exception_metrics:
+  - UNMAPPED_PCT
+thresholds:
+  unmapped_pct_gt: 1.0
+enabled: true
+doc_summary: >-
+  Mapping / vocabulary coverage rollup: for each pipeline dictionary
+  (<table>_<column>_dict), the fraction of rows whose source value is not
+  present in the dictionary. Folds the existing mapping_gap check into the
+  health report.
+doc_interpretation: >-
+  UNMAPPED_PCT above the threshold (EXCEPTION) means a meaningful share of
+  values would fall through the pipeline's mapping.

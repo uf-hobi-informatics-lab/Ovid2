@@ -1,0 +1,35 @@
+v: 1
+name: pcornet_7_0.obs_clin.obsclin_result_modifier
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 OBS_CLIN.OBSCLIN_RESULT_MODIFIER code set.
+code_column: code
+description_column: label
+items:
+- code: EQ
+  label: EQ=Equal
+  order: 9415
+- code: GE
+  label: GE=Greater than or equal to
+  order: 9416
+- code: GT
+  label: GT=Greater than
+  order: 9417
+- code: LE
+  label: LE=Less than or equal to
+  order: 9418
+- code: LT
+  label: LT=Less than
+  order: 9419
+- code: TX
+  label: TX=Text
+  order: 9420
+- code: NI
+  label: NI=No information
+  order: 9421
+- code: UN
+  label: UN=Unknown
+  order: 9422
+- code: OT
+  label: OT=Other
+  order: 9423

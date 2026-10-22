@@ -1,0 +1,26 @@
+v: 1
+name: pcornet_7_0.death.death_match_confidence
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 DEATH.DEATH_MATCH_CONFIDENCE code set.
+code_column: code
+description_column: label
+items:
+- code: E
+  label: E=Excellent
+  order: 7172
+- code: F
+  label: F=Fair
+  order: 7173
+- code: P
+  label: P=Poor
+  order: 7174
+- code: NI
+  label: NI=No information
+  order: 7175
+- code: UN
+  label: UN=Unknown
+  order: 7176
+- code: OT
+  label: OT=Other
+  order: 7177

@@ -1,0 +1,50 @@
+v: 1
+name: pcornet_7_0.demographic.sexual_orientation
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 DEMOGRAPHIC.SEXUAL_ORIENTATION code set.
+code_column: code
+description_column: label
+items:
+- code: AS
+  label: AS=Asexual
+  order: 7
+- code: BI
+  label: BI=Bisexual
+  order: 8
+- code: GA
+  label: GA=Gay
+  order: 9
+- code: LE
+  label: LE=Lesbian
+  order: 10
+- code: QU
+  label: QU=Queer
+  order: 11
+- code: HO
+  label: HO=Lesbian, Gay or Homosexual
+  order: 12
+- code: QS
+  label: QS=Questioning
+  order: 13
+- code: ST
+  label: ST=Straight
+  order: 14
+- code: SE
+  label: SE=Something else
+  order: 15
+- code: MU
+  label: MU=Multiple sexual orientations
+  order: 16
+- code: DC
+  label: DC=Decline to answer
+  order: 17
+- code: NI
+  label: NI=No information
+  order: 18
+- code: UN
+  label: UN=Unknown
+  order: 19
+- code: OT
+  label: OT=Other
+  order: 20

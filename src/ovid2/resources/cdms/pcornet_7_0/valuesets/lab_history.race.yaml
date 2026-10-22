@@ -1,0 +1,29 @@
+v: 1
+name: pcornet_7_0.lab_history.race
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 LAB_HISTORY.RACE code set.
+code_column: code
+description_column: label
+items:
+- code: '01'
+  label: 01=American Indian or Alaska Native
+  order: 13073
+- code: '02'
+  label: 02=Asian
+  order: 13074
+- code: '03'
+  label: 03=Black or African American
+  order: 13075
+- code: '04'
+  label: 04=Native Hawaiian or Other Pacific Islander
+  order: 13076
+- code: '05'
+  label: 05=White
+  order: 13077
+- code: OT
+  label: OT=Other
+  order: 13078
+- code: NS
+  label: NS=Not specified
+  order: 13079

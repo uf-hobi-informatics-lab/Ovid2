@@ -1,0 +1,31 @@
+# Example PCORnet-native passthrough spec.
+v: 1
+formatter: diagnosis
+adapter: pcornet_passthrough
+input_file_name: "*Diagnosis_*.txt"
+
+sources:
+  diagnosis:
+    glob: "*Diagnosis_*.txt"
+    lowercase_columns: true
+
+projections:
+  ADMIT_DATE: admit_date
+  DIAGNOSISID: diagnosisid
+  DX: dx
+  DX_DATE: ''
+  DX_ORIGIN: dx_origin
+  DX_POA: dx_poa
+  DX_SOURCE: dx_source
+  DX_TYPE: dx_type
+  ENCOUNTERID: encounterid
+  ENC_TYPE: enc_type
+  PATID: patid
+  PDX: pdx
+  PROVIDERID: providerid
+  RAW_DX: raw_dx
+  RAW_DX_ORIGIN: dx_origin
+  RAW_DX_POA: raw_dx_poa
+  RAW_DX_SOURCE: raw_dx_source
+  RAW_DX_TYPE: raw_dx_type
+  RAW_PDX: raw_pdx

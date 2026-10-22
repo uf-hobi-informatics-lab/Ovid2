@@ -1,0 +1,55 @@
+v: 1
+name: provider
+composite_key:
+- provider_id
+domain_description: OMOP CDM 5.3 clinical data table.
+domain_order: 3
+fields:
+- name: provider_id
+  rdbms_type: RDBMS Number
+  order: 1
+- name: provider_name
+  rdbms_type: RDBMS Text(20)
+  order: 2
+- name: npi
+  rdbms_type: RDBMS Text(20)
+  order: 3
+- name: dea
+  rdbms_type: RDBMS Text(20)
+  order: 4
+- name: care_site_id
+  rdbms_type: RDBMS Text(20)
+  order: 5
+- name: year_of_birth
+  rdbms_type: RDBMS Text(20)
+  order: 6
+- name: specialty_concept_id
+  rdbms_type: RDBMS Number
+  order: 7
+- name: gender_concept_id
+  rdbms_type: RDBMS Number
+  order: 8
+- name: provider_source_value
+  rdbms_type: RDBMS Text(150)
+  order: 9
+- name: specialty_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 10
+- name: specialty_source_concept_id
+  rdbms_type: RDBMS Number
+  order: 11
+- name: gender_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 12
+- name: gender_source_concept_id
+  rdbms_type: RDBMS Number
+  order: 13
+- name: updated
+  rdbms_type: RDBMS Text(50)
+  order: 14
+- name: source
+  rdbms_type: RDBMS Text(10)
+  order: 15
+- name: mapped_from
+  rdbms_type: RDBMS Text(50)
+  order: 16

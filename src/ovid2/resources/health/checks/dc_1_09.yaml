@@ -1,0 +1,47 @@
+id: "1.09"
+name: DC 1.09
+part: part1
+edc_table: Table IIE
+description: Orphan ENCOUNTERID(s) for more than 5% of records in a table
+operator: orphan_fk
+source_tables:
+  - ENCOUNTER
+  - DIAGNOSIS
+  - PROCEDURES
+  - VITAL
+  - LAB_RESULT_CM
+  - PRESCRIBING
+  - PRO_CM
+  - CONDITION
+  - MED_ADMIN
+  - OBS_CLIN
+  - OBS_GEN
+  - IMMUNIZATION
+params:
+  relationships:
+    - {child: DIAGNOSIS, child_key: ENCOUNTERID, parent: ENCOUNTER, parent_key: ENCOUNTERID}
+    - {child: PROCEDURES, child_key: ENCOUNTERID, parent: ENCOUNTER, parent_key: ENCOUNTERID}
+    - {child: VITAL, child_key: ENCOUNTERID, parent: ENCOUNTER, parent_key: ENCOUNTERID}
+    - {child: LAB_RESULT_CM, child_key: ENCOUNTERID, parent: ENCOUNTER, parent_key: ENCOUNTERID}
+    - {child: PRESCRIBING, child_key: ENCOUNTERID, parent: ENCOUNTER, parent_key: ENCOUNTERID}
+    - {child: PRO_CM, child_key: ENCOUNTERID, parent: ENCOUNTER, parent_key: ENCOUNTERID}
+    - {child: CONDITION, child_key: ENCOUNTERID, parent: ENCOUNTER, parent_key: ENCOUNTERID}
+    - {child: MED_ADMIN, child_key: ENCOUNTERID, parent: ENCOUNTER, parent_key: ENCOUNTERID}
+    - {child: OBS_CLIN, child_key: ENCOUNTERID, parent: ENCOUNTER, parent_key: ENCOUNTERID}
+    - {child: OBS_GEN, child_key: ENCOUNTERID, parent: ENCOUNTER, parent_key: ENCOUNTERID}
+    - {child: IMMUNIZATION, child_key: ENCOUNTERID, parent: ENCOUNTER, parent_key: ENCOUNTERID}
+metrics:
+  - CHILD_ROWS
+  - ORPHAN_ROWS
+  - ORPHAN_PCT
+exception_metrics:
+  - ORPHAN_PCT
+thresholds:
+  orphan_pct_gt: 5.0
+enabled: true
+doc_summary: >-
+  DC 1.09 (Table IIE): fewer than 5% of a table's records reference an
+  ENCOUNTERID absent from ENCOUNTER.
+doc_interpretation: >-
+  ORPHAN_PCT above 5% (EXCEPTION) means a table commonly references
+  encounters that have no ENCOUNTER record.

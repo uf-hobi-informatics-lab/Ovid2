@@ -1,0 +1,31 @@
+v: 1
+name: fact_relationship
+composite_key:
+- domain_concept_id_1
+domain_description: OMOP CDM 5.3 clinical data table.
+domain_order: 17
+fields:
+- name: domain_concept_id_1
+  rdbms_type: RDBMS Number
+  order: 1
+- name: fact_id_1
+  rdbms_type: RDBMS Number
+  order: 2
+- name: domain_concept_id_2
+  rdbms_type: RDBMS Number
+  order: 3
+- name: fact_id_2
+  rdbms_type: RDBMS Number
+  order: 4
+- name: relationship_concept_id
+  rdbms_type: RDBMS Number
+  order: 5
+- name: updated
+  rdbms_type: RDBMS Text(50)
+  order: 6
+- name: source
+  rdbms_type: RDBMS Text(10)
+  order: 7
+- name: mapped_from
+  rdbms_type: RDBMS Text(50)
+  order: 8

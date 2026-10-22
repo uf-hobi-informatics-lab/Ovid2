@@ -1,0 +1,109 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://ovid2.dev/schemas/cdm.v1.json",
+    "title": "Ovid2 CDM handle (root)",
+    "description": "Handle-level metadata for one CDM. Ships as `resources/cdms/<cdm>/cdm.yaml`. Per-table detail lives in `tables/<table>.yaml` and is validated by `cdm_table.v1.json`. Introduced by phase C1 (CDM YAML + Route kinds).",
+    "type": "object",
+    "required": ["v", "name", "tables"],
+    "additionalProperties": false,
+    "properties": {
+        "v": {
+            "type": "integer",
+            "const": 1,
+            "description": "Schema version. Bumped on breaking changes."
+        },
+        "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "Canonical CDM identifier (snake_case), e.g. `pcornet_7_0`."
+        },
+        "version": {
+            "type": "string",
+            "description": "Human-readable version tag, informational only."
+        },
+        "source": {
+            "type": "object",
+            "description": "Provenance metadata about the authoritative upstream spec.",
+            "additionalProperties": true,
+            "properties": {
+                "origin":        {"type": "string"},
+                "imported_from": {"type": "string"},
+                "imported_at":   {"type": "string"}
+            }
+        },
+        "tables": {
+            "type": "array",
+            "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+            },
+            "uniqueItems": true,
+            "minItems": 1,
+            "description": "Ordered table list. Dict-insertion order into the handle's `composite_keys` follows this order — earlier tables run first under `--tables all`."
+        },
+        "reference_tables": {
+            "type": "array",
+            "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+            "uniqueItems": true,
+            "description": "Tables cached with `persist()` after their per-table pipeline completes."
+        },
+        "flavour_of_null": {
+            "type": "array",
+            "items": {"type": ["string", "null"]},
+            "uniqueItems": true,
+            "description": "Sentinel values that CDM consumers treat as `null`."
+        },
+        "id_columns": {
+            "type": "object",
+            "additionalProperties": {"$ref": "#/$defs/id_column"},
+            "description": "Semantic role -> identifier-column metadata."
+        },
+        "shared_views": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/shared_view"},
+            "description": "Views to register once per Spark session."
+        },
+        "composite_key_overrides": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1
+            },
+            "description": "Per-table composite-key overrides that win over the value declared in `tables/<table>.yaml`. Encodes Ovid-specific dedup semantics that differ from the CDM's declared primary key."
+        }
+    },
+    "$defs": {
+        "id_column": {
+            "type": "object",
+            "required": ["column"],
+            "additionalProperties": false,
+            "properties": {
+                "column":           {"type": "string"},
+                "width":            {"type": "integer", "minimum": 1, "default": 64},
+                "reference_table":  {"type": ["string", "null"]}
+            }
+        },
+        "shared_view": {
+            "type": "object",
+            "required": ["view_name", "source"],
+            "additionalProperties": false,
+            "properties": {
+                "view_name": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+                "source": {
+                    "type": "object",
+                    "required": ["kind"],
+                    "additionalProperties": true,
+                    "properties": {
+                        "kind":      {"type": "string", "enum": ["file", "address"]},
+                        "path":      {"type": "string"},
+                        "address":   {"type": "string"},
+                        "delimiter": {"type": "string", "default": "\t"},
+                        "header":    {"type": "boolean", "default": true},
+                        "required":  {"type": "boolean", "default": false}
+                    }
+                }
+            }
+        }
+    }
+}

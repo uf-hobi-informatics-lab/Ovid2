@@ -1,0 +1,7 @@
+{
+    "src_name": "disc",
+    "src_args": {
+        "path": "/data",
+        "format": "csv"
+    }
+}

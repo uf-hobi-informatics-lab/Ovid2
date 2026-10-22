@@ -1,0 +1,35 @@
+v: 1
+name: pcornet_7_0.condition.condition_type
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 CONDITION.CONDITION_TYPE code set.
+code_column: code
+description_column: label
+items:
+- code: 09
+  label: 09=ICD-9-CM
+  order: 5859
+- code: '10'
+  label: 10=ICD-10-CM
+  order: 5860
+- code: '11'
+  label: 11=ICD-11-CM
+  order: 5861
+- code: SM
+  label: SM=SNOMED CT
+  order: 5862
+- code: HP
+  label: HP=Human Phenotype Ontology
+  order: 5863
+- code: AG
+  label: AG=Algorithmic
+  order: 5864
+- code: NI
+  label: NI=No information
+  order: 5865
+- code: UN
+  label: UN=Unknown
+  order: 5866
+- code: OT
+  label: OT=Other
+  order: 5867

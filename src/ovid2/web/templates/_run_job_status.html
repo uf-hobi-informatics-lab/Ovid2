@@ -1,0 +1,59 @@
+{# Rendered on initial run-detail load and by HTMX polling. Emits
+   the job-status badge, job-id/parent/submitted-by chrome, the
+   Cancel or Rerun form, the worker-log link, and the failure-reason
+   banner when the job has ended in failure. The wrapping <div>
+   carries an ``hx-swap-oob="true"``-friendly ``id`` and, when the
+   job status is terminal, ``hx-swap`` sets ``settle: none`` so the
+   ``hx-trigger="every …ms"`` loop halts naturally. #}
+{% if job %}
+{% set _terminal = job.status in ["done", "failed", "cancelled"] %}
+{# Machine-readable status marker: live.js reads it after every poll
+   swap and syncs the *visible* console label + queue note, so the
+   operator sees draft -> queued -> running without a reload. #}
+<span class="job-status-marker" hidden
+      data-job-status="{{ job.status }}"
+      {% if queue %}data-queue-running="{{ queue.running }}" data-queue-ahead="{{ queue.ahead }}"{% endif %}></span>
+<div class="job-actions">
+  <span class="badge status-{{ job.status }}">job: {{ job.status }}</span>
+  <span class="mono small">job_id={{ job.job_id }}</span>
+  {% if job.parent_job_id %}
+    <span class="mono small">parent={{ job.parent_job_id[:8] }}</span>
+  {% endif %}
+  <span class="mono small">submitted by {{ job.submitted_by }} at {{ job.submitted_at | localtime }}</span>
+  {% if job.status == "draft" %}
+    <form method="post" action="/jobs/{{ job.job_id }}/launch" style="display:inline">
+      <button class="primary small" type="submit">Run</button>
+    </form>
+    <form method="post" action="/jobs/{{ job.job_id }}/discard" style="display:inline">
+      <button class="secondary small" type="submit">Discard</button>
+    </form>
+  {% elif job.status in ["queued", "running"] %}
+    <form method="post" action="/jobs/{{ job.job_id }}/cancel" style="display:inline">
+      <button class="secondary small" type="submit">Cancel</button>
+    </form>
+  {% else %}
+    <form method="post" action="/jobs/{{ job.job_id }}/rerun" style="display:inline">
+      <button class="secondary small" type="submit">Rerun</button>
+    </form>
+  {% endif %}
+  <a class="small mono" href="/api/v1/jobs/{{ job.job_id }}/log">worker log &rarr;</a>
+</div>
+{% if job.status == "failed" and job.error %}
+  <div class="flash error" role="alert">
+    <strong>Failure reason:</strong>
+    <span class="mono small">{{ job.error }}</span>
+  </div>
+{% endif %}
+{# When the job has reached a terminal state, tell HTMX to stop
+   polling by re-emitting the container div with ``hx-disable``
+   set. The outer div id (``run-job-status``) is stable so the
+   swap replaces itself. #}
+{% if _terminal %}
+  <script>
+    (function () {
+      var el = document.getElementById("run-job-status");
+      if (el) { el.removeAttribute("hx-get"); el.removeAttribute("hx-trigger"); }
+    })();
+  </script>
+{% endif %}
+{% endif %}

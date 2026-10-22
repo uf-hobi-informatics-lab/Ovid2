@@ -1,0 +1,80 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://ovid2.dev/schemas/cdm_table.v1.json",
+    "title": "Ovid2 CDM table",
+    "description": "Per-table detail for one CDM. Ships as `resources/cdms/<cdm>/tables/<table>.yaml`. Introduced by phase C1.",
+    "type": "object",
+    "required": ["v", "name", "fields"],
+    "additionalProperties": false,
+    "properties": {
+        "v": {"type": "integer", "const": 1},
+        "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "Table name (snake_case)."
+        },
+        "composite_key": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 1,
+            "description": "Ordered list of key columns (uppercase)."
+        },
+        "domain_description": {"type": "string"},
+        "domain_order":       {"type": ["integer", "null"]},
+        "constraints": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["field", "rule"],
+                "additionalProperties": false,
+                "properties": {
+                    "field": {"type": "string"},
+                    "rule":  {"type": "string"},
+                    "order": {"type": ["integer", "null"]}
+                }
+            }
+        },
+        "relations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["relation"],
+                "additionalProperties": false,
+                "properties": {
+                    "relation": {"type": "string"},
+                    "details":  {"type": ["string", "null"]},
+                    "order":    {"type": ["integer", "null"]}
+                }
+            }
+        },
+        "fields": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"$ref": "#/$defs/field"}
+        }
+    },
+    "$defs": {
+        "field": {
+            "type": "object",
+            "required": ["name", "rdbms_type"],
+            "additionalProperties": false,
+            "properties": {
+                "name":            {"type": "string"},
+                "order":           {"type": ["integer", "null"]},
+                "rdbms_type":      {"type": "string"},
+                "sas_type":        {"type": ["string", "null"]},
+                "data_format":     {"type": ["string", "null"]},
+                "replicated":      {"type": ["boolean", "null"], "default": false},
+                "unit_of_measure": {"type": ["string", "null"]},
+                "valueset":        {
+                    "oneOf": [
+                        {"type": "boolean"},
+                        {"type": "string", "description": "Name of the registered vocabulary handle (e.g. `pcornet_7_0.demographic.sex`)."},
+                        {"type": "null"}
+                    ]
+                },
+                "definition":      {"type": ["string", "null"]}
+            }
+        }
+    }
+}

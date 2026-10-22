@@ -1,0 +1,31 @@
+# Example PCORnet-native passthrough spec.
+v: 1
+formatter: private_address_history
+adapter: pcornet_passthrough
+input_file_name: "*LDS_Address_History_*.txt"
+
+sources:
+  private_address_history:
+    glob: "*LDS_Address_History_*.txt"
+    lowercase_columns: true
+
+projections:
+  ADDRESSID: addressid
+  ADDRESS_CITY: address_city
+  ADDRESS_COUNTY: ''
+  ADDRESS_DETAIL: ''
+  ADDRESS_PERIOD_END: address_period_end
+  ADDRESS_PERIOD_START: address_period_start
+  ADDRESS_PREFERRED: address_preferred
+  ADDRESS_STATE: address_state
+  ADDRESS_STREET: ''
+  ADDRESS_TYPE: address_type
+  ADDRESS_USE: address_use
+  ADDRESS_ZIP5: address_zip5
+  ADDRESS_ZIP9: address_zip9
+  COUNTY_FIPS: ''
+  CURRENT_ADDRESS_FLAG: ''
+  PATID: patid
+  RAW_ADDRESS_TEXT: ''
+  RUCA_ZIP: ''
+  STATE_FIPS: ''

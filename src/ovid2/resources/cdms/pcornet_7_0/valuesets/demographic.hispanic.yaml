@@ -1,0 +1,26 @@
+v: 1
+name: pcornet_7_0.demographic.hispanic
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 DEMOGRAPHIC.HISPANIC code set.
+code_column: code
+description_column: label
+items:
+- code: Y
+  label: Y=Yes
+  order: 32
+- code: N
+  label: N=No
+  order: 33
+- code: R
+  label: R=Refuse to answer
+  order: 34
+- code: NI
+  label: NI=No information
+  order: 35
+- code: UN
+  label: UN=Unknown
+  order: 36
+- code: OT
+  label: OT=Other
+  order: 37

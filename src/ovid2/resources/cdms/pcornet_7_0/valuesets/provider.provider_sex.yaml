@@ -1,0 +1,26 @@
+v: 1
+name: pcornet_7_0.provider.provider_sex
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 PROVIDER.PROVIDER_SEX code set.
+code_column: code
+description_column: label
+items:
+- code: A
+  label: A=Ambiguous
+  order: 8254
+- code: F
+  label: F=Female
+  order: 8255
+- code: M
+  label: M=Male
+  order: 8256
+- code: NI
+  label: NI=No information
+  order: 8257
+- code: UN
+  label: UN=Unknown
+  order: 8258
+- code: OT
+  label: OT=Other
+  order: 8259

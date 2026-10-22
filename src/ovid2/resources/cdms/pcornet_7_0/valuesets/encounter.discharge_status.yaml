@@ -1,0 +1,59 @@
+v: 1
+name: pcornet_7_0.encounter.discharge_status
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 ENCOUNTER.DISCHARGE_STATUS code set.
+code_column: code
+description_column: label
+items:
+- code: AF
+  label: AF=Adult Foster Home
+  order: 458
+- code: AL
+  label: AL=Assisted Living Facility
+  order: 459
+- code: AM
+  label: AM=Against Medical Advice
+  order: 460
+- code: AW
+  label: AW=Absent without leave
+  order: 461
+- code: EX
+  label: EX=Expired
+  order: 462
+- code: HH
+  label: HH=Home Health
+  order: 463
+- code: HO
+  label: HO=Home / Self Care
+  order: 464
+- code: HS
+  label: HS=Hospice
+  order: 465
+- code: IP
+  label: IP=Other Acute Inpatient Hospital
+  order: 466
+- code: NH
+  label: NH=Nursing Home (Includes ICF)
+  order: 467
+- code: RH
+  label: RH=Rehabilitation Facility
+  order: 468
+- code: RS
+  label: RS=Residential Facility
+  order: 469
+- code: SH
+  label: SH=Still In Hospital
+  order: 470
+- code: SN
+  label: SN=Skilled Nursing Facility
+  order: 471
+- code: NI
+  label: NI=No information
+  order: 472
+- code: UN
+  label: UN=Unknown
+  order: 473
+- code: OT
+  label: OT=Other
+  order: 474

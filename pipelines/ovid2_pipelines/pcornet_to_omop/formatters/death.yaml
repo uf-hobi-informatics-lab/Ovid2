@@ -1,0 +1,8 @@
+# PCORnet DEATH + DEATH_CAUSE -> OMOP death.
+# person_id = PATID (no id-mapping). death_type_concept_id from the static
+# death_cause_source dict; cause concepts resolved against the concept /
+# concept_relationship views (domain=Condition).
+v: 1
+formatter: death
+adapter: custom
+class: ovid2_pipelines.pcornet_to_omop.formatters_custom.death_formatter.DeathFormatter

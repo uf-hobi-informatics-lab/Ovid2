@@ -1,0 +1,134 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://ovid2.dev/schemas/events.v1.json",
+    "title": "Ovid2 event",
+    "description": "One JSON object per line in the event log. All events share a small envelope; the `kind` string selects which additional fields must be present.",
+    "type": "object",
+    "required": ["v", "kind", "ts", "instance_id"],
+    "additionalProperties": true,
+    "properties": {
+        "v": {
+            "type": "integer",
+            "const": 1,
+            "description": "Schema version. Bumped on breaking changes."
+        },
+        "kind": {
+            "type": "string",
+            "enum": [
+                "instance.started",
+                "instance.finished",
+                "batch.received",
+                "batch.dispatched",
+                "batch.completed",
+                "batch.failed",
+                "table.started",
+                "table.completed",
+                "table.failed",
+                "check.started",
+                "check.completed",
+                "check.failed",
+                "stage.progress",
+                "fix.applied",
+                "fix.skipped",
+                "fix.failed",
+                "engine.metrics",
+                "log",
+                "warning",
+                "error"
+            ]
+        },
+        "ts": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC timestamp with microseconds."
+        },
+        "instance_id": {
+            "type": "string",
+            "pattern": "^[0-9]{8}-[0-9]{6}-[0-9a-f]{6}$"
+        },
+        "pipeline":     {"type": "string"},
+        "batch_id":    {"type": "string"},
+        "table":       {"type": "string"},
+        "stage": {
+            "type": "string",
+            "enum": ["read", "format", "deduplicate", "map", "fix", "write"]
+        },
+        "level": {
+            "type": "string",
+            "enum": ["debug", "info", "warning", "error"]
+        },
+        "message":     {"type": "string"},
+        "error":       {"type": "string"},
+        "check_id":    {"type": "string"},
+        "check_name":  {"type": "string"},
+        "part":        {"type": "string"},
+        "check_status": {"type": "string", "enum": ["passed", "exception", "error", "skipped"]},
+        "exception_count": {"type": "integer", "minimum": 0},
+        "metric_count":    {"type": "integer", "minimum": 0},
+        "fix":         {"type": "string"},
+        "fix_type":    {"type": "string", "enum": ["common", "custom"]},
+        "current_fix": {"type": "integer", "minimum": 0},
+        "total_fixes": {"type": "integer", "minimum": 0},
+        "src1":        {"type": "string"},
+        "src2":        {"type": "string"},
+        "file_name":   {"type": "string"},
+        "rows_before": {"type": ["integer", "null"], "minimum": 0},
+        "rows_after":  {"type": ["integer", "null"], "minimum": 0},
+        "elapsed_ms":  {"type": ["number", "null"],  "minimum": 0},
+        "extra":       {"type": "object"}
+    },
+    "allOf": [
+        {
+            "if": {"properties": {"kind": {"const": "table.started"}}, "required": ["kind"]},
+            "then": {"required": ["pipeline", "batch_id", "table"]}
+        },
+        {
+            "if": {"properties": {"kind": {"const": "table.completed"}}, "required": ["kind"]},
+            "then": {"required": ["pipeline", "batch_id", "table"]}
+        },
+        {
+            "if": {"properties": {"kind": {"const": "table.failed"}}, "required": ["kind"]},
+            "then": {"required": ["pipeline", "batch_id", "table", "error"]}
+        },
+        {
+            "if": {"properties": {"kind": {"const": "check.started"}}, "required": ["kind"]},
+            "then": {"required": ["check_id", "check_name", "part"]}
+        },
+        {
+            "if": {"properties": {"kind": {"const": "check.completed"}}, "required": ["kind"]},
+            "then": {"required": ["check_id", "check_name", "part", "check_status"]}
+        },
+        {
+            "if": {"properties": {"kind": {"const": "check.failed"}}, "required": ["kind"]},
+            "then": {"required": ["check_id", "check_name", "part", "error"]}
+        },
+        {
+            "if": {"properties": {"kind": {"const": "fix.applied"}}, "required": ["kind"]},
+            "then": {"required": ["pipeline", "batch_id", "table", "fix"]}
+        },
+        {
+            "if": {"properties": {"kind": {"const": "fix.failed"}}, "required": ["kind"]},
+            "then": {"required": ["pipeline", "batch_id", "table", "fix", "error"]}
+        },
+        {
+            "if": {"properties": {"kind": {"const": "batch.completed"}}, "required": ["kind"]},
+            "then": {"required": ["pipeline", "batch_id"]}
+        },
+        {
+            "if": {"properties": {"kind": {"const": "batch.failed"}}, "required": ["kind"]},
+            "then": {"required": ["pipeline", "batch_id", "error"]}
+        },
+        {
+            "if": {"properties": {"kind": {"const": "log"}}, "required": ["kind"]},
+            "then": {"required": ["level", "message"]}
+        },
+        {
+            "if": {"properties": {"kind": {"const": "warning"}}, "required": ["kind"]},
+            "then": {"required": ["message"]}
+        },
+        {
+            "if": {"properties": {"kind": {"const": "error"}}, "required": ["kind"]},
+            "then": {"required": ["message"]}
+        }
+    ]
+}

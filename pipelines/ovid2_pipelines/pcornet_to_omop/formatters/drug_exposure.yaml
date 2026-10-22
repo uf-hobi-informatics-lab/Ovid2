@@ -1,0 +1,7 @@
+# PCORnet MED_ADMIN + PRESCRIBING + DISPENSING + IMMUNIZATION -> OMOP
+# drug_exposure (domain=Drug). drug_exposure_id = the PCORnet surrogate id.
+# Concept ids resolved against the concept / concept_relationship views.
+v: 1
+formatter: drug_exposure
+adapter: custom
+class: ovid2_pipelines.pcornet_to_omop.formatters_custom.drug_exposure_formatter.DrugExposureFormatter

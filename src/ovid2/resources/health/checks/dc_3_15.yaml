@@ -1,0 +1,26 @@
+id: "3.15"
+name: DC 3.15
+part: part3
+edc_table: Table IVH
+description: Fewer than 80% of MED_ADMIN records map to a Tier 1 RXNORM code
+operator: known_value_coverage
+source_tables:
+  - MED_ADMIN
+na_when_empty:
+  - MED_ADMIN
+params:
+  coverage:
+    - {table: MED_ADMIN, column: MEDADMIN_CODE}
+metrics:
+  - COVERAGE_PCT
+exception_metrics:
+  - COVERAGE_PCT
+thresholds:
+  coverage_pct_lt: 80.0
+enabled: true
+doc_summary: >-
+  DC 3.15 (Table IVH): at least 80% of MED_ADMIN records carry a populated
+  medication code (Tier 1 fully-specified proxy).
+doc_interpretation: >-
+  COVERAGE_PCT below 80% (EXCEPTION) means administered medications are
+  frequently missing a normalized code.

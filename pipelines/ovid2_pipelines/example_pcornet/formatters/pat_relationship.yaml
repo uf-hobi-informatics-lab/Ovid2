@@ -1,0 +1,17 @@
+# Example PCORnet-native passthrough spec.
+v: 1
+formatter: pat_relationship
+adapter: pcornet_passthrough
+input_file_name: "*pat_relationship*"
+
+sources:
+  pat_relationship:
+    glob: "*pat_relationship*"
+    lowercase_columns: true
+
+projections:
+  PATID_1: patid_1
+  PATID_2: patid_2
+  RELATIONSHIP_END: relationship_end
+  RELATIONSHIP_START: relationship_start
+  RELATIONSHIP_TYPE: relationship_type

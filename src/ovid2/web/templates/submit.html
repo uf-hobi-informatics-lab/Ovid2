@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% block title %}Submit a job &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page submit-page">
+  <header class="submit-head">
+    <h1>{{ icons.icon("submit", size=24, cls="head-icon") }} Submit a job</h1>
+    <p class="note">
+      Pick a pipeline, choose your input and output storage, and select
+      which tables and transformations to run.
+    </p>
+  </header>
+
+  {% if flash %}<p class="flash-ok">{{ flash }}</p>{% endif %}
+  {% if error %}<p class="flash-error">{{ error }}</p>{% endif %}
+
+  {% if not addresses and not storage_accounts %}
+    <p class="note">
+      No storage accounts or addresses found. Add a
+      <a href="/storage">storage account</a>, or run
+      <code>ovid2 init</code>.
+    </p>
+  {% endif %}
+
+  <form method="post" action="/submit" class="submit-form" id="submit-form"
+        data-plan-url="/api/v1/pipelines/">
+
+    <!-- 1. Job basics ------------------------------------------------- -->
+    <section class="card submit-card">
+      <h2 class="card-title">{{ icons.icon("play", size=18) }} Job basics</h2>
+      <div class="field-grid">
+        <label>Pipeline type
+          <select id="kind" name="kind" onchange="ovid2_toggle_submit_fields();">
+            {% for k in kind_choices %}
+              <option value="{{ k.name }}" title="{{ k.description }}"{% if k.name == (preselect_kind or "etl") %} selected{% endif %}>{{ k.label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Pipeline
+          <select id="pipeline-select" name="pipeline" required>
+            <option value="">(choose a pipeline)</option>
+            {# Names that already appear as an option below. Used to decide
+               whether a preselected value (e.g. an open pipeline's
+               package/label sent from its "run now" action) needs its own
+               injected option so the preselect always sticks. #}
+            {% set known = generic_labels + (pipelines | map(attribute='name') | list) %}
+            {% if preselect_pipeline and preselect_pipeline not in known %}
+              <option value="{{ preselect_pipeline }}" selected>{{ preselect_pipeline }} &mdash; (from pipeline)</option>
+            {% endif %}
+            {% if generic_labels %}
+            <optgroup label="Reusable EDC / health labels (run against any database)">
+              {% for g in generic_labels %}
+              <option value="{{ g }}"{% if g == preselect_pipeline %} selected{% endif %}>{{ g }} &mdash; generic (pick DB/schema below)</option>
+              {% endfor %}
+            </optgroup>
+            {% endif %}
+            {% for p in pipelines %}
+              <option value="{{ p.name }}"{% if p.name == preselect_pipeline %} selected{% endif %}>{{ p.name }}{% if p.mappers_type %} &mdash; {{ p.mappers_type }}{% endif %}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Batch id
+          <input type="text" name="batch_id" required placeholder="20260101"
+                 value="{{ preselect_batch_id or '' }}">
+        </label>
+        <label>Warehouse (engine)
+          <input type="text" name="engine" value="{{ preselect_engine or 'pyspark' }}">
+        </label>
+      </div>
+    </section>
+
+    <!-- 2. Storage ---------------------------------------------------- -->
+    <section class="card submit-card">
+      <h2 class="card-title">{{ icons.icon("database", size=18) }} Storage</h2>
+      <div class="storage-grid">
+
+        {# ---- Input ---- #}
+        <div class="storage-card" data-storage-card="input">
+          <h3>{{ icons.icon("folder", size=16) }} Input</h3>
+          <div class="mode-toggle" role="tablist">
+            <button type="button" class="mode-btn active" data-mode="address">Saved address</button>
+            <button type="button" class="mode-btn" data-mode="browse">Browse storage</button>
+          </div>
+
+          <input type="hidden" name="input_mode" value="address">
+
+          <div class="mode-pane" data-pane="address">
+            <label>Address
+              <select name="input_address">
+                <option value="">(choose)</option>
+                {% for a in addresses %}<option value="{{ a }}"{% if a == preselect_input_address %} selected{% endif %}>{{ a }}</option>{% endfor %}
+              </select>
+            </label>
+          </div>
+
+          <div class="mode-pane" data-pane="browse" hidden>
+            <div class="storage-picker"
+                 data-storage-picker="input"
+                 data-connection-field="input_connection"
+                 data-location-field="input_location">
+              <label>Storage account
+                <select data-role="storage-select">
+                  <option value="">(choose)</option>
+                  {% for s in storage_accounts %}
+                    <option value="{{ s.name }}">{{ s.name }} &mdash; {{ s.type }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <div data-role="crumbs" class="crumbs small"></div>
+              <div data-role="listing" class="storage-listing">
+                <p class="note">Pick a storage account to browse.</p>
+              </div>
+              <p data-role="chosen" class="chosen-chip" hidden></p>
+              <p data-role="picker-error" class="flash-error picker-error" hidden></p>
+              <input type="hidden" name="input_connection" value="">
+              <input type="hidden" name="input_location" value="">
+            </div>
+          </div>
+        </div>
+
+        {# ---- Output ---- #}
+        <div class="storage-card" data-storage-card="output">
+          <h3>{{ icons.icon("folder", size=16) }} Output</h3>
+          <div class="mode-toggle" role="tablist">
+            <button type="button" class="mode-btn active" data-mode="address">Saved address</button>
+            <button type="button" class="mode-btn" data-mode="browse">Browse storage</button>
+          </div>
+
+          <input type="hidden" name="output_mode" value="address">
+
+          <div class="mode-pane" data-pane="address">
+            <label>Address
+              <select name="output_address">
+                <option value="">(choose)</option>
+                {% for a in addresses %}<option value="{{ a }}"{% if a == preselect_output_address %} selected{% endif %}>{{ a }}</option>{% endfor %}
+              </select>
+            </label>
+          </div>
+
+          <div class="mode-pane" data-pane="browse" hidden>
+            <div class="storage-picker"
+                 data-storage-picker="output"
+                 data-connection-field="output_connection"
+                 data-location-field="output_location">
+              <label>Storage account
+                <select data-role="storage-select">
+                  <option value="">(choose)</option>
+                  {% for s in storage_accounts %}
+                    <option value="{{ s.name }}">{{ s.name }} &mdash; {{ s.type }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <div data-role="crumbs" class="crumbs small"></div>
+              <div data-role="listing" class="storage-listing">
+                <p class="note">Pick a storage account to browse.</p>
+              </div>
+              <p data-role="chosen" class="chosen-chip" hidden></p>
+              <p data-role="picker-error" class="flash-error picker-error" hidden></p>
+              <input type="hidden" name="output_connection" value="">
+              <input type="hidden" name="output_location" value="">
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Advanced options ------------------------------------------ -->
+    {#
+      Everything below is *advanced*: sub-run selection (which tables,
+      which transformation stages, which data-health checks) plus the
+      engine / Snowflake / mount knobs. It stays collapsed by default —
+      a plain submit runs *everything* (all tables, all four ETL stages,
+      or the whole selected check package). Operators who want to narrow
+      a run open this drawer and untick what they want to skip. The
+      pickers are well-presented lists (checkbox per item, a live
+      count, a Select-all / Select-none toolbar, and a filter/search
+      box) rather than free-text fields.
+    #}
+    <details class="card submit-card" id="advanced-card">
+      <summary class="card-title">{{ icons.icon("engines", size=18) }} Advanced options</summary>
+
+      <!-- 3a. Tables ------------------------------------------------- -->
+      <section class="submit-subcard" id="tables-card">
+        <h3 class="subcard-title">
+          {{ icons.icon("table", size=16) }} Tables
+          <span class="count-badge" id="tables-count" hidden></span>
+        </h3>
+        <div class="picker-toolbar" id="tables-toolbar" hidden>
+          <button type="button" class="button small" data-select="all">Select all</button>
+          <button type="button" class="button small ghost" data-select="none">Select none</button>
+          <span class="picker-search">
+            {{ icons.icon("search", size=14) }}
+            <input type="text" id="tables-filter" placeholder="Filter tables&hellip;">
+          </span>
+        </div>
+        <div id="tables-list" class="check-grid">
+          <p class="note">Choose a pipeline to see its tables.</p>
+        </div>
+        {# Hidden field holds the space-separated selection ("all" when every box is checked). #}
+        <input type="hidden" name="tables" id="tables-field" value="all">
+      </section>
+
+      <!-- 3b. Transformations --------------------------------------- -->
+      <section class="submit-subcard" id="transformations-card">
+        <h3 class="subcard-title">{{ icons.icon("layers", size=16) }} Transformations</h3>
+        <p class="note">
+          The four ETL stages, run in order. Uncheck a stage to skip it.
+          The <strong>fix</strong> stage applies the per-table fixers
+          shown below.
+        </p>
+        <div id="transformations-list" class="stage-list">
+          <p class="note">Choose a pipeline to see its transformation plan.</p>
+        </div>
+        <input type="hidden" name="transformations" id="transformations-field" value="all">
+      </section>
+
+      <!-- 3c. Health checks (kind=health / dq_checks) --------------- -->
+      <section class="submit-subcard" id="health-card" style="display: none;">
+        <h3 class="subcard-title">{{ icons.icon("check", size=16) }} Report cycle</h3>
+        <p class="note">
+          Pick an EDC / Data-Characterization report cycle. Every check
+          in the selected cycle-package runs unless you narrow it below.
+          New quarterly cycles appear here automatically; the most recent
+          is selected by default.
+        </p>
+        <div class="field-grid">
+          <label>Report cycle (package)
+            <select id="health-package-select" name="packages">
+              {% for pkg in health_packages %}
+                <option value="{{ pkg.id }}"{% if loop.first %} selected{% endif %}>
+                  {{ pkg.label }} ({{ pkg.checks|length }} checks)
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+        {% if not health_packages %}
+          <p class="note">No check packages registered.</p>
+        {% endif %}
+      </section>
+
+      <!-- 3d. Individual checks (kind=health / dq_checks) ----------- -->
+      <section class="submit-subcard" id="checks-card" style="display: none;">
+        <h3 class="subcard-title">
+          {{ icons.icon("check-square", size=16) }} Checks
+          <span class="count-badge" id="checks-count" hidden></span>
+        </h3>
+        <p class="note">
+          Optional. Leave every box checked to run the whole report
+          cycle above; untick individual checks to run a subset.
+        </p>
+        <div class="picker-toolbar" id="checks-toolbar" hidden>
+          <button type="button" class="button small" data-select="all">Select all</button>
+          <button type="button" class="button small ghost" data-select="none">Select none</button>
+          <span class="picker-search">
+            {{ icons.icon("search", size=14) }}
+            <input type="text" id="checks-filter" placeholder="Filter checks&hellip;">
+          </span>
+        </div>
+        <div id="checks-list" class="check-grid">
+          <p class="note">Loading checks&hellip;</p>
+        </div>
+        {# Empty / "all" => run the whole package; a space-separated id
+           list => run just those checks. #}
+        <input type="hidden" name="checks" id="checks-field" value="">
+      </section>
+
+      <!-- 3e. Engine / Snowflake / mounts --------------------------- -->
+      <section class="submit-subcard" id="engine-subcard">
+        <h3 class="subcard-title">{{ icons.icon("engines", size=16) }} Engine &amp; overrides</h3>
+        <div class="field-grid">
+          <label id="workers-row">Workers
+            <input type="number" name="workers" value="25" min="1" max="200">
+          </label>
+          <label id="sf-database-row">Snowflake DATABASE override
+            <input type="text" name="sf_database" placeholder="optional">
+          </label>
+          <label id="sf-account-row">Snowflake ACCOUNT override
+            <input type="text" name="sf_account" placeholder="optional">
+          </label>
+          <label id="sf-schema-row">Snowflake SCHEMA override
+            <input type="text" name="sf_schema" placeholder="optional">
+          </label>
+        </div>
+        <label class="checkbox" id="stderr-log-row">
+          <input type="checkbox" name="stderr_log" value="true">
+          Mirror events to stderr
+        </label>
+        <label id="extra-mounts-row" style="display: none;">
+          Extra bind mounts (copy / move only, one per line)
+          <textarea name="extra_mounts" rows="3" placeholder="/host/path:/container/path[:rw|ro]
+/scratch/acme_out:/copy_out"></textarea>
+        </label>
+        <label class="checkbox" id="strict-types-row" style="display: none;">
+          <input type="checkbox" name="strict_types" value="true">
+          Strict CDM type check (move only)
+        </label>
+      </section>
+    </details>
+
+    <p id="copy-hint" class="note" style="display: none;">
+      <strong>Copy job.</strong> Every named table is read from the input
+      storage account and written to the output storage account verbatim
+      &mdash; no formatter, no mapper, no fixer. Tables must be an
+      explicit list.
+    </p>
+    <p id="move-hint" class="note" style="display: none;">
+      <strong>Move job.</strong> Driver-native successor to copy. Same
+      shape rules; I/O routes through the D3 native drivers.
+    </p>
+
+    <div class="submit-actions">
+      <button type="submit" class="button primary">
+        {{ icons.icon("submit", size=16) }} Submit job
+      </button>
+    </div>
+  </form>
+</section>
+
+<script src="/static/browse.js" defer></script>
+<script src="/static/submit_plan.js" defer></script>
+<script>
+  // Show/hide fields that only apply to certain kinds. All sub-run
+  // pickers now live inside the "Advanced options" drawer; this only
+  // governs *which* of them apply to the selected kind.
+  //   - etl / analysis: Tables + Transformations.
+  //   - copy / move: Tables only (from the source), + mounts/strict.
+  //   - health / dq_checks: Report cycle + individual Checks.
+  function ovid2_toggle_submit_fields() {
+    var kind = (document.getElementById('kind') || {}).value || 'etl';
+    var isCopyOrMove = (kind === 'copy' || kind === 'move');
+    var isMove = (kind === 'move');
+    var isHealth = (kind === 'health' || kind === 'dq_checks');
+    function show(id, on) {
+      var el = document.getElementById(id);
+      if (el) el.style.display = on ? '' : 'none';
+    }
+    // Transformations: ETL-shaped kinds only.
+    show('transformations-card', !(isCopyOrMove || isHealth));
+    // Tables: ETL and copy/move (health reads CDM tables as-is).
+    show('tables-card', !isHealth);
+    // Health report-cycle + individual checks: health kinds only.
+    show('health-card', isHealth);
+    show('checks-card', isHealth);
+    // Snowflake/stderr overrides don't apply to copy/move.
+    var etlOnly = ['sf-database-row', 'sf-account-row', 'sf-schema-row', 'stderr-log-row'];
+    for (var i = 0; i < etlOnly.length; i++) {
+      show(etlOnly[i], !isCopyOrMove);
+    }
+    show('extra-mounts-row', isCopyOrMove);
+    show('strict-types-row', isMove);
+    var copyHint = document.getElementById('copy-hint');
+    if (copyHint) copyHint.style.display = (kind === 'copy') ? '' : 'none';
+    var moveHint = document.getElementById('move-hint');
+    if (moveHint) moveHint.style.display = isMove ? '' : 'none';
+    // Let submit_plan.js know which source the Tables picker should use
+    // (a pipeline CDM plan, or a copy/move source's own tables).
+    document.dispatchEvent(new CustomEvent('ovid2:kind-change', {
+      detail: { kind: kind, isCopyOrMove: isCopyOrMove, isHealth: isHealth }
+    }));
+  }
+  ovid2_toggle_submit_fields();
+</script>
+{% endblock %}

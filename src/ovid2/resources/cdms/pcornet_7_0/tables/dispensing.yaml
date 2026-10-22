@@ -1,0 +1,124 @@
+v: 1
+name: dispensing
+composite_key:
+- DISPENSINGID
+domain_description: Prescriptions filled through a community, mail-order or hospital pharmacy. Outpatient
+  dispensing may not be directly captured within healthcare systems.
+domain_order: 7
+constraints:
+- field: DISPENSINGID
+  rule: unique
+  order: 28
+- field: DISPENSINGID
+  rule: required, not null
+  order: 29
+- field: PATID
+  rule: required, not null
+  order: 30
+- field: DISPENSE_DATE
+  rule: required, not null
+  order: 31
+- field: NDC
+  rule: required, not null
+  order: 32
+relations:
+- relation: PK
+  details: DISPENSINGID
+  order: 18
+- relation: FK (many to one)
+  details: DISPENSING.PATID references DEMOGRAPHIC.PATID
+  order: 19
+- relation: FK (zero to many)
+  details: DISPENSING.PRESCRIBINGID references PRESCRIBING.PRESCRIBINGID
+  order: 20
+fields:
+- name: DISPENSINGID
+  rdbms_type: RDBMS Text(x)
+  order: 114
+  sas_type: SAS Char(x)
+  definition: Arbitrary identifier for each unique record. Does not need to be persistent across refreshes,
+    and may be created by methods such as sequence or GUID.
+- name: PATID
+  rdbms_type: RDBMS Text(x)
+  order: 115
+  sas_type: SAS Char(x)
+  definition: Arbitrary person-level identifier. Used to link across tables.
+- name: PRESCRIBINGID
+  rdbms_type: RDBMS Text(x)
+  order: 116
+  sas_type: SAS Char(x)
+  definition: This is an optional relationship to the PRESCRIBING table, and may not be generally available.
+    One prescribing order may generate multiple dispensing records.
+- name: DISPENSE_DATE
+  rdbms_type: RDBMS Date
+  order: 117
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Dispensing date (as close as possible to date the person received the dispensing).
+- name: NDC
+  rdbms_type: RDBMS Text(11)
+  order: 118
+  sas_type: SAS Char(11)
+  definition: National Drug Code in the 11-digit, no-dash, HIPAA format. Please expunge any place holders
+    (such as dashes or extra digits).
+- name: DISPENSE_SOURCE
+  rdbms_type: RDBMS Text(2)
+  order: 119
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.dispensing.dispense_source
+  definition: Source of the dispensing information.
+- name: DISPENSE_SUP
+  rdbms_type: RDBMS Number(x)
+  order: 120
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: 'Days supply. Number of days that the medication supports based on the number of doses as
+    reported by the pharmacist. This amount is typically found on the dispensing record. Integer values
+    are expected. Important: Please do not calculate during CDM implementation. This field should only
+    reflect originating source system calculations. Number precision and scale updated in v3.1.'
+- name: DISPENSE_AMT
+  rdbms_type: RDBMS Number(x)
+  order: 121
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: 'Number of units (pills, tablets, vials) dispensed. Net amount per NDC per dispensing. This
+    amount is typically found on the dispensing record. Positive values are expected. Important: Please
+    do not calculate during CDM implementation. This field should only reflect originating source system
+    calculations. Number precision and scale updated in v3.1.'
+- name: DISPENSE_DOSE_DISP
+  rdbms_type: RDBMS Number(x)
+  order: 122
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: Dose of a given mediation, as dispensed
+- name: DISPENSE_DOSE_DISP_UNIT
+  rdbms_type: RDBMS Text(x)
+  order: 123
+  sas_type: SAS Char(x)
+  definition: Units of measure associated with the dose of the medication as dispensed
+- name: DISPENSE_ROUTE
+  rdbms_type: RDBMS Text(x)
+  order: 124
+  sas_type: SAS Char(x)
+  definition: Route of delivery
+- name: RAW_NDC
+  rdbms_type: RDBMS Text(x)
+  order: 125
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_DISPENSE_DOSE_DISP
+  rdbms_type: RDBMS Text(x)
+  order: 126
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.
+- name: RAW_DISPENSE_DOSE_DISP_UNIT
+  rdbms_type: RDBMS Text(x)
+  order: 127
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.
+- name: RAW_DISPENSE_ROUTE
+  rdbms_type: RDBMS Text(x)
+  order: 128
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.

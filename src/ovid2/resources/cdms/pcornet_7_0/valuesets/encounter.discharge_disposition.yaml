@@ -1,0 +1,23 @@
+v: 1
+name: pcornet_7_0.encounter.discharge_disposition
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 ENCOUNTER.DISCHARGE_DISPOSITION code set.
+code_column: code
+description_column: label
+items:
+- code: A
+  label: A=Discharged alive
+  order: 453
+- code: E
+  label: E=Expired
+  order: 454
+- code: NI
+  label: NI=No information
+  order: 455
+- code: UN
+  label: UN=Unknown
+  order: 456
+- code: OT
+  label: OT=Other
+  order: 457

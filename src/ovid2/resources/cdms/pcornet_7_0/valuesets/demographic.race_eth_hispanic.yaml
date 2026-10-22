@@ -1,0 +1,11 @@
+v: 1
+name: pcornet_7_0.demographic.race_eth_hispanic
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 DEMOGRAPHIC.RACE_ETH_HISPANIC code set.
+code_column: code
+description_column: label
+items:
+- code: Y
+  label: Y=Yes
+  order: 55

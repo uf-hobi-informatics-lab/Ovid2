@@ -1,0 +1,85 @@
+v: 1
+name: drug_exposure
+composite_key:
+- drug_exposure_id
+domain_description: OMOP CDM 5.3 clinical data table.
+domain_order: 9
+fields:
+- name: drug_exposure_id
+  rdbms_type: RDBMS Number
+  order: 1
+- name: person_id
+  rdbms_type: RDBMS Number
+  order: 2
+- name: drug_concept_id
+  rdbms_type: RDBMS Number
+  order: 3
+- name: drug_exposure_start_date
+  rdbms_type: RDBMS Date
+  order: 4
+- name: drug_exposure_start_datetime
+  rdbms_type: RDBMS Text(50)
+  order: 5
+- name: drug_exposure_end_date
+  rdbms_type: RDBMS Date
+  order: 6
+- name: drug_exposure_end_datetime
+  rdbms_type: RDBMS Text(50)
+  order: 7
+- name: verbatim_end_date
+  rdbms_type: RDBMS Date
+  order: 8
+- name: drug_type_concept_id
+  rdbms_type: RDBMS Number
+  order: 9
+- name: stop_reason
+  rdbms_type: RDBMS Text(50)
+  order: 10
+- name: refills
+  rdbms_type: RDBMS Number
+  order: 11
+- name: quantity
+  rdbms_type: RDBMS Number
+  order: 12
+- name: days_supply
+  rdbms_type: RDBMS Number
+  order: 13
+- name: sig
+  rdbms_type: RDBMS Text(350)
+  order: 14
+- name: route_concept_id
+  rdbms_type: RDBMS Number
+  order: 15
+- name: lot_number
+  rdbms_type: RDBMS Text(150)
+  order: 16
+- name: provider_id
+  rdbms_type: RDBMS Number
+  order: 17
+- name: visit_occurrence_id
+  rdbms_type: RDBMS Number
+  order: 18
+- name: visit_detail_id
+  rdbms_type: RDBMS Number
+  order: 19
+- name: drug_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 20
+- name: drug_source_concept_id
+  rdbms_type: RDBMS Number
+  order: 21
+- name: route_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 22
+- name: dose_unit_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 23
+- name: updated
+  rdbms_type: RDBMS Text(50)
+  order: 24
+- name: source
+  rdbms_type: RDBMS Text(10)
+  order: 25
+- name: mapped_from
+  rdbms_type: RDBMS Text(50)
+  order: 26

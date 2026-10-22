@@ -1,0 +1,29 @@
+v: 1
+name: pcornet_7_0.pro_cm.pro_mode
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 PRO_CM.PRO_MODE code set.
+code_column: code
+description_column: label
+items:
+- code: SF
+  label: SF=Self without assistance
+  order: 5894
+- code: SA
+  label: SA= Self with assistance
+  order: 5895
+- code: PR
+  label: PR=Proxy without assistance
+  order: 5896
+- code: PA
+  label: PA=Proxy with assistance
+  order: 5897
+- code: NI
+  label: NI=No information
+  order: 5898
+- code: UN
+  label: UN=Unknown
+  order: 5899
+- code: OT
+  label: OT=Other
+  order: 5900

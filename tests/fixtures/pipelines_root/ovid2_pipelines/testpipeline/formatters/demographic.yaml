@@ -1,0 +1,14 @@
+# Minimal PCORnet-shaped passthrough spec for tests.
+v: 1
+formatter: demographic
+adapter: pcornet_passthrough
+
+sources:
+  demographic:
+    glob: "*Demographic*"
+    lowercase_columns: true
+
+projections:
+  PATID: "patid"
+  BIRTH_DATE: "birth_date"
+  SEX: "sex"

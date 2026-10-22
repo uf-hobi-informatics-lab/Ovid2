@@ -1,0 +1,37 @@
+id: health.pk_uniqueness
+name: PK_UNIQUENESS
+part: integrity
+edc_table: ""
+description: Composite primary key is unique (native integrity panel)
+operator: pk_uniqueness
+source_tables:
+  - DEMOGRAPHIC
+  - ENCOUNTER
+  - DIAGNOSIS
+  - PROCEDURES
+  - VITAL
+  - LAB_RESULT_CM
+  - PRESCRIBING
+  - CONDITION
+  - PRO_CM
+  - OBS_CLIN
+  - OBS_GEN
+  - MED_ADMIN
+  - IMMUNIZATION
+  - PROVIDER
+params: {}
+metrics:
+  - ROW_COUNT
+  - DISTINCT_PK_COUNT
+  - DUPLICATE_PK_COUNT
+exception_metrics:
+  - DUPLICATE_PK_COUNT
+thresholds:
+  duplicate_pk_count_gt: 0
+enabled: true
+doc_summary: >-
+  Native primary-key integrity panel: each table's composite primary key
+  (from the CDM handle) is unique. Uses COUNT(*) vs COUNT(DISTINCT key). The
+  EDC-report equivalent is DC 1.05 (Table IIA).
+doc_interpretation: >-
+  DUPLICATE_PK_COUNT > 0 (EXCEPTION) means the primary key repeats.

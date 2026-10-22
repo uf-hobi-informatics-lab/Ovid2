@@ -1,0 +1,297 @@
+{#
+  Run console — full-width console styled like a terminal.
+
+  Renders:
+    * A job-details header block (ovid `print_pipeline_summary` style)
+      built server-side from the run tracker row and/or the web-tier
+      job record: pipeline, folder/batch, path, tables, engine, input
+      and output addresses, submitted-by, job id, instance id, plus a
+      link row (worker log / raw log). The leading prompt glyph doubles
+      as the transport control — a ▶ Play cursor (posts /rerun) once
+      terminal, or a ■ Stop cursor (posts /cancel) while queued/running.
+      The instance id and status pill sit at the right edge of the row.
+    * A status pill (queued / running / done / failed / cancelled)
+      updated client-side from the job-status nudge glue.
+    * A split lower region: left = per-table running summary — the full
+      run manifest is shown up front (every table the run will touch
+      appears as ``queued`` before its first event, seeded from
+      ``data-planned-tables`` or the pipeline plan endpoint), each row
+      clickable (the list controls the right pane; the newest running
+      table is auto-followed until the operator pins one) and carrying a
+      colour-coded status *dot* (queued / running / done / failed) that
+      pulses while running instead of a status word — right (slightly
+      larger) = a free, continuously-populating list of *every* table's
+      detail (status + duration + stages + fixes + errors, filtered from
+      the live event stream client-side; clicking a left row scrolls the
+      matching section into view and highlights it). Event times are
+      rendered in the operator's configured display timezone.
+    * A footer line `Total Elapsed Time: MM:SS.s` (ovid parity).
+    * A <noscript> fallback pointing at the raw JSONL log endpoint.
+
+  The event reader still runs (see mount.js) to drive the status pill,
+  the total-elapsed clock, and the per-table summary/detail panel — the
+  scrolling terminal body and the live meta strip were removed, so the
+  reader now feeds those consumers without rendering a `<pre>`.
+#}
+{% import "_icons.html" as icons %}
+{#
+  Output artifacts strip — icon-only links (worker log / raw log /
+  report) surfaced in the right-pane header. Rendered as small, tooltip-
+  bearing icon buttons instead of the old plain "→" text links.
+#}
+{% macro output_links(job, instance_id, report_available) %}
+<div class="term-output-links" role="group" aria-label="Run outputs">
+  {% if report_available %}
+  <a class="term-output-link" href="/runs/{{ instance_id }}/report"
+     title="View report" aria-label="View report">{{ icons.icon("check-square", size=15) }}</a>
+  {% endif %}
+  {% if job %}
+  <a class="term-output-link" href="/api/v1/jobs/{{ job.job_id }}/log"
+     title="Worker log" aria-label="Worker log">{{ icons.icon("file", size=15) }}</a>
+  {% endif %}
+  <a class="term-output-link" href="/api/v1/runs/{{ instance_id }}/events.log"
+     title="Raw event log" aria-label="Raw event log">{{ icons.icon("external", size=15) }}</a>
+</div>
+{% endmacro %}
+{#
+  Shared "waiting for data" placeholder — the single empty-state
+  component used by *every* panel type (ETL tables, health/dq_checks,
+  and any future pipeline type), so they all look identical. It carries
+  the same `small mono` font + muted colour as every other empty-state
+  line; the animation is a subtle pulse of the run's accent colour.
+  Panels overwrite it (via replaceChildren) on their first event.
+#}
+{% macro data_waiting() %}
+<div class="data-waiting" role="status" aria-label="Waiting for data">
+  <span class="data-waiting-logo" aria-hidden="true">
+    <span class="data-waiting-dot"></span>
+    <span class="data-waiting-dot"></span>
+    <span class="data-waiting-dot"></span>
+  </span>
+  <span class="data-waiting-label small mono">waiting for data…</span>
+</div>
+{% endmacro %}
+<aside class="terminal-pane console-fill"
+       data-instance-id="{{ instance_id }}"
+       {% if job %}data-job-id="{{ job.job_id }}"{% endif %}
+       data-pipeline="{{ (run.pipeline if run and run.pipeline else (job.pipeline if job and job.pipeline else '')) }}"
+       data-batch="{{ run.batch_id or '' if run else '' }}"
+       data-path="{{ run.path or '' if run else '' }}"
+       {% if started_at_ms %}data-started-at-ms="{{ started_at_ms }}"{% endif %}
+       {% if ended_at_ms %}data-ended-at-ms="{{ ended_at_ms }}"{% endif %}
+       {% if server_now_ms %}data-server-now-ms="{{ server_now_ms }}"{% endif %}
+       data-display-tz="{{ display_tz or 'UTC' }}"
+       data-status="{{ job.status if job else 'unknown' }}"
+       {% if job and job.tables %}data-planned-tables='{{ job.tables | tojson }}'{% endif %}
+       {% if check_parts %}data-check-parts='{{ check_parts | tojson }}'{% endif %}
+       {% if check_packages %}data-check-packages='{{ check_packages | tojson }}'{% endif %}
+       {% if check_checks %}data-check-checks='{{ check_checks | tojson }}'{% endif %}
+       aria-label="Live run console">
+
+  {# ---- Job-details header block (ovid pipeline-summary style) ---- #}
+  <section class="term-summary" aria-label="Run details">
+    {#
+      The prompt glyph IS the transport control — and *only* the glyph
+      is clickable. While the job is queued/running it is a ■ Stop
+      square (posts /cancel); once terminal it is a ▶ Play triangle
+      (posts /rerun). The glyph is always a soft green and never
+      animates — the shape simply switches. The "ovid2" label sits
+      *beside* the button and is the run-status indicator: dim/idle green
+      while queued, full green while running, dimmed while a stop is
+      pending, and a solid per-status colour when terminal (green done /
+      red failed / purple cancelled) — driven by ``data-status``, set
+      server-side on first render and flipped live by mount.js. Clicking
+      the label does nothing. Clicking ■ Stop POSTs /cancel in the
+      background (no page reload, no confirm); the run stays in-flight
+      until the worker tears it down, during which the ■ glyph is inert.
+    #}
+    <div class="term-summary-title">
+      {% if job and job.status == "draft" %}
+      {#
+        Draft (e.g. prepared by the assistant): fully specified, not yet
+        queued. The ▶ is the human approval gate — it POSTs /launch,
+        which promotes the draft to ``queued``. This is the ONE place the
+        transport glyph animates (``.run-ready`` breathing glow) to
+        signal "ready to execute"; disabled under prefers-reduced-motion.
+      #}
+      <form class="term-prompt-form" method="post"
+            action="/jobs/{{ job.job_id }}/launch">
+        <button type="submit"
+                class="term-prompt-btn term-btn-primary run-ready"
+                data-action="launch"
+                data-run-state="draft"
+                aria-label="Run this job"
+                title="Ready — run this job">
+          <span class="term-prompt-glyph" aria-hidden="true">{{ icons.icon("play", size=15) }}</span>
+        </button>
+      </form>
+      <span class="term-prompt-label" data-status="draft">ovid2</span>
+      <span class="term-draft-note small muted">draft — ready to run</span>
+      <form class="term-draft-discard" method="post"
+            action="/jobs/{{ job.job_id }}/discard">
+        <button type="submit" class="link small" data-action="discard"
+                title="Discard this draft">discard</button>
+      </form>
+      {% elif job and job.status in ["queued", "running"] %}
+      <form class="term-prompt-form" method="post"
+            action="/jobs/{{ job.job_id }}/cancel">
+        <button type="submit"
+                class="term-prompt-btn term-btn-primary"
+                data-action="cancel"
+                data-run-state="running"
+                aria-label="Cancel"
+                title="Cancel">
+          <span class="term-prompt-glyph" aria-hidden="true">{{ icons.icon("stop", size=15) }}</span>
+        </button>
+      </form>
+      <span class="term-prompt-label" data-status="{{ job.status }}">ovid2</span>
+      {#
+        Queue note: a launched job can wait in ``queued`` for the whole
+        duration of an earlier run (the worker runs WEB_MAX_PARALLEL_JOBS
+        at a time). Say so explicitly so it never looks like a draft.
+        live.js keeps it in sync from the status poll and clears it once
+        the job is running.
+      #}
+      <span class="term-queue-note small muted"
+            {% if job.status != "queued" %}hidden{% endif %}>{% if job.status == "queued" %}{% include "_run_queue_note.html" %}{% endif %}</span>
+      {% elif job %}
+      <form class="term-prompt-form" method="post" action="/jobs/{{ job.job_id }}/rerun">
+        <button type="submit"
+                class="term-prompt-btn term-btn-primary"
+                data-action="rerun"
+                data-run-state="done"
+                aria-label="Rerun"
+                title="Rerun">
+          <span class="term-prompt-glyph" aria-hidden="true">{{ icons.icon("play", size=15) }}</span>
+        </button>
+      </form>
+      <span class="term-prompt-label" data-status="{{ job.status }}">ovid2</span>
+      {% else %}
+      <span class="term-prompt"><span class="term-prompt-glyph" aria-hidden="true">▮</span> <span class="term-prompt-label" data-status="unknown">ovid2</span></span>
+      {% endif %}
+      <span class="term-flex"></span>
+      <span class="term-summary-run mono">{{ identifier }}</span>
+    </div>
+
+    <dl class="term-summary-fields">
+      <dt>Pipeline</dt>
+      <dd class="mono">{{ (run.pipeline if run and run.pipeline else (job.pipeline if job and job.pipeline else "—")) }}</dd>
+      {% if job and job.extra_args and job.extra_args.get("kind") %}
+      <dt>Kind</dt>
+      <dd class="mono">{{ job.extra_args.get("kind") }}</dd>
+      {% endif %}
+      <dt>Folder</dt>
+      <dd class="mono">{{ (run.batch_id if run and run.batch_id else (job.batch_id if job and job.batch_id else "—")) }}</dd>
+      {% if job and job.tables %}
+      <dt>Tables</dt>
+      <dd class="mono">{{ job.tables|join(", ") }}</dd>
+      {% endif %}
+      <dt>Engine</dt>
+      <dd class="mono">{{ engine or "—" }}</dd>
+      <dt>Input</dt>
+      <dd class="mono small">{{ input_address or "—" }}</dd>
+      <dt>Output</dt>
+      <dd class="mono small">{{ output_address or "—" }}</dd>
+      {% if check_packages %}
+      <dt>Packages</dt>
+      <dd class="mono small">{{ check_packages|join(", ") }}</dd>
+      {% endif %}
+      {% if check_checks %}
+      <dt>Checks</dt>
+      <dd class="mono small">{{ check_checks|join(", ") }}</dd>
+      {% endif %}
+      {% if job and job.extra_args and job.extra_args.get("workers") %}
+      <dt>Workers</dt>
+      <dd class="mono small">{{ job.extra_args.get("workers") }}</dd>
+      {% endif %}
+      {% if job %}
+      <dt>Submitted</dt>
+      <dd class="mono small">{{ job.submitted_at | localtime_pretty }}</dd>
+      {% endif %}
+    </dl>
+    {% if job and job.status == "failed" and job.error %}
+    <div class="flash error" role="alert">
+      <strong>Failure reason:</strong>
+      <span class="mono small">{{ job.error }}</span>
+    </div>
+    {% endif %}
+  </section>
+
+  {# ---- Split lower region ---- #}
+  {% if run_kind in ("health", "dq_checks") %}
+  {# Health / dq_checks runs: left = checks, right = selected check's metric detail. #}
+  <section class="term-split" aria-label="Data-health checks">
+    <div class="term-split-left">
+      <h3 class="term-split-title">Checks</h3>
+      <div id="check-summary"
+           class="check-summary"
+           data-instance-id="{{ instance_id }}"
+           role="listbox"
+           aria-label="Checks in this run">
+        {{ data_waiting() }}
+      </div>
+      <button type="button"
+              id="check-follow-toggle"
+              class="table-follow-toggle"
+              aria-pressed="true"
+              aria-label="Follow the running check"
+              title="Follow the running check">{{ icons.icon("chevrons-down", size=13) }}</button>
+    </div>
+    <div class="term-split-right">
+      <div class="term-split-righthead">
+        <h3 class="term-split-title">
+          Detail <span id="check-detail-name" class="mono small"></span>
+        </h3>
+        {{ output_links(job, instance_id, report_available) }}
+      </div>
+      <div id="check-detail" class="check-detail" aria-live="polite">
+        {{ data_waiting() }}
+      </div>
+    </div>
+  </section>
+  {% else %}
+  {# Standard ETL / analysis runs: per-table summary | table detail. #}
+  <section class="term-split" aria-label="Per-table summary and detail">
+    <div class="term-split-left">
+      <h3 class="term-split-title">Tables</h3>
+      <div id="table-summary"
+           class="table-summary"
+           data-instance-id="{{ instance_id }}"
+           role="listbox"
+            aria-label="Tables in this run">
+        {{ data_waiting() }}
+      </div>
+      <button type="button"
+              id="table-follow-toggle"
+              class="table-follow-toggle"
+              aria-pressed="true"
+              aria-label="Follow the running table"
+              title="Follow the running table">{{ icons.icon("chevrons-down", size=13) }}</button>
+    </div>
+    <div class="term-split-right">
+      <div class="term-split-righthead">
+        <h3 class="term-split-title">
+          Detail <span id="table-detail-name" class="mono small"></span>
+        </h3>
+        {{ output_links(job, instance_id, report_available) }}
+      </div>
+      <div id="table-detail" class="table-detail" aria-live="polite">
+        {{ data_waiting() }}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {# ---- Footer: total elapsed (ovid parity) ---- #}
+  <footer class="term-footer" aria-hidden="true">
+    <span class="term-total-label">Total Elapsed Time:</span>
+    <span class="term-total mono">—</span>
+  </footer>
+
+  <noscript>
+    <div class="term-noscript">
+      JavaScript disabled &mdash;
+      <a href="/api/v1/runs/{{ instance_id }}/events.log">download the raw event log &rarr;</a>
+    </div>
+  </noscript>
+</aside>

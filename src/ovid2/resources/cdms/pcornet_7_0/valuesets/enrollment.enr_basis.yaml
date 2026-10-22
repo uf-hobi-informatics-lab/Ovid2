@@ -1,0 +1,23 @@
+v: 1
+name: pcornet_7_0.enrollment.enr_basis
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 ENROLLMENT.ENR_BASIS code set.
+code_column: code
+description_column: label
+items:
+- code: I
+  label: I=Medical insurance coverage
+  order: 436
+- code: D
+  label: D=Outpatient prescription drug coverage
+  order: 437
+- code: G
+  label: G=Geography
+  order: 438
+- code: A
+  label: A=Algorithmic
+  order: 439
+- code: E
+  label: E=Encounter-based
+  order: 440

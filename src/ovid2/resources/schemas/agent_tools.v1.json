@@ -1,0 +1,143 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://ovid2.dev/schemas/agent_tools.v1.json",
+    "title": "Ovid2 agent tool catalogue",
+    "description": "The allow-list of /api/v1 operations the in-panel assistant (and any future agent loop) may call. Each entry maps one function-calling tool onto exactly one HTTP route. GET tools are executed by the LLM executor with a short-lived, GET-only, per-user token; every other method is surfaced to the human as a proposal and executed by their browser session. A third kind, ui_action, has no method/path at all: it is a cosmetic, reversible change to the user's own browser (e.g. the page theme) that the browser re-validates against its own allow-list, applies immediately and offers to undo. Loaded by ovid2.agent_tools.catalogue.",
+    "type": "object",
+    "required": [
+        "v",
+        "tools"
+    ],
+    "additionalProperties": false,
+    "properties": {
+        "v": {
+            "type": "integer",
+            "const": 1
+        },
+        "tools": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "$ref": "#/$defs/tool"
+            }
+        }
+    },
+    "$defs": {
+        "tool": {
+            "type": "object",
+            "required": [
+                "name",
+                "description",
+                "capability"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{1,63}$"
+                },
+                "description": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 1024
+                },
+                "method": {
+                    "enum": [
+                        "GET",
+                        "POST",
+                        "PUT"
+                    ]
+                },
+                "path": {
+                    "type": "string",
+                    "pattern": "^/api/v1/[A-Za-z0-9_\\-{}/:.]+$"
+                },
+                "capability": {
+                    "type": "string"
+                },
+                "params": {
+                    "type": "object",
+                    "description": "JSON Schema (object) for the tool arguments. Path placeholders must be required string properties; for GET the rest become query parameters, otherwise the JSON body.",
+                    "required": [
+                        "type"
+                    ],
+                    "properties": {
+                        "type": {
+                            "const": "object"
+                        }
+                    }
+                },
+                "max_result_chars": {
+                    "type": "integer",
+                    "minimum": 256,
+                    "maximum": 200000
+                },
+                "truncate": {
+                    "enum": [
+                        "head",
+                        "tail"
+                    ]
+                },
+                "opens_draft": {
+                    "type": "boolean",
+                    "description": "Mutating tools only. When true the browser executes the call immediately (no proposal click) and navigates to the returned run page. Allowed ONLY on routes that create a non-executing draft job; the human approval gate moves to the run page's Run button. Enforced by tests/contract/test_agent_tools_catalogue.py."
+                },
+                "ui_action": {
+                    "type": "boolean",
+                    "description": "Browser-only UI action (no HTTP call, no credentials). The executor emits a ui_action event; the user's browser re-validates the arguments against its own allow-list, applies the change immediately and offers Undo. Must have no method/path and a description starting with 'UI:'. Allowed names are pinned by tests/contract/test_agent_tools_catalogue.py."
+                }
+            },
+            "allOf": [
+                {
+                    "if": {
+                        "required": [
+                            "ui_action"
+                        ],
+                        "properties": {
+                            "ui_action": {
+                                "const": true
+                            }
+                        }
+                    },
+                    "then": {
+                        "not": {
+                            "anyOf": [
+                                {
+                                    "required": [
+                                        "method"
+                                    ]
+                                },
+                                {
+                                    "required": [
+                                        "path"
+                                    ]
+                                },
+                                {
+                                    "required": [
+                                        "opens_draft"
+                                    ]
+                                },
+                                {
+                                    "required": [
+                                        "max_result_chars"
+                                    ]
+                                },
+                                {
+                                    "required": [
+                                        "truncate"
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    "else": {
+                        "required": [
+                            "method",
+                            "path"
+                        ]
+                    }
+                }
+            ]
+        }
+    }
+}

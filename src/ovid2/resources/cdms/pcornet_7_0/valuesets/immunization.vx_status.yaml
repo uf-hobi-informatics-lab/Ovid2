@@ -1,0 +1,29 @@
+v: 1
+name: pcornet_7_0.immunization.vx_status
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 IMMUNIZATION.VX_STATUS code set.
+code_column: code
+description_column: label
+items:
+- code: CP
+  label: CP=Completed
+  order: 11616
+- code: ER
+  label: ER=Entered in error
+  order: 11617
+- code: ND
+  label: ND=Not Done
+  order: 11618
+- code: IC
+  label: IC=Incomplete
+  order: 11619
+- code: NI
+  label: NI=No information
+  order: 11620
+- code: UN
+  label: UN=Unknown
+  order: 11621
+- code: OT
+  label: OT=Other
+  order: 11622

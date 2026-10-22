@@ -1,0 +1,43 @@
+[Unit]
+Description=Ovid2 MCP server (Model-Context-Protocol bridge to the web REST API)
+Documentation=https://github.com/uf-hobi-informatics-lab/Ovid2
+After=network-online.target ovid2-web.service
+Wants=network-online.target
+# Prefer to run after the web tier is up. The MCP process retries on
+# connection errors, so a hard dependency is not required.
+
+[Service]
+Type=simple
+User=@USER@
+Environment=PYTHONUNBUFFERED=1
+Environment=XDG_CONFIG_HOME=/etc
+Environment=XDG_STATE_HOME=/var/lib
+Environment=XDG_RUNTIME_DIR=/var/run
+# Kept in sync with ovid2-web.service so any tool call that shells out via
+# the web tier inherits the same effective mount sources.
+Environment=OVID2_DATA_DIR=/data
+Environment=OVID2_CREDENTIALS_DIR=/ovid_credentials
+# Binds loopback only (127.0.0.1:8091 by default); the shared host reverse
+# proxy fronts it on a distinct hostname. Override the bind or the upstream
+# URL via /etc/ovid2/mcp.env if needed:
+#   OVID2_MCP_BIND=127.0.0.1:8091
+#   OVID2_WEB_URL=http://127.0.0.1:8090
+EnvironmentFile=-/etc/ovid2/mcp.env
+ExecStart=@OVID2_BIN@ mcp --transport http
+Restart=on-failure
+RestartSec=5s
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths=/var/log/ovid2 /var/run/ovid2 /var/lib/ovid2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,52 @@
+{#
+  Run-list rows — one <li> per RunSummary, newest first.
+
+  Rendered both inside runs.html (initial page) and by the
+  /partials/runs/list endpoint (HTMX infinite scroll: the trailing
+  sentinel self-fetches the next offset when revealed).
+
+  Each row shows the pipeline name as the primary label; a batch-id +
+  status sub-bar sits below it. A hover-delayed tooltip (see
+  .run-tip in ovid2.css, revealed after ~1s) exposes the job id and the
+  received / start / end timestamps.
+
+  Context:
+    runs      RunListResponse (runs, total, limit, offset)
+    selected  identifier (instance_id or batch_id) of the active run
+    status    active status filter (carried into the next-page URL)
+    pipeline  active pipeline filter (carried into the next-page URL)
+#}
+{% for run in runs.runs %}
+  {% set rid = run.instance_id or run.batch_id %}
+  <li class="run-list-item status-{{ run.status|lower }}
+             {% if selected and rid == selected %}is-selected{% endif %}">
+    <a class="run-list-link"
+       href="/runs/{{ rid }}"
+       data-run-nav
+       data-run-id="{{ rid }}"
+       {% if run.instance_id %}data-instance-id="{{ run.instance_id }}"{% endif %}>
+      <span class="run-list-main">
+        <span class="run-list-name">{{ run.pipeline or "—" }}</span>
+      </span>
+      <span class="run-list-sub">
+        <span class="run-list-batch mono small">{{ run.batch_id }}</span>
+        <span class="badge status-{{ run.status|lower }}">{{ run.status }}</span>
+      </span>
+    </a>
+    <span class="run-tip" role="tooltip" aria-hidden="true">
+      {% if run.job_id %}<span class="run-tip-row"><span class="run-tip-k">job</span><span class="run-tip-v mono">{{ run.job_id }}</span></span>{% endif %}
+      <span class="run-tip-row"><span class="run-tip-k">received</span><span class="run-tip-v">{{ run.received_time | localtime or "—" }}</span></span>
+      <span class="run-tip-row"><span class="run-tip-k">start</span><span class="run-tip-v">{{ run.processing_start | localtime or "—" }}</span></span>
+      <span class="run-tip-row"><span class="run-tip-k">end</span><span class="run-tip-v">{{ run.processing_end | localtime or "—" }}</span></span>
+    </span>
+  </li>
+{% endfor %}
+{% set next_offset = runs.offset + runs.runs|length %}
+{% if next_offset < runs.total %}
+  <li class="run-list-sentinel"
+      hx-get="/partials/runs/list?offset={{ next_offset }}{% if status %}&status={{ status }}{% endif %}{% if pipeline %}&pipeline={{ pipeline }}{% endif %}{% if selected %}&selected={{ selected }}{% endif %}"
+      hx-trigger="revealed"
+      hx-swap="outerHTML">
+    <span class="run-list-loading small mono">loading older runs…</span>
+  </li>
+{% endif %}

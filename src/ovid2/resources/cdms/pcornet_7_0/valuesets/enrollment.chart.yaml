@@ -1,0 +1,14 @@
+v: 1
+name: pcornet_7_0.enrollment.chart
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 ENROLLMENT.CHART code set.
+code_column: code
+description_column: label
+items:
+- code: Y
+  label: Y=Yes
+  order: 434
+- code: N
+  label: N=No
+  order: 435

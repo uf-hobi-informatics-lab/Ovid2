@@ -1,0 +1,8 @@
+# Coded-clinical fan-in (LAB_RESULT_CM + PROCEDURES + OBS_CLIN + OBS_GEN +
+# VITAL) -> OMOP measurement (domain=Measurement). measurement_id = the
+# PCORnet surrogate id. Concept ids resolved against the concept /
+# concept_relationship views; only Measurement-domain codes survive.
+v: 1
+formatter: measurement
+adapter: custom
+class: ovid2_pipelines.pcornet_to_omop.formatters_custom.measurement_formatter.MeasurementFormatter

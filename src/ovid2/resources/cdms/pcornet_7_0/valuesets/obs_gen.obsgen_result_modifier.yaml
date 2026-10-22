@@ -1,0 +1,35 @@
+v: 1
+name: pcornet_7_0.obs_gen.obsgen_result_modifier
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 OBS_GEN.OBSGEN_RESULT_MODIFIER code set.
+code_column: code
+description_column: label
+items:
+- code: EQ
+  label: EQ=Equal
+  order: 10606
+- code: GE
+  label: GE=Greater than or equal to
+  order: 10607
+- code: GT
+  label: GT=Greater than
+  order: 10608
+- code: LE
+  label: LE=Less than or equal to
+  order: 10609
+- code: LT
+  label: LT=Less than
+  order: 10610
+- code: TX
+  label: TX=Text
+  order: 10611
+- code: NI
+  label: NI=No information
+  order: 10612
+- code: UN
+  label: UN=Unknown
+  order: 10613
+- code: OT
+  label: OT=Other
+  order: 10614

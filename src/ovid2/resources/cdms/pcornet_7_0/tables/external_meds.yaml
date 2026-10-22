@@ -1,0 +1,131 @@
+v: 1
+name: external_meds
+composite_key:
+- EXTMEDID
+domain_description: Medications external to the originating health system.  Examples include medications
+  as reported by the patient and those obtained from external health systems.
+domain_order: 25
+constraints:
+- field: EXTMEDID
+  rule: unique
+  order: 101
+- field: EXTMEDID
+  rule: required, not null
+  order: 102
+- field: PATID
+  rule: required, not null
+  order: 103
+relations:
+- relation: PK
+  details: EXTMEDID
+  order: 71
+- relation: FK (many to one)
+  details: EXTERNAL_MEDS.PATID references DEMOGRAPHIC.PATID
+  order: 72
+fields:
+- name: EXTMEDID
+  rdbms_type: RDBMS Text(x)
+  order: 478
+  sas_type: SAS Char(x)
+  definition: Arbitrary identifier for each unique EXTERNAL_MEDS record.
+- name: PATID
+  rdbms_type: RDBMS Text(x)
+  order: 479
+  sas_type: SAS Char(x)
+  definition: Arbitrary person-level identifier used to link across tables.
+- name: EXT_RECORD_DATE
+  rdbms_type: RDBMS Date
+  order: 480
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Date the external medication was recorded in the EHR.
+- name: EXT_PAT_START_DATE
+  rdbms_type: RDBMS Date
+  order: 481
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Date the patient reports taking the external medication, if known.
+- name: EXT_END_DATE
+  rdbms_type: RDBMS Date
+  order: 482
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Date the external medication was ended or canceled in the EHR.
+- name: EXT_PAT_END_DATE
+  rdbms_type: RDBMS Date
+  order: 483
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Date the patient reports stopping the external medication, if known.
+- name: EXT_DOSE
+  rdbms_type: RDBMS Number(x)
+  order: 484
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: Dose of a given external mediation
+- name: EXT_DOSE_ORDERED_UNIT
+  rdbms_type: RDBMS Text(x)
+  order: 485
+  sas_type: SAS Char(x)
+  definition: Units of measure associated with the dose of the external medication
+- name: EXT_DOSE_FORM
+  rdbms_type: RDBMS Text(x)
+  order: 486
+  sas_type: SAS Char(x)
+  definition: The form of the external medication. This is equivalent to RxNorm Dose Form.
+- name: EXT_ROUTE
+  rdbms_type: RDBMS Text(x)
+  order: 487
+  sas_type: SAS Char(x)
+  definition: Route of medication delivery.
+- name: EXT_BASIS
+  rdbms_type: RDBMS Text(2)
+  order: 488
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.external_meds.ext_basis
+  definition: "Basis of the external medication. \n\nUse “patient-reported” for medications that come\
+    \ from the patient, such as through a kiosk or portal.  Use this value even if the patient-reported\
+    \ medication is ultimately recorded or confirmed by the provider.\n\nUse “external health system /\
+    \ health information exchange” for medications that are pulled into the EHR from outside health systems."
+- name: RXNORM_CUI
+  rdbms_type: RDBMS Text(8)
+  order: 489
+  sas_type: SAS Char(8)
+  definition: Where an RxNorm mapping exists for the source medication, this field contains the RxNorm
+    concept identifier (CUI) at the highest possible specificity.
+- name: EXTMED_SOURCE
+  rdbms_type: RDBMS Text(2)
+  order: 490
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.external_meds.extmed_source
+  definition: Source of the external medication information.
+- name: RAW_EXT_MED_NAME
+  rdbms_type: RDBMS Text(x)
+  order: 491
+  sas_type: SAS Char(x)
+  definition: Field for originating, full textual medication name from the source.
+- name: RAW_RXNORM_CUI
+  rdbms_type: RDBMS Text(x)
+  order: 492
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet® CDM value set.
+- name: RAW_EXT_NDC
+  rdbms_type: RDBMS Text(x)
+  order: 493
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet® CDM value set.
+- name: RAW_EXT_DOSE
+  rdbms_type: RDBMS Text(x)
+  order: 494
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet® CDM value set.
+- name: RAW_EXT_DOSE_UNIT
+  rdbms_type: RDBMS Text(x)
+  order: 495
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet® CDM value set.
+- name: RAW_EXT_ROUTE
+  rdbms_type: RDBMS Text(x)
+  order: 496
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet® CDM value set.

@@ -1,0 +1,144 @@
+v: 1
+name: lab_history
+composite_key:
+- LABHISTORYID
+domain_description: Table for storing historical information about units of measure and reference ranges
+  for laboratory test results.
+domain_order: 23
+constraints:
+- field: LABHISTORYID
+  rule: unique
+  order: 95
+- field: LABHISTORYID
+  rule: required, not null
+  order: 96
+- field: LAB_LOINC
+  rule: required, not null
+  order: 97
+relations:
+- relation: PK
+  details: LABHISTORYID
+  order: 67
+fields:
+- name: LABHISTORYID
+  rdbms_type: RDBMS Text(x)
+  order: 456
+  sas_type: SAS Char(x)
+  definition: Arbitrary identifier for each unique LAB_HISTORY record.
+- name: LAB_LOINC
+  rdbms_type: RDBMS Text(10)
+  order: 457
+  sas_type: SAS Char(10)
+  definition: Logical Observation Identifiers, Names, and Codes (LOINC®) from the Regenstrief Institute.
+    Current LOINC codes are from 3-8 characters long but Regenstrief suggests a length of 10 for future
+    growth. The last digit of the LOINC code is a check digit and is always preceded by a hyphen. All
+    parts of the LOINC code, including the hyphen, must be included. Do not pad the LOINC code with leading
+    zeros.
+- name: LAB_FACILITYID
+  rdbms_type: RDBMS Text(x)
+  order: 458
+  sas_type: SAS Char(x)
+  definition: Arbitrary local code that identifies the facility providing lab results. Used in instances
+    where pipelines are aggregating laboratory results from a number of different organizations. LAB_FACILITYID
+    can be a true identifier, or a pseudoidentifier with a consistent crosswalk to the true identifier
+    retained by the source data pipeline.
+- name: SEX
+  rdbms_type: RDBMS Text(2)
+  order: 459
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.lab_history.sex
+  definition: Sex to which this unit and range applies.
+- name: RACE
+  rdbms_type: RDBMS Text(2)
+  order: 460
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.lab_history.race
+  definition: 'Race to which this unit and range applies. Details of categorical definitions: American
+    Indian or Alaska Native: A person having origins in any of the original peoples of North and South
+    America (including Central America), and who maintains tribal affiliation or community attachment.
+    Asian: A person having origins in any of the original peoples of the Far East, Southeast Asia, or
+    the Indian subcontinent including, for example, Cambodia, China, India, Japan, Korea, Malaysia, Pakistan,
+    the Philippine Islands, Thailand, and Vietnam. Black or African American: A person having origins
+    in any of the black racial groups of Africa. Native Hawaiian or Other Pacific Islander: A person having
+    origins in any of the original peoples of Hawaii, Guam, Samoa, or other Pacific Islands. White: A
+    person having origins in any of the original peoples of Europe, the Middle East, or North Africa.'
+- name: AGE_MIN_WKS
+  rdbms_type: RDBMS Number(x)
+  order: 461
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: Minimum age to which this unit and range applies, in weeks.
+- name: AGE_MAX_WKS
+  rdbms_type: RDBMS Number(x)
+  order: 462
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: Maximum age to which this unit and range applies, in weeks.
+- name: RESULT_UNIT
+  rdbms_type: RDBMS Text(x)
+  order: 463
+  sas_type: SAS Char(x)
+  definition: Converted/standardized units for the specified LOINC.
+- name: NORM_RANGE_LOW
+  rdbms_type: RDBMS Text(10)
+  order: 464
+  sas_type: SAS Char(10)
+  definition: Lower bound of the normal range assigned by the laboratory. Value should only contain the
+    value of the lower bound. The symbols >, <, >=, <= should be removed. For example, if the normal range
+    for a test is >100 and <300, then "100" should be entered.
+- name: NORM_MODIFIER_LOW
+  rdbms_type: RDBMS Text(2)
+  order: 465
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.lab_history.norm_modifier_low
+  definition: 'Modifier for NORM_RANGE_LOW values. For numeric results one of the following needs to be
+    true: 1) Both MODIFIER_LOW and MODIFIER_HIGH contain EQ (e.g. normal values fall in the range 3-10)
+    2) MODIFIER_LOW contains GT or GE and MODIFIER_HIGH contains NO (e.g. normal values are >3 with no
+    upper boundary) 3) MODIFIER_HIGH contains LT or LE and MODIFIER_LOW contains NO (e.g. normal values
+    are <=10 with no lower boundary)'
+- name: NORM_RANGE_HIGH
+  rdbms_type: RDBMS Text(10)
+  order: 466
+  sas_type: SAS Char(10)
+  definition: Upper bound of the normal range assigned by the laboratory. Value should only contain the
+    value of the upper bound. The symbols >, <, >=, <= should be removed. For example, if the normal range
+    for a test is >100 and <300, then "300" should be entered.
+- name: NORM_MODIFIER_HIGH
+  rdbms_type: RDBMS Text(2)
+  order: 467
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.lab_history.norm_modifier_high
+  definition: 'Modifier for NORM_RANGE_HIGH values. For numeric results one of the following needs to
+    be true: 1) Both MODIFIER_LOW and MODIFIER_HIGH contain EQ (e.g. normal values fall in the range 3-10)
+    2) MODIFIER_LOW contains GT or GE and MODIFIER_HIGH contains NO (e.g. normal values are >3 with no
+    upper boundary) 3) MODIFIER_HIGH contains LT or LE and MODIFIER_LOW contains NO (e.g. normal values
+    are <=10 with no lower boundary)'
+- name: PERIOD_START
+  rdbms_type: RDBMS Date
+  order: 468
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Initial date when the unit and range are known to be in use for the specified age range,
+    race, sex and facility.
+- name: PERIOD_END
+  rdbms_type: RDBMS Date
+  order: 469
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Date when the unit and range are no longer in use for the specified age range, race, sex
+    and facility.
+- name: RAW_LAB_NAME
+  rdbms_type: RDBMS Text(x)
+  order: 470
+  sas_type: SAS Char(x)
+  definition: Local name related to an individual lab test.
+- name: RAW_UNIT
+  rdbms_type: RDBMS Text(x)
+  order: 471
+  sas_type: SAS Char(x)
+  definition: Original units in your source data.
+- name: RAW_RANGE
+  rdbms_type: RDBMS Text(x)
+  order: 472
+  sas_type: SAS Char(x)
+  definition: Original reference range in your source data.

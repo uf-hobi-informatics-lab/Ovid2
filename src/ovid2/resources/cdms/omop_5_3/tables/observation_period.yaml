@@ -1,0 +1,31 @@
+v: 1
+name: observation_period
+composite_key:
+- observation_period_id
+domain_description: OMOP CDM 5.3 clinical data table.
+domain_order: 5
+fields:
+- name: observation_period_id
+  rdbms_type: RDBMS Number
+  order: 1
+- name: person_id
+  rdbms_type: RDBMS Number
+  order: 2
+- name: observation_period_start_date
+  rdbms_type: RDBMS Date
+  order: 3
+- name: observation_period_end_date
+  rdbms_type: RDBMS Date
+  order: 4
+- name: period_type_concept_id
+  rdbms_type: RDBMS Number
+  order: 5
+- name: updated
+  rdbms_type: RDBMS Text(50)
+  order: 6
+- name: source
+  rdbms_type: RDBMS Text(10)
+  order: 7
+- name: mapped_from
+  rdbms_type: RDBMS Text(50)
+  order: 8

@@ -1,0 +1,58 @@
+id: dcq_v7_03
+label: "Cycle 20 / v7.03"
+released: "2026-09-12"
+description: >-
+  PCORnet Empirical Data Curation (EDC) report cycle, DCQ v7.03 / Cycle 20.
+  Ports every check that lands in the authoritative EDC report's
+  dc_summary_* exception blocks (edc_report.sas v7.03), PCORnet CDM only.
+  Ships alongside the Ovid2-native health panels that back the same
+  metrics natively.
+checks:
+  # --- Part 1: structural integrity / conformance (Tables ID–IIG) --------- #
+  - "1.01"   # Table IID  — required table present
+  - "1.02"   # Table IID  — required table populated
+  - "1.05"   # Table IIA  — primary key not unique
+  - "1.06"   # Table IIB  — value out of CDM valueset
+  - "1.07"   # Table IIC  — required NOT NULL field missing
+  - "1.08"   # Table IIE  — orphan PATID (any)
+  - "1.09"   # Table IIE  — orphan ENCOUNTERID (>5%)
+  - "1.12"   # Table IIE  — orphan PROVIDERID (any)
+  - "1.13"   # Table IIF  — bad code type (>5%)
+  - "1.14"   # Table IIE  — DEMOGRAPHIC PATID missing from HASH_TOKEN
+  - "1.17"   # Table IID  — ZIP / FIPS-location conformance (any bad value)
+  - "1.18"   # Table ID   — no valid data-refresh date
+  - "1.20"   # Table IIG  — panel LOINC share (>5%)
+  # --- Part 2: temporal / plausibility (Tables IIIA–IIIG) ----------------- #
+  - "2.01"   # Table IIIA — future-date share (>5%)
+  - "2.02"   # Table IIIB — implausible low/high numeric (>10%)
+  - "2.03"   # Table IIIC — illogical date sequence (>5%)
+  - "2.04"   # Table IIID — encounters per visit for ED/EI/IP (>2)
+  - "2.08"   # Table IIIG — most-recent-month volume anomaly
+  - "2.09"   # Table IB   — dx+vital patient coverage (<80%)
+  # --- Part 3: completeness / coverage (Tables IB, IVA–IVI) --------------- #
+  - "3.01"   # Table IVA  — dx-with-known-type per encounter (<1.00)
+  - "3.02"   # Table IVB  — px per encounter (AV/ED<0.75; EI/IP<1.00)
+  - "3.03"   # Table IVC/IVD — key field missing (>=10%)
+  - "3.04"   # Table IB   — dx coverage (<50%)
+  - "3.05"   # Table IB   — px coverage (<50%)
+  - "3.07"   # Table IVF  — recent-month ENC/DIA/PRO (<75%)
+  - "3.08"   # Table IVH  — PRES RXCUI tier (<80%)
+  - "3.09"   # Table IVI  — LAB loinc+result (<80%)
+  - "3.11"   # Table IVG  — recent-month VIT/PRES/LAB (<75%)
+  - "3.12"   # Table IVI  — LAB result unit (<80%)
+  - "3.15"   # Table IVH  — MED_ADMIN tier (<80%)
+  - "3.16"   # Table IVI  — OBS_CLIN code+result (<80%)
+  - "3.17"   # Table IVI  — OBS_CLIN result unit (<80%)
+  - "3.18"   # Table IB   — zip5+county_fips coverage (<80%)
+  # --- Part 4: cross-refresh trend (Tables VA–VC) ------------------------- #
+  - "4.01"   # Table VA   — records/patients dropped vs prior refresh
+  - "4.02"   # Table VB   — encounter-type domain vs prior
+  - "4.03"   # Table VC   — code-type distribution vs prior
+  # --- Ovid2-native panels backing the same metrics ----------------------- #
+  - health.pk_uniqueness
+  - health.valueset_conformance
+  - health.null_rate
+  - health.future_date
+  - health.freshness
+  - health.mapping_coverage
+  - health.orphan_fk

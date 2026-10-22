@@ -1,0 +1,6 @@
+{# Inline text for the queued-job note (no wrapper). Context: queue (dict|None). #}
+{%- set _r = queue.running if queue else 0 -%}
+{%- set _a = queue.ahead if queue else 0 -%}
+queued
+{%- if _r or _a %} — waiting for {% if _r %}{{ _r }} running job{{ "s" if _r != 1 else "" }}{% endif %}{% if _r and _a %} + {% endif %}{% if _a %}{{ _a }} queued ahead{% endif %}
+{%- else %} — starting…{% endif -%}

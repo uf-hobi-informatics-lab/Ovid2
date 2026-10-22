@@ -1,0 +1,23 @@
+v: 1
+name: pcornet_7_0.harvest.datamart_claims
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 HARVEST.DATAMART_CLAIMS code set.
+code_column: code
+description_column: label
+items:
+- code: '01'
+  label: 01=Not present
+  order: 12842
+- code: '02'
+  label: 02=Present
+  order: 12843
+- code: NI
+  label: NI=No information
+  order: 12844
+- code: UN
+  label: UN=Unknown
+  order: 12845
+- code: OT
+  label: OT=Other
+  order: 12846

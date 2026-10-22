@@ -1,0 +1,68 @@
+v: 1
+name: pcornet_7_0.obs_gen.obsgen_type
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 OBS_GEN.OBSGEN_TYPE code set.
+code_column: code
+description_column: label
+items:
+- code: 09DX
+  label: 09DX=ICD-9-CM-DX
+  order: 10315
+- code: 09PX
+  label: 09PX=ICD-9-CM-PX
+  order: 10316
+- code: 10DX
+  label: 10DX=ICD-10-CM
+  order: 10317
+- code: 10PX
+  label: 10PX=ICD-10-PCS
+  order: 10318
+- code: 11DX
+  label: 11DX=ICD-11-CM
+  order: 10319
+- code: 11PX
+  label: 11PX=ICD-11-PCS
+  order: 10320
+- code: 'ON'
+  label: ON=ICD-O (Oncology)
+  order: 10321
+- code: SM
+  label: SM=SNOMED
+  order: 10322
+- code: HP
+  label: HP=Human Phenotype Ontology
+  order: 10323
+- code: HG
+  label: HG=Human Genome Organization
+  order: 10324
+- code: LC
+  label: LC=LOINC
+  order: 10325
+- code: RX
+  label: RX=RXNORM
+  order: 10326
+- code: ND
+  label: ND=NDC
+  order: 10327
+- code: CH
+  label: CH=CPT/HCPCS
+  order: 10328
+- code: GM
+  label: GM=Global Medical Device Nomenclature
+  order: 10329
+- code: UD_*
+  label: UD_*=User-defined
+  order: 10330
+- code: PC_*
+  label: PC_*=PCORnet reserved
+  order: 10331
+- code: NI
+  label: NI=No information
+  order: 10332
+- code: UN
+  label: UN=Unknown
+  order: 10333
+- code: OT
+  label: OT=Other
+  order: 10334

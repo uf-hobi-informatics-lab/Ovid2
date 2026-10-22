@@ -1,0 +1,307 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ovid2"
+version = "0.1.0"
+description = "Ovid2 — data processing engine for healthcare pipeline data (PCORnet CDM v7.0, OMOP CDM 5.3)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "UF HOBI Informatics Lab" },
+]
+keywords = ["etl", "pyspark", "pcornet", "omop", "cdm", "healthcare"]
+classifiers = [
+    # NOTE: "Private :: Do Not Upload" was removed as part of the OSS-readiness
+    # scaffolding. Re-add it if the open-source release is not approved.
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+
+dependencies = [
+    # Runtime (PySpark is provided by the base Docker image; declared for host tooling only)
+    "pyyaml>=6.0",
+    "jsonschema>=4.21",
+    "rich>=13.7",
+    "textual>=0.60",              # `ovid2 init` TUI
+    "click>=8.1",                 # CLI dispatch
+    "pydantic>=2.6",              # config validation
+    "python-dateutil>=2.8",
+    "pyarrow>=15.0",
+    "sqlalchemy>=2.0",
+    "snowflake-connector-python>=3.7",
+    "snowflake-snowpark-python>=1.15",  # SnowparkEngine (ovid2.core.engines.snowpark)
+    "pycryptodome>=3.20",
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "openpyxl>=3.1",
+    "xlsxwriter>=3.2",
+    "croniter>=2.0",              # W7 route trigger cadence evaluation
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.4",
+    "mypy>=1.10",
+    "pytest>=8.2",
+    "pytest-json-report>=1.5",
+    "pytest-cov>=5.0",
+    "pre-commit>=3.7",
+    "types-pyyaml",
+    "types-python-dateutil",
+    "tomli>=2.0; python_version < '3.11'",   # scripts/public + its contract test
+]
+spark = [
+    # For local dev outside Docker; production uses the Bitnami base image.
+    "pyspark>=3.5,<4",
+]
+azure = [
+    # Optional driver stack for the ``azure_blob`` connector. Both
+    # wheels are pure-Python and safe to install on any host.
+    "azure-storage-blob>=12.19",
+    "azure-identity>=1.15",       # AAD (SPN + DefaultAzureCredential)
+]
+access = [
+    # Optional stack for browsing / expanding Microsoft Access
+    # (.accdb / .mdb) tables in the *web tier* without a Spark session.
+    # ``jaydebeapi`` (+ ``JPype1``) starts a lightweight JVM and reuses
+    # the UCanAccess jars (baked into the ETL image; point the web host
+    # at them via ``$OVID2_UCANACCESS_JARS``). The ETL/container read
+    # path uses the Spark JVM directly and needs neither wheel.
+    "JPype1>=1.5",
+    "jaydebeapi>=1.2",
+]
+web = [
+    # HTTP control panel + REST API surface (W1+).
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.30",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27",
+    "ruamel.yaml>=0.18",
+    "authlib>=1.3",
+    "itsdangerous>=2.1",
+    "argon2-cffi>=23.1",
+]
+mcp = [
+    # Model-Context-Protocol server that fronts the REST API.
+    # The 2.x SDK is the current stable line and the one the W6
+    # implementation targets (Server(on_list_tools=..., on_call_tool=...)
+    # constructor + streamable_http_app transport).
+    "mcp>=2.0",
+    "httpx>=0.27",
+    # ``ovid2 mcp --transport http`` uses uvicorn under the hood; the MCP
+    # SDK already declares it, but we pin it here so ``pip install
+    # ovid2[mcp]`` alone (no [web] extra) still gets a working http server.
+    "uvicorn[standard]>=0.30",
+]
+
+[project.scripts]
+ovid2 = "ovid2.cli.__main__:main"
+ovid2-watch = "ovid2.display.renderers.tui:main"
+
+[project.urls]
+Homepage = "https://github.com/uf-hobi-informatics-lab/Ovid2"
+Documentation = "https://github.com/uf-hobi-informatics-lab/Ovid2/tree/dev/docs"
+
+# ---------------------------------------------------------------------------
+# Hatch build config
+# ---------------------------------------------------------------------------
+[tool.hatch.build.targets.wheel]
+packages = ["src/ovid2"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/ovid2/resources/schemas/events.v1.json" = "ovid2/resources/schemas/events.v1.json"
+"src/ovid2/resources/schemas/formatter_spec.v1.json" = "ovid2/resources/schemas/formatter_spec.v1.json"
+"src/ovid2/resources/schemas/cdm.v1.json" = "ovid2/resources/schemas/cdm.v1.json"
+"src/ovid2/resources/schemas/cdm_table.v1.json" = "ovid2/resources/schemas/cdm_table.v1.json"
+"src/ovid2/resources/schemas/cdm_valueset.v1.json" = "ovid2/resources/schemas/cdm_valueset.v1.json"
+"src/ovid2/resources/schemas/semantic_handle.v1.json" = "ovid2/resources/schemas/semantic_handle.v1.json"
+"src/ovid2/resources/schemas/semantic_bindings.v1.json" = "ovid2/resources/schemas/semantic_bindings.v1.json"
+"src/ovid2/resources/log4j-quiet.properties" = "ovid2/resources/log4j-quiet.properties"
+"src/ovid2/resources/systemd/ovid2-scheduler.service.in" = "ovid2/resources/systemd/ovid2-scheduler.service.in"
+"src/ovid2/resources/systemd/ovid2-web.service.in" = "ovid2/resources/systemd/ovid2-web.service.in"
+"src/ovid2/resources/systemd/ovid2-web-worker.service.in" = "ovid2/resources/systemd/ovid2-web-worker.service.in"
+"src/ovid2/resources/systemd/ovid2-mcp.service.in" = "ovid2/resources/systemd/ovid2-mcp.service.in"
+"src/ovid2/resources/systemd/ovid2.logrotate" = "ovid2/resources/systemd/ovid2.logrotate"
+"src/ovid2/resources/systemd/ovid2.tmpfiles" = "ovid2/resources/systemd/ovid2.tmpfiles"
+"src/ovid2/resources/samples/configs/disc_input.json" = "ovid2/resources/samples/configs/disc_input.json"
+"src/ovid2/resources/samples/configs/disc_output.json" = "ovid2/resources/samples/configs/disc_output.json"
+"src/ovid2/resources/samples/configs/snowflake_sample.json" = "ovid2/resources/samples/configs/snowflake_sample.json"
+"src/ovid2/resources/branding/ovid_logo.png" = "ovid2/resources/branding/ovid_logo.png"
+"src/ovid2/resources/branding/ovid_logo.svg" = "ovid2/resources/branding/ovid_logo.svg"
+"src/ovid2/resources/branding/ovid_logo_32.png" = "ovid2/resources/branding/ovid_logo_32.png"
+"src/ovid2/resources/branding/ovid_logo_64.png" = "ovid2/resources/branding/ovid_logo_64.png"
+"src/ovid2/resources/branding/ovid_logo_128.png" = "ovid2/resources/branding/ovid_logo_128.png"
+# Web-tier templates + static assets are already picked up by the
+# ``packages = ["src/ovid2"]`` glob above (Hatchling walks the tree
+# and includes every file that lives under a package). Do NOT list
+# them here or the build fails with a duplicate-file error.
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/ovid2",
+    "tests",
+    "docs",
+    "configs",
+    "docker",
+    "systemd",
+    "AGENTS.md",
+    "CHANGELOG.md",
+    "README.md",
+    "pyproject.toml",
+]
+
+# ---------------------------------------------------------------------------
+# Ruff (lint + format)
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+extend-exclude = [
+    "build",
+    "dist",
+    ".venv",
+    "work_directory",
+    "pipelines",          # migrated pipeline code — lint waivers pending manual review
+    "docker",             # vendored legacy shim (XOR.py) is intentionally frozen
+]
+
+[tool.ruff.lint]
+# Ruff does not know about our custom OVID2001/OVID2002 noqa markers. Tell it
+# to leave any ``# noqa: OVID*`` comment alone.
+external = ["OVID2001", "OVID2002"]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "N",     # pep8-naming (enforces snake_case)
+    "UP",    # pyupgrade
+    "B",     # bugbear
+    "C4",    # comprehensions
+    "SIM",   # simplify
+    "PTH",   # use pathlib
+    "RUF",
+    "S",     # bandit (security)
+    "T20",   # flake8-print (no print in library code)
+]
+ignore = [
+    "E501",  # line length — handled by formatter
+    "S101",  # assert used — fine in tests
+    "B008",  # do not perform function call in argument defaults
+    "PTH",   # pathlib preference — legacy ported code uses os.path; migrate incrementally
+    "RUF002",# ambiguous unicode chars (× and — in docstrings) — deliberate
+    "RUF012",# mutable class defaults — accepted in fixer sentinel sets
+    "RUF005",# list concatenation — accepted where readability wins
+    "N812",  # lowercase-imported-as-non-lowercase — accepted (e.g. Crypto.Hash.SHA)
+    "S607",  # partial-path start-process — docker/etc. are on PATH by convention
+    "S603",  # subprocess with untrusted input — our subprocess use is controlled
+    "S303",  # SHA1 in the encryption seed chain — legacy scheme, not for encryption
+    "S608",  # SQL-injection heuristic — batch tracker interpolates trusted identifiers only
+    "UP017", # datetime.UTC — 3.11+ only; we support 3.10 dev shells too
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "S105", "S106", "S311", "T201"]
+"src/ovid2/cli/**/*.py" = ["T201"]           # CLI is allowed to print
+"src/ovid2/display/**/*.py" = ["T201"]       # display layer is allowed to print
+"src/ovid2/installer/**/*.py" = ["T201"]     # installer prints prompts
+"src/ovid2/tools/**/*.py" = ["T201"]         # migration tools have standalone CLI entry points
+"src/ovid2/web/cli.py" = ["T201"]            # web CLI entry point is allowed to print
+"src/ovid2/mcp/cli.py" = ["T201"]            # mcp CLI entry point is allowed to print
+"scripts/**/*.py" = ["T201"]                 # dev-only utility scripts
+
+[tool.ruff.lint.isort]
+known-first-party = ["ovid2"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ---------------------------------------------------------------------------
+# Mypy (strict on new code)
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unused_configs = true
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+show_error_codes = true
+show_column_numbers = true
+pretty = true
+
+[[tool.mypy.overrides]]
+module = [
+    "pyspark.*",
+    "snowflake.*",
+    "Crypto.*",
+    "openpyxl.*",
+    "xlsxwriter.*",
+    "azure.*",
+    "authlib.*",
+    "argon2.*",
+    "jaydebeapi.*",
+    "jpype.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+# ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--tb=short",
+]
+markers = [
+    "unit: fast in-process unit tests",
+    "contract: lint-style invariants over the source tree",
+    "integration: multi-component tests requiring Spark",
+    "smoke: end-to-end sanity checks",
+    "slow: takes more than a few seconds",
+    "real_connection: requires live external service (Snowflake, etc.)",
+    "real_cluster: requires a real Spark cluster",
+    "perf: performance benchmarks",
+    "endurance: long-running stability tests",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:pyspark.*",
+    "ignore::DeprecationWarning:pandas.*",
+]
+
+[tool.coverage.run]
+source = ["src/ovid2"]
+branch = true
+
+[tool.coverage.report]
+precision = 1
+show_missing = true
+skip_empty = true
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]

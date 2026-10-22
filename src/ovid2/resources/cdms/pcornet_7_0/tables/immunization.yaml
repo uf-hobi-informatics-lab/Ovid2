@@ -1,0 +1,199 @@
+v: 1
+name: immunization
+composite_key:
+- IMMUNIZATIONID
+domain_description: Records of immunizations that have been delivered within the health system as well
+  as reports of those administered elsewhere.
+domain_order: 21
+constraints:
+- field: IMMUNIZATIONID
+  rule: unique
+  order: 86
+- field: IMMUNIZATIONID
+  rule: required, not null
+  order: 87
+- field: PATID
+  rule: required, not null
+  order: 88
+- field: VX_CODE
+  rule: required, not null
+  order: 89
+- field: VX_CODE_TYPE
+  rule: required, not null
+  order: 90
+- field: VX_STATUS
+  rule: required, not null
+  order: 91
+relations:
+- relation: PK
+  details: IMMUNIZATIONID
+  order: 61
+- relation: FK (many to one)
+  details: IMMUNIZATION.PATID references DEMOGRAPHIC.PATID
+  order: 62
+- relation: FK (zero/many to one)
+  details: IMMUNIZATION.ENCOUNTERID references ENCOUNER.ENCOUNTERID
+  order: 63
+- relation: FK (zero/many to one)
+  details: IMMUNIZATION.VX_PROVIDERID references PROVIDER.PROVIDERID
+  order: 64
+- relation: FK (zero/many to one)
+  details: IMMUNIZATION.PROCEDURESID references PROCEDURES.PROCEDURESID
+  order: 65
+fields:
+- name: IMMUNIZATIONID
+  rdbms_type: RDBMS Text(x)
+  order: 367
+  sas_type: SAS Char(x)
+  definition: Arbitrary identifier for each unique IMMUNIZATION record.
+- name: PATID
+  rdbms_type: RDBMS Text(x)
+  order: 368
+  sas_type: SAS Char(x)
+  definition: Arbitrary person-level identifier used to link across tables.
+- name: ENCOUNTERID
+  rdbms_type: RDBMS Text(x)
+  order: 369
+  sas_type: SAS Char(x)
+  definition: Arbitrary encounter-level identifier. This should be present if the immunization activity
+    is directly associated with an encounter.
+- name: PROCEDURESID
+  rdbms_type: RDBMS Text(x)
+  order: 370
+  sas_type: SAS Char(x)
+  definition: This is an optional relationship to the PROCEDURES table and is not expected to be available
+    for all immunizations.  One procedure may generate multiple immunization records.
+- name: VX_PROVIDERID
+  rdbms_type: RDBMS Text(x)
+  order: 371
+  sas_type: SAS Char(x)
+  definition: Provider code for the provider who delivered the immunization. The provider code is a pseudoidentifier
+    with a consistent crosswalk to the real identifier.
+- name: VX_RECORD_DATE
+  rdbms_type: RDBMS Date
+  order: 372
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Date immunization was recorded (i.e., date record was created).
+- name: VX_ADMIN_DATE
+  rdbms_type: RDBMS Date
+  order: 373
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Date immunization was administered, if known.
+- name: VX_CODE_TYPE
+  rdbms_type: RDBMS Text(2)
+  order: 374
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.immunization.vx_code_type
+  definition: Immunization code type.
+- name: VX_CODE
+  rdbms_type: RDBMS Text(11)
+  order: 375
+  sas_type: SAS Char(11)
+  definition: Immunization code
+- name: VX_STATUS
+  rdbms_type: RDBMS Text(2)
+  order: 376
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.immunization.vx_status
+  definition: Status of the immunization.
+- name: VX_STATUS_REASON
+  rdbms_type: RDBMS Text(2)
+  order: 377
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.immunization.vx_status_reason
+  definition: Reason immunization is incomplete or not done.
+- name: VX_SOURCE
+  rdbms_type: RDBMS Text(2)
+  order: 378
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.immunization.vx_source
+  definition: Source of the prescribing information.
+- name: VX_DOSE
+  rdbms_type: RDBMS Number(x)
+  order: 379
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: Dose of a given immunization
+- name: VX_DOSE_UNIT
+  rdbms_type: RDBMS Text(x)
+  order: 380
+  sas_type: SAS Char(x)
+  definition: Units of measure associated with the dose of the immunization as delivered by the provider
+- name: VX_ROUTE
+  rdbms_type: RDBMS Text(x)
+  order: 381
+  sas_type: SAS Char(x)
+  definition: Route of immunization delivery.
+- name: VX_BODY_SITE
+  rdbms_type: RDBMS Text (x)
+  order: 382
+  sas_type: SAS Char(x)
+  definition: Body site where the immunization was delivered.
+- name: VX_MANUFACTURER
+  rdbms_type: RDBMS Text(x)
+  order: 383
+  sas_type: SAS Char(x)
+  definition: Manufacturer of the immunization, coded using MVX terminology.
+- name: VX_LOT_NUM
+  rdbms_type: RDBMS Text(x)
+  order: 384
+  sas_type: SAS Char(x)
+  definition: Lot number of the immunization.
+- name: VX_EXP_DATE
+  rdbms_type: RDBMS Date
+  order: 385
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Expiration date of the immunization.
+- name: RAW_VX_NAME
+  rdbms_type: RDBMS Text(x)
+  order: 386
+  sas_type: SAS Char(x)
+  definition: Field for originating, full textual immunization name from the source.
+- name: RAW_VX_CODE
+  rdbms_type: RDBMS Text(x)
+  order: 387
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.
+- name: RAW_VX_CODE_TYPE
+  rdbms_type: RDBMS Text(x)
+  order: 388
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.
+- name: RAW_VX_DOSE
+  rdbms_type: RDBMS Text(x)
+  order: 389
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.
+- name: RAW_VX_DOSE_UNIT
+  rdbms_type: RDBMS Text(x)
+  order: 390
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.
+- name: RAW_VX_ROUTE
+  rdbms_type: RDBMS Text(x)
+  order: 391
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.
+- name: RAW_VX_BODY_SITE
+  rdbms_type: RDBMS Text(x)
+  order: 392
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.
+- name: RAW_VX_STATUS
+  rdbms_type: RDBMS Text(x)
+  order: 393
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.
+- name: RAW_VX_STATUS_REASON
+  rdbms_type: RDBMS Text(x)
+  order: 394
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.
+- name: RAW_VX_MANUFACTURER
+  rdbms_type: RDBMS Text(x)
+  order: 395
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.

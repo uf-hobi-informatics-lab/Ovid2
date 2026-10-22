@@ -1,0 +1,578 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% block title %}New pipeline &mdash; Ovid2{% endblock %}
+{% block content %}
+{# ``form`` carries the operator's submitted values back on an error
+   re-render so a validation failure never wipes the form. It is
+   ``None`` on the initial (blank) GET; ``is_resubmit`` distinguishes
+   the two so unchecked checkboxes stay unchecked on re-render. #}
+{% set f = form or {} %}
+{% set is_resubmit = form is not none %}
+{#
+  Two-pane pipeline builder.
+
+   Left  — the settings pickers, grouped into compact cards and spaced
+           like the run-history column on /runs.
+   Right — the "ovid2" canvas: a live SVG drawing of the pipeline as
+           input -> body -> output, where the body SHAPE is the pipeline
+           type and the body MATERIAL/texture is the engine. An
+           incomplete pipeline renders dashed + desaturated. Either
+           storage side may be kept "open" (bound at run time) via its
+           bind-now / keep-open radio; an open node draws as a deferred
+           (amber, dashed) but satisfied node. The lone action is the
+           "save" button in the canvas header: it submits the form (via
+           ``form="new-pipeline-form"``) and only enables when every
+           required element is present. The play button is inert during
+           creation (a pipeline can only be run once saved).
+
+   All form field NAMES and the POST target (/pipelines) are unchanged
+   from the previous stacked form, so the server handler is untouched.
+#}
+<section class="page builder-workspace"
+         id="pipeline-builder"
+         data-submit-base="/submit">
+  <form method="post" action="/pipelines" class="builder-form" id="new-pipeline-form">
+    <div class="builder-form-head">
+      <p class="builder-back"><a href="/pipelines">&larr; all pipelines</a></p>
+      <h1 class="builder-heading">New pipeline</h1>
+    </div>
+
+    {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+    <div class="builder-cards">
+      {# ---- Identity ---- #}
+      <fieldset class="builder-card">
+        <legend>Name &amp; type</legend>
+        <div class="form-row">
+          <label for="name">Name</label>
+          <input type="text" id="name" name="name" required pattern="[A-Za-z0-9._-]+"
+                 value="{{ f.get('name', '') }}"
+                 data-builder="name"
+                 placeholder="e.g. myhospital">
+        </div>
+        <div class="form-row">
+          <label for="kind">Pipeline type</label>
+          <select id="kind" name="kind"
+                  data-builder="kind"
+                  onchange="ovid2_toggle_new_kind_fields();">
+            {% for k in kind_choices %}
+              <option value="{{ k.name }}" title="{{ k.description }}" {% if k.name == (f.get('kind') or 'etl') %}selected{% endif %}>{{ k.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-row" id="cdm-row">
+          <label for="cdm">CDM</label>
+          <select id="cdm" name="cdm" data-builder="cdm">
+            <option value="">(auto — resolve from the template)</option>
+            {% for c in cdms %}
+              <option value="{{ c }}" {% if c == f.get('cdm') %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </fieldset>
+
+      {# ---- ETL template (kind=etl) ---- #}
+      <fieldset class="builder-card" id="template-block">
+        <legend>ETL template</legend>
+        <p class="note small">
+          The scaffolder copies this template's package under the pipeline
+          name (identity fields reset to placeholders) so the new pipeline
+          is immediately runnable.
+        </p>
+        {% if templates %}
+          <div class="picker-list" role="radiogroup" aria-label="ETL template">
+            {% for t in templates %}
+              <label class="picker-option">
+                <input type="radio" name="template" value="{{ t.id }}"
+                       data-builder="template"
+                       {% if t.id == f.get('template') or (not f.get('template') and loop.first) %}checked{% endif %}>
+                <span class="picker-option-body">
+                  <span class="picker-option-title mono">{{ t.label }}</span>
+                  <span class="picker-option-sub small">{{ t.source_pipeline }} &rarr; {{ t.cdm }}</span>
+                  {% if t.description %}<span class="picker-option-desc small">{{ t.description }}</span>{% endif %}
+                </span>
+              </label>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="empty">No pipeline templates are registered.</p>
+        {% endif %}
+      </fieldset>
+
+      {# ---- Pipeline package (kind=analysis) ---- #}
+      <fieldset class="builder-card" id="package-block" style="display: none;">
+        <legend>Pipeline package</legend>
+        <p class="note small">
+          <strong>analysis</strong> runs over an existing package's
+          formatters and dictionaries — pick the installed package to run
+          against (the <em>Name</em> above is this configuration's label).
+        </p>
+        <div class="form-row">
+          <label for="package">Package</label>
+          <select id="package" name="package" data-builder="package">
+            <option value="">(choose an installed package)</option>
+            {% for p in installed_packages %}
+              <option value="{{ p }}" {% if p == f.get('package') %}selected{% endif %}>{{ p }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </fieldset>
+
+      {# ---- EDC report cycle (kind=dq_checks) ---- #}
+      <fieldset class="builder-card" id="cycle-block" style="display: none;">
+        <legend>EDC report cycle</legend>
+        <p class="note small">
+          A <strong>dq_checks</strong> pipeline runs the PCORnet EDC checks
+          for the report <strong>cycle(s)</strong> you pick (this is the
+          pipeline's <em>type</em>).
+        </p>
+        {% set chosen_pkgs = (f.get('packages', '') or '').replace(',', ' ').split() %}
+        {% if cycle_packages %}
+          <div class="picker-list" aria-label="EDC report cycle">
+            {% for c in cycle_packages %}
+              <label class="picker-option">
+                <input type="checkbox" name="packages" value="{{ c.id }}"
+                       data-builder="packages"
+                       {% if c.id in chosen_pkgs or (not chosen_pkgs and loop.first) %}checked{% endif %}>
+                <span class="picker-option-body">
+                  <span class="picker-option-title mono">{{ c.id }}</span>
+                  <span class="picker-option-sub small">released {{ c.released }} &middot; {{ c.checks | length }} checks</span>
+                  <span class="picker-option-desc small">{{ c.label }}{% if c.description %} — {{ c.description }}{% endif %}</span>
+                </span>
+              </label>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="empty">No EDC report cycle packages are registered.</p>
+        {% endif %}
+      </fieldset>
+
+      {# ---- Tables (kind=copy / move) ---- #}
+      <fieldset class="builder-card" id="tables-block" style="display: none;">
+        <legend>Tables</legend>
+        <p class="note small">
+          <strong>copy</strong> / <strong>move</strong> transfer named
+          tables verbatim &mdash; there is no <code>all</code> sentinel
+          (<code>ovid2 tools copy</code> reads each table by name). List
+          the tables now, or keep it <strong>open</strong> to choose them
+          on the Submit form each run.
+        </p>
+        {% set tables_open = (f.get('tables_open') in ('1', 'true', 'on')) %}
+        <div class="picker-list" role="radiogroup" aria-label="Tables binding">
+          <label class="picker-option">
+            <input type="radio" name="tables_open" value="0"
+                   data-builder="tables_open"
+                   data-tables-toggle
+                   {% if not tables_open %}checked{% endif %}>
+            <span class="picker-option-body">
+              <span class="picker-option-title">List the tables now</span>
+              <span class="picker-option-sub small">Fixed table set for every run.</span>
+            </span>
+          </label>
+          <label class="picker-option">
+            <input type="radio" name="tables_open" value="1"
+                   data-builder="tables_open"
+                   data-tables-toggle
+                   {% if tables_open %}checked{% endif %}>
+            <span class="picker-option-body">
+              <span class="picker-option-title">Keep open &mdash; choose at run time</span>
+              <span class="picker-option-sub small">Tables are required on the Submit form each run.</span>
+            </span>
+          </label>
+        </div>
+        <div class="form-row" id="tables-field-row"
+             {% if tables_open %}style="display: none;"{% endif %}>
+          <label for="tables">Tables (space-separated)</label>
+          <input type="text" id="tables" name="tables"
+                 data-builder="tables"
+                 value="{{ f.get('tables', '') }}"
+                 placeholder="e.g. demographic encounter diagnosis">
+        </div>
+      </fieldset>
+
+      {# ---- Input storage ---- #}
+      <fieldset class="builder-card">
+        <legend>Input storage</legend>
+        <p class="note small">
+          Point at the folder that <em>contains</em> the batch subfolders
+          (usually the account root) — or keep it <strong>open</strong> to
+          choose the input at run time.
+        </p>
+        {% set input_open = (f.get('input_open') in ('1', 'true', 'on')) %}
+        <div class="picker-list" role="radiogroup" aria-label="Input storage binding">
+          <label class="picker-option">
+            <input type="radio" name="input_open" value="0"
+                   data-builder="input_open"
+                   data-storage-toggle="input"
+                   {% if not input_open %}checked{% endif %}>
+            <span class="picker-option-body">
+              <span class="picker-option-title">Bind a storage account now</span>
+              <span class="picker-option-sub small">Fixed input for every run.</span>
+            </span>
+          </label>
+          <label class="picker-option">
+            <input type="radio" name="input_open" value="1"
+                   data-builder="input_open"
+                   data-storage-toggle="input"
+                   {% if input_open %}checked{% endif %}>
+            <span class="picker-option-body">
+              <span class="picker-option-title">Keep open — choose at run time</span>
+              <span class="picker-option-sub small">Input is required on the Submit form each run.</span>
+            </span>
+          </label>
+        </div>
+        <div class="storage-picker"
+             data-storage-picker="input"
+             data-connection-field="input_connection"
+             data-location-field="input_location"
+             data-initial-connection="{{ f.get('input_connection', '') }}"
+             data-initial-location="{{ f.get('input_location', '') }}">
+          <select id="input_account" data-role="storage-select" aria-label="Input storage account">
+            <option value="">(choose a storage account)</option>
+            {% for s in storage_accounts %}
+              <option value="{{ s.name }}" data-type="{{ s.type }}"
+                      {% if s.name == f.get('input_connection') %}selected{% endif %}>{{ s.name }} &mdash; {{ s.type }}</option>
+            {% endfor %}
+          </select>
+          <div data-role="crumbs" class="crumbs small"></div>
+          <div data-role="listing" class="storage-listing">
+            <p class="note">Pick a storage account to browse its batch folders.</p>
+          </div>
+          <p data-role="chosen" class="chosen-chip" hidden></p>
+          <input type="hidden" name="input_connection" value="{{ f.get('input_connection', '') }}"
+                 data-builder="input_connection">
+          <input type="hidden" name="input_location" value="{{ f.get('input_location', '') }}"
+                 data-builder="input_location">
+        </div>
+      </fieldset>
+
+      {# ---- Output storage ---- #}
+      <fieldset class="builder-card">
+        <legend>Output storage</legend>
+        <p class="note small">
+          Where the pipeline writes — or keep it <strong>open</strong> to
+          choose the destination at run time.
+        </p>
+        {% set output_open = (f.get('output_open') in ('1', 'true', 'on')) %}
+        <div class="picker-list" role="radiogroup" aria-label="Output storage binding">
+          <label class="picker-option">
+            <input type="radio" name="output_open" value="0"
+                   data-builder="output_open"
+                   data-storage-toggle="output"
+                   {% if not output_open %}checked{% endif %}>
+            <span class="picker-option-body">
+              <span class="picker-option-title">Bind a storage account now</span>
+              <span class="picker-option-sub small">Fixed output for every run.</span>
+            </span>
+          </label>
+          <label class="picker-option">
+            <input type="radio" name="output_open" value="1"
+                   data-builder="output_open"
+                   data-storage-toggle="output"
+                   {% if output_open %}checked{% endif %}>
+            <span class="picker-option-body">
+              <span class="picker-option-title">Keep open — choose at run time</span>
+              <span class="picker-option-sub small">Output is required on the Submit form each run.</span>
+            </span>
+          </label>
+        </div>
+        <div class="storage-picker"
+             data-storage-picker="output"
+             data-connection-field="output_connection"
+             data-location-field="output_location"
+             data-initial-connection="{{ f.get('output_connection', '') }}"
+             data-initial-location="{{ f.get('output_location', '') }}">
+          <select id="output_account" data-role="storage-select" aria-label="Output storage account">
+            <option value="">(choose a storage account)</option>
+            {% for s in storage_accounts %}
+              <option value="{{ s.name }}" data-type="{{ s.type }}"
+                      {% if s.name == f.get('output_connection') %}selected{% endif %}>{{ s.name }} &mdash; {{ s.type }}</option>
+            {% endfor %}
+          </select>
+          <div data-role="crumbs" class="crumbs small"></div>
+          <div data-role="listing" class="storage-listing">
+            <p class="note">Pick a storage account to browse.</p>
+          </div>
+          <p data-role="chosen" class="chosen-chip" hidden></p>
+          <input type="hidden" name="output_connection" value="{{ f.get('output_connection', '') }}"
+                 data-builder="output_connection">
+          <input type="hidden" name="output_location" value="{{ f.get('output_location', '') }}"
+                 data-builder="output_location">
+        </div>
+      </fieldset>
+
+      {# ---- Warehouse / engine ---- #}
+      <fieldset class="builder-card">
+        <legend>Warehouse (engine)</legend>
+        <p class="note small">
+          The engine is the material the pipeline is built from — it shows
+          as the body's texture on the canvas.
+        </p>
+        {% set chosen_engine = f.get('engine') or 'pyspark' %}
+        {% set engine_names = engines | map(attribute='name') | list %}
+        {# The engine choices are radio buttons. Each carries its concrete
+           type in ``data-type`` so pipeline_builder.js can map a material,
+           mirroring the old <option data-type> contract. Exactly one is
+           checked; the builder reads the checked radio via
+           ``data-builder="engine"``. #}
+        {% set ns = namespace(matched=false) %}
+        <div class="picker-list" role="radiogroup" aria-label="Engine">
+          {# 1. Configured engine instances (JSON configs on disk). #}
+          {% for e in engines %}
+            {% set is_sel = (e.name == chosen_engine) %}
+            {% if is_sel %}{% set ns.matched = true %}{% endif %}
+            <label class="picker-option">
+              <input type="radio" name="engine" value="{{ e.name }}"
+                     data-builder="engine" data-type="{{ e.type }}"
+                     {% if is_sel %}checked{% endif %}>
+              <span class="picker-option-body">
+                <span class="picker-option-title mono">{{ e.name }}</span>
+                <span class="picker-option-sub small">{{ e.type }} &middot; configured engine</span>
+              </span>
+            </label>
+          {% endfor %}
+          {# 2. Every registered engine TYPE, so the operator can always
+                pick any engine kind even before saving a config. A type
+                whose name collides with a configured instance is skipped. #}
+          {% for t in engine_types %}
+            {% if t not in engine_names %}
+              {% set is_sel = (t == chosen_engine) %}
+              {% if is_sel %}{% set ns.matched = true %}{% endif %}
+              <label class="picker-option">
+                <input type="radio" name="engine" value="{{ t }}"
+                       data-builder="engine" data-type="{{ t }}"
+                       {% if is_sel %}checked{% endif %}>
+                <span class="picker-option-body">
+                  <span class="picker-option-title mono">{{ t }}</span>
+                  <span class="picker-option-sub small">engine type</span>
+                </span>
+              </label>
+            {% endif %}
+          {% endfor %}
+          {# Guarantee the built-in pyspark default is always present. #}
+          {% if 'pyspark' not in engine_names and 'pyspark' not in engine_types %}
+            {% set is_sel = (chosen_engine == 'pyspark') %}
+            {% if is_sel %}{% set ns.matched = true %}{% endif %}
+            <label class="picker-option">
+              <input type="radio" name="engine" value="pyspark"
+                     data-builder="engine" data-type="pyspark"
+                     {% if is_sel %}checked{% endif %}>
+              <span class="picker-option-body">
+                <span class="picker-option-title mono">pyspark</span>
+                <span class="picker-option-sub small">engine type</span>
+              </span>
+            </label>
+          {% endif %}
+          {# 3. Preserve a submitted engine that is neither a configured
+                instance nor a registered type (error re-render / API name). #}
+          {% if chosen_engine and chosen_engine not in engine_names and chosen_engine not in engine_types %}
+            <label class="picker-option">
+              <input type="radio" name="engine" value="{{ chosen_engine }}"
+                     data-builder="engine" data-type="{{ chosen_engine }}" checked>
+              <span class="picker-option-body">
+                <span class="picker-option-title mono">{{ chosen_engine }}</span>
+                <span class="picker-option-sub small">(not configured)</span>
+              </span>
+            </label>
+            {% set ns.matched = true %}
+          {% endif %}
+        </div>
+      </fieldset>
+
+      {# ---- Automation / trigger ---- #}
+      <fieldset class="builder-card">
+        <legend>Automation (trigger)</legend>
+        <p class="note small">
+          <strong>watch</strong> runs the pipeline automatically when a new
+          batch folder appears in the input storage account — so it needs a
+          <em>bound</em> input (unavailable while the input is kept open).
+        </p>
+        <div class="form-row">
+          <label for="trigger_type">Trigger</label>
+          <select id="trigger_type" name="trigger_type" onchange="ovid2_toggle_new_trigger_fields();">
+            {% set tt = f.get('trigger_type') or 'watch' %}
+            <option value="watch" {% if tt == 'watch' %}selected{% endif %}>watch (on new batch)</option>
+            <option value="manual" {% if tt == 'manual' %}selected{% endif %}>manual</option>
+            <option value="cron" {% if tt == 'cron' %}selected{% endif %}>cron</option>
+            <option value="interval" {% if tt == 'interval' %}selected{% endif %}>interval</option>
+          </select>
+        </div>
+        <div class="form-row" id="trigger-watch-row">
+          <label for="watch_min_wait_minutes">Re-scan debounce (min, optional)</label>
+          <input type="number" id="watch_min_wait_minutes" name="watch_min_wait_minutes"
+                 min="0" value="{{ f.get('watch_min_wait_minutes', '') }}" placeholder="0">
+        </div>
+        <div class="form-row" id="trigger-cron-row" style="display: none;">
+          <label for="cron">Cron expression</label>
+          <input type="text" id="cron" name="cron" value="{{ f.get('cron', '') }}" placeholder="0 3 * * *">
+        </div>
+        <div class="form-row" id="trigger-interval-row" style="display: none;">
+          <label for="interval_minutes">Interval (minutes)</label>
+          <input type="number" id="interval_minutes" name="interval_minutes" min="1"
+                 value="{{ f.get('interval_minutes', '') }}">
+        </div>
+        <div class="form-row">
+          <label><input type="checkbox" name="enabled" {% if not is_resubmit or f.get('enabled') %}checked{% endif %}> Enabled</label>
+        </div>
+      </fieldset>
+    </div>
+  </form>
+
+  {# ---- Right pane: the "ovid2" canvas ---- #}
+  <aside class="builder-canvas" id="builder-canvas"
+         data-complete="false"
+         aria-label="Pipeline preview">
+    <div class="builder-canvas-head">
+      {#
+        The play button mirrors the run console's transport glyph. During
+        creation the pipeline is not yet saved, so it is inert (disabled).
+        Once the pipeline exists it links to /submit for that pipeline.
+      #}
+      <button type="button" class="term-prompt-btn builder-play"
+              id="builder-play" disabled
+              aria-label="Save the pipeline to run it"
+              title="Save the pipeline to run it">
+        <span class="term-prompt-glyph" aria-hidden="true">{{ icons.icon("play", size=15) }}</span>
+      </button>
+      <span class="term-prompt-label builder-wordmark" data-status="queued">ovid2</span>
+      <span class="term-flex"></span>
+      {#
+        The former status chip is now the sole submit control. It lives
+        outside <form> in the DOM, so ``form="new-pipeline-form"`` ties
+        its click to the create POST. It reads "save" at all times and is
+        disabled until pipeline_builder.js finds every requirement met.
+      #}
+      <button type="submit" form="new-pipeline-form"
+              class="builder-status-chip builder-save-chip small" id="builder-save"
+              disabled>save</button>
+    </div>
+
+    <div class="builder-stage" role="img"
+         aria-label="A drawing of the pipeline: input, body, output">
+      {#
+        The pipeline diagram: input node -> body (shape = kind,
+        material = engine) -> output node. Rendered as inline SVG so it is
+        dependency-free and themeable via the CSS custom-property cascade.
+        pipeline_builder.js swaps the body glyph on kind change, the body
+        texture on engine change, and the input/output labels/icons as the
+        storage pickers write their hidden fields.
+      #}
+      <svg class="builder-svg" viewBox="0 0 520 320" preserveAspectRatio="xMidYMid meet"
+           xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          {# Engine "materials" — the body fill switches between these by
+             engine family. #}
+          <linearGradient id="mat-spark" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#3fae5a"/>
+            <stop offset="1" stop-color="#1c7a3a"/>
+          </linearGradient>
+          <linearGradient id="mat-snowpark" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#4aa3e0"/>
+            <stop offset="1" stop-color="#2166a6"/>
+          </linearGradient>
+          <linearGradient id="mat-unknown" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#8a8f98"/>
+            <stop offset="1" stop-color="#5a5f68"/>
+          </linearGradient>
+        </defs>
+
+        {# Connecting pipes #}
+        <g class="builder-pipes" stroke-width="10" fill="none">
+          <line x1="96" y1="160" x2="205" y2="160"/>
+          <line x1="315" y1="160" x2="424" y2="160"/>
+        </g>
+
+        {# Input node #}
+        <g class="builder-node builder-node-input" data-node="input" transform="translate(40,120)">
+          <rect class="builder-node-box" x="0" y="0" width="56" height="80" rx="8"/>
+          <g class="builder-node-icon" transform="translate(16,14) scale(1.0)"></g>
+          <text class="builder-node-label" x="28" y="98" text-anchor="middle">input</text>
+        </g>
+
+        {# Body — shape = pipeline kind, fill = engine material #}
+        <g class="builder-body" data-node="body" transform="translate(200,80)">
+          <g class="builder-body-shape"></g>
+          <text class="builder-body-kind" x="60" y="96" text-anchor="middle">etl</text>
+          <text class="builder-body-cdm" x="60" y="112" text-anchor="middle"></text>
+        </g>
+
+        {# Output node #}
+        <g class="builder-node builder-node-output" data-node="output" transform="translate(424,120)">
+          <rect class="builder-node-box" x="0" y="0" width="56" height="80" rx="8"/>
+          <g class="builder-node-icon" transform="translate(16,14) scale(1.0)"></g>
+          <text class="builder-node-label" x="28" y="98" text-anchor="middle">output</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="builder-checklist" id="builder-checklist" aria-live="polite">
+      <p class="note small builder-checklist-title">To create this pipeline:</p>
+      <ul class="builder-req-list" id="builder-req-list"></ul>
+    </div>
+  </aside>
+</section>
+
+<script src="/static/browse.js" defer></script>
+<script type="module" src="/static/pipeline_builder.js"></script>
+<script>
+// ETL scaffolds a package from a template; analysis runs over an
+// existing installed package (pick one); dq_checks picks EDC report
+// cycle(s); health/copy/move are package-free. Toggle the template
+// block, the package picker, the cycle picker, and the CDM row per kind.
+// After toggling we notify the builder so the canvas + validation
+// recompute (the builder also listens to native change events, but the
+// display flips here are what gate a block's "required" status).
+function ovid2_toggle_new_kind_fields() {
+  var k = (document.getElementById('kind') || {}).value || 'etl';
+  var isEtl = (k === 'etl');
+  var usesPackage = (k === 'analysis');
+  var usesCycle = (k === 'dq_checks');
+  var usesTables = (k === 'copy' || k === 'move');
+  var showCdm = (k === 'etl' || k === 'analysis' || k === 'health');
+  var cdmRow = document.getElementById('cdm-row');
+  var tmpl = document.getElementById('template-block');
+  var pkg = document.getElementById('package-block');
+  var cyc = document.getElementById('cycle-block');
+  var tbl = document.getElementById('tables-block');
+  if (cdmRow) cdmRow.style.display = showCdm ? '' : 'none';
+  if (tmpl) tmpl.style.display = isEtl ? '' : 'none';
+  if (pkg) pkg.style.display = usesPackage ? '' : 'none';
+  if (cyc) cyc.style.display = usesCycle ? '' : 'none';
+  if (tbl) tbl.style.display = usesTables ? '' : 'none';
+  ovid2_toggle_new_tables_field();
+  document.dispatchEvent(new CustomEvent('ovid2:builder-refresh'));
+}
+// Show the free-text tables input only when the copy/move Tables card is
+// visible AND "list now" (not "keep open") is chosen.
+function ovid2_toggle_new_tables_field() {
+  var row = document.getElementById('tables-field-row');
+  if (!row) return;
+  var block = document.getElementById('tables-block');
+  var open = false;
+  var checked = document.querySelector('input[name="tables_open"]:checked');
+  if (checked) open = (checked.value === '1');
+  var visible = block && block.style.display !== 'none';
+  row.style.display = (visible && !open) ? '' : 'none';
+}
+function ovid2_toggle_new_trigger_fields() {
+  var t = (document.getElementById('trigger_type') || {}).value || 'watch';
+  document.getElementById('trigger-watch-row').style.display = (t === 'watch') ? '' : 'none';
+  document.getElementById('trigger-cron-row').style.display = (t === 'cron') ? '' : 'none';
+  document.getElementById('trigger-interval-row').style.display = (t === 'interval') ? '' : 'none';
+}
+// Expose the trigger toggler so the builder module can re-run it when it
+// switches the trigger away from watch (open input can't be watched).
+window.ovid2_toggle_new_trigger_fields = ovid2_toggle_new_trigger_fields;
+// Flip the free-text tables input as the copy/move "list now / keep open"
+// radios change, then let the builder recompute its checklist.
+document.addEventListener('change', function (evt) {
+  var t = evt.target;
+  if (t && t.name === 'tables_open') {
+    ovid2_toggle_new_tables_field();
+    document.dispatchEvent(new CustomEvent('ovid2:builder-refresh'));
+  }
+});
+ovid2_toggle_new_kind_fields();
+ovid2_toggle_new_trigger_fields();
+</script>
+{% endblock %}

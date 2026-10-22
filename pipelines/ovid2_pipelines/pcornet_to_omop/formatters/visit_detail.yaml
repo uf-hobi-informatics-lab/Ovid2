@@ -1,0 +1,5 @@
+# Header-only OMOP visit_detail (no PCORnet visit-detail source).
+v: 1
+formatter: visit_detail
+adapter: custom
+class: ovid2_pipelines.pcornet_to_omop.formatters_custom.empty_tables_formatter.VisitDetailFormatter

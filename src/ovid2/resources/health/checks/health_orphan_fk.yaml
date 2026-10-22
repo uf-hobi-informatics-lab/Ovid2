@@ -1,0 +1,49 @@
+id: health.orphan_fk
+name: ORPHAN_FK
+part: integrity
+edc_table: ""
+description: Child records referencing an absent parent (orphan foreign keys)
+operator: orphan_fk
+source_tables:
+  - DEMOGRAPHIC
+  - ENCOUNTER
+  - DIAGNOSIS
+  - PROCEDURES
+  - VITAL
+params:
+  relationships:
+    - child: ENCOUNTER
+      child_key: PATID
+      parent: DEMOGRAPHIC
+      parent_key: PATID
+    - child: DIAGNOSIS
+      child_key: PATID
+      parent: DEMOGRAPHIC
+      parent_key: PATID
+    - child: DIAGNOSIS
+      child_key: ENCOUNTERID
+      parent: ENCOUNTER
+      parent_key: ENCOUNTERID
+    - child: PROCEDURES
+      child_key: ENCOUNTERID
+      parent: ENCOUNTER
+      parent_key: ENCOUNTERID
+    - child: VITAL
+      child_key: PATID
+      parent: DEMOGRAPHIC
+      parent_key: PATID
+metrics:
+  - CHILD_ROWS
+  - ORPHAN_ROWS
+  - ORPHAN_PCT
+exception_metrics:
+  - ORPHAN_ROWS
+thresholds:
+  orphan_rows_gt: 0
+enabled: true
+doc_summary: >-
+  Referential-integrity sweep: for each declared child->parent relationship,
+  counts child rows whose foreign key has no matching parent row.
+doc_interpretation: >-
+  ORPHAN_ROWS > 0 (EXCEPTION) means dangling references exist (e.g. encounters
+  with no patient, diagnoses with no encounter).

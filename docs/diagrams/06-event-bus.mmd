@@ -1,0 +1,10 @@
+flowchart LR
+    PIPE["Pipeline stages"] -->|typed events| BUS["JsonlEventBus"]
+    SAMP["metrics sampler thread<br/>(500ms Spark / 5s Snowpark)"] -->|engine.metrics| BUS
+    BUS --> LOG[["events-&lt;id&gt;.jsonl"]]
+    LOG --> TUI["ovid2 watch (TUI)"]
+    LOG --> JSON["json_file"]
+    LOG --> MAIL["email_digest"]
+    LOG --> WEBT["web: byte-offset tail"]
+    LOG --> SSE["web: engine.metrics SSE"]
+    SSE --> D3["live D3 canvas<br/>(pulse / executors / throughput / gantt)"]

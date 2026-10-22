@@ -1,0 +1,26 @@
+id: "3.09"
+name: DC 3.09
+part: part3
+edc_table: Table IVI
+description: Fewer than 80% of lab results map to a known LOINC and carry a known result
+operator: known_value_coverage
+source_tables:
+  - LAB_RESULT_CM
+na_when_empty:
+  - LAB_RESULT_CM
+params:
+  coverage:
+    - {table: LAB_RESULT_CM, column: LAB_LOINC, require_also: [RESULT_QUAL]}
+metrics:
+  - COVERAGE_PCT
+exception_metrics:
+  - COVERAGE_PCT
+thresholds:
+  coverage_pct_lt: 80.0
+enabled: true
+doc_summary: >-
+  DC 3.09 (Table IVI): at least 80% of LAB_RESULT_CM records map to a known
+  LAB_LOINC and carry a known result (RESULT_QUAL populated).
+doc_interpretation: >-
+  COVERAGE_PCT below 80% (EXCEPTION) means lab results frequently lack a LOINC
+  or a result value.

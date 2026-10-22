@@ -1,0 +1,68 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://ovid2.dev/schemas/semantic_bindings.v1.json",
+    "title": "Ovid2 semantic column bindings",
+    "description": "One binding YAML file attaches a set of ColumnBinding rows to a single CDM. Phase S3 introduced the file format so cross-CDM vocabularies (LOINC, SNOMED, RxNorm, NDC, ICD10CM, ICD9CM) can wire themselves onto CDM columns without editing Python. Loaded by ovid2.semantic.vocabularies._yaml_loader at import time; referential integrity (vocabulary registered, cdm+table known) is checked at load and enforced non-fatally (unknown rows are warned + skipped).",
+    "type": "object",
+    "required": ["v", "cdm", "bindings"],
+    "additionalProperties": false,
+    "properties": {
+        "v": {
+            "type": "integer",
+            "const": 1,
+            "description": "Schema version. Bumped on breaking changes."
+        },
+        "cdm": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "Snake_case CDM name that every binding in this file targets."
+        },
+        "description": {
+            "type": "string",
+            "description": "Free-form summary shown in ovid2 semantic bindings output."
+        },
+        "bindings": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"$ref": "#/$defs/binding"},
+            "description": "Non-empty list of ColumnBinding rows."
+        }
+    },
+    "$defs": {
+        "binding": {
+            "type": "object",
+            "required": ["table", "column", "vocabulary"],
+            "additionalProperties": false,
+            "properties": {
+                "table": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "description": "CDM table (lowercase snake_case, matches resources/cdms/<cdm>/tables/<table>.yaml)."
+                },
+                "column": {
+                    "type": "string",
+                    "pattern": "^[A-Z][A-Z0-9_]*$",
+                    "description": "CDM column (UPPERCASE per Ovid2 convention)."
+                },
+                "vocabulary": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]+)*$",
+                    "description": "Name of a registered VocabularyHandle."
+                },
+                "role": {
+                    "type": ["string", "null"],
+                    "description": "Optional semantic role (e.g. `diagnosis_code`, `lab_result_loinc`)."
+                },
+                "valueset": {
+                    "type": ["string", "null"],
+                    "description": "Optional named valueset within the vocabulary. Reserved for a future ValueSetBinding sibling."
+                },
+                "required": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "When true, strict formatter validation (opt-in, phase S4) fails if the column is not produced through a semantic-aware path."
+                }
+            }
+        }
+    }
+}

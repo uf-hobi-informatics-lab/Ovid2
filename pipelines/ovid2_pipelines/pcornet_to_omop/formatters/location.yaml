@@ -1,0 +1,8 @@
+# PCORnet ENCOUNTER -> OMOP location (derived / complementary table).
+# location_id = hash_key_id(FACILITY_LOCATION) (matches the care_site
+# formatter). FACILITY_LOCATION stored in zip + location_source_value.
+# Deduplicated to one row per FACILITY_LOCATION.
+v: 1
+formatter: location
+adapter: custom
+class: ovid2_pipelines.pcornet_to_omop.formatters_custom.location_formatter.LocationFormatter

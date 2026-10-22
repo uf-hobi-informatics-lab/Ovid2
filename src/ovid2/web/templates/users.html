@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Users &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <div class="page-header">
+    <h1>Users</h1>
+  </div>
+
+  {% if error %}
+    <div class="flash error">{{ error }}</div>
+  {% endif %}
+
+  <p class="note">
+    Web principals resolved from the identity provider. Newly seen users land
+    in <code>pending</code> and gain no access until an administrator activates
+    them with a role. The last active <code>system_admin</code> cannot be
+    disabled or demoted.
+  </p>
+
+  {% if pending %}
+    <div class="table-wrap">
+    <h2 class="small">Pending approvals ({{ pending | length }})</h2>
+    <table class="runs-table">
+      <thead>
+        <tr>
+          <th>Email</th>
+          <th>Name</th>
+          <th>Requested</th>
+          <th>Activate</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in pending %}
+          <tr>
+            <td class="mono">{{ u.email or "&mdash;" | safe }}</td>
+            <td>{{ u.name or "&mdash;" | safe }}</td>
+            <td class="small">{{ u.created_at | localtime }}</td>
+            <td>
+              <form action="/users/{{ u.user_id }}/activate" method="post" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <select name="role">
+                  {% for r in roles %}
+                    <option value="{{ r }}">{{ r }}</option>
+                  {% endfor %}
+                </select>
+                <button type="submit" class="button primary small">Activate</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% endif %}
+
+  {% if users %}
+    <div class="table-wrap">
+    <table class="runs-table">
+      <thead>
+        <tr>
+          <th>Email</th>
+          <th>Name</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th>Last login</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+          <tr>
+            <td class="mono">{{ u.email or "&mdash;" | safe }}</td>
+            <td>{{ u.name or "&mdash;" | safe }}</td>
+            <td><span class="badge status-{{ u.role }}">{{ u.role }}</span></td>
+            <td><span class="badge status-{{ u.status }}">{{ u.status }}</span></td>
+            <td class="small">{% if u.last_login_at %}{{ u.last_login_at | localtime }}{% else %}&mdash;{% endif %}</td>
+            <td>
+              <form action="/users/{{ u.user_id }}/role" method="post" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <select name="role">
+                  {% for r in roles %}
+                    <option value="{{ r }}" {% if u.role == r %}selected{% endif %}>{{ r }}</option>
+                  {% endfor %}
+                </select>
+                <button type="submit" class="link-button small">set role</button>
+              </form>
+              {% if u.status == 'disabled' %}
+                <form action="/users/{{ u.user_id }}/enable" method="post" style="display: inline;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="link-button small">enable</button>
+                </form>
+              {% else %}
+                <form action="/users/{{ u.user_id }}/disable" method="post" style="display: inline;"
+                      onsubmit="return confirm('Disable {{ u.email or u.user_id }}?')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="link-button small danger">disable</button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% else %}
+    <p class="empty">No users yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

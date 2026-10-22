@@ -1,0 +1,139 @@
+v: 1
+name: pcornet_7_0
+version: '7.0'
+source:
+  origin: PCORnet Common Data Model v7.0
+  imported_from: 2025_01_23_PCORnet_Common_Data_Model_v7dot0_parseable.xlsx
+  imported_at: '2026-08-04T22:08:40+00:00'
+tables:
+- demographic
+- provider
+- harvest
+- encounter
+- diagnosis
+- procedures
+- vital
+- dispensing
+- lab_result_cm
+- prescribing
+- condition
+- pro_cm
+- med_admin
+- obs_clin
+- obs_gen
+- death
+- death_cause
+- lds_address_history
+- immunization
+- hash_token
+- enrollment
+- external_meds
+- lab_history
+- private_address_history
+- private_address_geocode
+- pat_relationship
+- pcornet_trial
+reference_tables:
+- demographic
+- encounter
+- provider
+- harvest
+- death
+flavour_of_null:
+- NI
+- OT
+- UN
+- ''
+- null
+
+# Ovid-specific dedup-key overrides. These win over the primary-key
+# values declared in `tables/<table>.yaml` (which mirror the PCORnet
+# 7.0 xlsx spec verbatim). They encode dedup semantics inherited from
+# Ovid's PCORnet 6.x pipeline, where several tables lacked surrogate
+# IDs and were deduped on their natural composite keys instead. When
+# migrating to v7.0-native surrogate keys, remove the corresponding
+# entry from this block.
+composite_key_overrides:
+  harvest:                   [DATAMARTID]
+  diagnosis:                 [ENCOUNTERID, DX, DX_TYPE]
+  procedures:                [ENCOUNTERID, PX, PX_TYPE]
+  vital:                     [ENCOUNTERID, MEASURE_DATE, MEASURE_TIME]
+  death:                     [PATID]
+  death_cause:               [PATID, DEATH_CAUSE, DEATH_CAUSE_CODE]
+  hash_token:                [PATID]
+  lab_history:               [LAB_HISTORY_ID]
+  private_address_history:   [ADDRESSID]
+  private_address_geocode:   [GEOCODEID]
+  pcornet_trial:             [PATID, TRIALID]
+id_columns:
+  patient:
+    column: PATID
+    width: 64
+    reference_table: demographic
+  patient_1:
+    column: PATID_1
+    width: 64
+    reference_table: demographic
+  patient_2:
+    column: PATID_2
+    width: 64
+    reference_table: demographic
+  encounter:
+    column: ENCOUNTERID
+    width: 128
+    reference_table: encounter
+  provider:
+    column: PROVIDERID
+    width: 64
+    reference_table: provider
+  vx_provider:
+    column: VX_PROVIDERID
+    width: 64
+    reference_table: provider
+  medadmin_provider:
+    column: MEDADMIN_PROVIDERID
+    width: 64
+    reference_table: provider
+  obsgen_provider:
+    column: OBSGEN_PROVIDERID
+    width: 64
+    reference_table: provider
+  obsclin_provider:
+    column: OBSCLIN_PROVIDERID
+    width: 64
+    reference_table: provider
+  rx_provider:
+    column: RX_PROVIDERID
+    width: 64
+    reference_table: provider
+  procedures:
+    column: PROCEDURESID
+    width: 128
+    reference_table: null
+  prescribing:
+    column: PRESCRIBINGID
+    width: 128
+    reference_table: null
+  address:
+    column: ADDRESSID
+    width: 64
+    reference_table: null
+  geocode:
+    column: GEOCODEID
+    width: 64
+    reference_table: null
+shared_views:
+- view_name: concept
+  source:
+    kind: file
+    path: ${OMOP_CDM_DIR}/CONCEPT.csv
+    delimiter: "\t"
+    header: true
+    required: false
+- view_name: concept_relationship
+  source:
+    kind: file
+    path: ${OMOP_CDM_DIR}/CONCEPT_RELATIONSHIP.csv
+    delimiter: "\t"
+    header: true
+    required: false

@@ -1,0 +1,26 @@
+id: "3.07"
+name: DC 3.07
+part: part3
+edc_table: Table IVF
+description: Most recent month of ENCOUNTER/DIAGNOSIS/PROCEDURES is zero or far below benchmark
+operator: monthly_volume
+source_tables:
+  - ENCOUNTER
+  - DIAGNOSIS
+  - PROCEDURES
+params:
+  date_column: ADMIT_DATE
+metrics:
+  - RECENT_MONTH_ROWS
+exception_metrics:
+  - RECENT_MONTH_ROWS
+thresholds:
+  recent_month_pct_lt: 75.0
+enabled: true
+doc_summary: >-
+  DC 3.07 (Table IVF): the most recent complete month of ENCOUNTER,
+  DIAGNOSIS and PROCEDURES data is non-zero and at least 75% of the
+  trailing-12-month mean.
+doc_interpretation: >-
+  RECENT_MONTH_ROWS below the expected floor (EXCEPTION) means the latest
+  month of core visit data is missing or truncated.

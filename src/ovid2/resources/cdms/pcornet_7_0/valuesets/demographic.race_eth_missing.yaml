@@ -1,0 +1,20 @@
+v: 1
+name: pcornet_7_0.demographic.race_eth_missing
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 DEMOGRAPHIC.RACE_ETH_MISSING code set.
+code_column: code
+description_column: label
+items:
+- code: R
+  label: R=Refuse to answer
+  order: 48
+- code: NI
+  label: NI=No information
+  order: 49
+- code: UN
+  label: UN=Unknown
+  order: 50
+- code: OT
+  label: OT=Other
+  order: 51

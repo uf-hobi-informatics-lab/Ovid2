@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% block title %}Pipeline {{ pipeline_config.name }} &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <p><a href="/pipelines">&larr; all pipelines</a></p>
+  <h1>Pipeline: <span class="mono">{{ pipeline_config.name }}</span></h1>
+
+  {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+
+  <table class="kv-table">
+    <tbody>
+      <tr><th>Type</th><td class="mono">{{ pipeline_config.kind }}</td></tr>
+      <tr><th>CDM</th><td class="mono">{{ pipeline_config.cdm or '&mdash; (resolved from pipeline_settings)' | safe }}</td></tr>
+      <tr><th>Pipeline</th><td class="mono">{{ pipeline_config.pipeline }}</td></tr>
+      <tr><th>Input</th><td class="mono">{% if pipeline_config.input_address %}{{ pipeline_config.input_address }}{% else %}<span class="badge">open &mdash; chosen at run time</span>{% endif %}</td></tr>
+      <tr><th>Output</th><td class="mono">{% if pipeline_config.output_address %}{{ pipeline_config.output_address }}{% else %}<span class="badge">open &mdash; chosen at run time</span>{% endif %}</td></tr>
+      <tr><th>Tables</th><td class="mono small">{{ pipeline_config.tables | join(' ') }}</td></tr>
+      <tr><th>Transformations</th><td class="mono small">{{ pipeline_config.transformations | join(' ') }}</td></tr>
+      <tr><th>Warehouse</th><td>{{ pipeline_config.engine }}</td></tr>
+      <tr><th>Workers</th><td>{{ pipeline_config.workers }}</td></tr>
+      <tr><th>Enabled</th><td>{{ 'yes' if pipeline_config.enabled else 'no' }}</td></tr>
+      <tr><th>Trigger type</th><td>{{ pipeline_config.trigger.type }}</td></tr>
+      {% if pipeline_config.trigger.cron %}
+      <tr><th>Cron</th><td class="mono">{{ pipeline_config.trigger.cron }}</td></tr>
+      {% endif %}
+      {% if pipeline_config.trigger.interval_minutes %}
+      <tr><th>Interval (min)</th><td>{{ pipeline_config.trigger.interval_minutes }}</td></tr>
+      {% endif %}
+      <tr><th>Last fired</th><td class="mono small">{{ pipeline_config.last_fired_at | localtime or '&mdash;' | safe }}</td></tr>
+      <tr><th>Next fire</th><td class="mono small">{{ pipeline_config.next_fire_at | localtime or '&mdash;' | safe }}</td></tr>
+      <tr><th>Last job</th>
+          <td class="mono small">
+            {% if pipeline_config.last_job_id %}
+              <a href="/jobs/{{ pipeline_config.last_job_id }}">{{ pipeline_config.last_job_id }}</a>
+            {% else %}&mdash;{% endif %}
+          </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="page-actions">
+    {% set is_open = not pipeline_config.input_address or not pipeline_config.output_address %}
+    {% if is_open %}
+    <a href="/submit?pipeline={{ pipeline_config.name }}" class="button primary"
+       title="Choose storage &amp; run">{{ icons.icon("play", size=16) }} Run&hellip;</a>
+    {% else %}
+    <form action="/pipelines/{{ pipeline_config.name }}/run" method="post" style="display:inline;">
+      <button type="submit" class="button primary" title="Run now">
+        {{ icons.icon("play", size=16) }} Run
+      </button>
+    </form>
+    {% endif %}
+    <form action="/pipelines/{{ pipeline_config.name }}/{% if pipeline_config.enabled %}disable{% else %}enable{% endif %}"
+          method="post" style="display:inline;">
+      <button type="submit" class="button">{% if pipeline_config.enabled %}Disable{% else %}Enable{% endif %}</button>
+    </form>
+    <a href="/pipelines/{{ pipeline_config.name }}/edit" class="button" title="Edit">
+      {{ icons.icon("edit", size=16) }} Edit</a>
+    <form action="/pipelines/{{ pipeline_config.name }}/delete" method="post" style="display:inline;"
+          onsubmit="return confirm('Delete pipeline {{ pipeline_config.name }}?')">
+      <button type="submit" class="button danger" title="Delete">
+        {{ icons.icon("trash", size=16) }} Delete
+      </button>
+    </form>
+  </div>
+</section>
+{% endblock %}

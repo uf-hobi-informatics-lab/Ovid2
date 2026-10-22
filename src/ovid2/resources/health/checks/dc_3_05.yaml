@@ -1,0 +1,26 @@
+id: "3.05"
+name: DC 3.05
+part: part3
+edc_table: Table IB
+description: Fewer than 50% of patients with encounters have a procedure
+operator: patient_coverage
+source_tables:
+  - ENCOUNTER
+  - PROCEDURES
+params:
+  denominator_table: ENCOUNTER
+  related:
+    - PROCEDURES
+metrics:
+  - PATIENT_COVERAGE_PCT
+exception_metrics:
+  - PATIENT_COVERAGE_PCT
+thresholds:
+  coverage_pct_lt: 50.0
+enabled: true
+doc_summary: >-
+  DC 3.05 (Table IB): at least 50% of patients with encounters have at least
+  one PROCEDURES record.
+doc_interpretation: >-
+  PATIENT_COVERAGE_PCT below 50% (EXCEPTION) means procedure capture is low
+  relative to the encountered population.

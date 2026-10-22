@@ -1,0 +1,425 @@
+v: 1
+name: harvest
+composite_key:
+- NETWORKID
+- DATAMARTID
+domain_description: Attributes associated with the specific PCORnet datamart implementation, including
+  data refreshes.
+domain_order: 22
+constraints:
+- field: NETWORKID + DATAMARTID
+  rule: unique
+  order: 92
+- field: NETWORKID
+  rule: required, not null
+  order: 93
+- field: DATAMARTID
+  rule: required, not null
+  order: 94
+relations:
+- relation: Composite Key
+  details: NETWORKID + DATAMARTID
+  order: 66
+fields:
+- name: NETWORKID
+  rdbms_type: RDBMS Text(10)
+  order: 396
+  sas_type: SAS Char(10)
+  definition: This identifier is assigned by the Coordinating Center
+- name: NETWORK_NAME
+  rdbms_type: RDBMS Text(20)
+  order: 397
+  sas_type: SAS Char(20)
+  definition: 'Descriptive name of the network.
+
+    This identifier is assigned by the Coordinating Center'
+- name: DATAMARTID
+  rdbms_type: RDBMS Text(10)
+  order: 398
+  sas_type: SAS Char(10)
+  definition: This identifier is assigned by the Coordinating Center
+- name: DATAMART_NAME
+  rdbms_type: RDBMS Text(20)
+  order: 399
+  sas_type: SAS Char(20)
+  definition: 'Descriptive name of the datamart.
+
+    This identifier is assigned by the Coordinating Center'
+- name: DATAMART_PLATFORM
+  rdbms_type: RDBMS Text(2)
+  order: 400
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.datamart_platform
+- name: CDM_VERSION
+  rdbms_type: RDBMS Text(3)
+  order: 401
+  sas_type: SAS Char(3)
+  valueset: pcornet_7_0.harvest.cdm_version
+  definition: Version currently implemented within this datamart.
+- name: DATAMART_CLAIMS
+  rdbms_type: RDBMS Text(2)
+  order: 402
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.datamart_claims
+  definition: Datamart includes claims data source(s)
+- name: DATAMART_EHR
+  rdbms_type: RDBMS Text(2)
+  order: 403
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.datamart_ehr
+  definition: Datamart includes EHR data source(s)
+- name: BIRTH_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 404
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.birth_date_mgmt
+  definition: Data management strategy currently present in the BIRTH_DATE field on the DEMOGRAPHIC table.
+    Please see notes for additional definitions.
+- name: ENR_START_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 405
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.enr_start_date_mgmt
+  definition: Data management strategy currently present in the ENR_START_DATE field on the ENROLLMENT
+    table. Please see notes for additional definitions.
+- name: ENR_END_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 406
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.enr_end_date_mgmt
+  definition: Data management strategy currently present in the ENR_END_DATE field on the ENROLLMENT table.
+    Please see notes for additional definitions.
+- name: ADMIT_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 407
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.admit_date_mgmt
+  definition: Data management strategy currently present in the ADMIT_DATE field on the ENCOUNTER table.
+    Please see notes for additional definitions.
+- name: DISCHARGE_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 408
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.discharge_date_mgmt
+  definition: Data management strategy currently present in the DISCHARGE_DATE field on the ENCOUNTER
+    table. Please see notes for additional definitions.
+- name: DX_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 409
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.dx_date_mgmt
+  definition: Data management strategy currently present in the DX_DATE field on the DIAGNOSIS table.
+    Please see notes for additional definitions.
+- name: PX_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 410
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.px_date_mgmt
+  definition: Data management strategy currently present in the PX_DATE field on the PROCEDURES table.
+    Please see notes for additional definitions.
+- name: RX_ORDER_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 411
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.rx_order_date_mgmt
+  definition: Data management strategy currently present in the RX_ORDER_DATE field on the PRESCRIBING
+    table. Please see notes for additional definitions.
+- name: RX_START_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 412
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.rx_start_date_mgmt
+  definition: Data management strategy currently present in the RX_START_DATE field on the PRESCRIBING
+    table. Please see notes for additional definitions.
+- name: RX_END_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 413
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.rx_end_date_mgmt
+  definition: Data management strategy currently present in the RX_END_DATE field on the PRESCRIBING table.
+    Please see notes for additional definitions.
+- name: DISPENSE_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 414
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.dispense_date_mgmt
+  definition: Data management strategy currently present in the DISPENSE_DATE field on the DISPENSING
+    table. Please see notes for additional definitions.
+- name: LAB_ORDER_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 415
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.lab_order_date_mgmt
+  definition: Data management strategy currently present in the LAB_ORDER_DATE field on the LAB_RESULT_CM
+    table. Please see notes for additional definitions.
+- name: SPECIMEN_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 416
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.specimen_date_mgmt
+  definition: Data management strategy currently present in the SPECIMEN_DATE field on the LAB_RESULT_CM
+    table. Please see notes for additional definitions.
+- name: RESULT_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 417
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.result_date_mgmt
+  definition: Data management strategy currently present in the RESULT_DATE field on the LAB_RESULT_CM
+    table. Please see notes for additional definitions.
+- name: MEASURE_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 418
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.measure_date_mgmt
+  definition: Data management strategy currently present in the MEASURE_DATE field on the VITAL table.
+    Please see notes for additional definitions.
+- name: ONSET_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 419
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.onset_date_mgmt
+  definition: Data management strategy currently present in the ONSET_DATE field on the CONDITION table.
+    Please see notes for additional definitions.
+- name: REPORT_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 420
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.report_date_mgmt
+  definition: Data management strategy currently present in the REPORT_DATE field on the CONDITION table.
+    Please see notes for additional definitions.
+- name: RESOLVE_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 421
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.resolve_date_mgmt
+  definition: Data management strategy currently present in the RESOLVE_DATE field on the CONDITION table.
+    Please see notes for additional definitions.
+- name: PRO_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 422
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.pro_date_mgmt
+  definition: Data management strategy currently present in the PRO_DATE field on the PRO_CM table. Please
+    see notes for additional definitions.
+- name: DEATH_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 423
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.death_date_mgmt
+  definition: Data management strategy employed for the DEATH_DATE field in the DEATH table.
+- name: MEDADMIN_START_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 424
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.medadmin_start_date_mgmt
+  definition: Data management strategy employed for the MEDADMIN_START_DATE field in the MED_ADMIN table.
+- name: MEDADMIN_STOP_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 425
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.medadmin_stop_date_mgmt
+  definition: Data management strategy employed for the MEDADMIN_STOP_DATE field in the MED_ADMIN table.
+- name: OBSCLIN_START_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 426
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.obsclin_start_date_mgmt
+  definition: Data management strategy employed for the OBSCLIN_START_DATE field in the OBS_CLIN table.
+- name: OBSCLIN_STOP_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 427
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.obsclin_stop_date_mgmt
+  definition: Data management strategy employed for the OBSCLIN_STOP_DATE field in the OBS_CLIN table.
+- name: OBSGEN_START_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 428
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.obsgen_start_date_mgmt
+  definition: Data management strategy employed for the OBSGEN_START_DATE field in the OBS_GEN table.
+- name: OBSGEN_STOP_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 429
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.obsgen_stop_date_mgmt
+  definition: Data management strategy employed for the OBSGEN_STOP_DATE field in the OBS_GEN table.
+- name: ADDRESS_PERIOD_START_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 430
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.address_period_start_mgmt
+  definition: Data management strategy employed for the ADDRESS_PERIOD_START_MGMT field in the LDS_ADDRESS_HISTORY
+    table.
+- name: ADDRESS_PERIOD_END_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 431
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.address_period_end_mgmt
+  definition: Data management strategy employed for the ADDRESS_PERIOD_END_MGMT field in the LDS_ADDRESS_HISTORY
+    table.
+- name: VX_RECORD_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 432
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.vx_record_date_mgmt
+  definition: Data management strategy employed for the VX_RECORD_DATE_MGMT field in the IMMUNIZATION
+    table.
+- name: VX_ADMIN_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 433
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.vx_admin_date_mgmt
+  definition: Data management strategy employed for the VX_ADMIN_DATE_MGMT field in the IMMUNIZATION table.
+- name: VX_EXP_DATE_MGMT
+  rdbms_type: RDBMS Text(2)
+  order: 434
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.harvest.vx_exp_date_mgmt
+  definition: Data management strategy employed for the VX_EXP_DATE_MGMT field in the IMMUNIZATION table.
+- name: REFRESH_DEMOGRAPHIC_DATE
+  rdbms_type: RDBMS Date
+  order: 435
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Most recent date on which the present data were loaded into the DEMOGRAPHIC table. This
+    date should be null if the table does not have records.
+- name: REFRESH_ENROLLMENT_DATE
+  rdbms_type: RDBMS Date
+  order: 436
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Most recent date on which the present data were loaded into the ENROLLMENT table. This date
+    should be null if the table does not have records.
+- name: REFRESH_ENCOUNTER_DATE
+  rdbms_type: RDBMS Date
+  order: 437
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Most recent date on which the present data were loaded into the ENCOUNTER table. This date
+    should be null if the table does not have records.
+- name: REFRESH_DIAGNOSIS_DATE
+  rdbms_type: RDBMS Date
+  order: 438
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Most recent date on which the present data were loaded into the DIAGNOSIS table. This date
+    should be null if the table does not have records.
+- name: REFRESH_PROCEDURES_DATE
+  rdbms_type: RDBMS Date
+  order: 439
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Most recent date on which the present data were loaded into the PROCEDURES table. This date
+    should be null if the table does not have records.
+- name: REFRESH_VITAL_DATE
+  rdbms_type: RDBMS Date
+  order: 440
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Most recent date on which the present data were loaded into the VITAL table. This date should
+    be null if the table does not have records.
+- name: REFRESH_DISPENSING_DATE
+  rdbms_type: RDBMS Date
+  order: 441
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Most recent date on which the present data were loaded into the DISPENSING table. This date
+    should be null if the table does not have records.
+- name: REFRESH_LAB_RESULT_CM_DATE
+  rdbms_type: RDBMS Date
+  order: 442
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Most recent date on which the present data were loaded into the LAB_RESULT_CM table. This
+    date should be null if the table does not have records.
+- name: REFRESH_CONDITION_DATE
+  rdbms_type: RDBMS Date
+  order: 443
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Most recent date on which the present data were loaded into the CONDITION table. This date
+    should be null if the table does not have records.
+- name: REFRESH_PRO_CM_DATE
+  rdbms_type: RDBMS Date
+  order: 444
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Most recent date on which the present data were loaded into the PRO_CM table. This date
+    should be null if the table does not have records.
+- name: REFRESH_PRESCRIBING_DATE
+  rdbms_type: RDBMS Date
+  order: 445
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Most recent date on which the present data were loaded into the PRESCRIBING table. This
+    date should be null if the table does not have records.
+- name: REFRESH_PCORNET_TRIAL_DATE
+  rdbms_type: RDBMS Date
+  order: 446
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Most recent date on which the present data were loaded into the PCORNET_TRIAL table. This
+    date should be null if the table does not have records.
+- name: REFRESH_DEATH_DATE
+  rdbms_type: RDBMS Date
+  order: 447
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Most recent date on which the present data were loaded into the DEATH table. This date should
+    be null if the table does not have records.
+- name: REFRESH_DEATH_CAUSE_DATE
+  rdbms_type: RDBMS Date
+  order: 448
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Most recent date on which the present data were loaded into the DEATH_CAUSE table. This
+    date should be null if the table does not have records.
+- name: REFRESH_MED_ADMIN_DATE
+  rdbms_type: RDBMS Date
+  order: 449
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Most recent date on which the present data were loaded into the MED_ADMIN table. This date
+    should be null if the table does not have records.
+- name: REFRESH_OBS_CLIN_DATE
+  rdbms_type: RDBMS Date
+  order: 450
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Most recent date on which the present data were loaded into the OBS_CLIN table. This date
+    should be null if the table does not have records.
+- name: REFRESH_PROVIDER_DATE
+  rdbms_type: RDBMS Date
+  order: 451
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Most recent date on which the present data were loaded into the PROVIDER table. This date
+    should be null if the table does not have records.
+- name: REFRESH_OBS_GEN_DATE
+  rdbms_type: RDBMS Date
+  order: 452
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Most recent date on which the present data were loaded into the OBS_GEN table. This date
+    should be null if the table does not have records.
+- name: REFRESH_HASH_TOKEN_DATE
+  rdbms_type: RDBMS Date
+  order: 453
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Most recent date on which the present data were loaded into the HASH_TOKEN table. This date
+    should be null if the table does not have records.
+- name: REFRESH_LDS_ADDRESS_HX_DATE
+  rdbms_type: RDBMS Date
+  order: 454
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Most recent date on which the present data were loaded into the LDS_ADDRESS_HISTORY table.
+    This date should be null if the table does not have records.
+- name: REFRESH_IMMUNIZATION_DATE
+  rdbms_type: RDBMS Date
+  order: 455
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Most recent date on which the present data were loaded into the IMMUNIZATION table. This
+    date should be null if the table does not have records.

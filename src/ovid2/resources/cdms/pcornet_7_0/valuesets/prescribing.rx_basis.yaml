@@ -1,0 +1,23 @@
+v: 1
+name: pcornet_7_0.prescribing.rx_basis
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 PRESCRIBING.RX_BASIS code set.
+code_column: code
+description_column: label
+items:
+- code: '01'
+  label: 01=Order to Dispense
+  order: 7141
+- code: '02'
+  label: 02=Order to administer
+  order: 7142
+- code: NI
+  label: NI=No information
+  order: 7143
+- code: UN
+  label: UN=Unknown
+  order: 7144
+- code: OT
+  label: OT=Other
+  order: 7145

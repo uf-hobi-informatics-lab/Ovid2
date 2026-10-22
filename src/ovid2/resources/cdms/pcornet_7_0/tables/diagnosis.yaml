@@ -1,0 +1,159 @@
+v: 1
+name: diagnosis
+composite_key:
+- DIAGNOSISID
+domain_description: Diagnosis codes indicate the results of diagnostic processes and medical coding within
+  healthcare delivery. Data in this table are expected to be from healthcare-mediated processes and reimbursement
+  drivers.
+domain_order: 4
+constraints:
+- field: DIAGNOSISID
+  rule: unique
+  order: 12
+- field: DIAGNOSISID
+  rule: required, not null
+  order: 13
+- field: PATID
+  rule: required, not null
+  order: 14
+- field: DX
+  rule: required, not null
+  order: 15
+- field: DX_TYPE
+  rule: required, not null
+  order: 16
+- field: DX_SOURCE
+  rule: required, not null
+  order: 17
+relations:
+- relation: PK
+  details: DIAGNOSISID
+  order: 7
+- relation: FK (many to one)
+  details: DIAGNOSIS.PATID references DEMOGRAPHIC.PATID
+  order: 8
+- relation: FK (many to one)
+  details: DIAGNOSIS.ENCOUNTERID references ENCOUNTER.ENCOUNTERID
+  order: 9
+- relation: FK (many to one)
+  details: DIAGNOSIS.PROVIDERID references PROVIDER.PROVIDERID
+  order: 10
+fields:
+- name: DIAGNOSISID
+  rdbms_type: RDBMS Text(x)
+  order: 61
+  sas_type: SAS Char(x)
+  definition: Arbitrary identifier for each unique record. Does not need to be persistent across refreshes,
+    and may be created by methods such as sequence or GUID.
+- name: PATID
+  rdbms_type: RDBMS Text(x)
+  order: 62
+  sas_type: SAS Char(x)
+  definition: Arbitrary person-level identifier. Used to link across tables.
+- name: ENCOUNTERID
+  rdbms_type: RDBMS Text(x)
+  order: 63
+  sas_type: SAS Char(x)
+  definition: Arbitrary encounter-level identifier. Used to link across tables.
+- name: ENC_TYPE
+  rdbms_type: RDBMS Text(2)
+  order: 64
+  sas_type: SAS Char(2)
+  replicated: true
+  valueset: pcornet_7_0.diagnosis.enc_type
+  definition: 'Please note: This is a field replicated from the ENCOUNTER table. See the ENCOUNTER table
+    for definitions.'
+- name: ADMIT_DATE
+  rdbms_type: RDBMS Date
+  order: 65
+  sas_type: SAS Date (Numeric)
+  replicated: true
+  unit_of_measure: DATE
+  definition: 'Please note: This is a field replicated from the ENCOUNTER table. See the ENCOUNTER table
+    for definitions.'
+- name: PROVIDERID
+  rdbms_type: RDBMS Text(x)
+  order: 66
+  sas_type: SAS Char(x)
+  definition: Identifier associated with the provider most responsible for the diagnosis.
+- name: DX
+  rdbms_type: RDBMS Text(18)
+  order: 67
+  sas_type: SAS Char(18)
+  definition: Diagnosis code. Some codes will contain leading zeroes, and different levels of decimal
+    precision may also be present. This field is a character field, not numeric, to accommodate these
+    coding conventions. (Description updated in v3.1.)
+- name: DX_TYPE
+  rdbms_type: RDBMS Text(2)
+  order: 68
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.diagnosis.dx_type
+  definition: 'Diagnosis code type.  We provide values for ICD and SNOMED code types. Other code types
+    will be added as new terminologies are more widely used. Please note: The “Other” category is meant
+    to identify internal use ontologies and codes.'
+- name: DX_DATE
+  rdbms_type: RDBMS Date
+  order: 69
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Date diagnosis was recorded, if known.
+- name: DX_SOURCE
+  rdbms_type: RDBMS Text(2)
+  order: 70
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.diagnosis.dx_source
+  definition: Classification of diagnosis source. We include these categories to allow some flexibility
+    in implementation. The context is to capture available diagnoses recorded during a specific encounter.
+- name: DX_ORIGIN
+  rdbms_type: RDBMS Text(2)
+  order: 71
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.diagnosis.dx_origin
+  definition: Source of the diagnosis information. Billing pertains to internal healthcare processes and
+    data sources. Claim pertains to data from the bill fulfillment, generally data sources held by insurers
+    and other health plans. New field added in v3.1.
+- name: PDX
+  rdbms_type: RDBMS Text(2)
+  order: 72
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.diagnosis.pdx
+  definition: Principal discharge diagnosis flag.
+- name: DX_POA
+  rdbms_type: RDBMS Text(2)
+  order: 73
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.diagnosis.dx_poa
+  definition: Flag to denote whether diagnosis was present on inpatient admission.  Y=Diagnosis present
+    at time of inpatient admission.  N=Diagnosis not present at time of inpatient admission.  U=Documentation
+    insufficient to determine if the condition was present at the time of inpatient admission.  W=Clinically
+    undetermined.  Provider unable to clinically determine whether the condition was present at the time
+    of inpatient admission.  1=Unreported / not used.  Exempt from present-on-admission reporting.
+- name: RAW_DX
+  rdbms_type: RDBMS Text(x)
+  order: 74
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_DX_TYPE
+  rdbms_type: RDBMS Text(x)
+  order: 75
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_DX_SOURCE
+  rdbms_type: RDBMS Text(x)
+  order: 76
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_PDX
+  rdbms_type: RDBMS Text(x)
+  order: 77
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_DX_POA
+  rdbms_type: RDBMS Text(x)
+  order: 78
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.

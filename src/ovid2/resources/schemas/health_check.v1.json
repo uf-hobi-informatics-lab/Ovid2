@@ -1,0 +1,84 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://ovid2.dev/schemas/health_check.v1.json",
+    "title": "Ovid2 data-health check spec",
+    "description": "One declarative data-health check. Ported from the PCORnet EDC / Data Curation Query (DCQ) package plus Ovid2-native health panels. A registry of these specs drives the `ovid2 health` runner; each spec names an operator from `ovid2.transformations.quality.ops` and its parameters.",
+    "type": "object",
+    "required": ["id", "name", "part", "description", "operator"],
+    "additionalProperties": false,
+    "properties": {
+        "id": {
+            "type": "string",
+            "description": "Stable check identifier. For EDC checks this is the DC row number (e.g. '1.01'); for native panels a dotted slug (e.g. 'health.null_rate').",
+            "pattern": "^[A-Za-z0-9_.]+$"
+        },
+        "name": {
+            "type": "string",
+            "description": "Machine name (e.g. 'DC_1_01', 'NULL_RATE')."
+        },
+        "part": {
+            "type": "string",
+            "description": "Grouping bucket for the run window / report nav tree.",
+            "enum": [
+                "part1",
+                "part2",
+                "part3",
+                "part4",
+                "mapping",
+                "freshness",
+                "integrity",
+                "completeness",
+                "semantic"
+            ]
+        },
+        "edc_table": {
+            "type": "string",
+            "description": "EDC report table this check populates (e.g. 'Table IID'). Informational; blank for native panels."
+        },
+        "description": {
+            "type": "string",
+            "description": "One-line human description of what the check validates."
+        },
+        "operator": {
+            "type": "string",
+            "description": "Name of the check operator in `ovid2.transformations.quality.ops`."
+        },
+        "source_tables": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "CDM tables the check reads. Used to auto-skip checks whose tables are absent."
+        },
+        "na_when_empty": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "CDM tables whose *collective* emptiness downgrades the check to `not_applicable` (SAS empty-table rule, edc_report.sas:11314-11354). The check is n/a only when EVERY listed table is absent or has zero rows; if any is populated the check runs normally. Mirrors e.g. DC_3_08 -> n/a when PRESCRIBING is empty."
+        },
+        "params": {
+            "type": "object",
+            "description": "Operator-specific parameters. Shape validated by the operator itself at run time.",
+            "additionalProperties": true
+        },
+        "metrics": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Metric names this check emits into the result rows."
+        },
+        "exception_metrics": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Subset of `metrics` whose exceedance flags an EXCEPTION."
+        },
+        "thresholds": {
+            "type": "object",
+            "description": "Threshold config consumed by the operator to set EXCEPTION_FLAG.",
+            "additionalProperties": true
+        },
+        "enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "When false, the check is skipped even if requested."
+        },
+        "doc_summary": {"type": "string"},
+        "doc_interpretation": {"type": "string"}
+    }
+}

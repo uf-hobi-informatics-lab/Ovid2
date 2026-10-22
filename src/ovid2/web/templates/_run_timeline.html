@@ -1,0 +1,65 @@
+{# Rendered on the run detail page and refreshed by HTMX every few seconds. #}
+<div class="timeline-summary">
+  <span class="badge {% if timeline.success == True %}severity-ok{% elif timeline.success == False %}severity-error{% else %}severity-warning{% endif %}">
+    {% if timeline.success == True %}success{% elif timeline.success == False %}failed{% else %}in progress{% endif %}
+  </span>
+  <span class="mono small">
+    started {{ timeline.started_at | localtime or "&mdash;"|safe }} &middot;
+    ended {{ timeline.ended_at | localtime or "&mdash;"|safe }} &middot;
+    events {{ timeline.events_seen }} &middot;
+    warnings {{ timeline.warning_count }} &middot;
+    errors {{ timeline.error_count }}
+  </span>
+</div>
+
+{% if timeline.stage_counts %}
+  <table class="runs-table">
+    <thead><tr><th>Stage</th><th class="num">Started</th><th class="num">Completed</th><th class="num">Failed</th></tr></thead>
+    <tbody>
+      {% for stage_name, counts in timeline.stage_counts.items() %}
+        <tr>
+          <td class="mono">{{ stage_name }}</td>
+          <td class="num">{{ counts.started }}</td>
+          <td class="num">{{ counts.completed }}</td>
+          <td class="num severity-{{ 'error' if counts.failed else 'ok' }}">{{ counts.failed }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+
+{% if timeline.tables %}
+  <h3 class="small">Tables</h3>
+  <table class="runs-table">
+    <thead><tr><th>Table</th><th>Status</th><th>Started</th><th>Ended</th><th class="num">ms</th><th>Error</th></tr></thead>
+    <tbody>
+      {% for t in timeline.tables %}
+        <tr class="severity-{{ 'error' if t.status == 'failed' else ('ok' if t.status == 'completed' else 'warning') }}">
+          <td class="mono">{{ t.table }}</td>
+          <td><span class="badge status-{{ t.status }}">{{ t.status }}</span></td>
+          <td class="small">{{ t.started_at | localtime_only }}</td>
+          <td class="small">{{ t.ended_at | localtime_only }}</td>
+          <td class="num">{{ t.elapsed_ms or "" }}</td>
+          <td class="small">{{ t.error or "" }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+
+{% if timeline.fixes %}
+  <h3 class="small">Fixes</h3>
+  <table class="runs-table">
+    <thead><tr><th>Table</th><th>Fix</th><th>Status</th><th>Error</th></tr></thead>
+    <tbody>
+      {% for f in timeline.fixes %}
+        <tr>
+          <td class="mono small">{{ f.table }}</td>
+          <td class="mono small">{{ f.fix }}</td>
+          <td><span class="badge {% if f.status == 'failed' %}severity-error{% elif f.status == 'applied' %}severity-ok{% else %}severity-warning{% endif %}">{{ f.status }}</span></td>
+          <td class="small">{{ f.error or "" }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}

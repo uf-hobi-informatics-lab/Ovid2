@@ -1,0 +1,64 @@
+v: 1
+name: condition_occurrence
+composite_key:
+- condition_occurrence_id
+domain_description: OMOP CDM 5.3 clinical data table.
+domain_order: 8
+fields:
+- name: condition_occurrence_id
+  rdbms_type: RDBMS Number
+  order: 1
+- name: person_id
+  rdbms_type: RDBMS Number
+  order: 2
+- name: condition_concept_id
+  rdbms_type: RDBMS Number
+  order: 3
+- name: condition_start_date
+  rdbms_type: RDBMS Date
+  order: 4
+- name: condition_start_datetime
+  rdbms_type: RDBMS Text(50)
+  order: 5
+- name: condition_end_date
+  rdbms_type: RDBMS Date
+  order: 6
+- name: condition_end_datetime
+  rdbms_type: RDBMS Text(50)
+  order: 7
+- name: condition_type_concept_id
+  rdbms_type: RDBMS Number
+  order: 8
+- name: condition_status_concept_id
+  rdbms_type: RDBMS Number
+  order: 9
+- name: stop_reason
+  rdbms_type: RDBMS Text(50)
+  order: 10
+- name: provider_id
+  rdbms_type: RDBMS Number
+  order: 11
+- name: visit_occurrence_id
+  rdbms_type: RDBMS Number
+  order: 12
+- name: visit_detail_id
+  rdbms_type: RDBMS Number
+  order: 13
+- name: condition_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 14
+- name: condition_source_concept_id
+  rdbms_type: RDBMS Number
+  order: 15
+- name: condition_status_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 16
+- name: updated
+  rdbms_type: RDBMS Text(50)
+  order: 17
+- name: source
+  rdbms_type: RDBMS Text(10)
+  order: 18
+- name: mapped_from
+  rdbms_type: RDBMS Text(50)
+  order: 19

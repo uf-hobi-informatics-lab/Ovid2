@@ -1,0 +1,23 @@
+v: 1
+name: pcornet_7_0.med_admin.medadmin_type
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 MED_ADMIN.MEDADMIN_TYPE code set.
+code_column: code
+description_column: label
+items:
+- code: ND
+  label: ND=NDC
+  order: 7205
+- code: RX
+  label: RX=RXNORM
+  order: 7206
+- code: NI
+  label: NI=No information
+  order: 7207
+- code: UN
+  label: UN=Unknown
+  order: 7208
+- code: OT
+  label: OT=Other
+  order: 7209

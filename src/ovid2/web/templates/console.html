@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Console &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page console-landing-page">
+  <div class="console-head">
+    <span class="console-prompt-mark" aria-hidden="true">&#9646;</span>
+    <span class="console-head-text">ovid2 console</span>
+    <span class="console-head-links">
+      <a href="/submit">submit</a>
+      <a href="/dashboard">dashboard</a>
+      <a href="/health">health</a>
+    </span>
+  </div>
+
+  <div id="console-body"
+       hx-get="/partials/console"
+       hx-trigger="every {{ poll_ms }}ms"
+       hx-swap="innerHTML">
+    {% include "_console_body.html" %}
+  </div>
+
+  <noscript>
+    <p class="console-noscript muted">
+      JavaScript is off: panels above are server-rendered and every link
+      works. The command palette needs JavaScript.
+    </p>
+  </noscript>
+
+  <form class="console-cmd" role="search" autocomplete="off"
+        onsubmit="return false;">
+    <label class="console-cmd-prompt" for="console-cmd-input">ovid2&nbsp;&rsaquo;</label>
+    <input id="console-cmd-input" class="console-cmd-input" type="text"
+           autocomplete="off" spellcheck="false"
+           aria-label="Command palette — type to navigate"
+           aria-controls="console-cmd-results"
+           placeholder="type a command or page&hellip;">
+    <span class="console-cursor" aria-hidden="true"></span>
+    <ul id="console-cmd-results" class="console-cmd-results" role="listbox" hidden></ul>
+    <span class="console-cmd-hint muted" aria-hidden="true">LLM chat coming soon</span>
+  </form>
+
+  <script id="ovid2-palette-data" type="application/json">{{ palette_targets | tojson }}</script>
+  <script src="/static/console.js" type="module"></script>
+</section>
+{% endblock %}

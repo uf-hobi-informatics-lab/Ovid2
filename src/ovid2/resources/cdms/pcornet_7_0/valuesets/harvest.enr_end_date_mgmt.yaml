@@ -1,0 +1,29 @@
+v: 1
+name: pcornet_7_0.harvest.enr_end_date_mgmt
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 HARVEST.ENR_END_DATE_MGMT code set.
+code_column: code
+description_column: label
+items:
+- code: '01'
+  label: 01=No imputation or obfuscation
+  order: 12866
+- code: '02'
+  label: 02=Imputation for incomplete dates
+  order: 12867
+- code: '03'
+  label: 03=Date obfuscation
+  order: 12868
+- code: '04'
+  label: 04=Both imputation and obfuscation
+  order: 12869
+- code: NI
+  label: NI=No information
+  order: 12870
+- code: UN
+  label: UN=Unknown
+  order: 12871
+- code: OT
+  label: OT=Other
+  order: 12872

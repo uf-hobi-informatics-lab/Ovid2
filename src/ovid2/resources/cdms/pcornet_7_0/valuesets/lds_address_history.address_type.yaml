@@ -1,0 +1,26 @@
+v: 1
+name: pcornet_7_0.lds_address_history.address_type
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 LDS_ADDRESS_HISTORY.ADDRESS_TYPE code set.
+code_column: code
+description_column: label
+items:
+- code: PO
+  label: PO=Postal
+  order: 11536
+- code: PH
+  label: PH=Physical
+  order: 11537
+- code: BO
+  label: BO=Both
+  order: 11538
+- code: NI
+  label: NI=No information
+  order: 11539
+- code: UN
+  label: UN=Unknown
+  order: 11540
+- code: OT
+  label: OT=Other
+  order: 11541

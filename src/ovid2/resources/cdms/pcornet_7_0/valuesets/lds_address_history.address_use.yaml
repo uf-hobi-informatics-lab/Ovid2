@@ -1,0 +1,32 @@
+v: 1
+name: pcornet_7_0.lds_address_history.address_use
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 LDS_ADDRESS_HISTORY.ADDRESS_USE code set.
+code_column: code
+description_column: label
+items:
+- code: HO
+  label: HO=Home
+  order: 11528
+- code: WO
+  label: WO=Work
+  order: 11529
+- code: TP
+  label: TP=Temp
+  order: 11530
+- code: OL
+  label: OL=Old/Incorrect
+  order: 11531
+- code: OH
+  label: OH = Other Home
+  order: 11532
+- code: NI
+  label: NI=No information
+  order: 11533
+- code: UN
+  label: UN=Unknown
+  order: 11534
+- code: OT
+  label: OT=Other
+  order: 11535

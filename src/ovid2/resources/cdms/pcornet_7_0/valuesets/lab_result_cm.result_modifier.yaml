@@ -1,0 +1,35 @@
+v: 1
+name: pcornet_7_0.lab_result_cm.result_modifier
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 LAB_RESULT_CM.RESULT_MODIFIER code set.
+code_column: code
+description_column: label
+items:
+- code: EQ
+  label: EQ=Equal
+  order: 5819
+- code: GE
+  label: GE=Greater than or equal to
+  order: 5820
+- code: GT
+  label: GT=Greater than
+  order: 5821
+- code: LE
+  label: LE=Less than or equal to
+  order: 5822
+- code: LT
+  label: LT=Less than
+  order: 5823
+- code: TX
+  label: TX=Text
+  order: 5824
+- code: NI
+  label: NI=No information
+  order: 5825
+- code: UN
+  label: UN=Unknown
+  order: 5826
+- code: OT
+  label: OT=Other
+  order: 5827

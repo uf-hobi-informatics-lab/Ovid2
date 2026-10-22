@@ -1,0 +1,11 @@
+flowchart LR
+    MCP["MCP submit_run"] --> SUBMIT
+    UI["Web /submit (manual)"] --> SUBMIT
+    subgraph WK["web-worker clock (every tick)"]
+        CRON["cron / interval<br/>(croniter → next_fire_at)"]
+        WATCH["watch<br/>(scan for new batch folders)"]
+    end
+    CRON --> SUBMIT
+    WATCH --> SUBMIT
+    SUBMIT["jobs_svc.submit()"] --> Q[("web_jobs (queued)")]
+    Q --> RUN["worker claims → ovid2 etl"]

@@ -1,0 +1,5 @@
+# Header-only OMOP note (no PCORnet clinical-note source).
+v: 1
+formatter: note
+adapter: custom
+class: ovid2_pipelines.pcornet_to_omop.formatters_custom.empty_tables_formatter.NoteFormatter

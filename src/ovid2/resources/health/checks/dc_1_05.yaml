@@ -1,0 +1,42 @@
+id: "1.05"
+name: DC 1.05
+part: part1
+edc_table: Table IIA
+description: Primary key of a table is not unique
+operator: pk_uniqueness
+source_tables:
+  - DEMOGRAPHIC
+  - ENROLLMENT
+  - ENCOUNTER
+  - DIAGNOSIS
+  - PROCEDURES
+  - VITAL
+  - LAB_RESULT_CM
+  - PRESCRIBING
+  - DISPENSING
+  - DEATH
+  - CONDITION
+  - PRO_CM
+  - DEATH_CAUSE
+  - MED_ADMIN
+  - OBS_CLIN
+  - OBS_GEN
+  - PROVIDER
+  - HASH_TOKEN
+  - IMMUNIZATION
+params: {}
+metrics:
+  - ROW_COUNT
+  - DISTINCT_PK_COUNT
+  - DUPLICATE_PK_COUNT
+exception_metrics:
+  - DUPLICATE_PK_COUNT
+thresholds:
+  duplicate_pk_count_gt: 0
+enabled: true
+doc_summary: >-
+  DC 1.05 (Table IIA): the CDM-declared composite primary key of each table
+  is unique (distinct-key count equals row count).
+doc_interpretation: >-
+  DUPLICATE_PK_COUNT > 0 (EXCEPTION) means the table's primary key is not
+  unique — duplicate key tuples are present.

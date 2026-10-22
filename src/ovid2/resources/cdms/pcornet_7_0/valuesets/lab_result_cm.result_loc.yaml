@@ -1,0 +1,23 @@
+v: 1
+name: pcornet_7_0.lab_result_cm.result_loc
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 LAB_RESULT_CM.RESULT_LOC code set.
+code_column: code
+description_column: label
+items:
+- code: L
+  label: L=Lab
+  order: 4664
+- code: P
+  label: P=Point of Care
+  order: 4665
+- code: NI
+  label: NI=No information
+  order: 4666
+- code: UN
+  label: UN=Unknown
+  order: 4667
+- code: OT
+  label: OT=Other
+  order: 4668

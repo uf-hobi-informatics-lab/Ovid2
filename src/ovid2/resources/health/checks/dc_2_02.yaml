@@ -1,0 +1,33 @@
+id: "2.02"
+name: DC 2.02
+part: part2
+edc_table: Table IIIB
+description: More than 10% of numeric values are implausibly low or high
+operator: implausible_value
+source_tables:
+  - DEMOGRAPHIC
+  - VITAL
+  - DISPENSING
+params:
+  ranges:
+    - {table: VITAL, column: HT, low: 0, high: 96}
+    - {table: VITAL, column: WT, low: 0, high: 700}
+    - {table: VITAL, column: DIASTOLIC, low: 0, high: 210}
+    - {table: VITAL, column: SYSTOLIC, low: 0, high: 300}
+    - {table: VITAL, column: ORIGINAL_BMI, low: 0, high: 100}
+    - {table: DISPENSING, column: DISPENSE_SUP, low: 0, high: 365}
+    - {table: DISPENSING, column: DISPENSE_AMT, low: 0, high: 3000}
+metrics:
+  - IMPLAUSIBLE_VALUE_PCT
+exception_metrics:
+  - IMPLAUSIBLE_VALUE_PCT
+thresholds:
+  implausible_pct_gt: 10.0
+enabled: true
+doc_summary: >-
+  DC 2.02 (Table IIIB): fewer than 10% of a numeric field's values fall
+  outside a plausible physiologic / operational range (height, weight, blood
+  pressure, days-supply, dispense amount).
+doc_interpretation: >-
+  IMPLAUSIBLE_VALUE_PCT above 10% (EXCEPTION) means implausibly low or high
+  values are common, signalling a units or capture error.

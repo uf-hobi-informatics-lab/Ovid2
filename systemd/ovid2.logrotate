@@ -1,0 +1,10 @@
+/var/log/ovid2/*.log /var/log/ovid2/*.jsonl {
+    daily
+    rotate 14
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    su root root
+}

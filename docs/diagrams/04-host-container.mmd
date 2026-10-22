@@ -1,0 +1,16 @@
+flowchart TB
+    START["ovid2 etl main()"] --> COMPAT{"engine/driver<br/>compatible?"}
+    COMPAT -- no --> ABORT["abort rc=2 (before any cluster)"]
+    COMPAT -- yes --> MODE{"/.dockerenv<br/>present?"}
+    MODE -- no --> HOST["HOST MODE"]
+    MODE -- yes --> CONT["CONTAINER MODE"]
+
+    subgraph HOST_STEPS["Host: build the isolated cluster"]
+        H1["OvidInstance():<br/>unique id · network · temp/work/logs dirs"]
+        H2["build_disc_mounts + scoped secret mounts + nss overlay"]
+        H3["docker compose up (master + N workers)"]
+        H4["docker run driver → spark-submit"]
+    end
+
+    HOST --> H1 --> H2 --> H3 --> H4 --> CONT
+    CONT --> PIPE["run the 5-stage pipeline (diagram 5)"]

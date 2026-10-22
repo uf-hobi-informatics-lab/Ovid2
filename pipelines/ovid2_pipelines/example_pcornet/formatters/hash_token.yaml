@@ -1,0 +1,46 @@
+# Example PCORnet-native passthrough spec.
+v: 1
+formatter: hash_token
+adapter: pcornet_passthrough
+input_file_name: "*Hash_Token_*.txt"
+
+sources:
+  hash_token:
+    glob: "*Hash_Token_*.txt"
+    lowercase_columns: true
+
+projections:
+  PATID: pat_id
+  TOKEN_01: token_1
+  TOKEN_02: token_2
+  TOKEN_03: token_3
+  TOKEN_04: token_4
+  TOKEN_05: token_5
+  TOKEN_06: token_6
+  TOKEN_07: token_7
+  TOKEN_08: token_8
+  TOKEN_09: token_9
+  TOKEN_101: token_101
+  TOKEN_102: token_102
+  TOKEN_103: token_103
+  TOKEN_104: token_104
+  TOKEN_105: token_105
+  TOKEN_106: token_106
+  TOKEN_107: token_107
+  TOKEN_108: token_108
+  TOKEN_109: token_109
+  TOKEN_110: token_110
+  TOKEN_111: token_111
+  TOKEN_12: token_12
+  TOKEN_14: token_14
+  TOKEN_15: token_15
+  TOKEN_16: token_16
+  TOKEN_17: token_17
+  TOKEN_18: token_18
+  TOKEN_23: token_23
+  TOKEN_24: token_24
+  TOKEN_25: token_25
+  TOKEN_26: token_26
+  TOKEN_29: token_29
+  TOKEN_30: token_30
+  TOKEN_ENCRYPTION_KEY: token_encryption_key

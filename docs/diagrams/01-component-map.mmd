@@ -1,0 +1,35 @@
+flowchart TB
+    subgraph AGENT["Agent tier — untrusted planner"]
+        MCP["ovid2 mcp<br/>(MCP server)"]
+    end
+
+    subgraph API["API tier — trusted gateway (no plaintext secrets)"]
+        WEB["ovid2 web<br/>(FastAPI + HTMX + JSON API)"]
+        DB[("scheduler.db<br/>web_jobs / web_pipelines / web_audit")]
+        BROKER["_broker.py<br/>short-lived 'ovid2 tools' subprocess<br/>(probes / storage browse)"]
+    end
+
+    subgraph EXEC["Executor tier — dereferences credentials, least-privilege"]
+        WORKER["ovid2 web-worker<br/>(poll + cron/interval/watch dispatch)"]
+        CLI["ovid2 etl / tools copy|move / health<br/>(host CLI)"]
+        subgraph CLUSTER["Per-invocation Docker Spark cluster"]
+            MASTER["Spark master<br/>(runs the container-mode pipeline)"]
+            WORKERS["N Spark workers"]
+        end
+    end
+
+    STORE[("Storage backends<br/>disc · s3 · azure_blob · snowflake<br/>gcs · databricks · postgres · mssql")]
+    EVENTS[["events-&lt;id&gt;.jsonl<br/>(append-only event log)"]]
+
+    MCP -- "HTTP only" --> WEB
+    WEB --> DB
+    WEB --> BROKER
+    BROKER -.->|scoped, one-shot| STORE
+    WORKER -->|claim queued jobs| DB
+    WORKER -->|spawn subprocess<br/>allow-listed env + instance id| CLI
+    CLI -->|docker compose up<br/>scoped secret mounts + nss overlay| CLUSTER
+    MASTER --> WORKERS
+    MASTER <-->|engine → stager → driver| STORE
+    MASTER --> EVENTS
+    EVENTS -->|byte-offset tail + SSE| WEB
+    EVENTS --> RENDER["renderers:<br/>tui · json_file · email_digest · plain_log"]

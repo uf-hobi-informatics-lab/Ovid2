@@ -1,0 +1,29 @@
+# Example PCORnet-native passthrough spec.
+v: 1
+formatter: pro_cm
+adapter: pcornet_passthrough
+input_file_name: "*Pro_CM_*.txt"
+
+sources:
+  pro_cm:
+    glob: "*Pro_CM_*.txt"
+    lowercase_columns: true
+
+projections:
+  ENCOUNTERID: encounterid
+  PATID: patid
+  PRO_CAT: pro_cat
+  PRO_CM_ID: pro_cm_id
+  PRO_CODE: pro_code
+  PRO_DATE: pro_date
+  PRO_FULLNAME: pro_fullname
+  PRO_METHOD: pro_method
+  PRO_MODE: pro_mode
+  PRO_NAME: pro_item_name
+  PRO_RESPONSE_TEXT: pro_response_text
+  PRO_SEQ: proe_seq
+  PRO_SOURCE: pro_source
+  PRO_TEXT: pro_text
+  PRO_TIME: pro_time
+  PRO_TYPE: pro_type
+  PRO_VERSION: pro_version

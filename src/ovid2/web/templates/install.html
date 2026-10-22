@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% block title %}Install wizard &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <h1>Install wizard</h1>
+  <p class="note">
+    First-time setup for Ovid2 &mdash; step-by-step. Every action here is
+    idempotent, so re-visiting a step never breaks a working install.
+  </p>
+
+  {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+  <p class="badge severity-{{ 'ok' if status.complete else 'warning' }}">
+    {{ 'READY' if status.complete else 'STEP: ' + status.current_step|upper }}
+  </p>
+
+  <h2>Checklist</h2>
+  <table class="check-table">
+    <thead>
+      <tr><th>Step</th><th>Status</th><th>Summary</th></tr>
+    </thead>
+    <tbody>
+      {% for step in status.steps %}
+        <tr class="severity-{{ 'ok' if step.status == 'done' else ('warning' if step.status == 'warning' else 'error') }}">
+          <td class="mono">{{ step.key }}</td>
+          <td>
+            <span class="badge severity-{{ 'ok' if step.status == 'done' else ('warning' if step.status == 'warning' else 'error') }}">
+              {{ step.status|upper }}
+            </span>
+          </td>
+          <td>{{ step.summary }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- ------------------------------------------------------------------ -->
+  <h2 id="bootstrap">1. Bootstrap XDG tree</h2>
+  <p>
+    Creates <code>$XDG_CONFIG_HOME/ovid2/</code>, <code>secrets.d/</code>,
+    and drops sample <code>disc_input.json</code> /
+    <code>disc_output.json</code> configs plus a
+    <code>snowflake.json</code> template (mode 0600).
+  </p>
+  <form method="post" action="/install/bootstrap" class="edit-form">
+    <button type="submit" class="button primary">Run bootstrap</button>
+  </form>
+
+  <!-- ------------------------------------------------------------------ -->
+  <h2 id="snowflake">2. Snowflake credentials</h2>
+  <p>
+    Writes to <code>secrets.d/snowflake.json</code> with
+    <code>mode 0600</code> from the moment of creation. Values are never
+    read back through the API &mdash; only key names.
+  </p>
+  {% if snowflake_step and snowflake_step.detail.get("keys") %}
+    <p class="note">On-disk keys: <span class="mono">{{ snowflake_step.detail["keys"] | join(", ") }}</span>.
+      Leave a value at <code>***</code> to keep the existing secret.</p>
+  {% endif %}
+  <form method="post" action="/install/snowflake" class="edit-form">
+    <table class="kv-table edit">
+      <thead>
+        <tr><th>Key</th><th>Value</th></tr>
+      </thead>
+      <tbody>
+        {% set defaults = ["account", "user", "password", "role", "warehouse", "database", "schema"] %}
+        {% for key in defaults %}
+          <tr>
+            <td>
+              <input type="text" name="arg_key_{{ loop.index0 }}"
+                     value="{{ key }}" class="mono" readonly>
+            </td>
+            <td>
+              <input type="password" name="arg_val_{{ loop.index0 }}"
+                     class="mono wide"
+                     placeholder="{{ 'REPLACE_ME' if key not in snowflake_step.detail.get('keys', []) else '***' }}"
+                     value="{{ '***' if key in snowflake_step.detail.get('keys', []) else '' }}"
+                     autocomplete="new-password">
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="form-row">
+      <button type="submit" class="button primary">Save Snowflake secret</button>
+    </div>
+  </form>
+
+  <!-- ------------------------------------------------------------------ -->
+  <h2 id="addresses">3. Storage accounts</h2>
+  <p>
+    Ovid2 needs at least one input and one output location. Use the
+    dedicated <a href="/storage">Storage accounts</a> page to create,
+    edit, test, or delete them. A pipeline picks a storage account for
+    its input and output and chooses the folder / bucket / schema at
+    run time.
+  </p>
+  <p><a class="button" href="/connections/new">New storage account</a> &nbsp;
+     <a class="button" href="/storage">Manage storage accounts</a></p>
+
+  <!-- ------------------------------------------------------------------ -->
+  <h2 id="image">4. Docker image</h2>
+  <p>
+    Builds <code>{{ builds.builds[0].tag if builds.total else 'the configured OVID2_DOCKER_IMAGE tag' }}</code>
+    from the repo-local <code>docker/Dockerfile</code>. The build runs
+    in a background thread; you can leave this page and come back.
+  </p>
+  <form method="post" action="/install/image/build" class="edit-form">
+    <div class="form-row">
+      <label for="tag">Tag</label>
+      <input type="text" id="tag" name="tag" class="mono wide"
+             placeholder="leave blank for default">
+    </div>
+    <div class="form-row">
+      <label for="context">Context</label>
+      <input type="text" id="context" name="context" class="mono wide"
+             placeholder="leave blank to auto-detect">
+    </div>
+    <div class="form-row">
+      <label for="dockerfile">Dockerfile</label>
+      <input type="text" id="dockerfile" name="dockerfile" class="mono wide"
+             placeholder="leave blank for &lt;context&gt;/docker/Dockerfile">
+    </div>
+    <div class="form-row">
+      <button type="submit" class="button primary">Start build</button>
+    </div>
+  </form>
+
+  {% if builds.total %}
+    <h3>Recent builds</h3>
+    <table class="check-table">
+      <thead>
+        <tr><th>Build</th><th>Tag</th><th>Status</th><th>Submitted</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for build in builds.builds %}
+          <tr>
+            <td class="mono">{{ build.build_id[:8] }}</td>
+            <td class="mono">{{ build.tag }}</td>
+            <td>
+              <span class="badge severity-{{ 'ok' if build.status == 'succeeded' else ('warning' if build.status == 'running' else 'error') }}">
+                {{ build.status|upper }}
+              </span>
+            </td>
+            <td class="mono">{{ build.submitted_at | localtime }}</td>
+            <td><a class="button" href="/install/image/builds/{{ build.build_id }}">Log</a></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+
+  <!-- ------------------------------------------------------------------ -->
+  <h2 id="service">5. systemd service</h2>
+  <p>
+    The scheduler daemon lives at <code>/etc/systemd/system/ovid2-scheduler.service</code>,
+    which requires root. Copy-paste the command below into a terminal to
+    finish this step. Reload this page afterwards to update the badge.
+  </p>
+  <pre class="mono"><code>{{ service_command.command }}</code></pre>
+
+  <!-- ------------------------------------------------------------------ -->
+  <h2 id="pipeline">6. First pipeline</h2>
+  <p>
+    Ovid2 discovers pipelines under the <code>ovid2_pipelines.*</code>
+    namespace. Pick one to verify it is reachable; you can edit its
+    formatters and mappers under <a href="/pipelines">/pipelines</a>
+    once verified.
+  </p>
+  {% if pipelines %}
+    <form method="post" action="/install/pipeline/verify" class="edit-form">
+      <div class="form-row">
+        <label for="name">Pipeline</label>
+        <select id="name" name="name" class="mono wide">
+          {% for pipeline in pipelines %}
+            <option value="{{ pipeline.name }}">{{ pipeline.name }} &mdash; {{ pipeline.formatter_count }} formatter(s)</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-row">
+        <button type="submit" class="button primary">Verify pipeline</button>
+      </div>
+    </form>
+  {% else %}
+    <p class="note">No <code>ovid2_pipelines.*</code> packages are on
+      <code>sys.path</code>. Install a pipeline wheel or set
+      <code>OVID2_PIPELINES_DIR</code>.</p>
+  {% endif %}
+
+  <!-- ------------------------------------------------------------------ -->
+  <h2 id="done">7. Ready to run</h2>
+  {% if status.complete %}
+    <p class="flash">Every step is complete &mdash; head to
+      <a href="/submit">/submit</a> to run your first ETL job.</p>
+  {% else %}
+    <p class="note">Finish the pending steps above and this section will
+      unlock.</p>
+  {% endif %}
+</section>
+{% endblock %}

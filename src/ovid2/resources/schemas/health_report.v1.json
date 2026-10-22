@@ -1,0 +1,89 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://ovid2.dev/schemas/health_report.v1.json",
+    "title": "Ovid2 data-health report artifact",
+    "description": "Per-run compact JSON artifact written beside the event log (`health-report-<instance_id>.json`). The web tier reads this to render the clickable result viewer. This file is the sanctioned hand-off between the pipeline process and the web tier (like the JSONL event log); the web tier never imports pipeline code.",
+    "type": "object",
+    "required": ["v", "instance_id", "pipeline", "cdm", "generated_at", "summary", "checks"],
+    "additionalProperties": true,
+    "properties": {
+        "v": {"type": "integer", "const": 1},
+        "instance_id": {"type": "string"},
+        "pipeline": {"type": "string"},
+        "batch_id": {"type": "string"},
+        "cdm": {"type": "string"},
+        "input_address": {"type": "string"},
+        "output_address": {"type": "string"},
+        "datamart_id": {"type": ["string", "null"]},
+        "refresh_date": {"type": ["string", "null"]},
+        "generated_at": {"type": "string", "format": "date-time"},
+        "results_uri": {
+            "type": ["string", "null"],
+            "description": "Where the durable metric-row table was written (the output storage account)."
+        },
+        "summary": {
+            "type": "object",
+            "required": ["checks_total", "checks_passed", "checks_exception", "checks_error"],
+            "properties": {
+                "checks_total": {"type": "integer", "minimum": 0},
+                "checks_passed": {"type": "integer", "minimum": 0},
+                "checks_exception": {"type": "integer", "minimum": 0},
+                "checks_error": {"type": "integer", "minimum": 0},
+                "checks_skipped": {"type": "integer", "minimum": 0},
+                "checks_not_applicable": {"type": "integer", "minimum": 0},
+                "parts": {
+                    "type": "object",
+                    "description": "Per-part rollup keyed by part name.",
+                    "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                            "total": {"type": "integer"},
+                            "passed": {"type": "integer"},
+                            "exception": {"type": "integer"},
+                            "error": {"type": "integer"},
+                            "not_applicable": {"type": "integer"}
+                        }
+                    }
+                }
+            }
+        },
+        "checks": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["id", "name", "part", "status"],
+                "properties": {
+                    "id": {"type": "string"},
+                    "name": {"type": "string"},
+                    "part": {"type": "string"},
+                    "edc_table": {"type": "string"},
+                    "description": {"type": "string"},
+                    "status": {
+                        "type": "string",
+                        "enum": ["passed", "exception", "error", "skipped", "not_applicable"]
+                    },
+                    "exception_count": {"type": "integer", "minimum": 0},
+                    "metric_count": {"type": "integer", "minimum": 0},
+                    "error": {"type": ["string", "null"]},
+                    "doc_interpretation": {"type": "string"},
+                    "metrics": {
+                        "type": "array",
+                        "description": "Compact metric rows for the report detail pane.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "source_table": {"type": ["string", "null"]},
+                                "metric": {"type": "string"},
+                                "value_num": {"type": ["number", "null"]},
+                                "value_str": {"type": ["string", "null"]},
+                                "threshold_num": {"type": ["number", "null"]},
+                                "exception_flag": {"type": "boolean"},
+                                "details": {"type": ["object", "null"]}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

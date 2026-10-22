@@ -1,0 +1,37 @@
+id: "1.02"
+name: DC 1.02
+part: part1
+edc_table: Table IID
+description: Required tables are not populated
+operator: table_populated
+source_tables:
+  - DEMOGRAPHIC
+  - ENROLLMENT
+  - ENCOUNTER
+  - DIAGNOSIS
+  - PROCEDURES
+  - HARVEST
+  - LAB_RESULT_CM
+  - PRESCRIBING
+  - VITAL
+params:
+  required:
+    - DEMOGRAPHIC
+    - ENROLLMENT
+    - ENCOUNTER
+    - DIAGNOSIS
+    - PROCEDURES
+    - HARVEST
+metrics:
+  - ROW_COUNT
+  - EMPTY_REQUIRED_TABLE_FLAG
+exception_metrics:
+  - EMPTY_REQUIRED_TABLE_FLAG
+thresholds:
+  empty_required_table_flag_eq: 1
+enabled: true
+doc_summary: >-
+  DC 1.02 (Table IID): required CDM tables are populated (row count > 0).
+doc_interpretation: >-
+  EMPTY_REQUIRED_TABLE_FLAG=1 (EXCEPTION) means a present required table has
+  zero rows.

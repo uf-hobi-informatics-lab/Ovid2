@@ -1,0 +1,27 @@
+id: "1.14"
+name: DC 1.14
+part: part1
+edc_table: Table IIE
+description: A PATID in DEMOGRAPHIC is not included in HASH_TOKEN
+operator: orphan_fk
+source_tables:
+  - DEMOGRAPHIC
+  - HASH_TOKEN
+params:
+  relationships:
+    - {child: DEMOGRAPHIC, child_key: PATID, parent: HASH_TOKEN, parent_key: PATID}
+metrics:
+  - CHILD_ROWS
+  - ORPHAN_ROWS
+  - ORPHAN_PCT
+exception_metrics:
+  - ORPHAN_ROWS
+thresholds:
+  orphan_rows_gt: 0
+enabled: true
+doc_summary: >-
+  DC 1.14 (Table IIE): every DEMOGRAPHIC PATID has a corresponding HASH_TOKEN
+  record (linkage completeness).
+doc_interpretation: >-
+  ORPHAN_ROWS > 0 (EXCEPTION) means a patient in DEMOGRAPHIC has no
+  HASH_TOKEN row and cannot be linked.

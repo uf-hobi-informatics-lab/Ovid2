@@ -1,0 +1,140 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://ovid2.dev/schemas/semantic_handle.v1.json",
+    "title": "Ovid2 semantic handle",
+    "description": "Declarative descriptor for one entry in the Ovid2 semantic registry. Phase S1 defines the `vocabulary` kind; additional kinds (metric, catalog_entry) reuse the same envelope.",
+    "type": "object",
+    "required": ["v", "kind", "name"],
+    "additionalProperties": true,
+    "properties": {
+        "v": {
+            "type": "integer",
+            "const": 1,
+            "description": "Schema version. Bumped on breaking changes."
+        },
+        "kind": {
+            "type": "string",
+            "enum": ["vocabulary", "metric", "catalog_entry"],
+            "description": "Discriminator that selects the SemanticHandle subclass."
+        },
+        "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]+)*$",
+            "description": "Unique identifier within the kind. Snake_case for cross-CDM vocabularies (e.g. `omop_concept`); dotted-lowercase for CDM-scoped valuesets (e.g. `pcornet_7_0.demographic.sex`)."
+        },
+        "version": {
+            "type": "string",
+            "description": "Human-readable version tag, informational only."
+        },
+        "description": {
+            "type": "string",
+            "description": "Free-form summary shown by `ovid2 semantic show`."
+        },
+        "tags": {
+            "type": "array",
+            "items": {"type": "string"},
+            "uniqueItems": true,
+            "description": "Optional metadata tags (e.g. `clinical`, `omop_native`)."
+        }
+    },
+    "allOf": [
+        {
+            "if": {"properties": {"kind": {"const": "vocabulary"}}, "required": ["kind"]},
+            "then": {"$ref": "#/$defs/vocabulary"}
+        }
+    ],
+    "$defs": {
+        "vocabulary": {
+            "type": "object",
+            "required": ["code_column"],
+            "properties": {
+                "view_name": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "description": "Spark temp-view name to expose. Defaults to `name` with dots replaced by underscores."
+                },
+                "code_column": {
+                    "type": "string",
+                    "description": "Column holding the code value (e.g. `concept_code`, `loinc_num`, `code`)."
+                },
+                "description_column": {
+                    "type": ["string", "null"],
+                    "description": "Column holding the human-readable label."
+                },
+                "domain_column": {
+                    "type": ["string", "null"],
+                    "description": "Column carrying a domain / semantic-type discriminator."
+                },
+                "source_path": {
+                    "type": ["string", "null"],
+                    "description": "Filesystem path to a CSV. Mutually exclusive with the other source legs."
+                },
+                "shared_view": {
+                    "oneOf": [
+                        {"type": "null"},
+                        {
+                            "type": "string",
+                            "description": "Name of an existing SharedViewSpec (string form)."
+                        },
+                        {
+                            "type": "object",
+                            "required": ["cdm", "view"],
+                            "additionalProperties": false,
+                            "properties": {
+                                "cdm": {
+                                    "type": "string",
+                                    "description": "Registered CDM name that declares the shared view."
+                                },
+                                "view": {
+                                    "type": "string",
+                                    "description": "SharedViewSpec.view_name to resolve within `cdm`."
+                                }
+                            },
+                            "description": "Object form: resolve the SharedViewSpec by (cdm, view) against ovid2.cdm.registry."
+                        }
+                    ],
+                    "description": "SharedViewSpec reference. Accepts a string (view name — reserved for future flat-name lookup) or a `{cdm, view}` object (S3, resolved via the CDM registry). Mutually exclusive with the other source legs."
+                },
+                "address": {
+                    "type": ["string", "null"],
+                    "description": "Name of a registered Ovid2 address. Requires `address_table`. Mutually exclusive with the other source legs."
+                },
+                "address_table": {
+                    "type": ["string", "null"],
+                    "description": "Table name to pass to `address.read` when `address` is set."
+                },
+                "inline_items": {
+                    "type": ["array", "null"],
+                    "items": {
+                        "type": "object",
+                        "required": ["code"],
+                        "additionalProperties": true,
+                        "properties": {
+                            "code":  {"type": "string"},
+                            "label": {"type": ["string", "null"]}
+                        }
+                    },
+                    "description": "Inline enum items. Mutually exclusive with the other source legs."
+                },
+                "delimiter": {
+                    "type": "string",
+                    "default": "\t"
+                },
+                "header": {
+                    "type": "boolean",
+                    "default": true
+                },
+                "required": {
+                    "type": "boolean",
+                    "default": false
+                }
+            },
+            "oneOf": [
+                {"required": ["source_path"]},
+                {"required": ["shared_view"]},
+                {"required": ["address", "address_table"]},
+                {"required": ["inline_items"]}
+            ]
+        }
+    }
+}

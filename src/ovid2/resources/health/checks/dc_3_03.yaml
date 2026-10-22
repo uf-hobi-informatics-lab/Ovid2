@@ -1,0 +1,51 @@
+id: "3.03"
+name: DC 3.03
+part: part3
+edc_table: Table IVC/IVD
+description: Key fields in primary or secondary tables are missing/unmapped in >=10% of records
+operator: field_completeness
+source_tables:
+  - DEMOGRAPHIC
+  - ENCOUNTER
+  - DIAGNOSIS
+  - PROCEDURES
+  - VITAL
+  - LAB_RESULT_CM
+  - PRESCRIBING
+  - MED_ADMIN
+  - OBS_CLIN
+  - OBS_GEN
+  - DEATH
+params:
+  fields:
+    # Table IVC — primary tables
+    - {table: DEMOGRAPHIC, column: BIRTH_DATE}
+    - {table: DEMOGRAPHIC, column: SEX}
+    - {table: DIAGNOSIS, column: DX_ORIGIN}
+    - {table: DIAGNOSIS, column: DX_SOURCE}
+    - {table: DIAGNOSIS, column: DX_TYPE}
+    - {table: PROCEDURES, column: PX_SOURCE}
+    - {table: PROCEDURES, column: PX_TYPE}
+    - {table: ENCOUNTER, column: ENC_TYPE}
+    # Table IVD — secondary tables
+    - {table: VITAL, column: VITAL_SOURCE}
+    - {table: LAB_RESULT_CM, column: LAB_RESULT_SOURCE}
+    - {table: LAB_RESULT_CM, column: RESULT_QUAL}
+    - {table: MED_ADMIN, column: MEDADMIN_SOURCE}
+    - {table: DEATH, column: DEATH_SOURCE}
+    - {table: OBS_CLIN, column: OBSCLIN_SOURCE}
+    - {table: OBS_GEN, column: OBSGEN_SOURCE}
+metrics:
+  - MISSING_PCT
+exception_metrics:
+  - MISSING_PCT
+thresholds:
+  missing_pct_ge: 10.0
+enabled: true
+doc_summary: >-
+  DC 3.03 (Table IVC/IVD): key fields in the primary (IVC) and secondary
+  (IVD) CDM tables are populated in at least 90% of records (missing rate
+  below 10%).
+doc_interpretation: >-
+  MISSING_PCT at or above 10% (EXCEPTION) means a key field is frequently
+  missing or unmapped.

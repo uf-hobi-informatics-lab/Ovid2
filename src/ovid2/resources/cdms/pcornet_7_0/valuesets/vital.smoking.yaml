@@ -1,0 +1,41 @@
+v: 1
+name: pcornet_7_0.vital.smoking
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 VITAL.SMOKING code set.
+code_column: code
+description_column: label
+items:
+- code: '01'
+  label: 01=Current every day smoker
+  order: 1038
+- code: '02'
+  label: 02=Current some day smoker
+  order: 1039
+- code: '03'
+  label: 03=Former smoker
+  order: 1040
+- code: '04'
+  label: 04=Never smoker
+  order: 1041
+- code: '05'
+  label: 05=Smoker, current status unknown
+  order: 1042
+- code: '06'
+  label: 06=Unknown if ever smoked
+  order: 1043
+- code: '07'
+  label: 07=Heavy tobacco smoker
+  order: 1044
+- code: 08
+  label: 08=Light tobacco smoker
+  order: 1045
+- code: NI
+  label: NI=No information
+  order: 1046
+- code: UN
+  label: UN=Unknown
+  order: 1047
+- code: OT
+  label: OT=Other
+  order: 1048

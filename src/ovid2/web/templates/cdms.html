@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}CDMs &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <div class="page-header">
+    <h1>Common Data Models</h1>
+  </div>
+  <p class="note">
+    A <strong>CDM</strong> (Common Data Model) declares the table list,
+    composite dedup keys, identifier columns, and bounded valuesets the
+    generic ETL engine relies on. The pipeline never imports a specific
+    CDM module &mdash; it reads state from a
+    <code>CdmHandle</code> registered here. YAML-authored CDMs live
+    under <code>src/ovid2/resources/cdms/</code> and are regenerated via
+    <code>ovid2 tools import-cdm</code>; pipeline-family CDMs (nursing,
+    veritas, tumor) remain declared in Python.
+  </p>
+
+  {% if cdms %}
+    <div class="table-wrap">
+    <table class="runs-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Version</th>
+          <th>Tables</th>
+          <th>YAML</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in cdms %}
+          <tr>
+            <td><a href="/cdms/{{ c.name }}" class="mono">{{ c.name }}</a></td>
+            <td class="mono small">{{ c.version or '&mdash;' | safe }}</td>
+            <td>{{ c.table_count }}</td>
+            <td>
+              {% if c.has_yaml %}
+                <span class="badge severity-ok" title="YAML tree present">yaml</span>
+              {% else %}
+                <span class="badge severity-warning"
+                      title="Declared in Python (pipeline-family CDM)">python</span>
+              {% endif %}
+            </td>
+            <td><a href="/cdms/{{ c.name }}" class="small">view</a></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% else %}
+    <p class="empty">
+      No CDMs registered. This is unusual &mdash; the bundled CDMs
+      (<code>pcornet_7_0</code>, <code>ovid2_pipeline_nursing_v1</code>,
+      <code>ovid2_pipeline_veritas_v1</code>,
+      <code>ovid2_pipeline_tumor_v1</code>) self-register at package
+      import time. Check the server log for a startup error.
+    </p>
+  {% endif %}
+</section>
+{% endblock %}

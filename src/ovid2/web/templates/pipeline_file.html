@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ pipeline }}/{{ relative_path }} &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <p><a href="/pipelines/{{ pipeline }}/config">&larr; back to {{ pipeline }}</a></p>
+  <h1><span class="mono">{{ pipeline }}</span> &mdash; <span class="mono small">{{ relative_path }}</span></h1>
+  <p class="mono small">{{ absolute_path }} &mdash; {{ size_bytes }} bytes</p>
+  <pre class="code-preview"><code>{{ content }}</code></pre>
+</section>
+{% endblock %}

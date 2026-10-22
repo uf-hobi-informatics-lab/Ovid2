@@ -1,0 +1,30 @@
+id: health.freshness
+name: FRESHNESS
+part: freshness
+edc_table: ""
+description: Row-count and refresh-date movement versus the prior refresh
+operator: freshness_delta
+source_tables:
+  - HARVEST
+  - DEMOGRAPHIC
+  - ENCOUNTER
+  - DIAGNOSIS
+  - PROCEDURES
+params:
+  requires_prior: true
+metrics:
+  - CURRENT_ROWS
+  - PRIOR_ROWS
+  - ROW_DELTA
+  - ROW_DELTA_PCT
+exception_metrics:
+  - ROW_DELTA_PCT
+thresholds:
+  row_delta_pct_abs_gt: 20.0
+enabled: true
+doc_summary: >-
+  Freshness & volume trend: compares each table's row count against the same
+  table in a prior refresh (--prev-input-address). Generalises EDC Part 4.
+doc_interpretation: >-
+  |ROW_DELTA_PCT| above the threshold (EXCEPTION) flags a large volume swing
+  versus the last refresh, up or down.

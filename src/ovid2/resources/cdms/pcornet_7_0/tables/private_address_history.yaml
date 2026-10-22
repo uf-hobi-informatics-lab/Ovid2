@@ -1,0 +1,81 @@
+v: 1
+name: private_address_history
+domain_description: Supplemented from pcornet_cdm_v70.csv.
+domain_order: 9026
+fields:
+- name: ADDRESSID
+  rdbms_type: RDBMS Text(x)
+  order: 513
+  sas_type: SAS Char(x)
+- name: PATID
+  rdbms_type: RDBMS Text(x)
+  order: 514
+  sas_type: SAS Char(x)
+- name: ADDRESS_USE
+  rdbms_type: RDBMS Text(2)
+  order: 515
+  sas_type: SAS Char(2)
+- name: ADDRESS_TYPE
+  rdbms_type: RDBMS Text(2)
+  order: 516
+  sas_type: SAS Char(2)
+- name: ADDRESS_PREFERRED
+  rdbms_type: RDBMS Text(2)
+  order: 517
+  sas_type: SAS Char(2)
+- name: ADDRESS_STREET
+  rdbms_type: RDBMS Text(x)
+  order: 518
+  sas_type: SAS Char(x)
+- name: ADDRESS_DETAIL
+  rdbms_type: RDBMS Text(x)
+  order: 519
+  sas_type: SAS Char(x)
+- name: ADDRESS_COUNTY
+  rdbms_type: RDBMS Text(x)
+  order: 520
+  sas_type: SAS Char(x)
+- name: ADDRESS_CITY
+  rdbms_type: RDBMS Text(x)
+  order: 521
+  sas_type: SAS Char(x)
+- name: ADDRESS_STATE
+  rdbms_type: RDBMS Text(2)
+  order: 522
+  sas_type: SAS Char(2)
+- name: ADDRESS_ZIP5
+  rdbms_type: RDBMS Text(5)
+  order: 523
+  sas_type: SAS Char(5)
+- name: ADDRESS_ZIP9
+  rdbms_type: RDBMS Text(9)
+  order: 524
+  sas_type: SAS Char(9)
+- name: ADDRESS_PERIOD_START
+  rdbms_type: RDBMS Date
+  order: 525
+  sas_type: SAS Date (Numeric)
+- name: ADDRESS_PERIOD_END
+  rdbms_type: RDBMS Date
+  order: 526
+  sas_type: SAS Date (Numeric)
+- name: STATE_FIPS
+  rdbms_type: RDBMS Text(2)
+  order: 527
+  sas_type: SAS Char(2)
+- name: COUNTY_FIPS
+  rdbms_type: RDBMS Text(5)
+  order: 528
+  sas_type: SAS Char(5)
+- name: RUCA_ZIP
+  rdbms_type: RDBMS Text(2)
+  order: 529
+  sas_type: SAS Char(2)
+- name: CURRENT_ADDRESS_FLAG
+  rdbms_type: RDBMS Text(1)
+  order: 530
+  sas_type: SAS Char(1)
+- name: RAW_ADDRESS_TEXT
+  rdbms_type: RDBMS Text(x)
+  order: 531
+  sas_type: SAS Char(x)

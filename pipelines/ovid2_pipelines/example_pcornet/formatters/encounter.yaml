@@ -1,0 +1,42 @@
+# Example PCORnet-native passthrough spec.
+v: 1
+formatter: encounter
+adapter: pcornet_passthrough
+input_file_name: "*Encounter_*.txt"
+
+sources:
+  encounter:
+    glob: "*Encounter_*.txt"
+    lowercase_columns: true
+
+projections:
+  ADMITTING_SOURCE: admitting_source
+  ADMIT_DATE: admit_date
+  ADMIT_TIME: admit_time
+  DISCHARGE_DATE: discharge_date
+  DISCHARGE_DISPOSITION: discharge_disposition
+  DISCHARGE_STATUS: discharge_status
+  DISCHARGE_TIME: discharge_time
+  DRG: drg
+  DRG_TYPE: drg_type
+  ENCOUNTERID: encounterid
+  ENC_TYPE: enc_type
+  FACILITYID: facilityid
+  FACILITY_TYPE: facility_type
+  PATID: patid
+  PAYER_TYPE_PRIMARY: payer_type_primary
+  PAYER_TYPE_SECONDARY: payer_type_secondary
+  PROVIDERID: providerid
+  RAW_ADMITTING_SOURCE: raw_admitting_source
+  RAW_DISCHARGE_DISPOSITION: raw_discharge_disposition
+  RAW_DISCHARGE_STATUS: raw_discharge_status
+  RAW_DRG_TYPE: raw_drg_type
+  RAW_ENC_TYPE: raw_encounter_type
+  RAW_FACILITY_TYPE: raw_facility_type
+  RAW_PAYER_ID_PRIMARY: raw_payer_id_primary
+  RAW_PAYER_ID_SECONDARY: raw_payer_id_secondary
+  RAW_PAYER_NAME_PRIMARY: raw_payer_name_primary
+  RAW_PAYER_NAME_SECONDARY: raw_payer_name_secondary
+  RAW_PAYER_TYPE_PRIMARY: raw_payer_type_primary
+  RAW_PAYER_TYPE_SECONDARY: raw_payer_type_secondary
+  RAW_SITEID: raw_siteid

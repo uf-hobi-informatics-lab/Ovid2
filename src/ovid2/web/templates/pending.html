@@ -1,0 +1,63 @@
+{#
+  Ovid2 pending-approval page (standalone).
+
+  Shown by ``AuthRedirectMiddleware`` (todo 13) when a visitor has a valid
+  session but their account is ``pending`` or ``disabled`` — i.e. they have
+  authenticated with the identity provider but an administrator has not yet
+  granted them a role. Deliberately does NOT extend base.html: the shell
+  chrome assumes an authorised context, and a pending user must not see the
+  nav / dashboard. Rendered with HTTP 200 (not a redirect) so the visitor is
+  never trapped in a redirect loop.
+
+  Context:
+    email — the visitor's email address when known, else None.
+#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Awaiting approval &mdash; Ovid2</title>
+  <link rel="icon" type="image/svg+xml" href="/branding/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/branding/favicon.png">
+  <link rel="stylesheet" href="/static/ovid2.css">
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem("ovid2Theme");
+        var prefersDark = window.matchMedia
+          && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.setAttribute(
+          "data-theme", stored || (prefersDark ? "dark" : "light"));
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "light");
+      }
+    })();
+  </script>
+</head>
+<body class="login-body">
+  <main class="login-shell" role="main">
+    <section class="login-card" aria-labelledby="pending-heading">
+      <header class="login-header">
+        <img src="/branding/ovid_logo_128.png" alt="Ovid2" width="64" height="64">
+        <h1 id="pending-heading">Awaiting approval</h1>
+      </header>
+
+      <p class="note">
+        Your account is <strong>pending approval</strong>. You have signed in
+        successfully{% if email %} as <code>{{ email }}</code>{% endif %}, but
+        an administrator has not yet granted your account a role.
+      </p>
+      <p class="note small">
+        Once an administrator activates your account you will be able to access
+        the control panel. If you believe this is taking too long, contact an
+        Ovid2 administrator.
+      </p>
+
+      <hr class="login-sep" aria-hidden="true">
+      <a class="button block" href="/logout">Sign out</a>
+    </section>
+  </main>
+</body>
+</html>

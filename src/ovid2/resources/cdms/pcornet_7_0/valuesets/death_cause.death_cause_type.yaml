@@ -1,0 +1,29 @@
+v: 1
+name: pcornet_7_0.death_cause.death_cause_type
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 DEATH_CAUSE.DEATH_CAUSE_TYPE code set.
+code_column: code
+description_column: label
+items:
+- code: C
+  label: C=Contributory
+  order: 7183
+- code: I
+  label: I=Immediate/Primary
+  order: 7184
+- code: O
+  label: O=Other
+  order: 7185
+- code: U
+  label: U=Underlying
+  order: 7186
+- code: NI
+  label: NI=No information
+  order: 7187
+- code: UN
+  label: UN=Unknown
+  order: 7188
+- code: OT
+  label: OT=Other
+  order: 7189

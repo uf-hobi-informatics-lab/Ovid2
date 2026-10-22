@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Pipelines &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <div class="page-header">
+    <h1>Pipelines</h1>
+    <div class="page-actions">
+      <span class="small muted">{{ pipelines|length }} pipeline{{ '' if pipelines|length == 1 else 's' }}</span>
+    </div>
+  </div>
+  {% if pipelines %}
+    <div class="table-wrap">
+    <table class="runs-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Mapper type</th>
+          <th>Default DB</th>
+          <th class="num">Formatters</th>
+          <th class="num">Mappers</th>
+          <th>Path</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in pipelines %}
+          <tr>
+            <td><a href="/pipelines/{{ p.name }}/config"><strong>{{ p.name }}</strong></a></td>
+            <td>{{ p.mappers_type or "&mdash;"|safe }}</td>
+            <td>{{ p.default_db or "&mdash;"|safe }}</td>
+            <td class="num">{{ p.formatter_count }}</td>
+            <td class="num">{{ p.mapper_count }}</td>
+            <td class="mono small">{{ p.path }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% else %}
+    <p class="empty">
+      No <code>ovid2_pipelines.*</code> packages found on
+      <code>sys.path</code>. Drop a pipeline package under
+      <code>pipelines/ovid2_pipelines/&lt;name&gt;/</code> or install one
+      via pip.
+    </p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,68 @@
+v: 1
+name: pat_relationship
+composite_key:
+- PATID_1
+- PATID_2
+- RELATIONSHIP_TYPE
+domain_description: This table is used to store information about the relationships between patients within
+  a given PCORnet® Common Data Model.
+domain_order: 24
+constraints:
+- field: PATID_1
+  rule: required, not null
+  order: 98
+- field: PATID_2
+  rule: required, not null
+  order: 99
+- field: RELATIONSHIP_TYPE
+  rule: required, not null
+  order: 100
+relations:
+- relation: Composite Key
+  details: PATID_1 + PATID_2 + RELATIONSHIP_TYPE
+  order: 68
+- relation: FK (many to one)
+  details: PAT_RELATIONSHIP.PATID_1 references DEMOGRAPHIC.PATID
+  order: 69
+- relation: FK (many to one)
+  details: PAT_RELATIONSHIP.PATID_2 references DEMOGRAPHIC.PATID
+  order: 70
+fields:
+- name: PATID_1
+  rdbms_type: RDBMS Text(x)
+  order: 473
+  sas_type: SAS Char(x)
+  definition: 'Arbitrary person-level identifier used to link across tables.
+
+
+    PATID of the first patient in the relationship link.'
+- name: PATID_2
+  rdbms_type: RDBMS Text(x)
+  order: 474
+  sas_type: SAS Char(x)
+  definition: 'Arbitrary person-level identifier used to link across tables.
+
+
+    PATID of the second patient in the relationship link.'
+- name: RELATIONSHIP_TYPE
+  rdbms_type: RDBMS Text(2)
+  order: 475
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.pat_relationship.relationship_type
+  definition: 'Code denoting the relationship between the two patients.
+
+
+    The order of the terms indicates directionality.  For instance, if using “birth mother – child”, PATID_1
+    represents birth mother, PATID_2, the child.'
+- name: RELATIONSHIP_START
+  rdbms_type: RDBMS Date
+  order: 476
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: The date the indicated relationship was believed to have started, if known.
+- name: RELATIONSHIP_END
+  rdbms_type: RDBMS Date
+  order: 477
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: The date the indicated relationship was believed to have ended, if known.

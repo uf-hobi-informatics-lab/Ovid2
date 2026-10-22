@@ -1,0 +1,26 @@
+id: "3.12"
+name: DC 3.12
+part: part3
+edc_table: Table IVI
+description: Fewer than 80% of quantitative lab results specify a result unit
+operator: known_value_coverage
+source_tables:
+  - LAB_RESULT_CM
+na_when_empty:
+  - LAB_RESULT_CM
+params:
+  coverage:
+    - {table: LAB_RESULT_CM, column: RESULT_UNIT}
+metrics:
+  - COVERAGE_PCT
+exception_metrics:
+  - COVERAGE_PCT
+thresholds:
+  coverage_pct_lt: 80.0
+enabled: true
+doc_summary: >-
+  DC 3.12 (Table IVI): at least 80% of LAB_RESULT_CM records carry a populated
+  RESULT_UNIT.
+doc_interpretation: >-
+  COVERAGE_PCT below 80% (EXCEPTION) means quantitative lab results frequently
+  omit units, blocking cross-site comparison.

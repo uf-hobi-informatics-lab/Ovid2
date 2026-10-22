@@ -1,0 +1,41 @@
+id: "1.12"
+name: DC 1.12
+part: part1
+edc_table: Table IIE
+description: Orphan PROVIDERID(s) - a PROVIDERID is not present in PROVIDER
+operator: orphan_fk
+source_tables:
+  - PROVIDER
+  - ENCOUNTER
+  - DIAGNOSIS
+  - PROCEDURES
+  - PRESCRIBING
+  - MED_ADMIN
+  - OBS_CLIN
+  - OBS_GEN
+  - IMMUNIZATION
+params:
+  relationships:
+    - {child: ENCOUNTER, child_key: PROVIDERID, parent: PROVIDER, parent_key: PROVIDERID}
+    - {child: DIAGNOSIS, child_key: PROVIDERID, parent: PROVIDER, parent_key: PROVIDERID}
+    - {child: PROCEDURES, child_key: PROVIDERID, parent: PROVIDER, parent_key: PROVIDERID}
+    - {child: PRESCRIBING, child_key: RX_PROVIDERID, parent: PROVIDER, parent_key: PROVIDERID}
+    - {child: MED_ADMIN, child_key: MEDADMIN_PROVIDERID, parent: PROVIDER, parent_key: PROVIDERID}
+    - {child: OBS_CLIN, child_key: OBSCLIN_PROVIDERID, parent: PROVIDER, parent_key: PROVIDERID}
+    - {child: OBS_GEN, child_key: OBSGEN_PROVIDERID, parent: PROVIDER, parent_key: PROVIDERID}
+    - {child: IMMUNIZATION, child_key: VX_PROVIDERID, parent: PROVIDER, parent_key: PROVIDERID}
+metrics:
+  - CHILD_ROWS
+  - ORPHAN_ROWS
+  - ORPHAN_PCT
+exception_metrics:
+  - ORPHAN_ROWS
+thresholds:
+  orphan_rows_gt: 0
+enabled: true
+doc_summary: >-
+  DC 1.12 (Table IIE): every PROVIDERID referenced by a data table exists in
+  PROVIDER.
+doc_interpretation: >-
+  ORPHAN_ROWS > 0 (EXCEPTION) means a table references a provider that has no
+  PROVIDER record.

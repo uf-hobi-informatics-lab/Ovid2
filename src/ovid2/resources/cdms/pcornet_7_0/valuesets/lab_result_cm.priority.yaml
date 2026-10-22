@@ -1,0 +1,26 @@
+v: 1
+name: pcornet_7_0.lab_result_cm.priority
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 LAB_RESULT_CM.PRIORITY code set.
+code_column: code
+description_column: label
+items:
+- code: E
+  label: E=Expedite
+  order: 4658
+- code: R
+  label: R=Routine
+  order: 4659
+- code: S
+  label: S=Stat
+  order: 4660
+- code: NI
+  label: NI=No information
+  order: 4661
+- code: UN
+  label: UN=Unknown
+  order: 4662
+- code: OT
+  label: OT=Other
+  order: 4663

@@ -1,0 +1,29 @@
+v: 1
+name: pcornet_7_0.lab_result_cm.lab_result_source
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 LAB_RESULT_CM.LAB_RESULT_SOURCE code set.
+code_column: code
+description_column: label
+items:
+- code: OD
+  label: OD=Order/EHR
+  order: 4642
+- code: BI
+  label: BI=Billing
+  order: 4643
+- code: CL
+  label: CL=Claim
+  order: 4644
+- code: DR
+  label: DR=Derived
+  order: 4645
+- code: NI
+  label: NI=No information
+  order: 4646
+- code: UN
+  label: UN=Unknown
+  order: 4647
+- code: OT
+  label: OT=Other
+  order: 4648

@@ -1,0 +1,14 @@
+# Example PCORnet-native passthrough spec.
+v: 1
+formatter: obs_gen
+adapter: pcornet_passthrough
+input_file_name: "*OBS_GEN_*.txt"
+
+sources:
+  obs_gen:
+    glob: "*OBS_GEN_*.txt"
+    lowercase_columns: true
+
+projections:
+  OBSGEN_ID_MODIFIED: ''
+  OBSGEN_TABLE_MODIFIED: ''

@@ -1,0 +1,43 @@
+id: "1.18"
+name: DC 1.18
+part: part1
+edc_table: Table ID
+description: A CDM table has no valid data-refresh date
+operator: refresh_date_present
+source_tables:
+  - DEMOGRAPHIC
+  - ENROLLMENT
+  - ENCOUNTER
+  - DIAGNOSIS
+  - PROCEDURES
+  - VITAL
+  - LAB_RESULT_CM
+  - PRESCRIBING
+  - DISPENSING
+  - DEATH
+  - CONDITION
+  - PRO_CM
+  - DEATH_CAUSE
+  - MED_ADMIN
+  - OBS_CLIN
+  - OBS_GEN
+  - IMMUNIZATION
+  - LDS_ADDRESS_HISTORY
+  - LAB_HISTORY
+params:
+  exclude:
+    - EXTERNAL_MEDS
+    - PAT_RELATIONSHIP
+metrics:
+  - MISSING_REFRESH_DATE_FLAG
+exception_metrics:
+  - MISSING_REFRESH_DATE_FLAG
+thresholds:
+  missing_refresh_date_flag_eq: 1
+enabled: true
+doc_summary: >-
+  DC 1.18 (Table ID): every populated CDM table exposes at least one
+  resolvable event/refresh date, so a data-refresh date can be derived.
+doc_interpretation: >-
+  MISSING_REFRESH_DATE_FLAG=1 (EXCEPTION) means the table has no parseable
+  date and its refresh date resolves to N/A.

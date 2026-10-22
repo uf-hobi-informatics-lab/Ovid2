@@ -1,0 +1,65 @@
+v: 1
+name: pcornet_7_0.obs_gen.obsgen_table_modified
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 OBS_GEN.OBSGEN_TABLE_MODIFIED code set.
+code_column: code
+description_column: label
+items:
+- code: ENR
+  label: ENR=ENROLLMENT
+  order: 11484
+- code: ENC
+  label: ENC=ENCOUNTER
+  order: 11485
+- code: DX
+  label: DX=DIAGNOSIS
+  order: 11486
+- code: PX
+  label: PX=PROCEDURES
+  order: 11487
+- code: VT
+  label: VT=VITAL
+  order: 11488
+- code: DSP
+  label: DSP=DISPENSING
+  order: 11489
+- code: LAB
+  label: LAB=LAB_RESULT_CM
+  order: 11490
+- code: CON
+  label: CON=CONDITION
+  order: 11491
+- code: PRO
+  label: PRO=PRO_CM
+  order: 11492
+- code: RX
+  label: RX=PRESCRIBING
+  order: 11493
+- code: PT
+  label: PT=PCORNET_TRIAL
+  order: 11494
+- code: DTH
+  label: DTH=DEATH
+  order: 11495
+- code: DC
+  label: DC=DEATH_CAUSE
+  order: 11496
+- code: MA
+  label: MA=MED_ADMIN
+  order: 11497
+- code: OC
+  label: OC=OBS_CLIN
+  order: 11498
+- code: OB
+  label: OB=OBS_GEN
+  order: 11499
+- code: IM
+  label: IM=IMMUNIZATION
+  order: 11500
+- code: LDS
+  label: LDS=LDS_ADDRESS_HISTORY
+  order: 11501
+- code: OT
+  label: OT=Other
+  order: 11502

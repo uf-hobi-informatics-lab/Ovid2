@@ -1,0 +1,67 @@
+v: 1
+name: visit_occurrence
+composite_key:
+- visit_occurrence_id
+domain_description: OMOP CDM 5.3 clinical data table.
+domain_order: 6
+fields:
+- name: visit_occurrence_id
+  rdbms_type: RDBMS Number
+  order: 1
+- name: person_id
+  rdbms_type: RDBMS Number
+  order: 2
+- name: visit_concept_id
+  rdbms_type: RDBMS Number
+  order: 3
+- name: visit_start_date
+  rdbms_type: RDBMS Date
+  order: 4
+- name: visit_start_datetime
+  rdbms_type: RDBMS Text(50)
+  order: 5
+- name: visit_end_date
+  rdbms_type: RDBMS Date
+  order: 6
+- name: visit_end_datetime
+  rdbms_type: RDBMS Text(50)
+  order: 7
+- name: visit_type_concept_id
+  rdbms_type: RDBMS Number
+  order: 8
+- name: provider_id
+  rdbms_type: RDBMS Number
+  order: 9
+- name: care_site_id
+  rdbms_type: RDBMS Number
+  order: 10
+- name: visit_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 11
+- name: visit_source_concept_id
+  rdbms_type: RDBMS Number
+  order: 12
+- name: admitting_source_concept_id
+  rdbms_type: RDBMS Number
+  order: 13
+- name: admitting_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 14
+- name: discharge_to_concept_id
+  rdbms_type: RDBMS Number
+  order: 15
+- name: discharge_to_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 16
+- name: preceding_visit_occurrence_id
+  rdbms_type: RDBMS Number
+  order: 17
+- name: updated
+  rdbms_type: RDBMS Text(50)
+  order: 18
+- name: source
+  rdbms_type: RDBMS Text(10)
+  order: 19
+- name: mapped_from
+  rdbms_type: RDBMS Text(50)
+  order: 20

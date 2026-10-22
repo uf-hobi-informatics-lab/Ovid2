@@ -1,0 +1,23 @@
+# Example PCORnet-native passthrough spec.
+v: 1
+formatter: dispensing
+adapter: pcornet_passthrough
+input_file_name: "*Dispensing_*.txt"
+
+sources:
+  dispensing:
+    glob: "*Dispensing_*.txt"
+    lowercase_columns: true
+
+projections:
+  DISPENSE_DATE: dispense_date
+  DISPENSE_DOSE_DISP_UNIT: dispense_dose_disp_unit
+  DISPENSE_SOURCE: dispensing_source
+  DISPENSINGID: dispensingid
+  NDC: ndc
+  PATID: patid
+  PRESCRIBINGID: prescribingid
+  RAW_DISPENSE_DOSE_DISP: raw_dispense_dose_disp
+  RAW_DISPENSE_DOSE_DISP_UNIT: raw_dispense_dose_disp_unit
+  RAW_DISPENSE_ROUTE: raw_dispense_route
+  RAW_NDC: raw_ndc

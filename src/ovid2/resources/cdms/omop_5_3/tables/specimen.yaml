@@ -1,0 +1,61 @@
+v: 1
+name: specimen
+composite_key:
+- specimen_id
+domain_description: OMOP CDM 5.3 clinical data table.
+domain_order: 16
+fields:
+- name: specimen_id
+  rdbms_type: RDBMS Number
+  order: 1
+- name: person_id
+  rdbms_type: RDBMS Number
+  order: 2
+- name: specimen_concept_id
+  rdbms_type: RDBMS Number
+  order: 3
+- name: specimen_type_concept_id
+  rdbms_type: RDBMS Number
+  order: 4
+- name: specimen_date
+  rdbms_type: RDBMS Date
+  order: 5
+- name: specimen_datetime
+  rdbms_type: RDBMS Text(50)
+  order: 6
+- name: quantity
+  rdbms_type: RDBMS Number
+  order: 7
+- name: unit_concept_id
+  rdbms_type: RDBMS Number
+  order: 8
+- name: anatomic_site_concept_id
+  rdbms_type: RDBMS Number
+  order: 9
+- name: disease_status_concept_id
+  rdbms_type: RDBMS Number
+  order: 10
+- name: specimen_source_id
+  rdbms_type: RDBMS Text(150)
+  order: 11
+- name: specimen_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 12
+- name: unit_source_value
+  rdbms_type: RDBMS Number
+  order: 13
+- name: anatomic_site_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 14
+- name: disease_status_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 15
+- name: updated
+  rdbms_type: RDBMS Text(50)
+  order: 16
+- name: source
+  rdbms_type: RDBMS Text(10)
+  order: 17
+- name: mapped_from
+  rdbms_type: RDBMS Text(50)
+  order: 18

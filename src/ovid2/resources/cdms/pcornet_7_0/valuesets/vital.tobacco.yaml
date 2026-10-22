@@ -1,0 +1,32 @@
+v: 1
+name: pcornet_7_0.vital.tobacco
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 VITAL.TOBACCO code set.
+code_column: code
+description_column: label
+items:
+- code: '01'
+  label: 01=Current user
+  order: 1049
+- code: '02'
+  label: 02=Never
+  order: 1050
+- code: '03'
+  label: 03=Quit/former user
+  order: 1051
+- code: '04'
+  label: 04=Passive or environmental exposure
+  order: 1052
+- code: '06'
+  label: 06=Not asked
+  order: 1053
+- code: NI
+  label: NI=No information
+  order: 1054
+- code: UN
+  label: UN=Unknown
+  order: 1055
+- code: OT
+  label: OT=Other
+  order: 1056

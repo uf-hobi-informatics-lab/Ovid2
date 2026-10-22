@@ -1,0 +1,30 @@
+id: health.future_date
+name: FUTURE_DATE
+part: freshness
+edc_table: ""
+description: Any date column is later than the run date (native strict panel)
+operator: future_date
+source_tables:
+  - ENCOUNTER
+  - DIAGNOSIS
+  - PROCEDURES
+  - VITAL
+  - DEATH
+  - PRESCRIBING
+params: {}
+metrics:
+  - TOTAL_ROWS
+  - FUTURE_DATE_ROWS
+  - FUTURE_DATE_PCT
+exception_metrics:
+  - FUTURE_DATE_ROWS
+thresholds:
+  future_date_rows_gt: 0
+enabled: true
+doc_summary: >-
+  Native strict future-date panel: count of rows whose date columns are later
+  than the run date. Any future date is implausible for a completed refresh.
+  (The EDC-report equivalent is DC 2.01, which flags at a 5% share.)
+doc_interpretation: >-
+  FUTURE_DATE_ROWS > 0 (EXCEPTION) means at least one record carries a future
+  date.

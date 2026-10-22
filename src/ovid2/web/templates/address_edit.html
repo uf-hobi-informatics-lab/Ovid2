@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}{{ 'New address' if mode == 'new' else 'Edit address ' + name }} &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <p><a href="/addresses">&larr; all addresses</a></p>
+  <h1>
+    {% if mode == 'new' %}New address{% else %}Edit address: <span class="mono">{{ name }}</span>{% endif %}
+  </h1>
+
+  {% if mode == 'edit' %}
+    <div class="flash warning">
+      <strong>Legacy address.</strong>
+      This config predates the Connections resource: credentials and
+      location live in the same file. New addresses must be built on
+      top of a <a href="/connections">connection</a>. To convert this
+      one, run <code>ovid2 tools migrate-addresses --write</code> on
+      the host or recreate it via <a href="/addresses/new">+ New address</a>.
+    </div>
+  {% endif %}
+
+  {% if error %}
+    <div class="flash error">{{ error }}</div>
+  {% endif %}
+
+  <form method="post"
+        action="{% if mode == 'new' %}/addresses{% else %}/addresses/{{ name }}{% endif %}"
+        class="edit-form">
+
+    {% if mode == 'new' %}
+      {# Kept for backwards compatibility only; new-address flow now
+         routes through /addresses/new (connection picker) →
+         address_new_form.html. #}
+      <div class="form-row">
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" required
+               pattern="[A-Za-z0-9._-]+"
+               placeholder="e.g. sf_prod, disc_input">
+      </div>
+    {% endif %}
+
+    <div class="form-row">
+      <label for="src_name">Type</label>
+      <select id="src_name" name="src_name">
+        <option value="disc" {% if src_name == 'disc' %}selected{% endif %}>disc (filesystem)</option>
+        <option value="snowflake" {% if src_name == 'snowflake' %}selected{% endif %}>snowflake</option>
+      </select>
+    </div>
+
+    <h2>Arguments</h2>
+    <table class="kv-table edit">
+      <thead>
+        <tr><th>Key</th><th>Value</th></tr>
+      </thead>
+      <tbody id="arg-rows">
+        {% set idx = namespace(i=0) %}
+        {% for key, value in src_args.items() %}
+          <tr>
+            <td>
+              <input type="text" name="arg_key_{{ idx.i }}" value="{{ key }}" class="mono">
+            </td>
+            <td>
+              <input type="text" name="arg_val_{{ idx.i }}" value="{{ value }}" class="mono wide">
+            </td>
+          </tr>
+          {% set idx.i = idx.i + 1 %}
+        {% endfor %}
+        {# Pad with blank rows so users can add up to 6 new keys inline. #}
+        {% for j in range(idx.i, idx.i + 6) %}
+          <tr>
+            <td><input type="text" name="arg_key_{{ j }}" class="mono" placeholder="key"></td>
+            <td><input type="text" name="arg_val_{{ j }}" class="mono wide" placeholder="value"></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <p class="note">
+      Sensitive keys (<code>password</code>, <code>token</code>, <code>private_key</code>, …)
+      are masked as <code>***</code> in the display. Leave the value at <code>***</code>
+      to preserve the on-disk secret, or replace it to set a new value.
+      Writes always land in <code>$XDG_CONFIG_HOME/ovid2/configs/</code>.
+    </p>
+
+    <div class="form-row">
+      <button type="submit" class="button primary">Save</button>
+      {% if mode == 'edit' %}
+        <a href="/addresses/{{ name }}" class="button">Cancel</a>
+      {% else %}
+        <a href="/addresses" class="button">Cancel</a>
+      {% endif %}
+    </div>
+  </form>
+</section>
+{% endblock %}

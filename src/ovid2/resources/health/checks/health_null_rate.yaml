@@ -1,0 +1,31 @@
+id: health.null_rate
+name: NULL_RATE
+part: completeness
+edc_table: ""
+description: Fields with high proportion of missing (null) values
+operator: null_rate
+source_tables:
+  - DEMOGRAPHIC
+  - ENCOUNTER
+  - DIAGNOSIS
+  - PROCEDURES
+  - VITAL
+  - LAB_RESULT_CM
+  - PRESCRIBING
+params:
+  treat_flavour_of_null_as_missing: true
+metrics:
+  - TOTAL_ROWS
+  - NULL_ROWS
+  - NULL_PCT
+exception_metrics:
+  - NULL_PCT
+thresholds:
+  null_pct_gt: 90.0
+enabled: true
+doc_summary: >-
+  DC 3.09 (Table IIIC): per-column null / flavour-of-null rate. Feeds the
+  completeness heatmap in the report viewer.
+doc_interpretation: >-
+  NULL_PCT above the threshold (EXCEPTION) means the field is almost entirely
+  unpopulated.

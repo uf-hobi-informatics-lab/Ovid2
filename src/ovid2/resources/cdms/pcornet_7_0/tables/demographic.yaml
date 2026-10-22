@@ -1,0 +1,202 @@
+v: 1
+name: demographic
+composite_key:
+- PATID
+domain_description: Demographics record the direct attributes of individual patients.
+domain_order: 1
+constraints:
+- field: PATID
+  rule: unique
+  order: 1
+- field: PATID
+  rule: required, not null
+  order: 2
+relations:
+- relation: PK
+  details: PATID
+  order: 1
+fields:
+- name: PATID
+  rdbms_type: RDBMS Text(x)
+  order: 1
+  sas_type: SAS Char(x)
+  definition: Arbitrary person-level identifier used to link across tables.  PATID is a pseudoidentifier
+    with a consistent crosswalk to the true identifier retained by the source data pipeline. For analytical
+    data sets requiring patient-level data, only the pseudoidentifier is used to link across all information
+    belonging to a patient. The PATID must be unique within each PCORnet data mart. Creating a unique
+    identifier within a network would be beneficial and acceptable. The PATID is not the basis for linkages
+    across data pipelines.
+- name: BIRTH_DATE
+  rdbms_type: RDBMS Date
+  order: 2
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Date of birth.
+- name: BIRTH_TIME
+  rdbms_type: RDBMS Text(5)
+  order: 3
+  sas_type: SAS Time (Numeric)
+  data_format: HH:MI using 24-hour clock and zero-padding for hour and minute
+  unit_of_measure: TIME
+  definition: Time of birth.
+- name: SEX
+  rdbms_type: RDBMS Text(2)
+  order: 4
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.demographic.sex
+  definition: Sex assigned at birth (definition updated in v3.1).
+- name: SEXUAL_ORIENTATION
+  rdbms_type: RDBMS Text(2)
+  order: 5
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.demographic.sexual_orientation
+  definition: Sexual orientation. (New field added in v3.1.)
+- name: GENDER_IDENTITY
+  rdbms_type: RDBMS Text(2)
+  order: 6
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.demographic.gender_identity
+  definition: Current gender identity.
+- name: HISPANIC
+  rdbms_type: RDBMS Text(2)
+  order: 7
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.demographic.hispanic
+  definition: A person of Cuban, Mexican, Puerto Rican, South or Central American, or other Spanish culture
+    or origin, regardless of race.
+- name: RACE
+  rdbms_type: RDBMS Text(2)
+  order: 8
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.demographic.race
+  definition: 'Please use only one race value per patient. Details of categorical definitions: American
+    Indian or Alaska Native: A person having origins in any of the original peoples of North and South
+    America (including Central America), and who maintains tribal affiliation or community attachment.
+    Asian: A person having origins in any of the original peoples of the Far East, Southeast Asia, or
+    the Indian subcontinent including, for example, Cambodia, China, India, Japan, Korea, Malaysia, Pakistan,
+    the Philippine Islands, Thailand, and Vietnam. Black or African American: A person having origins
+    in any of the black racial groups of Africa. Native Hawaiian or Other Pacific Islander: A person having
+    origins in any of the original peoples of Hawaii, Guam, Samoa, or other Pacific Islands. White: A
+    person having origins in any of the original peoples of Europe, the Middle East, or North Africa.'
+- name: RACE_ETH_MISSING
+  rdbms_type: RDBMS Text(2)
+  order: 9
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.demographic.race_eth_missing
+  definition: Field to indicate whether patient has refused to provide a response to question(s) related
+    to race/ethnicity or if a response does not conform to other values.
+- name: RACE_ETH_AI_AN
+  rdbms_type: RDBMS Text(1)
+  order: 10
+  sas_type: SAS Char(1)
+  valueset: pcornet_7_0.demographic.race_eth_ai_an
+  definition: "Field to indicate whether patient identifies with the categories of American Indian or\
+    \ Alaska Native race/ethnicity. \n\nDetails of categorical definition:\nAmerican Indian or Alaska\
+    \ Native: Individuals with origins in any of the original peoples of North, Central, and South America,\
+    \ including, for example, Navajo Nation, Blackfeet Tribe of the Blackfeet Indian Reservation of Montana,\
+    \ Native Village of Barrow Inupiat Traditional Government, Nome Eskimo Community, Aztec, and Maya."
+- name: RACE_ETH_ASIAN
+  rdbms_type: RDBMS Text(1)
+  order: 11
+  sas_type: SAS Char(1)
+  valueset: pcornet_7_0.demographic.race_eth_asian
+  definition: "Field to indicate whether patient identifies with the categories of Asian race/ethnicity.\
+    \ \n\nDetails of categorical definition:\nAsian: Individuals with origins in any of the original peoples\
+    \ of Central or East Asia, Southeast Asia, or South Asia, including, for example, Chinese, Asian Indian,\
+    \ Filipino, Vietnamese, Korean, and Japanese."
+- name: RACE_ETH_BLACK
+  rdbms_type: RDBMS Text(1)
+  order: 12
+  sas_type: SAS Char(1)
+  valueset: pcornet_7_0.demographic.race_eth_black
+  definition: "Field to indicate whether patient identifies with the categories of Black or African American\
+    \ race/ethnicity. \n\nDetails of categorical definition:\nBlack or African American: Individuals with\
+    \ origins in any of the Black racial groups of Africa, including, for example, African American, Jamaican,\
+    \ Haitian, Nigerian, Ethiopian, and Somali."
+- name: RACE_ETH_HISPANIC
+  rdbms_type: RDBMS Text(1)
+  order: 13
+  sas_type: SAS Char(1)
+  valueset: pcornet_7_0.demographic.race_eth_hispanic
+  definition: "Field to indicate whether patient identifies with the categories of Hispanic or Latino\
+    \ race/ethnicity. \n\nDetails of categorical definition:\nHispanic or Latino: Includes individuals\
+    \ of Mexican, Puerto Rican, Salvadoran, Cuban, Dominican, Guatemalan, and other Central or South American\
+    \ or Spanish culture or origin."
+- name: RACE_ETH_ME_NA
+  rdbms_type: RDBMS Text(1)
+  order: 14
+  sas_type: SAS Char(1)
+  valueset: pcornet_7_0.demographic.race_eth_me_na
+  definition: "Field to indicate whether patient identifies with the categories of Middle Eastern or North\
+    \ African race/ethnicity. \n\nDetails of categorical definition:\nMiddle Eastern or North African:\
+    \ Individuals with origins in any of the original peoples of the Middle East or North Africa, including,\
+    \ for example, Lebanese, Iranian, Egyptian, Syrian, Iraqi, and Israeli."
+- name: RACE_ETH_NH_PI
+  rdbms_type: RDBMS Text(1)
+  order: 15
+  sas_type: SAS Char(1)
+  valueset: pcornet_7_0.demographic.race_eth_nh_pi
+  definition: "Field to indicate whether patient identifies with the categories of Native Hawaiian or\
+    \ Pacific Islander race/ethnicity. \n\nDetails of categorical definition:\nNative Hawaiian or Pacific\
+    \ Islander: Individuals with origins in any of the original peoples of Hawaii, Guam, Samoa, or other\
+    \ Pacific Islands, including, for example, Native Hawaiian, Samoan, Chamorro, Tongan, Fijian, and\
+    \ Marshallese."
+- name: RACE_ETH_WHITE
+  rdbms_type: RDBMS Text(1)
+  order: 16
+  sas_type: SAS Char(1)
+  valueset: pcornet_7_0.demographic.race_eth_white
+  definition: "Field to indicate whether patient identifies with the categories of White race/ethnicity.\
+    \ \n\nDetails of categorical definition:\nWhite: Individuals with origins in any of the original peoples\
+    \ of Europe, including, for example, English, German, Irish, Italian, Polish, and Scottish."
+- name: BIOBANK_FLAG
+  rdbms_type: RDBMS Text(1)
+  order: 17
+  sas_type: SAS Char(1)
+  valueset: pcornet_7_0.demographic.biobank_flag
+  definition: Flag to indicate that one or more biobanked specimens are stored and available for research
+    use. Examples of biospecimens could include blood, urine, or tissue (eg, skin cells, organ tissues).
+    If biospecimens are available, locally maintained “mapping tables” would be necessary to map between
+    the DEMOGRAPHIC record and the originating biobanking system(s). If no known biobanked specimens are
+    available, this field should be marked “No”.
+- name: PAT_PREF_LANGUAGE_SPOKEN
+  rdbms_type: RDBMS Text(3)
+  order: 18
+  sas_type: SAS Char(3)
+  definition: Preferred spoken language of communication as expressed by the patient.
+- name: RAW_SEX
+  rdbms_type: RDBMS Text(x)
+  order: 19
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_SEXUAL_ORIENTATION
+  rdbms_type: RDBMS Text(x)
+  order: 20
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_GENDER_IDENTITY
+  rdbms_type: RDBMS Text(x)
+  order: 21
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_HISPANIC
+  rdbms_type: RDBMS Text(x)
+  order: 22
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_RACE
+  rdbms_type: RDBMS Text(x)
+  order: 23
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_PAT_PREF_LANGUAGE_SPOKEN
+  rdbms_type: RDBMS Text(x)
+  order: 24
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.

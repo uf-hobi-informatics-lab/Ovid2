@@ -1,0 +1,31 @@
+{# HTMX-swapped inline validation report. #}
+{% if report.entries %}
+  {% set ok = report.entries|selectattr('status', 'equalto', 'ok')|list|length %}
+  {% set err = report.entries|selectattr('status', 'equalto', 'error')|list|length %}
+  {% set skip = report.entries|selectattr('status', 'equalto', 'skipped')|list|length %}
+  <p>
+    <span class="badge severity-{{ 'error' if err else 'ok' }}">
+      {{ ok }} ok
+      {%- if err %} &middot; {{ err }} error{% endif -%}
+      {%- if skip %} &middot; {{ skip }} skipped{% endif -%}
+    </span>
+  </p>
+  <table class="runs-table">
+    <thead><tr><th>Table</th><th>Status</th><th>Message</th></tr></thead>
+    <tbody>
+      {% for e in report.entries %}
+        <tr class="severity-{{ 'error' if e.status == 'error' else ('ok' if e.status == 'ok' else 'warning') }}">
+          <td class="mono">{{ e.table }}</td>
+          <td>
+            <span class="badge severity-{{ 'error' if e.status == 'error' else ('ok' if e.status == 'ok' else 'warning') }}">
+              {{ e.status }}
+            </span>
+          </td>
+          <td class="small">{{ e.message }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p class="empty">No {{ kind }} specs to validate.</p>
+{% endif %}

@@ -1,0 +1,37 @@
+# Example PCORnet-native passthrough spec.
+v: 1
+formatter: prescribing
+adapter: pcornet_passthrough
+input_file_name: "*Prescribing_*.txt"
+
+sources:
+  prescribing:
+    glob: "*Prescribing_*.txt"
+    lowercase_columns: true
+
+projections:
+  ENCOUNTERID: encounterid
+  PATID: patid
+  PRESCRIBINGID: prescribingid
+  RAW_RXNORM_CUI: raw_rxnorm_cui
+  RAW_RX_DOSE_FORM: rx_dose_form
+  RAW_RX_DOSE_ORDERED: raw_rx_dose_ordered
+  RAW_RX_DOSE_ORDERED_UNIT: raw_rx_dose_ordered_unit
+  RAW_RX_FREQUENCY: raw_rx_frequency
+  RAW_RX_MED_NAME: raw_rx_med_name
+  RAW_RX_NDC: raw_rx_ndc
+  RAW_RX_QUANTITY: raw_rx_quantity
+  RAW_RX_REFILLS: raw_rx_refills
+  RAW_RX_ROUTE: raw_rx_route
+  RXNORM_CUI: rxnorm_cui
+  RX_BASIS: rx_basis
+  RX_DISPENSE_AS_WRITTEN: rx_dispense_as_written
+  RX_DOSE_ORDERED_UNIT: rx_dose_ordered_unit
+  RX_END_DATE: rx_end_date
+  RX_FREQUENCY: rx_frequency
+  RX_ORDER_DATE: rx_order_date
+  RX_ORDER_TIME: rx_order_time
+  RX_PRN_FLAG: rx_prn_flag
+  RX_PROVIDERID: rx_providerid
+  RX_SOURCE: rx_source
+  RX_START_DATE: rx_start_date

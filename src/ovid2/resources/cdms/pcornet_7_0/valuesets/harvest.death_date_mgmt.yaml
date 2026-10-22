@@ -1,0 +1,29 @@
+v: 1
+name: pcornet_7_0.harvest.death_date_mgmt
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 HARVEST.DEATH_DATE_MGMT code set.
+code_column: code
+description_column: label
+items:
+- code: '01'
+  label: 01=No imputation or obfuscation
+  order: 12985
+- code: '02'
+  label: 02=Imputation for incomplete dates
+  order: 12986
+- code: '03'
+  label: 03=Date obfuscation
+  order: 12987
+- code: '04'
+  label: 04=Both imputation and obfuscation
+  order: 12988
+- code: NI
+  label: NI=No information
+  order: 12989
+- code: UN
+  label: UN=Unknown
+  order: 12990
+- code: OT
+  label: OT=Other
+  order: 12991

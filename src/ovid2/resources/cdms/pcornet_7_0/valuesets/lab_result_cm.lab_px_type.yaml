@@ -1,0 +1,38 @@
+v: 1
+name: pcornet_7_0.lab_result_cm.lab_px_type
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 LAB_RESULT_CM.LAB_PX_TYPE code set.
+code_column: code
+description_column: label
+items:
+- code: 09
+  label: 09=ICD-9-CM
+  order: 4669
+- code: '10'
+  label: 10=ICD-10-PCS
+  order: 4670
+- code: '11'
+  label: 11=ICD-11-PCS
+  order: 4671
+- code: CH
+  label: CH = CPT or HCPCS
+  order: 4672
+- code: LC
+  label: LC=LOINC
+  order: 4673
+- code: ND
+  label: ND=NDC
+  order: 4674
+- code: RE
+  label: RE=Revenue
+  order: 4675
+- code: NI
+  label: NI=No information
+  order: 4676
+- code: UN
+  label: UN=Unknown
+  order: 4677
+- code: OT
+  label: OT=Other
+  order: 4678

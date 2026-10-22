@@ -1,0 +1,41 @@
+name: Feature request
+description: Propose an enhancement to Ovid2
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What are you trying to do, and why is it hard today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: >
+        What would you like to see? If it fits a pluggable seam (driver,
+        connection, engine, CDM, formatter adapter, mapper/transform op, fixer),
+        say which — see CONTRIBUTING.md.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Core pipeline / engines
+        - Drivers / connections
+        - CDM / semantic layer
+        - Formatters / mappers / transforms
+        - Fixers / data quality
+        - Web / MCP / auth
+        - CLI / installer / scheduler
+        - Docs
+        - Other
+    validations:
+      required: true

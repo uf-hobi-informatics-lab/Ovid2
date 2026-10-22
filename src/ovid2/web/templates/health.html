@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Health &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <div class="page-header">
+    <h1>Environment diagnostics</h1>
+    <div class="page-actions">
+      <span class="badge severity-{{ health.worst }}">worst: {{ health.worst|upper }}</span>
+    </div>
+  </div>
+  <div class="table-wrap">
+  <table class="check-table">
+    <thead>
+      <tr><th>Severity</th><th>Check</th><th>Message</th><th>Hint</th></tr>
+    </thead>
+    <tbody>
+      {% for check in health.checks %}
+        <tr class="severity-{{ check.severity }}">
+          <td><span class="badge severity-{{ check.severity }}">{{ check.severity|upper }}</span></td>
+          <td class="mono">{{ check.name }}</td>
+          <td>{{ check.message }}</td>
+          <td>{{ check.hint or "" }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}

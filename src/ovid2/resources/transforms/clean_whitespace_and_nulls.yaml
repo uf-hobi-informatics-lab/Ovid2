@@ -1,0 +1,11 @@
+v: 1
+name: clean_whitespace_and_nulls
+description: >
+  Trim whitespace, collapse internal runs, and convert common sentinel
+  strings (NULL, NA, N/A, '.', empty) to true null across the given
+  columns. A safe, CDM-agnostic first pass on any messy text feed.
+steps:
+  - op: normalize_whitespace
+    columns: [__REPLACE_WITH_YOUR_COLUMNS__]
+  - op: standardize_null
+    columns: [__REPLACE_WITH_YOUR_COLUMNS__]

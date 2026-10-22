@@ -1,0 +1,6 @@
+# PCORnet ENCOUNTER -> OMOP visit_occurrence.
+# visit_occurrence_id = ENCOUNTERID, person_id = PATID (no id-mapping).
+v: 1
+formatter: visit_occurrence
+adapter: custom
+class: ovid2_pipelines.pcornet_to_omop.formatters_custom.visit_occurrence_formatter.VisitOccurrenceFormatter

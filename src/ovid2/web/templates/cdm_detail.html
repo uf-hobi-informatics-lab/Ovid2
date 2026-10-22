@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}CDM {{ cdm.name }} &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <p><a href="/cdms">&larr; all CDMs</a></p>
+  <h1>CDM: <span class="mono">{{ cdm.name }}</span></h1>
+
+  <table class="kv-table">
+    <tbody>
+      <tr><th>Version</th><td class="mono">{{ cdm.version or '(unspecified)' }}</td></tr>
+      <tr>
+        <th>Source</th>
+        <td>
+          {% if cdm.has_yaml %}
+            <span class="badge severity-ok">yaml</span>
+            <span class="mono small">{{ cdm.yaml_dir }}</span>
+          {% else %}
+            <span class="badge severity-warning">python</span>
+            <span class="small">Pipeline-family CDM declared in
+            <code>ovid2/cdm/</code>.</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr><th>Tables</th><td>{{ cdm.tables|length }}</td></tr>
+      <tr><th>Reference tables</th>
+        <td class="mono small">
+          {% if cdm.reference_tables %}
+            {{ cdm.reference_tables|join(', ') }}
+          {% else %}&mdash;{% endif %}
+        </td>
+      </tr>
+      <tr><th>Flavour of null</th>
+        <td class="mono small">
+          {% if cdm.flavour_of_null %}
+            {% for v in cdm.flavour_of_null -%}
+              {% if v is none %}<code>(null)</code>{% else %}<code>{{ v or '(empty)' }}</code>{% endif %}{% if not loop.last %}, {% endif %}
+            {%- endfor %}
+          {% else %}&mdash;{% endif %}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Tables &amp; composite keys</h2>
+  {% if cdm.tables %}
+    <div class="table-wrap">
+    <table class="runs-table">
+      <thead>
+        <tr>
+          <th>Table</th>
+          <th>Composite key</th>
+          <th>Kind</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in cdm.tables %}
+          <tr>
+            <td class="mono">{{ t.name }}</td>
+            <td class="mono small">
+              {% if t.composite_key %}
+                {{ t.composite_key|join(', ') }}
+              {% else %}&mdash;{% endif %}
+            </td>
+            <td>
+              {% if t.is_reference %}
+                <span class="badge severity-ok" title="Persisted after processing">reference</span>
+              {% else %}
+                <span class="small" style="color: var(--fg-muted);">&mdash;</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% else %}
+    <p class="empty">This CDM registers no tables.</p>
+  {% endif %}
+
+  <h2>Identifier columns</h2>
+  {% if cdm.id_columns %}
+    <div class="table-wrap">
+    <table class="runs-table">
+      <thead>
+        <tr>
+          <th>Role</th>
+          <th>Column</th>
+          <th>Width</th>
+          <th>Reference table</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in cdm.id_columns %}
+          <tr>
+            <td class="mono">{{ row.role }}</td>
+            <td class="mono">{{ row.column }}</td>
+            <td>{{ row.width }}</td>
+            <td class="mono small">{{ row.reference_table or '&mdash;' | safe }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% else %}
+    <p class="empty">No identifier columns declared.</p>
+  {% endif %}
+
+  <h2>Shared views</h2>
+  {% if cdm.shared_views %}
+    <div class="table-wrap">
+    <table class="runs-table">
+      <thead>
+        <tr>
+          <th>View name</th>
+          <th>Source path</th>
+          <th>Delimiter</th>
+          <th>Header</th>
+          <th>Required</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in cdm.shared_views %}
+          <tr>
+            <td class="mono">{{ v.view_name }}</td>
+            <td class="mono small">{{ v.source_path }}</td>
+            <td class="mono small">{{ v.delimiter|replace('\t', '\\t') }}</td>
+            <td>{{ 'yes' if v.header else 'no' }}</td>
+            <td>{{ 'yes' if v.required else 'no' }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% else %}
+    <p class="empty">No shared views registered on this CDM.</p>
+  {% endif %}
+
+  <h2>Valuesets ({{ cdm.valuesets|length }})</h2>
+  {% if cdm.valuesets %}
+    <p class="note small">
+      Bounded enums registered on this CDM. Full code lists live in the
+      <a href="/api/v1/cdms/{{ cdm.name }}">API response</a> and in the
+      semantic layer (<code>ovid2 semantic list-vocabularies</code>).
+    </p>
+    <div class="table-wrap">
+    <table class="runs-table">
+      <thead>
+        <tr>
+          <th>Table</th>
+          <th>Column</th>
+          <th>Codes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in cdm.valuesets %}
+          <tr>
+            <td class="mono">{{ v.table }}</td>
+            <td class="mono">{{ v.column }}</td>
+            <td>{{ v.code_count }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% else %}
+    <p class="empty">No bounded valuesets registered.</p>
+  {% endif %}
+</section>
+{% endblock %}

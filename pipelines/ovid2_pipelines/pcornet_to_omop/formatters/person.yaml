@@ -1,0 +1,7 @@
+# PCORnet DEMOGRAPHIC -> OMOP person.
+# person_id = PATID (no id-mapping step). Gender/race/ethnicity concept
+# ids come from static dictionaries applied inside the custom class.
+v: 1
+formatter: person
+adapter: custom
+class: ovid2_pipelines.pcornet_to_omop.formatters_custom.person_formatter.PersonFormatter

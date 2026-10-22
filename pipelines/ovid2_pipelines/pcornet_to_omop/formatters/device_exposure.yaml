@@ -1,0 +1,5 @@
+# Header-only OMOP device_exposure (PCORnet has no device source).
+v: 1
+formatter: device_exposure
+adapter: custom
+class: ovid2_pipelines.pcornet_to_omop.formatters_custom.empty_tables_formatter.DeviceExposureFormatter

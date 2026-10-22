@@ -1,0 +1,32 @@
+v: 1
+name: pcornet_7_0.diagnosis.dx_poa
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 DIAGNOSIS.DX_POA code set.
+code_column: code
+description_column: label
+items:
+- code: Y
+  label: Y=Diagnosis present
+  order: 982
+- code: N
+  label: N=Diagnosis not present
+  order: 983
+- code: U
+  label: U=Insufficient documentation
+  order: 984
+- code: W
+  label: W=Clinically undetermined
+  order: 985
+- code: '1'
+  label: 1=Unreported / not used
+  order: 986
+- code: NI
+  label: NI=No information
+  order: 987
+- code: UN
+  label: UN=Unknown
+  order: 988
+- code: OT
+  label: OT=Other
+  order: 989

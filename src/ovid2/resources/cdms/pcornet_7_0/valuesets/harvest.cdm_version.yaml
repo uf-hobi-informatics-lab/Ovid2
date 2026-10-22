@@ -1,0 +1,38 @@
+v: 1
+name: pcornet_7_0.harvest.cdm_version
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 HARVEST.CDM_VERSION code set.
+code_column: code
+description_column: label
+items:
+- code: '010'
+  label: 010=1.0
+  order: 12832
+- code: '020'
+  label: 020=2.0
+  order: 12833
+- code: '030'
+  label: 030=3.0
+  order: 12834
+- code: '031'
+  label: 031=3.1
+  order: 12835
+- code: '040'
+  label: 040=4.0
+  order: 12836
+- code: '041'
+  label: 041=4.1
+  order: 12837
+- code: '050'
+  label: 050=5.0
+  order: 12838
+- code: '051'
+  label: 051=5.1
+  order: 12839
+- code: '060'
+  label: 060=6.0
+  order: 12840
+- code: '061'
+  label: 061=6.1
+  order: 12841

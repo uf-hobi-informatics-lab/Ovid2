@@ -1,0 +1,41 @@
+id: "1.07"
+name: DC 1.07
+part: part1
+edc_table: Table IIC
+description: A required field is NULL or missing in one or more records
+operator: null_rate
+source_tables:
+  - DEMOGRAPHIC
+  - ENROLLMENT
+  - ENCOUNTER
+  - DIAGNOSIS
+  - PROCEDURES
+  - VITAL
+  - LAB_RESULT_CM
+  - PRESCRIBING
+  - DEATH
+params:
+  treat_flavour_of_null_as_missing: true
+  required_fields:
+    DEMOGRAPHIC: [PATID, BIRTH_DATE, SEX]
+    ENROLLMENT: [PATID, ENR_START_DATE, ENR_BASIS]
+    ENCOUNTER: [ENCOUNTERID, PATID, ADMIT_DATE, ENC_TYPE]
+    DIAGNOSIS: [DIAGNOSISID, PATID, ENCOUNTERID, DX, DX_TYPE, DX_SOURCE]
+    PROCEDURES: [PROCEDURESID, PATID, ENCOUNTERID, PX, PX_TYPE]
+    VITAL: [VITALID, PATID, MEASURE_DATE]
+    LAB_RESULT_CM: [LAB_RESULT_CM_ID, PATID, LAB_LOINC, RESULT_QUAL]
+    PRESCRIBING: [PRESCRIBINGID, PATID, RX_ORDER_DATE]
+    DEATH: [PATID, DEATH_DATE, DEATH_SOURCE]
+metrics:
+  - NULL_PCT
+exception_metrics:
+  - NULL_PCT
+thresholds:
+  null_pct_gt: 0.0
+enabled: true
+doc_summary: >-
+  DC 1.07 (Table IIC): required NOT-NULL CDM fields are populated in every
+  record. Any missing / flavour-of-null value in a required field flags.
+doc_interpretation: >-
+  NULL_PCT > 0 (EXCEPTION) means a required field is NULL / missing in at
+  least one record.

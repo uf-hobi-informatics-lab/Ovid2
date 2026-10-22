@@ -1,0 +1,25 @@
+id: "3.18"
+name: DC 3.18
+part: part3
+edc_table: Table IB
+description: Fewer than 80% of address records have ADDRESS_ZIP5 and COUNTY_FIPS populated
+operator: field_completeness
+source_tables:
+  - LDS_ADDRESS_HISTORY
+params:
+  fields:
+    - {table: LDS_ADDRESS_HISTORY, column: ADDRESS_ZIP5}
+    - {table: LDS_ADDRESS_HISTORY, column: ADDRESS_COUNTY}
+metrics:
+  - MISSING_PCT
+exception_metrics:
+  - MISSING_PCT
+thresholds:
+  missing_pct_ge: 20.0
+enabled: true
+doc_summary: >-
+  DC 3.18 (Table IB): geocode completeness - ADDRESS_ZIP5 and county/FIPS are
+  populated for at least 80% of address records (missing rate below 20%).
+doc_interpretation: >-
+  MISSING_PCT at or above 20% (EXCEPTION) means geocoding inputs are largely
+  absent, blocking neighbourhood-level linkage.

@@ -1,0 +1,21 @@
+sequenceDiagram
+    participant U as Operator / Agent
+    participant W as ovid2 web (API)
+    participant J as jobs_svc
+    participant DB as web_jobs
+    participant K as web-worker
+    participant C as ovid2 etl (container)
+    participant E as events-{id}.jsonl
+
+    U->>W: POST /api/v1/runs
+    W->>J: submit() (validate + engine/driver compat)
+    J->>DB: INSERT status=queued, mint instance_id
+    W-->>U: { job_id, instance_id, status: queued }
+    loop worker tick
+        K->>DB: claim_next_queued() (queued → running)
+    end
+    K->>C: Popen(ovid2 etl …, env: OVID2_INSTANCE_ID)
+    C->>E: instance.started / table.* / engine.metrics
+    E-->>W: SSE + byte-offset tail (live canvas)
+    C-->>K: exit code
+    K->>DB: mark_terminal (done / failed / cancelled)

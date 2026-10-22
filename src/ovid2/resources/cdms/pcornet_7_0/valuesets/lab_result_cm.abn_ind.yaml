@@ -1,0 +1,41 @@
+v: 1
+name: pcornet_7_0.lab_result_cm.abn_ind
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 LAB_RESULT_CM.ABN_IND code set.
+code_column: code
+description_column: label
+items:
+- code: AB
+  label: AB=Abnormal
+  order: 5842
+- code: AH
+  label: AH=Abnormally high
+  order: 5843
+- code: AL
+  label: AL=Abnormally low
+  order: 5844
+- code: CH
+  label: CH=Critically high
+  order: 5845
+- code: CL
+  label: CL=Critically low
+  order: 5846
+- code: CR
+  label: CR=Critical
+  order: 5847
+- code: IN
+  label: IN=Inconclusive
+  order: 5848
+- code: NL
+  label: NL=Normal
+  order: 5849
+- code: NI
+  label: NI=No information
+  order: 5850
+- code: UN
+  label: UN=Unknown
+  order: 5851
+- code: OT
+  label: OT=Other
+  order: 5852

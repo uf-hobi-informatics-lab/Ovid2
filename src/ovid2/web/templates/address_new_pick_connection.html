@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}New address &mdash; pick a connection{% endblock %}
+{% block content %}
+<section class="page">
+  <p><a href="/addresses">&larr; all addresses</a></p>
+  <h1>New address &mdash; step 1 of 2</h1>
+  <p class="note">
+    Every address is a view onto a <em>connection</em>: the credential-heavy
+    endpoint (Snowflake account, Azure storage account, S3 bucket root,
+    disc mount, …). Pick which one this new address should target, then
+    the next screen will ask for the path / database / container.
+  </p>
+
+  {% if error %}
+    <div class="flash error">{{ error }}</div>
+  {% endif %}
+
+  {% if connections %}
+    <div class="table-wrap">
+      <table class="runs-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Secret ref</th>
+            <th>&nbsp;</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in connections %}
+            <tr>
+              <td class="mono"><a href="/connections/{{ c.name }}">{{ c.name }}</a></td>
+              <td><span class="badge">{{ c.type }}</span></td>
+              <td class="mono small">
+                {% if c.secret_ref %}{{ c.secret_ref }}{% else %}<span style="color: var(--fg-muted);">&mdash;</span>{% endif %}
+              </td>
+              <td>
+                <a href="/addresses/new/step2?connection={{ c.name }}"
+                   class="button primary small">Choose</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="small">
+      No suitable connection? <a href="/connections/new">Create one first</a>.
+    </p>
+  {% else %}
+    <p class="empty">
+      No connections configured yet. Start with
+      <a href="/connections/new" class="button primary small">+ New connection</a>
+      &mdash; an address is a view onto one, so you need a connection before
+      you can point at anything.
+    </p>
+  {% endif %}
+</section>
+{% endblock %}

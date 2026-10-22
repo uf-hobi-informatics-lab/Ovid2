@@ -1,0 +1,23 @@
+id: "2.04"
+name: DC 2.04
+part: part2
+edc_table: Table IIID
+description: More than 2 encounters per distinct visit for ED/EI/IP encounters
+operator: encounter_per_visit
+source_tables:
+  - ENCOUNTER
+params:
+  enc_types: [ED, EI, IP]
+metrics:
+  - ENCOUNTERS_PER_VISIT
+exception_metrics:
+  - ENCOUNTERS_PER_VISIT
+thresholds:
+  enc_per_visit_gt: 2.0
+enabled: true
+doc_summary: >-
+  DC 2.04 (Table IIID): for ED/EI/IP encounter types, no more than 2
+  encounters per distinct visit (PATID + ADMIT_DATE + ENC_TYPE).
+doc_interpretation: >-
+  ENCOUNTERS_PER_VISIT above 2 (EXCEPTION) suggests visit-splitting - a single
+  visit represented as many encounter rows.

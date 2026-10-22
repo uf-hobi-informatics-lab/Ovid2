@@ -1,0 +1,7 @@
+# PCORnet HARVEST -> OMOP cdm_source (single-row metadata).
+# Dynamic fields from the HARVEST row; static holder / version fields from
+# pipeline_settings (CDM_HOLDER / CDM_VERSION / VOCABULARY_VERSION).
+v: 1
+formatter: cdm_source
+adapter: custom
+class: ovid2_pipelines.pcornet_to_omop.formatters_custom.cdm_source_formatter.CdmSourceFormatter

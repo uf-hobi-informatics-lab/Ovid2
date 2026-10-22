@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Address &mdash; {{ name }}{% endblock %}
+{% block content %}
+<section class="page">
+  <p><a href="/addresses">&larr; all addresses</a></p>
+  <h1>Address: {{ name }}</h1>
+  {% if address %}
+    {% if is_legacy %}
+      <div class="flash warning">
+        <strong>Legacy address.</strong>
+        This config predates the Connections resource. Credentials and
+        location are stored together in one file. To convert it into a
+        <a href="/connections">connection</a>-backed address, run
+        <code>ovid2 tools migrate-addresses --write</code> on the host.
+      </div>
+    {% endif %}
+    <p>
+      <a href="/addresses/{{ name }}/edit" class="button primary small">Edit</a>
+      {% if address.connection %}
+        <form action="/connections/{{ address.connection }}/test" method="post" style="display: inline;">
+          <button type="submit" class="button small"
+                  title="Probe the '{{ address.connection }}' connection this address views.">
+            Test underlying connection
+          </button>
+        </form>
+      {% endif %}
+      <form action="/addresses/{{ name }}/delete" method="post" style="display: inline;"
+            onsubmit="return confirm('Delete address {{ name }}?')">
+        <button type="submit" class="button danger small">Delete</button>
+      </form>
+    </p>
+    <dl class="detail">
+      <dt>Type</dt><dd>{{ address.src_name }}</dd>
+      <dt>Path</dt><dd class="mono">{{ address.path }}</dd>
+      {% if address.connection %}
+        <dt>Connection</dt>
+        <dd class="mono">
+          <a href="/connections/{{ address.connection }}">{{ address.connection }}</a>
+        </dd>
+      {% endif %}
+    </dl>
+    {% if address.connection and address.location %}
+      <h2>Location</h2>
+      <table class="kv-table">
+        <tbody>
+          {% for key, value in address.location.items() %}
+            <tr><th class="mono">{{ key }}</th><td class="mono">{{ value }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="note">
+        Location fields are non-sensitive by design &mdash; every
+        credential lives on the connection.
+      </p>
+    {% else %}
+      <h2>Arguments</h2>
+      <table class="kv-table">
+        <tbody>
+          {% for key, value in address.src_args.items() %}
+            <tr><th class="mono">{{ key }}</th><td class="mono">{{ value }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="note">Sensitive keys are masked with <code>***</code>. Editing preserves masked values unless you replace them.</p>
+    {% endif %}
+  {% else %}
+    <p class="empty">Address config <code>{{ name }}</code> not found in any search path.</p>
+  {% endif %}
+</section>
+{% endblock %}

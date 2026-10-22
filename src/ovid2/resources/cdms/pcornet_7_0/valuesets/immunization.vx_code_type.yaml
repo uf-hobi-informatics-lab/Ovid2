@@ -1,0 +1,29 @@
+v: 1
+name: pcornet_7_0.immunization.vx_code_type
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 IMMUNIZATION.VX_CODE_TYPE code set.
+code_column: code
+description_column: label
+items:
+- code: CX
+  label: CX=CVX
+  order: 11609
+- code: ND
+  label: ND=NDC
+  order: 11610
+- code: CH
+  label: CH=CPT or HCPCS
+  order: 11611
+- code: RX
+  label: RX=RXNORM
+  order: 11612
+- code: NI
+  label: NI=No information
+  order: 11613
+- code: UN
+  label: UN=Unknown
+  order: 11614
+- code: OT
+  label: OT=Other
+  order: 11615

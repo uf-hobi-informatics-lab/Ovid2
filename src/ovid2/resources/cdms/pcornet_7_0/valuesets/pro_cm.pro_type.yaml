@@ -1,0 +1,38 @@
+v: 1
+name: pcornet_7_0.pro_cm.pro_type
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 PRO_CM.PRO_TYPE code set.
+code_column: code
+description_column: label
+items:
+- code: PM
+  label: PM=PROMIS
+  order: 5877
+- code: NQ
+  label: NQ=Neuro-QoL
+  order: 5878
+- code: AM
+  label: AM=ASQC-Me
+  order: 5879
+- code: NT
+  label: NT=NIH Toolbox
+  order: 5880
+- code: PC
+  label: PC=PRO_CTCAE
+  order: 5881
+- code: LC
+  label: LC=LOINC
+  order: 5882
+- code: HC
+  label: HC=HCAHPS
+  order: 5883
+- code: NI
+  label: NI=No information
+  order: 5884
+- code: UN
+  label: UN=Unknown
+  order: 5885
+- code: OT
+  label: OT=Other
+  order: 5886

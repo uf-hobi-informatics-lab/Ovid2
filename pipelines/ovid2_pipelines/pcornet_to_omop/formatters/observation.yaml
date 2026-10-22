@@ -1,0 +1,8 @@
+# Coded-clinical fan-in -> OMOP observation (domain=Observation).
+# observation_id = the PCORnet surrogate id. Concept ids resolved against
+# the concept / concept_relationship views; only Observation-domain codes
+# survive.
+v: 1
+formatter: observation
+adapter: custom
+class: ovid2_pipelines.pcornet_to_omop.formatters_custom.observation_formatter.ObservationFormatter

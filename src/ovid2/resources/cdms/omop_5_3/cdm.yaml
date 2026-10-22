@@ -1,0 +1,72 @@
+v: 1
+name: omop_5_3
+version: '5.3'
+source:
+  origin: OHDSI OMOP Common Data Model v5.3
+  imported_from: pcornetcdm_to_omop_conversion/settings.py (SF_SCHEMAS)
+tables:
+- location
+- care_site
+- provider
+- person
+- observation_period
+- visit_occurrence
+- visit_detail
+- condition_occurrence
+- drug_exposure
+- procedure_occurrence
+- device_exposure
+- measurement
+- observation
+- death
+- note
+- specimen
+- fact_relationship
+- cdm_source
+reference_tables:
+- location
+- care_site
+- provider
+- person
+- visit_occurrence
+flavour_of_null:
+- ''
+- null
+id_columns:
+  person:
+    column: person_id
+    width: 64
+    reference_table: person
+  visit_occurrence:
+    column: visit_occurrence_id
+    width: 64
+    reference_table: visit_occurrence
+  provider:
+    column: provider_id
+    width: 64
+    reference_table: provider
+  care_site:
+    column: care_site_id
+    width: 64
+    reference_table: care_site
+  location:
+    column: location_id
+    width: 64
+    reference_table: location
+# Reuse the same OMOP CONCEPT views the PCORnet CDM already declares,
+# so concept-id resolution has the vocabulary available as a shared view.
+shared_views:
+- view_name: concept
+  source:
+    kind: file
+    path: ${OMOP_CDM_DIR}/CONCEPT.csv
+    delimiter: "\t"
+    header: true
+    required: false
+- view_name: concept_relationship
+  source:
+    kind: file
+    path: ${OMOP_CDM_DIR}/CONCEPT_RELATIONSHIP.csv
+    delimiter: "\t"
+    header: true
+    required: false

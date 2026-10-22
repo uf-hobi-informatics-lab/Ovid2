@@ -1,0 +1,44 @@
+v: 1
+name: pcornet_7_0.diagnosis.enc_type
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 DIAGNOSIS.ENC_TYPE code set.
+code_column: code
+description_column: label
+items:
+- code: AV
+  label: AV=Ambulatory Visit
+  order: 944
+- code: ED
+  label: ED=Emergency Department
+  order: 945
+- code: EI
+  label: EI=Emergency Department Admit to Inpatient Hospital Stay (permissible substitution)
+  order: 946
+- code: IP
+  label: IP=Inpatient Hospital Stay
+  order: 947
+- code: IS
+  label: IS=Non-Acute Institutional Stay
+  order: 948
+- code: OS
+  label: OS=Observation Stay
+  order: 949
+- code: IC
+  label: IC=Institutional Professional Consult (permissible substitution)
+  order: 950
+- code: TH
+  label: TH=Telehealth
+  order: 951
+- code: OA
+  label: OA=Other Ambulatory Visit
+  order: 952
+- code: NI
+  label: NI=No information
+  order: 953
+- code: UN
+  label: UN=Unknown
+  order: 954
+- code: OT
+  label: OT=Other
+  order: 955

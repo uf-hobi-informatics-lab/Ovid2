@@ -1,0 +1,3 @@
+# tmpfiles.d entries for Ovid2. Recreated on boot.
+d /var/run/ovid2 0755 @USER@ @USER@ - -
+d /var/log/ovid2 0755 @USER@ @USER@ - -

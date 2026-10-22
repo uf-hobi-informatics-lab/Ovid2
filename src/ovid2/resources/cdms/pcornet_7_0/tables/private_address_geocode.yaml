@@ -1,0 +1,69 @@
+v: 1
+name: private_address_geocode
+domain_description: Supplemented from pcornet_cdm_v70.csv.
+domain_order: 9025
+fields:
+- name: GEOCODEID
+  rdbms_type: RDBMS Text(x)
+  order: 497
+  sas_type: SAS Char(x)
+- name: ADDRESSID
+  rdbms_type: RDBMS Text(x)
+  order: 498
+  sas_type: SAS Char(x)
+- name: GEOCODE_STATE
+  rdbms_type: RDBMS Text(2)
+  order: 499
+  sas_type: SAS Char(2)
+- name: GEOCODE_COUNTY
+  rdbms_type: RDBMS Text(x)
+  order: 500
+  sas_type: SAS Char(x)
+- name: GEOCODE_LONGITUDE
+  rdbms_type: RDBMS Text(x)
+  order: 501
+  sas_type: SAS Char(x)
+- name: GEOCODE_LATITUDE
+  rdbms_type: RDBMS Text(x)
+  order: 502
+  sas_type: SAS Char(x)
+- name: GEOCODE_BLOCK
+  rdbms_type: RDBMS Text(x)
+  order: 503
+  sas_type: SAS Char(x)
+- name: GEOCODE_TRACT
+  rdbms_type: RDBMS Text(x)
+  order: 504
+  sas_type: SAS Char(x)
+- name: GEOCODE_GROUP
+  rdbms_type: RDBMS Text(x)
+  order: 505
+  sas_type: SAS Char(x)
+- name: GEOCODE_ZCTA
+  rdbms_type: RDBMS Text(x)
+  order: 506
+  sas_type: SAS Char(x)
+- name: GEOCODE_CUSTOM
+  rdbms_type: RDBMS Text(x)
+  order: 507
+  sas_type: SAS Char(x)
+- name: GEOCODE_CUSTOM_TEXT
+  rdbms_type: RDBMS Text(x)
+  order: 508
+  sas_type: SAS Char(x)
+- name: SHAPEFILE
+  rdbms_type: RDBMS Text(x)
+  order: 509
+  sas_type: SAS Char(x)
+- name: GEO_ACCURACY
+  rdbms_type: RDBMS Text(2)
+  order: 510
+  sas_type: SAS Char(2)
+- name: GEO_PROV_REF
+  rdbms_type: RDBMS Text(x)
+  order: 511
+  sas_type: SAS Char(x)
+- name: ASSIGNMENT_DATE
+  rdbms_type: RDBMS Date
+  order: 512
+  sas_type: SAS Date (Numeric)

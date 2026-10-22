@@ -1,0 +1,42 @@
+[Unit]
+Description=Ovid2 scheduler (host-side orchestrator)
+Documentation=https://github.com/uf-hobi-informatics-lab/Ovid2
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=@USER@
+Environment=PYTHONUNBUFFERED=1
+Environment=OVID2_SCHEDULER_MODE=orchestrator
+# Optional: point at a system-wide config
+Environment=XDG_CONFIG_HOME=/etc
+Environment=XDG_STATE_HOME=/var/lib
+Environment=XDG_RUNTIME_DIR=/var/run
+# Pin the compose-file mount sources so the docker containers see the host's
+# real data and credential directories. Without these, DATA_DIR falls back to
+# ``$XDG_DATA_HOME/ovid2/data`` (see ``ovid2.config.settings._resolve_path``)
+# which on a server host is an empty directory and results in silent
+# "no files found" errors at read time.
+Environment=OVID2_DATA_DIR=/data
+Environment=OVID2_CREDENTIALS_DIR=/ovid_credentials
+ExecStart=@OVID2_BIN@ scheduler
+Restart=on-failure
+RestartSec=10s
+# Cascade stop: sending SIGTERM to the daemon shuts the whole pipeline down
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=300
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths=/var/log/ovid2 /var/run/ovid2 /var/lib/ovid2
+
+[Install]
+WantedBy=multi-user.target

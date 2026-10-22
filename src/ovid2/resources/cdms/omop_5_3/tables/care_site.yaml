@@ -1,0 +1,34 @@
+v: 1
+name: care_site
+composite_key:
+- care_site_id
+domain_description: OMOP CDM 5.3 clinical data table.
+domain_order: 2
+fields:
+- name: care_site_id
+  rdbms_type: RDBMS Number
+  order: 1
+- name: care_site_name
+  rdbms_type: RDBMS Text(250)
+  order: 2
+- name: place_of_service_concept_id
+  rdbms_type: RDBMS Number
+  order: 3
+- name: location_id
+  rdbms_type: RDBMS Number
+  order: 4
+- name: care_site_source_value
+  rdbms_type: RDBMS Text(250)
+  order: 5
+- name: place_of_service_source_value
+  rdbms_type: RDBMS Text(250)
+  order: 6
+- name: updated
+  rdbms_type: RDBMS Text(250)
+  order: 7
+- name: source
+  rdbms_type: RDBMS Text(250)
+  order: 8
+- name: mapped_from
+  rdbms_type: RDBMS Text(50)
+  order: 9

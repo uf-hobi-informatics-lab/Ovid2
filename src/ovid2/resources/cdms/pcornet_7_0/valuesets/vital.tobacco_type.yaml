@@ -1,0 +1,32 @@
+v: 1
+name: pcornet_7_0.vital.tobacco_type
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 VITAL.TOBACCO_TYPE code set.
+code_column: code
+description_column: label
+items:
+- code: '01'
+  label: 01=Smoked tobacco only
+  order: 1057
+- code: '02'
+  label: 02=Non-smoked tobacco only
+  order: 1058
+- code: '03'
+  label: 03=Use of both smoked and non-smoked tobacco products
+  order: 1059
+- code: '04'
+  label: 04=None
+  order: 1060
+- code: '05'
+  label: 05=Use of smoked tobacco but no information about non-smoked tobacco use
+  order: 1061
+- code: NI
+  label: NI=No information
+  order: 1062
+- code: UN
+  label: UN=Unknown
+  order: 1063
+- code: OT
+  label: OT=Other
+  order: 1064

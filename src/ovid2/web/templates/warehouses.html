@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Warehouses &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <div class="page-header">
+    <h1>Warehouses</h1>
+    <div class="page-actions">
+      {% if engines %}
+        <button type="button" id="test-all-btn" class="button small"
+                data-test-all="engines">Test all</button>
+      {% endif %}
+      <a href="/engines/new" class="button primary small">+ New warehouse</a>
+    </div>
+  </div>
+  <p class="note">
+    A <strong>warehouse</strong> selects the compute backend a pipeline
+    runs on (PySpark, Databricks Connect, or Snowpark) and its resource
+    knobs (executor memory, cluster id, Snowflake warehouse). Warehouses
+    control <em>how</em> the pipeline computes; they never influence
+    application logic. Pipelines reference a warehouse by name.
+  </p>
+
+  {% if engines %}
+    <div id="test-all-summary" class="flash" style="display: none;"></div>
+    <div class="table-wrap">
+    <table class="runs-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Secret ref</th>
+          <th>Path</th>
+          <th>Result</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in engines %}
+          <tr data-engine-row="{{ e.name }}">
+            <td><a href="/engines/{{ e.name }}">{{ e.name }}</a></td>
+            <td>{{ e.type }}</td>
+            <td class="mono small">{{ e.secret_ref or '&mdash;' | safe }}</td>
+            <td class="mono small">{{ e.path }}</td>
+            <td class="test-result-cell" data-test-cell="{{ e.name }}">
+              <span class="small" style="color: var(--fg-muted);">&mdash;</span>
+            </td>
+            <td>
+              <button type="button" class="button small"
+                      data-test-engine="{{ e.name }}">Test</button>
+              <a href="/engines/{{ e.name }}/edit" class="small">edit</a>
+              <form action="/engines/{{ e.name }}/delete" method="post" style="display: inline;"
+                    onsubmit="return confirm('Delete warehouse {{ e.name }}?')">
+                <button type="submit" class="link-button small danger">delete</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% else %}
+    <p class="empty">
+      No warehouses yet. Click <a href="/engines/new">New warehouse</a> to
+      create one. Files land under
+      <code>$XDG_CONFIG_HOME/ovid2/engines/</code>. The bare type name
+      <code>pyspark</code> continues to work everywhere as a built-in
+      fallback with default settings; you only need to create a named
+      warehouse when you want to override the defaults.
+    </p>
+  {% endif %}
+</section>
+
+{% if engines %}
+<script>
+(function () {
+  "use strict";
+
+  var MAX_PARALLEL = 4;
+
+  function badgeHtml(cls, code, message) {
+    var safeCode = String(code || "").replace(/[<>&"']/g, function (c) {
+      return { "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+    var safeMsg = String(message || "").replace(/[<>&"']/g, function (c) {
+      return { "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+    return '<span class="badge ' + cls + '" title="' + safeMsg + '">' + safeCode + '</span>';
+  }
+
+  function setPending(cell) {
+    cell.innerHTML = '<span class="badge status-processing" title="Testing…">testing…</span>';
+  }
+
+  function setResult(cell, ok, code, message) {
+    var cls = ok ? "severity-ok" : "severity-error";
+    if (!ok && (code === "not_implemented" || code === "skipped")) {
+      cls = "severity-warning";
+    }
+    cell.innerHTML = badgeHtml(cls, code || (ok ? "ok" : "error"), message || "");
+  }
+
+  function setError(cell, message) {
+    cell.innerHTML = badgeHtml("severity-error", "error", message || "Request failed");
+  }
+
+  function runOne(name) {
+    var cell = document.querySelector('[data-test-cell="' + name + '"]');
+    if (!cell) return Promise.resolve({ ok: false, name: name });
+    setPending(cell);
+    return fetch("/api/v1/engines/" + encodeURIComponent(name) + "/test", {
+      method: "POST",
+      headers: { "Accept": "application/json" },
+    })
+      .then(function (r) {
+        return r.json().then(function (body) { return { status: r.status, body: body }; });
+      })
+      .then(function (res) {
+        var body = res.body || {};
+        if (res.status >= 400) {
+          var msg = body.detail || body.message || ("HTTP " + res.status);
+          setError(cell, msg);
+          return { ok: false, name: name };
+        }
+        setResult(cell, !!body.ok, body.code, body.message);
+        return { ok: !!body.ok, name: name };
+      })
+      .catch(function (err) {
+        setError(cell, (err && err.message) || "Network error");
+        return { ok: false, name: name };
+      });
+  }
+
+  function runPool(names) {
+    var summary = document.getElementById("test-all-summary");
+    if (summary) {
+      summary.className = "flash";
+      summary.style.display = "block";
+      summary.textContent = "Testing " + names.length + " warehouses…";
+    }
+    var idx = 0;
+    var oks = 0;
+    var fails = 0;
+    return new Promise(function (resolve) {
+      function next() {
+        if (idx >= names.length) {
+          if (idx - oks - fails === 0 && idx === names.length) {
+            if (summary) {
+              summary.className = fails === 0 ? "flash ok" : "flash error";
+              summary.textContent = oks + " ok, " + fails + " failed";
+            }
+            resolve();
+          }
+          return;
+        }
+        var name = names[idx++];
+        runOne(name).then(function (r) {
+          if (r.ok) oks++; else fails++;
+          if (oks + fails === names.length) {
+            if (summary) {
+              summary.className = fails === 0 ? "flash ok" : "flash error";
+              summary.textContent = oks + " ok, " + fails + " failed";
+            }
+            resolve();
+          } else {
+            next();
+          }
+        });
+      }
+      var slots = Math.min(MAX_PARALLEL, names.length);
+      for (var i = 0; i < slots; i++) next();
+    });
+  }
+
+  document.addEventListener("click", function (evt) {
+    var t = evt.target;
+    if (!(t instanceof HTMLElement)) return;
+    var single = t.getAttribute("data-test-engine");
+    if (single) {
+      evt.preventDefault();
+      runOne(single);
+      return;
+    }
+    if (t.getAttribute("data-test-all") === "engines") {
+      evt.preventDefault();
+      var rows = document.querySelectorAll("[data-engine-row]");
+      var names = [];
+      rows.forEach(function (r) { names.push(r.getAttribute("data-engine-row")); });
+      if (names.length) runPool(names);
+    }
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

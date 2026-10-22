@@ -1,0 +1,23 @@
+v: 1
+name: pcornet_7_0.pro_cm.pro_cat
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 PRO_CM.PRO_CAT code set.
+code_column: code
+description_column: label
+items:
+- code: Y
+  label: Y=Yes
+  order: 5901
+- code: N
+  label: N=No
+  order: 5902
+- code: NI
+  label: NI=No information
+  order: 5903
+- code: UN
+  label: UN=Unknown
+  order: 5904
+- code: OT
+  label: OT=Other
+  order: 5905

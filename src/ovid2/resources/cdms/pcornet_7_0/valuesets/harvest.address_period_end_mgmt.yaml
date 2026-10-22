@@ -1,0 +1,29 @@
+v: 1
+name: pcornet_7_0.harvest.address_period_end_mgmt
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 HARVEST.ADDRESS_PERIOD_END_MGMT code set.
+code_column: code
+description_column: label
+items:
+- code: '01'
+  label: 01=No imputation or obfuscation
+  order: 13041
+- code: '02'
+  label: 02=Imputation for incomplete dates
+  order: 13042
+- code: '03'
+  label: 03=Date obfuscation
+  order: 13043
+- code: '04'
+  label: 04=Both imputation and obfuscation
+  order: 13044
+- code: NI
+  label: NI=No information
+  order: 13045
+- code: UN
+  label: UN=Unknown
+  order: 13046
+- code: OT
+  label: OT=Other
+  order: 13047

@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}{{ 'New LLM' if mode == 'new' else 'Edit LLM ' + name }} &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <p><a href="/llms">&larr; all LLMs</a></p>
+  <h1>{% if mode == 'new' %}New LLM connection{% else %}Edit LLM: <span class="mono">{{ name }}</span>{% endif %}</h1>
+
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+  {% if spec.note %}<p class="note">{{ spec.note }}</p>{% endif %}
+
+  {% if mode == 'new' %}
+  <form method="get" action="/llms/new" class="edit-form" style="margin-bottom: 1em;">
+    <div class="form-row">
+      <label for="provider_selector">Provider</label>
+      <select id="provider_selector" name="provider" onchange="this.form.submit()">
+        {% for p in providers %}
+          <option value="{{ p }}" {% if provider == p %}selected{% endif %}>{{ p }}</option>
+        {% endfor %}
+      </select>
+      <span class="small">Changing the provider shows that provider's fields.</span>
+    </div>
+  </form>
+  {% endif %}
+
+  <form method="post" action="{% if mode == 'new' %}/llms{% else %}/llms/{{ name }}{% endif %}" class="edit-form" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="provider" value="{{ provider }}">
+    {% if mode == 'new' %}
+      <div class="form-row">
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" required pattern="[A-Za-z0-9._-]+"
+               placeholder="{{ 'system1' if provider == 'jev' else 'general' }}">
+      </div>
+    {% endif %}
+    <div class="form-row">
+      <label for="role">Role</label>
+      <select id="role" name="role">
+        {% for r in spec.roles %}
+          <option value="{{ r }}" {% if role == r %}selected{% endif %}>{{ 'System 1 (decisions)' if r == 'system1' else 'General (open questions)' }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <h2>Settings</h2>
+    <table class="kv-table edit">
+      <thead><tr><th>Key</th><th>Value</th><th>Help</th></tr></thead>
+      <tbody>
+        {% for f in spec.args %}
+          <tr>
+            <td class="mono">{{ f.name }}{% if f.required %} <span class="danger">*</span>{% endif %}</td>
+            <td>
+              {% if f.multiline %}
+                <textarea name="arg_{{ f.name }}" class="mono wide" rows="4" spellcheck="false">{{ args.get(f.name, '') }}</textarea>
+              {% else %}
+                <input type="text" name="arg_{{ f.name }}" value="{{ args.get(f.name, '') }}"
+                       class="mono wide" {% if f.required %}required{% endif %}
+                       placeholder="{{ f.default or '' }}">
+              {% endif %}
+            </td>
+            <td class="small">{{ f.help }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if spec.secrets %}
+      <h2>Credentials</h2>
+      <p class="note">
+        Saved to <code>$XDG_CONFIG_HOME/ovid2/secrets.d/llm_&lt;name&gt;.json</code> (mode 0600).
+        {% if mode == 'edit' %}Leave a field as <code>***</code> to keep the stored value.{% endif %}
+      </p>
+      <table class="kv-table edit">
+        <thead><tr><th>Key</th><th>Value</th><th>Help</th></tr></thead>
+        <tbody>
+          {% for f in spec.secrets %}
+            <tr>
+              <td class="mono">{{ f.name }}{% if f.required %} <span class="danger">*</span>{% endif %}</td>
+              <td>
+                <input type="password" name="sec_{{ f.name }}" value="{{ secrets.get(f.name, '') }}"
+                       class="mono wide" autocomplete="new-password"
+                       {% if f.required and mode == 'new' %}required{% endif %}
+                       placeholder="{{ '***' if mode == 'edit' else '' }}">
+              </td>
+              <td class="small">{{ f.help }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+
+    <div class="form-row">
+      <button type="submit" class="button primary">Save</button>
+      <a href="{% if mode == 'edit' %}/llms/{{ name }}{% else %}/llms{% endif %}" class="button">Cancel</a>
+    </div>
+  </form>
+
+  {% if mode == 'edit' %}
+    <form method="post" action="/llms/{{ name }}/delete" class="edit-form" style="margin-top: 1em;"
+          onsubmit="return confirm('Delete LLM connection {{ name }}?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="button danger">Delete</button>
+    </form>
+  {% endif %}
+</section>
+{% endblock %}

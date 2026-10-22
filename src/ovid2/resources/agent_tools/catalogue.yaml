@@ -1,0 +1,615 @@
+# Ovid2 agent tool catalogue (v1).
+#
+# The allow-list of /api/v1 operations the right-panel assistant may call.
+# Schema: resources/schemas/agent_tools.v1.json. Loader:
+# ovid2.agent_tools.catalogue. Contract: tests/contract/test_agent_tools_catalogue.py
+# (every entry must match a real route + capability in the OpenAPI snapshot).
+#
+#   method: GET   -> executed by the LLM executor with a short-lived,
+#                    GET-only token carrying the chatting user's role
+#                    (capped at pipeline_operator).
+#   method: POST/PUT -> NEVER executed by the executor. Surfaced to the
+#                    human as a proposal card; the browser runs it with the
+#                    user's own session. Destructive ops are not listed.
+#   opens_draft: true -> (draft-job creation ONLY) the browser runs the call
+#                    without a proposal click and opens the draft's run page.
+#                    A draft never executes; the human gate is the ▶ there.
+#                    Description must start with DRAFT (contract-enforced).
+#   ui_action: true -> (cosmetic, browser-only) no method/path. The browser
+#                    validates + applies the change to its own UI and shows
+#                    Undo. Description must start with UI: (contract-enforced).
+#
+# Deliberately excluded (PHI / privilege): secrets, settings, install,
+# users, approvals, LLM connections, storage browse, pipeline file
+# preview, filesystem listing, any DELETE.
+v: 1
+tools:
+  # ---------------------------------------------------------------- status
+  - name: health
+    description: Liveness of the Ovid2 API (version, uptime).
+    method: GET
+    path: /api/v1/health
+    capability: view_public
+
+  - name: list_cdms
+    description: List the registered common data models (PCORnet, OMOP, ...).
+    method: GET
+    path: /api/v1/cdms
+    capability: view_public
+
+  - name: get_cdm
+    description: Describe one CDM - its tables, composite keys and reference tables.
+    method: GET
+    path: /api/v1/cdms/{name}
+    capability: view_public
+    params:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string, description: "CDM name, e.g. pcornet_7_0."}
+
+  # ------------------------------------------------------------ runs / jobs
+  - name: list_jobs
+    description: >-
+      List web-submitted jobs, newest first. Each job has job_id, instance_id,
+      pipeline, kind, status (queued/running/succeeded/failed/cancelled).
+    method: GET
+    path: /api/v1/jobs
+    capability: view_runs
+    params:
+      type: object
+      properties:
+        limit: {type: integer, minimum: 1, maximum: 100, default: 20}
+        offset: {type: integer, minimum: 0, default: 0}
+        status: {type: string, description: "Exact status filter, e.g. failed."}
+        pipeline: {type: string, description: "Pipeline name filter."}
+
+  - name: get_job
+    description: Full detail for one job (payload, status, timestamps, exit code).
+    method: GET
+    path: /api/v1/jobs/{job_id}
+    capability: view_runs
+    params:
+      type: object
+      required: [job_id]
+      properties:
+        job_id: {type: string}
+
+  - name: get_job_log
+    description: >-
+      Tail of a job's stdout/stderr log. Use it to diagnose a failed job.
+    method: GET
+    path: /api/v1/jobs/{job_id}/log
+    capability: view_runs
+    max_result_chars: 12000
+    truncate: tail
+    params:
+      type: object
+      required: [job_id]
+      properties:
+        job_id: {type: string}
+
+  - name: list_runs
+    description: List batch runs from the batch tracker (batch_id, pipeline, status, instance_id).
+    method: GET
+    path: /api/v1/runs
+    capability: view_runs
+    params:
+      type: object
+      properties:
+        limit: {type: integer, minimum: 1, maximum: 100, default: 20}
+        offset: {type: integer, minimum: 0, default: 0}
+        status: {type: string, description: "NEW | PROCESSING | PROCESSED | ERROR"}
+        pipeline: {type: string}
+
+  - name: get_run
+    description: One batch run by batch_id.
+    method: GET
+    path: /api/v1/runs/{batch_id}
+    capability: view_runs
+    params:
+      type: object
+      required: [batch_id]
+      properties:
+        batch_id: {type: string}
+
+  - name: run_timeline
+    description: >-
+      Aggregated timeline of a run (per-table status, per-stage counters,
+      fixes applied, error/warning counts). Keyed by instance_id.
+    method: GET
+    path: /api/v1/runs/{instance_id}/timeline
+    capability: view_runs
+    params:
+      type: object
+      required: [instance_id]
+      properties:
+        instance_id: {type: string}
+
+  - name: run_events
+    description: Page of raw structured events from a run's event log (cursor-based).
+    method: GET
+    path: /api/v1/runs/{instance_id}/events
+    capability: view_runs
+    params:
+      type: object
+      required: [instance_id]
+      properties:
+        instance_id: {type: string}
+        after: {type: integer, minimum: 0, default: 0, description: "Cursor from the previous page."}
+        limit: {type: integer, minimum: 1, maximum: 200, default: 100}
+
+  - name: get_health_report
+    description: Data-health (EDC) report for a health run.
+    method: GET
+    path: /api/v1/runs/{instance_id}/report
+    capability: view_runs
+    params:
+      type: object
+      required: [instance_id]
+      properties:
+        instance_id: {type: string}
+
+  - name: list_health_checks
+    description: Catalogue of data-health / EDC checks that a health run can execute.
+    method: GET
+    path: /api/v1/health/checks
+    capability: view_runs
+
+  - name: list_health_packages
+    description: EDC report-cycle packages (e.g. 20r1) and their member checks.
+    method: GET
+    path: /api/v1/health/packages
+    capability: view_runs
+
+  - name: list_transforms
+    description: Public transformations library (op names, categories, parameters).
+    method: GET
+    path: /api/v1/transforms
+    capability: view_runs
+    params:
+      type: object
+      properties:
+        category: {type: string, description: "formatting / correction / reshape / sampling"}
+
+  # --------------------------------------------------------- configuration
+  - name: list_pipeline_configs
+    description: >-
+      List saved pipeline configurations (named, runnable job templates with
+      kind, input/output, tables, packages, schedule, enabled flag). Names
+      here (e.g. DC_CHECKS) are configs, NOT pipeline packages - read one
+      with get_pipeline_config. A config may keep its input or output open
+      (empty address); the run must then supply it.
+    method: GET
+    path: /api/v1/pipelines
+    capability: view_pipeline_data
+
+  - name: get_pipeline_config
+    description: >-
+      One saved pipeline configuration by name (kind, pipeline, input/output
+      address, tables, packages, checks, engine, workers).
+    method: GET
+    path: /api/v1/pipelines/{name}
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+
+  - name: list_pipeline_packages
+    description: List installed pipeline packages (code under ovid2_pipelines) and their CDM.
+    method: GET
+    path: /api/v1/pipeline-packages
+    capability: view_pipeline_data
+
+  - name: get_pipeline_package
+    description: >-
+      Detail for one installed code package under ovid2_pipelines (tables,
+      formatters, mappers, fixers). Not for saved configs - use
+      get_pipeline_config for names returned by list_pipeline_configs.
+    method: GET
+    path: /api/v1/pipeline-packages/{pipeline}
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [pipeline]
+      properties:
+        pipeline: {type: string}
+
+  - name: get_pipeline_plan
+    description: The execution plan (per-table stage chain) a pipeline package would run.
+    method: GET
+    path: /api/v1/pipeline-packages/{pipeline}/plan
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [pipeline]
+      properties:
+        pipeline: {type: string}
+
+  - name: list_formatters
+    description: Formatter specs defined by a pipeline package.
+    method: GET
+    path: /api/v1/pipeline-packages/{pipeline}/formatters
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [pipeline]
+      properties:
+        pipeline: {type: string}
+
+  - name: get_formatter
+    description: One formatter spec (YAML as JSON) for a pipeline table.
+    method: GET
+    path: /api/v1/pipeline-packages/{pipeline}/formatters/{table}
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [pipeline, table]
+      properties:
+        pipeline: {type: string}
+        table: {type: string}
+
+  - name: list_mappers
+    description: Mapper specs defined by a pipeline package.
+    method: GET
+    path: /api/v1/pipeline-packages/{pipeline}/mappers
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [pipeline]
+      properties:
+        pipeline: {type: string}
+
+  - name: get_mapper
+    description: One mapper spec for a pipeline table.
+    method: GET
+    path: /api/v1/pipeline-packages/{pipeline}/mappers/{table}
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [pipeline, table]
+      properties:
+        pipeline: {type: string}
+        table: {type: string}
+
+  - name: list_addresses
+    description: List address configs (named input/output endpoints used by runs).
+    method: GET
+    path: /api/v1/addresses
+    capability: view_pipeline_data
+
+  - name: get_address
+    description: One address config (secrets are never included).
+    method: GET
+    path: /api/v1/addresses/{name}
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+
+  - name: list_connections
+    description: List storage connections (type and non-secret fields only).
+    method: GET
+    path: /api/v1/connections
+    capability: view_pipeline_data
+
+  - name: get_connection
+    description: One storage connection (non-secret fields only).
+    method: GET
+    path: /api/v1/connections/{name}
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+
+  - name: list_engines
+    description: List compute engines (pyspark, databricks, snowpark ...).
+    method: GET
+    path: /api/v1/engines
+    capability: view_pipeline_data
+
+  - name: get_engine
+    description: One compute engine config.
+    method: GET
+    path: /api/v1/engines/{name}
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+
+  # ------------------------------------------------------------ data space
+  - name: ods_list_pipelines
+    description: Ovid Data Space - list pipelines that have batches (/pipeline level).
+    method: GET
+    path: /api/v1/dataspace
+    capability: view_pipeline_data
+
+  - name: ods_list_dimensions
+    description: Ovid Data Space - the storage dimensions (disc, snowflake, s3, ...).
+    method: GET
+    path: /api/v1/dataspace/dimensions
+    capability: view_pipeline_data
+
+  - name: ods_list_batches
+    description: Ovid Data Space - batches for one pipeline.
+    method: GET
+    path: /api/v1/dataspace/{pipeline}
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [pipeline]
+      properties:
+        pipeline: {type: string}
+
+  - name: ods_list_tables
+    description: Ovid Data Space - tables in one batch of a pipeline.
+    method: GET
+    path: /api/v1/dataspace/{pipeline}/{batch_id}
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [pipeline, batch_id]
+      properties:
+        pipeline: {type: string}
+        batch_id: {type: string}
+
+  - name: ods_resolve
+    description: Resolve an ODS path (/pipeline/batch/table) to its physical location(s).
+    method: GET
+    path: /api/v1/dataspace/resolve
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [path]
+      properties:
+        path: {type: string, description: "e.g. /demo/20260316/DEMOGRAPHIC"}
+        dim: {type: string, description: "Optional dimension (disc, snowflake, s3, ...)."}
+
+  # ======================================================= drafts (write)
+  # Executed by the user's browser WITHOUT a click: it only creates a draft
+  # job (never claimed by the worker) and opens its run page, where the
+  # human presses ▶ to run it.
+
+  - name: create_job_draft
+    description: >-
+      DRAFT a fully specified job and open it on the Jobs page, ready to run.
+      This is the PREFERRED way to act on "run X on A into B": nothing
+      executes - the user reviews the run page and presses the Run button.
+      kind is one of etl, analysis, dq_checks, health, copy, move. To run a
+      saved config, copy its kind, pipeline, packages/checks, engine,
+      workers and tables (read it with get_pipeline_config) and set
+      input_address / output_address to address NAMES exactly as returned by
+      list_addresses (e.g. CHAR_DEMO). Only when no saved address fits, use
+      *_connection plus *_location as a plain path like DATABASE/SCHEMA (never
+      JSON). batch_id is a short label for this run (e.g. today's date
+      YYYYMMDD).
+    method: POST
+    path: /api/v1/job-drafts
+    capability: submit_jobs
+    opens_draft: true
+    params:
+      type: object
+      required: [pipeline, batch_id]
+      properties:
+        kind: {type: string, enum: [etl, analysis, dq_checks, health, copy, move], default: etl}
+        pipeline: {type: string}
+        batch_id: {type: string}
+        cdm: {type: string}
+        input_address: {type: string, description: "Saved address name from list_addresses (preferred)."}
+        output_address: {type: string, description: "Saved address name from list_addresses (preferred)."}
+        input_connection: {type: string, description: "Only if no saved address fits."}
+        input_location: {type: string, description: "Plain path, e.g. CHAR_DEMO/PUBLIC. Never JSON."}
+        output_connection: {type: string, description: "Only if no saved address fits."}
+        output_location: {type: string, description: "Plain path, e.g. SANDBOX/PUBLIC. Never JSON."}
+        tables: {type: array, items: {type: string}}
+        transformations: {type: array, items: {type: string}}
+        engine: {type: string}
+        workers: {type: integer, minimum: 1, maximum: 200}
+        packages: {type: array, items: {type: string}}
+        parts: {type: array, items: {type: string}}
+        checks: {type: array, items: {type: string}}
+
+  # ======================================================= proposals (write)
+  # Never executed by the LLM executor. The user clicks Run in the panel.
+
+  - name: submit_run
+    description: >-
+      PROPOSE enqueuing a new job immediately (skips the draft review; prefer
+      create_job_draft). kind is one of etl, analysis, dq_checks,
+      health, copy, move. Requires pipeline and batch_id plus an input and
+      output (address names, or connection + location). The user must
+      confirm before anything runs.
+    method: POST
+    path: /api/v1/runs
+    capability: submit_jobs
+    params:
+      type: object
+      required: [pipeline, batch_id]
+      properties:
+        kind: {type: string, enum: [etl, analysis, dq_checks, health, copy, move], default: etl}
+        pipeline: {type: string}
+        batch_id: {type: string}
+        cdm: {type: string}
+        input_address: {type: string}
+        output_address: {type: string}
+        input_connection: {type: string}
+        input_location: {type: string}
+        output_connection: {type: string}
+        output_location: {type: string}
+        tables: {type: array, items: {type: string}}
+        transformations: {type: array, items: {type: string}}
+        engine: {type: string}
+        workers: {type: integer, minimum: 1, maximum: 200}
+        packages: {type: array, items: {type: string}}
+        parts: {type: array, items: {type: string}}
+        checks: {type: array, items: {type: string}}
+
+  - name: draft_pipeline_config
+    description: >-
+      DRAFT a run of a saved pipeline configuration (name from
+      list_pipeline_configs, e.g. DC_CHECKS) and open it on the Jobs page,
+      ready to run. Nothing executes - the user presses the Run button there.
+      Use this for "run <config> on A into B": pass input_address /
+      output_address as saved address NAMES from list_addresses (they fill
+      the config's open input/output for this run), plus optional batch_id
+      (e.g. today's date YYYYMMDD) or tables.
+    method: POST
+    path: /api/v1/pipelines/{name}/draft
+    capability: submit_jobs
+    opens_draft: true
+    params:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string, description: "Saved pipeline config name."}
+        batch_id: {type: string}
+        tables: {type: array, items: {type: string}}
+        input_address: {type: string, description: "Saved address name from list_addresses."}
+        output_address: {type: string, description: "Saved address name from list_addresses."}
+
+  - name: cancel_job
+    description: PROPOSE cancelling a queued or running job. The user must confirm.
+    method: POST
+    path: /api/v1/jobs/{job_id}/cancel
+    capability: submit_jobs
+    params:
+      type: object
+      required: [job_id]
+      properties:
+        job_id: {type: string}
+
+  - name: rerun_job
+    description: PROPOSE re-submitting a finished job with the same payload. The user must confirm.
+    method: POST
+    path: /api/v1/jobs/{job_id}/rerun
+    capability: submit_jobs
+    params:
+      type: object
+      required: [job_id]
+      properties:
+        job_id: {type: string}
+
+  - name: enable_pipeline_config
+    description: PROPOSE enabling a saved pipeline configuration's schedule. The user must confirm.
+    method: POST
+    path: /api/v1/pipelines/{name}/enable
+    capability: submit_jobs
+    params:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+
+  - name: disable_pipeline_config
+    description: PROPOSE disabling a saved pipeline configuration's schedule. The user must confirm.
+    method: POST
+    path: /api/v1/pipelines/{name}/disable
+    capability: submit_jobs
+    params:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+
+  # ------------------------------------------------------------ UI actions
+  # ui_action: true -> no method / path; never reaches the API. The executor
+  # emits a ui_action event, the user's browser re-validates the arguments
+  # against its own allow-list (llm_panel.js), applies the change to THAT
+  # browser only (localStorage) and shows an Undo button. Cosmetic and
+  # reversible by construction. Description must start with "UI:"; the set
+  # of names is pinned by the contract test.
+  - name: set_appearance
+    description: >-
+      UI: change how the Ovid2 web page looks for this user, in their browser only.
+      Applies immediately and the user can undo it. Use only when the user asks to
+      change the theme, colours, fonts or text sizes. Setting `theme` switches the
+      base theme and clears earlier colour/font overrides first; `colors` and
+      `appearance` are then layered on top. `reset: true` clears all overrides
+      (keeping the theme). The current appearance is given in the system prompt.
+      Keep text readable: pick fg/bg pairs with strong contrast.
+    ui_action: true
+    capability: use_llm
+    params:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        theme:
+          type: string
+          description: "Base theme: clinical (light, teal), matrix (black/green), super-mario-world (bright, playful), tatooine (dark, sandy amber), financial (dark, green), lego (light, red)."
+          enum: [clinical, matrix, super-mario-world, tatooine, financial, lego]
+        colors:
+          type: object
+          description: "Quick colour overrides as #rrggbb. surface = cards and raised panels."
+          additionalProperties: false
+          properties:
+            accent: {type: string, pattern: "^#[0-9a-fA-F]{6}$"}
+            bg: {type: string, pattern: "^#[0-9a-fA-F]{6}$"}
+            surface: {type: string, pattern: "^#[0-9a-fA-F]{6}$"}
+            fg: {type: string, pattern: "^#[0-9a-fA-F]{6}$"}
+        appearance:
+          type: object
+          description: >-
+            Fine-grained CSS variable overrides per component group. Colours are
+            #rrggbb; sizes like "15px" / "0.95rem"; weights 100-900; fonts a CSS
+            font stack such as "Georgia, serif" or one of var(--font-sans),
+            var(--font-serif), var(--mono), var(--font-display).
+          additionalProperties: false
+          properties:
+            "--bg": {type: string, pattern: "^#[0-9a-fA-F]{6}$", description: page background}
+            "--bg-elev": {type: string, pattern: "^#[0-9a-fA-F]{6}$", description: raised surfaces}
+            "--card-bg": {type: string, pattern: "^#[0-9a-fA-F]{6}$", description: cards and tables}
+            "--fg": {type: string, pattern: "^#[0-9a-fA-F]{6}$", description: body text}
+            "--accent": {type: string, pattern: "^#[0-9a-fA-F]{6}$", description: accent and buttons}
+            "--drawer-bg": {type: string, pattern: "^#[0-9a-fA-F]{6}$", description: navigation drawer}
+            "--body-ff": {type: string, pattern: "^(var\\(--(font-sans|font-serif|mono|font-display)\\)|[A-Za-z0-9 ,\"'-]{1,160})$"}
+            "--body-fs": {type: string, pattern: "^[0-9]{1,2}(\\.[0-9]{1,3})?(px|rem|em)$"}
+            "--body-fw": {type: string, pattern: "^[1-9]00$"}
+            "--btn-ff": {type: string, pattern: "^(var\\(--(font-sans|font-serif|mono|font-display)\\)|[A-Za-z0-9 ,\"'-]{1,160})$"}
+            "--btn-fs": {type: string, pattern: "^[0-9]{1,2}(\\.[0-9]{1,3})?(px|rem|em)$"}
+            "--btn-fw": {type: string, pattern: "^[1-9]00$"}
+            "--card-ff": {type: string, pattern: "^(var\\(--(font-sans|font-serif|mono|font-display)\\)|[A-Za-z0-9 ,\"'-]{1,160})$"}
+            "--card-fs": {type: string, pattern: "^[0-9]{1,2}(\\.[0-9]{1,3})?(px|rem|em)$"}
+            "--card-fw": {type: string, pattern: "^[1-9]00$"}
+            "--table-fs": {type: string, pattern: "^[0-9]{1,2}(\\.[0-9]{1,3})?(px|rem|em)$"}
+            "--nav-ff": {type: string, pattern: "^(var\\(--(font-sans|font-serif|mono|font-display)\\)|[A-Za-z0-9 ,\"'-]{1,160})$"}
+            "--nav-fs": {type: string, pattern: "^[0-9]{1,2}(\\.[0-9]{1,3})?(px|rem|em)$"}
+            "--nav-fw": {type: string, pattern: "^[1-9]00$"}
+        reset:
+          type: boolean
+          description: "true clears every colour/font override (applied before colors/appearance)."
+
+  - name: save_appearance
+    description: >-
+      UI: save the user's current look (base theme plus all overrides) as a named
+      saved theme in their browser, overwriting a saved theme with the same name.
+      The user can undo it. Call set_appearance first if the look should change.
+    ui_action: true
+    capability: use_llm
+    params:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 60, pattern: "^[^<>]{1,60}$"}
+
+  - name: apply_saved_appearance
+    description: >-
+      UI: switch to one of the user's saved themes by name (names are listed in the
+      system prompt). Applies immediately in their browser; the user can undo it.
+    ui_action: true
+    capability: use_llm
+    params:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 60}

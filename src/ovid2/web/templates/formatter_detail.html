@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}{{ spec.pipeline }}/formatters/{{ spec.table }} &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <p><a href="/pipeline-packages/{{ spec.pipeline }}">&larr; back to {{ spec.pipeline }}</a></p>
+  <h1>Formatter: <span class="mono">{{ spec.pipeline }}/{{ spec.table }}</span></h1>
+  <dl class="detail">
+    <dt>Path</dt><dd class="mono small">{{ spec.path }}</dd>
+    <dt>Kind</dt><dd>{{ spec.source_kind }}</dd>
+    <dt>Adapter</dt><dd>{{ spec.adapter or "&mdash;"|safe }}</dd>
+  </dl>
+  {% if spec.source_kind == 'yaml' %}
+    <p>
+      <a href="/pipeline-packages/{{ spec.pipeline }}/formatters/{{ spec.table }}/edit"
+         class="button primary small">Edit</a>
+      <form action="/pipeline-packages/{{ spec.pipeline }}/formatters/{{ spec.table }}/delete"
+            method="post" style="display: inline;"
+            onsubmit="return confirm('Delete formatter {{ spec.pipeline }}/{{ spec.table }}?')">
+        <button type="submit" class="button danger small">Delete</button>
+      </form>
+    </p>
+  {% else %}
+    <p class="note">
+      Python-dict specs are read-only through the panel; edit on disk
+      per <code>AGENTS.md</code>.
+    </p>
+  {% endif %}
+  <h2>Source</h2>
+  <pre class="code-preview"><code>{{ spec.raw_text }}</code></pre>
+</section>
+{% endblock %}

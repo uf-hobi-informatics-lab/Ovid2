@@ -1,0 +1,29 @@
+v: 1
+name: pcornet_7_0.pro_cm.pro_method
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 PRO_CM.PRO_METHOD code set.
+code_column: code
+description_column: label
+items:
+- code: PA
+  label: PA=Paper
+  order: 5887
+- code: EC
+  label: EC=Electronic
+  order: 5888
+- code: PH
+  label: PH=Telephonic
+  order: 5889
+- code: IV
+  label: IV=Telephonic with interactive voice response (IVR) technology
+  order: 5890
+- code: NI
+  label: NI=No information
+  order: 5891
+- code: UN
+  label: UN=Unknown
+  order: 5892
+- code: OT
+  label: OT=Other
+  order: 5893

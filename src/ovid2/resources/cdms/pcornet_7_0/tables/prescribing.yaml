@@ -1,0 +1,207 @@
+v: 1
+name: prescribing
+composite_key:
+- PRESCRIBINGID
+domain_description: Provider orders for medication dispensing and/or administration. These orders may
+  take place in any setting, including the inpatient or outpatient basis.
+domain_order: 11
+constraints:
+- field: PRESCRIBINGID
+  rule: unique
+  order: 47
+- field: PRESCRIBINGID
+  rule: required, not null
+  order: 48
+- field: PATID
+  rule: required, not null
+  order: 49
+relations:
+- relation: PK
+  details: PRESCRIBINGID
+  order: 30
+- relation: FK (many to one)
+  details: PRESCRIBING.PATID references DEMOGRAPHIC.PATID
+  order: 31
+- relation: FK (zero/many to one)
+  details: PRESCRIBING.ENCOUNTERID references ENCOUNTER.ENCOUNTERID
+  order: 32
+fields:
+- name: PRESCRIBINGID
+  rdbms_type: RDBMS Text(x)
+  order: 194
+  sas_type: SAS Char(x)
+  definition: Arbitrary identifier for each unique PRESCRIBING record. Does not need to be persistent
+    across refreshes, and may be created by methods such as sequence or GUID.
+- name: PATID
+  rdbms_type: RDBMS Text(x)
+  order: 195
+  sas_type: SAS Char(x)
+  definition: Arbitrary person-level identifier used to link across tables.
+- name: ENCOUNTERID
+  rdbms_type: RDBMS Text(x)
+  order: 196
+  sas_type: SAS Char(x)
+  definition: Arbitrary encounter-level identifier. This is an optional relationship; the ENCOUNTERID
+    should be present if the prescribing activity is directly associated with an encounter.
+- name: RX_PROVIDERID
+  rdbms_type: RDBMS Text(x)
+  order: 197
+  sas_type: SAS Char(x)
+  definition: Provider code for the provider who prescribed the medication. The provider code is a pseudoidentifier
+    with a consistent crosswalk to the real identifier.
+- name: RX_ORDER_DATE
+  rdbms_type: RDBMS Date
+  order: 198
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Order date of the prescription by the provider.
+- name: RX_ORDER_TIME
+  rdbms_type: RDBMS Text(5)
+  order: 199
+  sas_type: SAS Time (Numeric)
+  data_format: HH:MI using 24-hour clock and zero-padding for hour and minute
+  unit_of_measure: TIME
+  definition: Order time of the prescription by the provider.
+- name: RX_START_DATE
+  rdbms_type: RDBMS Date
+  order: 200
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Start date of order. This attribute may not be consistent with the date on which the patient
+    actually begin taking the medication.
+- name: RX_END_DATE
+  rdbms_type: RDBMS Date
+  order: 201
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: End date of order (if available).
+- name: RX_DOSE_ORDERED
+  rdbms_type: RDBMS Number(x)
+  order: 202
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: Dose of a given mediation, as ordered by the provider
+- name: RX_DOSE_ORDERED_UNIT
+  rdbms_type: RDBMS Text(x)
+  order: 203
+  sas_type: SAS Char(x)
+  definition: Units of measure associated with the dose of the medication as ordered by the provider
+- name: RX_QUANTITY
+  rdbms_type: RDBMS Number(x)
+  order: 204
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: Quantity ordered.
+- name: RX_DOSE_FORM
+  rdbms_type: RDBMS Text(x)
+  order: 205
+  sas_type: SAS Char(x)
+  definition: The unit associated with the quantity prescribed.  This is equivalent to RxNorm Dose Form.
+- name: RX_REFILLS
+  rdbms_type: RDBMS Number(x)
+  order: 206
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: Number of refills ordered (not including the original prescription). If no refills are ordered,
+    the value should be zero.
+- name: RX_DAYS_SUPPLY
+  rdbms_type: RDBMS Number(x)
+  order: 207
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: Number of days supply ordered, as specified by the prescription.
+- name: RX_FREQUENCY
+  rdbms_type: RDBMS Text(2)
+  order: 208
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.prescribing.rx_frequency
+  definition: Specified frequency of medication.
+- name: RX_PRN_FLAG
+  rdbms_type: RDBMS Text(1)
+  order: 209
+  sas_type: SAS Char(1)
+  valueset: pcornet_7_0.prescribing.rx_prn_flag
+  definition: Flag to indicate that all or part of medication frequency instructions includes “as needed.”
+- name: RX_ROUTE
+  rdbms_type: RDBMS Text(x)
+  order: 210
+  sas_type: SAS Char(x)
+  definition: Route of medication delivery.
+- name: RX_BASIS
+  rdbms_type: RDBMS Text(2)
+  order: 211
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.prescribing.rx_basis
+  definition: Basis of the medication order. The PRESCRIBING table can contain orders for many different
+    activities, and this field is intended to connect the provider’s prescribing order with how the order
+    was fulfilled (such as outpatient dispensing or administration by a healthcare professional). (Value
+    set items updated and field definition expanded in v3.1.)
+- name: RXNORM_CUI
+  rdbms_type: RDBMS Text (8)
+  order: 212
+  sas_type: SAS Char(8)
+  definition: 'Where an RxNorm mapping exists for the source medication, this field contains the RxNorm
+    concept identifier (CUI) at the highest possible specificity. v3.1 modification: field types changed
+    to character because the National Library of Medicine specifies this variable as a character type.'
+- name: RX_SOURCE
+  rdbms_type: RDBMS Text(2)
+  order: 213
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.prescribing.rx_source
+  definition: Source of the prescribing information.
+- name: RX_DISPENSE_AS_WRITTEN
+  rdbms_type: RDBMS Text(2)
+  order: 214
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.prescribing.rx_dispense_as_written
+  definition: Flag to indicate whether the provider indicated that the medication order was to be dispensed
+    as written.
+- name: RAW_RX_MED_NAME
+  rdbms_type: RDBMS Text(x)
+  order: 215
+  sas_type: SAS Char(x)
+  definition: Optional field for originating, full textual medication name from the source.
+- name: RAW_RX_FREQUENCY
+  rdbms_type: RDBMS Text(x)
+  order: 216
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_RXNORM_CUI
+  rdbms_type: RDBMS Text(x)
+  order: 217
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_RX_QUANTITY
+  rdbms_type: RDBMS Text(x)
+  order: 218
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_RX_NDC
+  rdbms_type: RDBMS Text(x)
+  order: 219
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_RX_DOSE_ORDERED
+  rdbms_type: RDBMS Text(x)
+  order: 220
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.
+- name: RAW_RX_DOSE_ORDERED_UNIT
+  rdbms_type: RDBMS Text(x)
+  order: 221
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.
+- name: RAW_RX_ROUTE
+  rdbms_type: RDBMS Text(x)
+  order: 222
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.
+- name: RAW_RX_REFILLS
+  rdbms_type: RDBMS Text(x)
+  order: 223
+  sas_type: SAS Char(x)
+  definition: Field for originating value, prior to mapping into the PCORnet CDM value set.

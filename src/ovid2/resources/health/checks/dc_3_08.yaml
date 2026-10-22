@@ -1,0 +1,29 @@
+id: "3.08"
+name: DC 3.08
+part: part3
+edc_table: Table IVH
+description: Fewer than 80% of PRESCRIBING records map to a Tier 1 RXNORM code
+operator: rxnorm_tier_coverage
+source_tables:
+  - PRESCRIBING
+na_when_empty:
+  - PRESCRIBING
+params:
+  table: PRESCRIBING
+  cui_column: RXNORM_CUI
+  tier1_labels:
+    - Tier 1
+metrics:
+  - TIER1_COVERAGE_PCT
+exception_metrics:
+  - TIER1_COVERAGE_PCT
+thresholds:
+  coverage_pct_lt: 80.0
+enabled: true
+doc_summary: >-
+  DC 3.08 (Table IVH): at least 80% of PRESCRIBING records carry an RXNORM_CUI
+  that maps to a Tier 1 RxNorm term type (SCD, SBD, BPCK, GPCK) via the PCORnet
+  RxNorm tier reference. Not applicable when PRESCRIBING is empty.
+doc_interpretation: >-
+  TIER1_COVERAGE_PCT below 80% (EXCEPTION) means prescriptions frequently carry
+  RxNorm codes that are not fully-specified Tier 1 clinical-drug terms.

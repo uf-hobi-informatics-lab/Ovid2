@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}LLMs &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <div class="page-header">
+    <h1>LLMs</h1>
+    <div class="page-actions">
+      <a href="/llms/new?provider=openai_compatible&role=general" class="button primary small">+ General LLM</a>
+      <a href="/llms/new?provider=jev&role=system1" class="button small">+ System 1 LLM</a>
+    </div>
+  </div>
+
+  {% if flash %}<div class="flash ok">{{ flash }}</div>{% endif %}
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+  <p class="note">
+    The assistant (the <strong>LLM</strong> button on the right rail) uses two kinds of model.
+    <strong>System 1</strong> (e.g. JEV or a similar decision model) is a fast decision model that is asked first. When it
+    abstains, errors, or is not confident enough, the question goes to the
+    <strong>general</strong> LLM (any OpenAI-compatible endpoint). API keys are stored in
+    <code>secrets.d/</code> (mode 0600) and are only read by a short-lived executor
+    subprocess. The web server never holds them.
+  </p>
+
+  <h2>Routing</h2>
+  <form method="post" action="/llms/routing" class="edit-form llm-routing">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-row">
+      <label>
+        <input type="checkbox" name="enabled" {% if routing.enabled %}checked{% endif %}>
+        Assistant enabled
+      </label>
+    </div>
+    <div class="form-row">
+      <label for="system1">System 1 (decides first)</label>
+      <select id="system1" name="system1">
+        <option value="">(none)</option>
+        {% for x in system1_choices %}
+          <option value="{{ x.name }}" {% if routing.system1 == x.name %}selected{% endif %}>{{ x.name }} &middot; {{ x.provider }}</option>
+        {% endfor %}
+      </select>
+      <label for="confidence_threshold">Confidence threshold</label>
+      <input type="number" id="confidence_threshold" name="confidence_threshold"
+             min="0" max="1" step="0.05" value="{{ routing.confidence_threshold }}">
+    </div>
+    <div class="form-row">
+      <label for="general">General LLM</label>
+      <select id="general" name="general">
+        <option value="">(none)</option>
+        {% for x in general_choices %}
+          <option value="{{ x.name }}" {% if routing.general == x.name %}selected{% endif %}>{{ x.name }} &middot; {{ x.model or x.provider }}</option>
+        {% endfor %}
+      </select>
+      <label>
+        <input type="checkbox" name="fallback_to_general" {% if routing.fallback_to_general %}checked{% endif %}>
+        Fall back to general when System 1 does not accept
+      </label>
+    </div>
+    <div class="form-row">
+      <label for="max_concurrent_chats">Max concurrent chats</label>
+      <input type="number" id="max_concurrent_chats" name="max_concurrent_chats"
+             min="1" max="64" value="{{ routing.max_concurrent_chats }}">
+      <label for="chat_timeout_seconds">Turn timeout (s)</label>
+      <input type="number" id="chat_timeout_seconds" name="chat_timeout_seconds"
+             min="10" max="1800" value="{{ routing.chat_timeout_seconds }}">
+    </div>
+    <div class="form-row">
+      <label>
+        <input type="checkbox" name="tools_enabled" {% if routing.tools_enabled %}checked{% endif %}>
+        Allow the assistant to call Ovid2 API tools
+      </label>
+      <label for="max_tool_iterations">Max tool steps</label>
+      <input type="number" id="max_tool_iterations" name="max_tool_iterations"
+             min="1" max="20" value="{{ routing.max_tool_iterations }}">
+      <label for="tool_result_max_chars">Tool result cap (chars)</label>
+      <input type="number" id="tool_result_max_chars" name="tool_result_max_chars"
+             min="256" max="200000" value="{{ routing.tool_result_max_chars }}">
+    </div>
+    <p class="small muted">Read-only tools (jobs, runs, logs, configs, data space) run automatically
+      with a short-lived token limited to the chatting user's permissions (at most pipeline operator).
+      Actions such as submitting or cancelling a job are shown as proposals you must click
+      <strong>Run</strong> on. No secrets, settings, users or data rows are exposed.</p>
+    <div class="form-row">
+      <button type="submit" class="button primary">Save routing</button>
+    </div>
+  </form>
+
+  <h2>Connections</h2>
+  {% if llms %}
+    <div class="table-wrap">
+    <table class="runs-table">
+      <thead><tr><th>Name</th><th>Role</th><th>Provider</th><th>Model</th><th>Endpoint</th><th>Result</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for x in llms %}
+          <tr>
+            <td><a href="/llms/{{ x.name }}">{{ x.name }}</a>
+              {% if routing.general == x.name %}<span class="badge severity-ok">general</span>{% endif %}
+              {% if routing.system1 == x.name %}<span class="badge severity-ok">system 1</span>{% endif %}
+            </td>
+            <td>{{ x.role }}</td>
+            <td>{{ x.provider }}</td>
+            <td class="mono small">{{ x.model or '—' }}</td>
+            <td class="mono small">{{ x.base_url or '—' }}</td>
+            <td data-llm-cell="{{ x.name }}"><span class="small muted">&mdash;</span></td>
+            <td>
+              <button type="button" class="button small" data-test-llm="{{ x.name }}">Test</button>
+              <a href="/llms/{{ x.name }}/edit" class="small">edit</a>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% else %}
+    <p class="empty">
+      No LLM connections yet. Click <a href="/llms/new?provider=openai_compatible&role=general">General LLM</a>
+      to add one. You need an OpenAI-compatible base URL (ending in <code>/v1</code>), the model id
+      the endpoint serves, and an API key. Add a <a href="/llms/new?provider=jev&role=system1">System 1</a>
+      decision model the same way.
+    </p>
+  {% endif %}
+</section>
+<script>
+(function () {
+  "use strict";
+  function esc(s) { return String(s || "").replace(/[<>&"']/g, function (c) {
+    return { "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  document.addEventListener("click", function (ev) {
+    var t = ev.target;
+    if (!(t instanceof HTMLElement)) return;
+    var name = t.getAttribute("data-test-llm");
+    if (!name) return;
+    ev.preventDefault();
+    var cell = document.querySelector('[data-llm-cell="' + name + '"]');
+    if (cell) cell.innerHTML = '<span class="badge status-processing">testing…</span>';
+    fetch("/api/v1/llms/" + encodeURIComponent(name) + "/test",
+          { method: "POST", headers: { "Accept": "application/json" } })
+      .then(function (r) { return r.json().then(function (b) { return { s: r.status, b: b }; }); })
+      .then(function (res) {
+        var b = res.b || {};
+        var ok = res.s < 400 && b.ok;
+        var cls = ok ? "severity-ok" : (b.code === "not_implemented" ? "severity-warning" : "severity-error");
+        var code = res.s >= 400 ? "error" : (b.code || "error");
+        var msg = res.s >= 400 ? (b.detail || ("HTTP " + res.s)) : b.message;
+        if (cell) cell.innerHTML = '<span class="badge ' + cls + '" title="' + esc(msg) + '">' + esc(code) + '</span>';
+      })
+      .catch(function (e) {
+        if (cell) cell.innerHTML = '<span class="badge severity-error" title="' + esc(e && e.message) + '">error</span>';
+      });
+  });
+})();
+</script>
+{% endblock %}

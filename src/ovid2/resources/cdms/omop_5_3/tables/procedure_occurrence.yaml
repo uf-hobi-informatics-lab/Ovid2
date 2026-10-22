@@ -1,0 +1,58 @@
+v: 1
+name: procedure_occurrence
+composite_key:
+- procedure_occurrence_id
+domain_description: OMOP CDM 5.3 clinical data table.
+domain_order: 10
+fields:
+- name: procedure_occurrence_id
+  rdbms_type: RDBMS Number
+  order: 1
+- name: person_id
+  rdbms_type: RDBMS Number
+  order: 2
+- name: procedure_concept_id
+  rdbms_type: RDBMS Number
+  order: 3
+- name: procedure_date
+  rdbms_type: RDBMS Date
+  order: 4
+- name: procedure_datetime
+  rdbms_type: RDBMS Text(50)
+  order: 5
+- name: procedure_type_concept_id
+  rdbms_type: RDBMS Number
+  order: 6
+- name: modifier_concept_id
+  rdbms_type: RDBMS Number
+  order: 7
+- name: quantity
+  rdbms_type: RDBMS Number
+  order: 8
+- name: provider_id
+  rdbms_type: RDBMS Number
+  order: 9
+- name: visit_occurrence_id
+  rdbms_type: RDBMS Number
+  order: 10
+- name: visit_detail_id
+  rdbms_type: RDBMS Number
+  order: 11
+- name: procedure_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 12
+- name: procedure_source_concept_id
+  rdbms_type: RDBMS Number
+  order: 13
+- name: modifier_source_value
+  rdbms_type: RDBMS Text(50)
+  order: 14
+- name: updated
+  rdbms_type: RDBMS Text(50)
+  order: 15
+- name: source
+  rdbms_type: RDBMS Text(10)
+  order: 16
+- name: mapped_from
+  rdbms_type: RDBMS Text(50)
+  order: 17

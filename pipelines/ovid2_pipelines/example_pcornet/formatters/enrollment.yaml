@@ -1,0 +1,17 @@
+# Example PCORnet-native passthrough spec.
+v: 1
+formatter: enrollment
+adapter: pcornet_passthrough
+input_file_name: "*Enrollment_*.txt"
+
+sources:
+  enrollment:
+    glob: "*Enrollment_*.txt"
+    lowercase_columns: true
+
+projections:
+  CHART: chart
+  ENR_BASIS: 'E'
+  ENR_END_DATE: enr_end_date
+  ENR_START_DATE: enr_start_date
+  PATID: pat_id

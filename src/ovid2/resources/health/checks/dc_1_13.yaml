@@ -1,0 +1,37 @@
+id: "1.13"
+name: DC 1.13
+part: part1
+edc_table: Table IIF
+description: More than 5% of records have code-type errors
+operator: code_placement
+source_tables:
+  - DIAGNOSIS
+  - PROCEDURES
+  - CONDITION
+  - MED_ADMIN
+  - PRESCRIBING
+  - IMMUNIZATION
+  - OBS_CLIN
+  - OBS_GEN
+params:
+  rules:
+    - {table: DIAGNOSIS, code_column: DX, type_column: DX_TYPE, valid_types: ["09", "10", "11", SM]}
+    - {table: PROCEDURES, code_column: PX, type_column: PX_TYPE, valid_types: ["09", "10", C2, C3, C4, H3, CH, LC, ND, RE, "11"]}
+    - {table: CONDITION, code_column: CONDITION, type_column: CONDITION_TYPE, valid_types: ["09", "10", SM, HP]}
+    - {table: MED_ADMIN, code_column: MEDADMIN_CODE, type_column: MEDADMIN_TYPE, valid_types: [ND, RX]}
+    - {table: IMMUNIZATION, code_column: VX_CODE, type_column: VX_CODE_TYPE, valid_types: [CX, CH, ND, RX, C4, OT]}
+    - {table: OBS_CLIN, code_column: OBSCLIN_CODE, type_column: OBSCLIN_TYPE, valid_types: [LC, SM, "09", "10", CH, ND]}
+    - {table: OBS_GEN, code_column: OBSGEN_CODE, type_column: OBSGEN_TYPE, valid_types: [LC, PC, GM, UD, "09", "10", SM]}
+metrics:
+  - BAD_CODE_TYPE_PCT
+exception_metrics:
+  - BAD_CODE_TYPE_PCT
+thresholds:
+  bad_record_pct_gt: 5.0
+enabled: true
+doc_summary: >-
+  DC 1.13 (Table IIF): fewer than 5% of records carry a code-type value that
+  does not match the CDM-permissible set for that code field.
+doc_interpretation: >-
+  BAD_CODE_TYPE_PCT above 5% (EXCEPTION) means a field's declared code type
+  is frequently outside the allowed set.

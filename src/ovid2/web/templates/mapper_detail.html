@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ spec.pipeline }}/mappers/{{ spec.table }} &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <p><a href="/pipeline-packages/{{ spec.pipeline }}">&larr; back to {{ spec.pipeline }}</a></p>
+  <h1>Mapper: <span class="mono">{{ spec.pipeline }}/{{ spec.table }}</span></h1>
+  <dl class="detail">
+    <dt>Path</dt><dd class="mono small">{{ spec.path }}</dd>
+    <dt>Kind</dt><dd>{{ spec.source_kind }}</dd>
+  </dl>
+  {% if spec.source_kind == 'yaml' %}
+    <p>
+      <a href="/pipeline-packages/{{ spec.pipeline }}/mappers/{{ spec.table }}/edit"
+         class="button primary small">Edit</a>
+      <form action="/pipeline-packages/{{ spec.pipeline }}/mappers/{{ spec.table }}/delete"
+            method="post" style="display: inline;"
+            onsubmit="return confirm('Delete mapper {{ spec.pipeline }}/{{ spec.table }}?')">
+        <button type="submit" class="button danger small">Delete</button>
+      </form>
+    </p>
+  {% else %}
+    <p class="note">
+      SPEC-dict Python mappers are read-only through the panel; edit on disk
+      per <code>AGENTS.md</code>.
+    </p>
+  {% endif %}
+  <h2>Source</h2>
+  <pre class="code-preview"><code>{{ spec.raw_text }}</code></pre>
+</section>
+{% endblock %}

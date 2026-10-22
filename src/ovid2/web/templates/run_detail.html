@@ -1,0 +1,14 @@
+{#
+  Run detail — dual-mode.
+
+  * Default (full-page GET, or a bookmarked deep link): renders the
+    merged runs workspace (runs.html) with this run pre-selected. The
+    handler routes that case to runs.html directly, so this template is
+    only reached for the fetch-fragment case below.
+  * fetch-mode (X-Requested-With: fetch, used by live.js navigateRun):
+    renders ONLY the run-console block so the in-place detail swap keeps
+    working without re-rendering the whole page shell.
+
+  Both share _run_console.html.
+#}
+{% include "_run_console.html" with context %}

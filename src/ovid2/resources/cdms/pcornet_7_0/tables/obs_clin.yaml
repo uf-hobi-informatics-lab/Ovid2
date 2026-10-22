@@ -1,0 +1,171 @@
+v: 1
+name: obs_clin
+composite_key:
+- OBSCLINID
+domain_description: Standardized qualitative and quantitative clinical observations about a patient, including
+  vital signs. Some observations may also be represented in the VITAL table
+domain_order: 17
+constraints:
+- field: OBSCLINID
+  rule: unique
+  order: 69
+- field: OBSCLINID
+  rule: required, not null
+  order: 70
+- field: PATID
+  rule: required, not null
+  order: 71
+- field: OBSCLIN_START_DATE
+  rule: required, not null
+  order: 72
+relations:
+- relation: PK
+  details: OBSCLINID
+  order: 49
+- relation: FK (many to one)
+  details: OBSCLIN.PATID references DEMOGRAPHIC.PATID
+  order: 50
+- relation: FK (many to one)
+  details: OBSCLIN.ENCOUNTERID references ENCOUNTER.ENCOUNTERID
+  order: 51
+- relation: FK (many to one)
+  details: OBSCLIN.OBSCLIN_PROVIDERID references PROVIDER.PROVIDERID
+  order: 52
+fields:
+- name: OBSCLINID
+  rdbms_type: RDBMS Text(x)
+  order: 269
+  sas_type: SAS Char(x)
+  definition: Arbitrary identifier for each unique OBS_CLIN record.
+- name: PATID
+  rdbms_type: RDBMS Text(x)
+  order: 270
+  sas_type: SAS Char(x)
+  definition: Arbitrary person-level identifier. Used to link across tables.
+- name: ENCOUNTERID
+  rdbms_type: RDBMS Text(x)
+  order: 271
+  sas_type: SAS Char(x)
+  definition: Arbitrary encounter-level identifier used to link across tables.
+- name: OBSCLIN_PROVIDERID
+  rdbms_type: RDBMS Text(x)
+  order: 272
+  sas_type: SAS Char(x)
+  definition: Provider code for the provider who ordered the observation. The provider code is a pseudoidentifier
+    with a consistent crosswalk to the real identifier.
+- name: OBSCLIN_START_DATE
+  rdbms_type: RDBMS Date
+  order: 273
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Date of observation/measurement.
+- name: OBSCLIN_START_TIME
+  rdbms_type: RDBMS Text(5)
+  order: 274
+  sas_type: SAS Time (Numeric)
+  data_format: HH:MI using 24-hour clock and zero-padding for hour and minute
+  unit_of_measure: TIME
+  definition: Time of observation/measurement.
+- name: OBSCLIN_STOP_DATE
+  rdbms_type: RDBMS Date
+  order: 275
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Date observation/measurement ended.
+- name: OBSCLIN_STOP_TIME
+  rdbms_type: RDBMS Text(5)
+  order: 276
+  sas_type: SAS Time (Numeric)
+  data_format: HH:MI using 24-hour clock and zero-padding for hour and minute
+  unit_of_measure: TIME
+  definition: Time observation/measurement ended.
+- name: OBSCLIN_TYPE
+  rdbms_type: RDBMS Text(2)
+  order: 277
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.obs_clin.obsclin_type
+  definition: Terminology / vocabulary used to describe the clinical observation.
+- name: OBSCLIN_CODE
+  rdbms_type: RDBMS Text(18)
+  order: 278
+  sas_type: SAS Char(18)
+  definition: Code of the clinical observation in the vocabulary/terminology specified in OBSCLIN_TYPE.
+- name: OBSCLIN_RESULT_QUAL
+  rdbms_type: RDBMS Text(x)
+  order: 279
+  sas_type: SAS Char(x)
+  definition: Standardized result for qualitative results. This variable should be NI for quantitative
+    results.
+- name: OBSCLIN_RESULT_TEXT
+  rdbms_type: RDBMS Text(x)
+  order: 280
+  sas_type: SAS Char(x)
+  definition: Narrative/textual clinical observations
+- name: OBSCLIN_RESULT_SNOMED
+  rdbms_type: RDBMS Text(18)
+  order: 281
+  sas_type: SAS Char(18)
+  definition: If the qualitative result has been mapped to SNOMED CT, the corresponding SNOMED code can
+    be placed here.
+- name: OBSCLIN_RESULT_NUM
+  rdbms_type: RDBMS Number(x)
+  order: 282
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: Standardized/converted result for quantitative results.
+- name: OBSCLIN_RESULT_MODIFIER
+  rdbms_type: RDBMS Text(2)
+  order: 283
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.obs_clin.obsclin_result_modifier
+  definition: Modifier for result values.
+- name: OBSCLIN_RESULT_UNIT
+  rdbms_type: RDBMS Text(x)
+  order: 284
+  sas_type: SAS Char(x)
+  definition: Converted/standardized units for the result.
+- name: OBSCLIN_SOURCE
+  rdbms_type: RDBMS Text(2)
+  order: 285
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.obs_clin.obsclin_source
+  definition: Source of the information for the observation or measurement.
+- name: OBSCLIN_ABN_IND
+  rdbms_type: RDBMS Text(2)
+  order: 286
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.obs_clin.obsclin_abn_ind
+  definition: Abnormal result indicator. This value comes from the source data; do not apply logic to
+    create it.  If field is blank in source data, map to the appropriate flavor of null.
+- name: RAW_OBSCLIN_NAME
+  rdbms_type: RDBMS Text(x)
+  order: 287
+  sas_type: SAS Char(x)
+  definition: Local name related to an individual clinical observation/measurement.
+- name: RAW_OBSCLIN_CODE
+  rdbms_type: RDBMS Text(x)
+  order: 288
+  sas_type: SAS Char(x)
+  definition: Local code related to an individual clinical observation/measurement.
+- name: RAW_OBSCLIN_TYPE
+  rdbms_type: RDBMS Text(x)
+  order: 289
+  sas_type: SAS Char(x)
+  definition: Terminology related to the code in RAW_OBSGEN_CODE.
+- name: RAW_OBSCLIN_RESULT
+  rdbms_type: RDBMS Text(x)
+  order: 290
+  sas_type: SAS Char(x)
+  definition: The original test result value as seen in your source data. Values may include a decimal
+    point, a sign or text (e.g., POSITIVE, NEGATIVE, DETECTED). The symbols >, <, >=, <= should be removed
+    from the value and stored in the Modifier variable instead.
+- name: RAW_OBSCLIN_MODIFIER
+  rdbms_type: RDBMS Text(x)
+  order: 291
+  sas_type: SAS Char(x)
+  definition: The original modifier text as represented in your source data.
+- name: RAW_OBSCLIN_UNIT
+  rdbms_type: RDBMS Text(x)
+  order: 292
+  sas_type: SAS Char(x)
+  definition: Original units for the result in your source data.

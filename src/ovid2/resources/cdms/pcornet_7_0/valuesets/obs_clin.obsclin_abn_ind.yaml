@@ -1,0 +1,41 @@
+v: 1
+name: pcornet_7_0.obs_clin.obsclin_abn_ind
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 OBS_CLIN.OBSCLIN_ABN_IND code set.
+code_column: code
+description_column: label
+items:
+- code: AB
+  label: AB=Abnormal
+  order: 10304
+- code: AH
+  label: AH=Abnormally high
+  order: 10305
+- code: AL
+  label: AL=Abnormally low
+  order: 10306
+- code: CH
+  label: CH=Critically high
+  order: 10307
+- code: CL
+  label: CL=Critically low
+  order: 10308
+- code: CR
+  label: CR=Critical
+  order: 10309
+- code: IN
+  label: IN=Inconclusive
+  order: 10310
+- code: NL
+  label: NL=Normal
+  order: 10311
+- code: NI
+  label: NI=No information
+  order: 10312
+- code: UN
+  label: UN=Unknown
+  order: 10313
+- code: OT
+  label: OT=Other
+  order: 10314

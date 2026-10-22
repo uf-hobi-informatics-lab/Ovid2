@@ -1,0 +1,178 @@
+v: 1
+name: vital
+composite_key:
+- VITALID
+domain_description: Vital signs (such as height, weight, and blood pressure) directly measure an individual’s
+  current state of attributes.
+domain_order: 6
+constraints:
+- field: VITALID
+  rule: unique
+  order: 23
+- field: VITALID
+  rule: required, not null
+  order: 24
+- field: PATID
+  rule: required, not null
+  order: 25
+- field: MEASURE_DATE
+  rule: required, not null
+  order: 26
+- field: VITAL_SOURCE
+  rule: required, not null
+  order: 27
+relations:
+- relation: PK
+  details: VITALID
+  order: 15
+- relation: FK (many to one)
+  details: VITAL.PATID references DEMOGRAPHIC.PATID
+  order: 16
+- relation: FK (zero/many to one)
+  details: VITAL.ENCOUNTERID references ENCOUNTER.ENCOUNTERID
+  order: 17
+fields:
+- name: VITALID
+  rdbms_type: RDBMS Text(x)
+  order: 93
+  sas_type: SAS Char(x)
+  definition: Arbitrary identifier for each unique VITAL record. Does not need to be persistent across
+    refreshes, and may be created by methods such as sequence or GUID.
+- name: PATID
+  rdbms_type: RDBMS Text(x)
+  order: 94
+  sas_type: SAS Char(x)
+  definition: Arbitrary person-level identifier. Used to link across tables.
+- name: ENCOUNTERID
+  rdbms_type: RDBMS Text(x)
+  order: 95
+  sas_type: SAS Char(x)
+  definition: Arbitrary encounter-level identifier.  This is an optional relationship because not all
+    vital sign measures will be associated with a healthcare encounter. (New description added in v3.1.)
+- name: MEASURE_DATE
+  rdbms_type: RDBMS Date
+  order: 96
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Date of vitals measure.
+- name: MEASURE_TIME
+  rdbms_type: RDBMS Text(5)
+  order: 97
+  sas_type: SAS Time (Numeric)
+  data_format: HH:MI using 24-hour clock and zero-padding for hour and minute
+  unit_of_measure: TIME
+  definition: Time of vitals measure.
+- name: VITAL_SOURCE
+  rdbms_type: RDBMS Text(2)
+  order: 98
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.vital.vital_source
+  definition: 'Please note: The “Patient-reported” category can include reporting by patient’s family
+    or guardian.'
+- name: HT
+  rdbms_type: RDBMS Number(x)
+  order: 99
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: Height (in inches) measured by standing. Only populated if measure was taken on this date.
+    If missing, this value should be null. Decimal precision is permissible.  Number precision and scale
+    updated in v3.1.
+- name: WT
+  rdbms_type: RDBMS Number(x)
+  order: 100
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: Weight (in pounds). Only populated if measure was taken on this date. If missing, this value
+    should be null. Decimal precision is permissible.  Number precision and scale updated in v3.1.
+- name: DIASTOLIC
+  rdbms_type: RDBMS Number(x)
+  order: 101
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: Diastolic blood pressure (in mmHg). Only populated if measure was taken on this date. If
+    missing, this value should be null.  Number precision and scale updated in v3.1.
+- name: SYSTOLIC
+  rdbms_type: RDBMS Number(x)
+  order: 102
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: Systolic blood pressure (in mmHg). Only populated if measure was taken on this date. If
+    missing, this value should be null. Number precision and scale updated in v3.1.
+- name: ORIGINAL_BMI
+  rdbms_type: RDBMS Number(x)
+  order: 103
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: 'BMI if calculated in the source system. Decimal precision is permissible (new guidance
+    added in v3.1). Important: Please do not calculate BMI during CDM implementation. This field should
+    only reflect originating source system calculations, if height and weight are not stored in the source.
+    Number precision and scale updated in v3.1.'
+- name: BP_POSITION
+  rdbms_type: RDBMS Text(2)
+  order: 104
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.vital.bp_position
+  definition: Position for orthostatic blood pressure. This value should be null if blood pressure was
+    not measured.
+- name: SMOKING
+  rdbms_type: RDBMS Text(2)
+  order: 105
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.vital.smoking
+  definition: Indicator for any form of tobacco that is smoked. Per Meaningful Use guidance, “…smoking
+    status includes any form of tobacco that is smoked, but not all tobacco use.” “’Light smoker’ is interpreted
+    to mean less than 10 cigarettes per day, or an equivalent (but less concretely defined) quantity of
+    cigar or pipe smoke. ‘Heavy smoker’ is interpreted to mean greater than 10 cigarettes per day or an
+    equivalent (but less concretely defined) quantity of cigar or pipe smoke.” “…we understand that a
+    “current every day smoker” or “current some day smoker” is an individual who has smoked at least 100
+    cigarettes during his/her lifetime and still regularly smokes every day or periodically, yet consistently;
+    a “former smoker” would be an individual who has smoked at least 100 cigarettes during his/her lifetime
+    but does not currently smoke; and a “never smoker” would be an individual who has not smoked 100 or
+    more cigarettes during his/her lifetime.” http://www.healthit.gov/sites/default/files/standards-certification/2014-edition-draft-test-procedures/170-314-a-11-smoking-status-2014-test-procedure-draft-v1.0.pdf
+    [retrieved May 11, 2015]
+- name: TOBACCO
+  rdbms_type: RDBMS Text(2)
+  order: 106
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.vital.tobacco
+  definition: Indicator for any form of tobacco.
+- name: TOBACCO_TYPE
+  rdbms_type: RDBMS Text(2)
+  order: 107
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.vital.tobacco_type
+  definition: Type(s) of tobacco used.
+- name: RAW_DIASTOLIC
+  rdbms_type: RDBMS Text(x)
+  order: 108
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to formatting into the PCORnet CDM.
+- name: RAW_SYSTOLIC
+  rdbms_type: RDBMS Text(x)
+  order: 109
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to formatting into the PCORnet CDM.
+- name: RAW_BP_POSITION
+  rdbms_type: RDBMS Text(x)
+  order: 110
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_SMOKING
+  rdbms_type: RDBMS Text(x)
+  order: 111
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_TOBACCO
+  rdbms_type: RDBMS Text(x)
+  order: 112
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.
+- name: RAW_TOBACCO_TYPE
+  rdbms_type: RDBMS Text(x)
+  order: 113
+  sas_type: SAS Char(x)
+  definition: Optional field for originating value of field, prior to mapping into the PCORnet CDM value
+    set.

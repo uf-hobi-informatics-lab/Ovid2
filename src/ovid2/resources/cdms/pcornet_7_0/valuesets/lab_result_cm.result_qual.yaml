@@ -1,0 +1,550 @@
+v: 1
+name: pcornet_7_0.lab_result_cm.result_qual
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 LAB_RESULT_CM.RESULT_QUAL code set.
+code_column: code
+description_column: label
+items:
+- code: 1+
+  label: 1+=1+
+- code: 2+
+  label: 2+=2+
+- code: 3+
+  label: 3+=3+
+- code: 4+
+  label: 4+=4+
+- code: 5+
+  label: 5+=5+
+- code: A NEG
+  label: A NEG=A Neg
+- code: A POS
+  label: A POS=A Pos
+- code: AB NEG
+  label: AB NEG=AB Neg
+- code: AB NOT DETECTED
+  label: AB NOT DETECTED=Ab not detected
+- code: AB POS
+  label: AB POS=AB Pos
+- code: ABNORMAL
+  label: ABNORMAL=Abnormal
+- code: ABSENT
+  label: ABSENT=Absent
+- code: ACANTHOCYTES
+  label: ACANTHOCYTES=Acanthocytes
+- code: ACCEPTABLE
+  label: ACCEPTABLE=Acceptable
+- code: ACIDIC
+  label: ACIDIC=Acidic
+- code: ADEQUATE
+  label: ADEQUATE=Adequate
+- code: AMBER
+  label: AMBER=Amber
+- code: AMNIOTIC FLUID
+  label: AMNIOTIC FLUID=Amniotic fluid
+- code: ANISOCHROMASIA
+  label: ANISOCHROMASIA=Anisochromasia
+- code: ANISOCYTOSIS
+  label: ANISOCYTOSIS=Anisocytosis
+- code: ANULOCYTES
+  label: ANULOCYTES=Anulocytes
+- code: ARTERIAL
+  label: ARTERIAL=Arterial
+- code: ARTERIAL LINE
+  label: ARTERIAL LINE=Arterial line
+- code: AUSCULTATION - AUTOMATIC
+  label: AUSCULTATION - AUTOMATIC=Auscultation - automatic
+- code: AUSCULTATION - MANUAL
+  label: AUSCULTATION - MANUAL=Auscultation - manual
+- code: AUTOMATED FLOW CYTOMETRY
+  label: AUTOMATED FLOW CYTOMETRY=Automated flow cytometry
+- code: B NEG
+  label: B NEG=B Neg
+- code: B POS
+  label: B POS=B Pos
+- code: BASOPHILIC STIPPLING
+  label: BASOPHILIC STIPPLING=Basophilic stippling
+- code: BASOPHILIC STIPPLING COARSE
+  label: BASOPHILIC STIPPLING COARSE=Basophilic stippling coarse
+- code: BASOPHILIC STIPPLING FINE
+  label: BASOPHILIC STIPPLING FINE=Basophilic stippling fine
+- code: BEDFAST
+  label: BEDFAST=Bedfast
+- code: BITE CELLS
+  label: BITE CELLS=Bite cells
+- code: BIZARRE CELLS
+  label: BIZARRE CELLS=Bizarre cells
+- code: BLACK
+  label: BLACK=Black
+- code: BLISTER CELLS
+  label: BLISTER CELLS=Blister cells
+- code: BLOOD
+  label: BLOOD=Blood
+- code: BLUE
+  label: BLUE=Blue
+- code: BONE MARROW
+  label: BONE MARROW=Bone marrow
+- code: BORDERLINE
+  label: BORDERLINE=Borderline
+- code: BROWN
+  label: BROWN=Brown
+- code: BURR CELLS
+  label: BURR CELLS=Burr cells
+- code: CABOT RINGS
+  label: CABOT RINGS=Cabot rings
+- code: CAPILLARY
+  label: CAPILLARY=Capillary
+- code: CEREBROSPINAL FLUID (CSF)
+  label: CEREBROSPINAL FLUID (CSF)=Cerebrospinal fluid (CSF)
+- code: CHAIRFAST
+  label: CHAIRFAST=Chairfast
+- code: CLEAN
+  label: CLEAN=Clean
+- code: CLEAN CATCH
+  label: CLEAN CATCH=Clean catch
+- code: CLEAR
+  label: CLEAR=Clear
+- code: CLEAR YELLOW
+  label: CLEAR YELLOW=Clear Yellow
+- code: CLOUDY
+  label: CLOUDY=Cloudy
+- code: CLUMPED
+  label: CLUMPED=Clumped
+- code: COLORLESS
+  label: COLORLESS=Colorless
+- code: COMPATIBLE
+  label: COMPATIBLE=Compatible
+- code: COMPLETELY IMMOBILE
+  label: COMPLETELY IMMOBILE=Completely immobile
+- code: COMPLETELY LIMITED
+  label: COMPLETELY LIMITED=Completely limited
+- code: COMPUTER IMAGING ASSISTED
+  label: COMPUTER IMAGING ASSISTED=Computer imaging assisted
+- code: CONFUSED
+  label: CONFUSED=Confused
+- code: CONSTANTLY MOIST
+  label: CONSTANTLY MOIST=Constantly moist
+- code: CONTINUOUS NONINVASIVE ARTERIAL PRESSURE (CNAP)
+  label: CONTINUOUS NONINVASIVE ARTERIAL PRESSURE (CNAP)=Continuous noninvasive arterial pressure (CNAP)
+- code: CUFF-MANUAL PALPATED ONLY
+  label: CUFF-MANUAL PALPATED ONLY=Cuff-manual palpated only
+- code: CURRENT EVERY DAY SMOKER
+  label: CURRENT EVERY DAY SMOKER=Current every day smoker
+- code: CURRENT SOME DAY SMOKER
+  label: CURRENT SOME DAY SMOKER=Current some day smoker
+- code: DACROCYTES
+  label: DACROCYTES=Dacrocytes
+- code: DARK AMBER
+  label: DARK AMBER=Dark Amber
+- code: DARK BROWN
+  label: DARK BROWN=Dark Brown
+- code: DARK ORANGE
+  label: DARK ORANGE=Dark Orange
+- code: DARK RED
+  label: DARK RED=Dark Red
+- code: DARK YELLOW
+  label: DARK YELLOW=Dark Yellow
+- code: DECREASED
+  label: DECREASED=Decreased
+- code: DETECTED
+  label: DETECTED=Detected
+- code: DONE
+  label: DONE=Done
+- code: DOPPLER
+  label: DOPPLER=Doppler
+- code: DRY
+  label: DRY=Dry
+- code: DYSERYTHROPOIEISIS
+  label: DYSERYTHROPOIEISIS=Dyserythropoieisis
+- code: ELEVATED
+  label: ELEVATED=Elevated
+- code: ELLIPTOCYTES
+  label: ELLIPTOCYTES=Elliptocytes
+- code: EQUIVOCAL
+  label: EQUIVOCAL=Equivocal
+- code: ERYTHROCYTES.FILAMENTED
+  label: ERYTHROCYTES.FILAMENTED=Erythrocytes.filamented
+- code: EXCELLENT
+  label: EXCELLENT=Excellent
+- code: EXTENSION TO PAIN
+  label: EXTENSION TO PAIN=Extension to pain
+- code: EYE OPENING TO PAIN
+  label: EYE OPENING TO PAIN=Eye opening to pain
+- code: EYE OPENING TO VERBAL COMMAND
+  label: EYE OPENING TO VERBAL COMMAND=Eye opening to verbal command
+- code: EYES OPEN SPONTANEOUSLY
+  label: EYES OPEN SPONTANEOUSLY=Eyes open spontaneously
+- code: FEW
+  label: FEW=Few
+- code: FEW-MODERATE
+  label: FEW-MODERATE=Few-Moderate
+- code: FLEXION TO PAIN
+  label: FLEXION TO PAIN=Flexion to pain
+- code: FORMER SMOKER
+  label: FORMER SMOKER=Former smoker
+- code: FRAGMENTS
+  label: FRAGMENTS=Fragments
+- code: FREQUENT
+  label: FREQUENT=Frequent
+- code: GREEN
+  label: GREEN=Green
+- code: GROUP A
+  label: GROUP A=Group A
+- code: GROUP AB
+  label: GROUP AB=Group AB
+- code: GROUP B
+  label: GROUP B=Group B
+- code: GROUP O
+  label: GROUP O=Group O
+- code: HAIR
+  label: HAIR=Hair
+- code: HAZY
+  label: HAZY=Hazy
+- code: HEALED
+  label: HEALED=Healed
+- code: HEAVY
+  label: HEAVY=Heavy
+- code: HEAVY TOBACCO SMOKER
+  label: HEAVY TOBACCO SMOKER=Heavy tobacco smoker
+- code: HEINZ BODIES
+  label: HEINZ BODIES=Heinz bodies
+- code: HELMET CELLS
+  label: HELMET CELLS=Helmet cells
+- code: HEMOGLOBIN C CRYSTALS
+  label: HEMOGLOBIN C CRYSTALS=Hemoglobin C crystals
+- code: HETEROZYGOUS
+  label: HETEROZYGOUS=Heterozygous
+- code: HIGH
+  label: HIGH=High
+- code: HOMOGENEOUS
+  label: HOMOGENEOUS=Homogeneous
+- code: HOMOZYGOUS
+  label: HOMOZYGOUS=Homozygous
+- code: HOWELL-JOLLY BODIES
+  label: HOWELL-JOLLY BODIES=Howell-Jolly bodies
+- code: HUMAN READ
+  label: HUMAN READ=Human read
+- code: HYPERCHROMIC
+  label: HYPERCHROMIC=Hyperchromic
+- code: HYPOCHROMIA
+  label: HYPOCHROMIA=Hypochromia
+- code: IMMUNE
+  label: IMMUNE=Immune
+- code: INAPPROPRIATE WORDS
+  label: INAPPROPRIATE WORDS=Inappropriate words
+- code: INCOMPREHENSIBLE SOUNDS
+  label: INCOMPREHENSIBLE SOUNDS=Incomprehensible sounds
+- code: INCONCLUSIVE
+  label: INCONCLUSIVE=Inconclusive
+- code: INCREASED
+  label: INCREASED=Increased
+- code: INDETERMINATE
+  label: INDETERMINATE=Indeterminate
+- code: INDETERMINATE ABNORMAL
+  label: INDETERMINATE ABNORMAL=Indeterminate abnormal
+- code: INFLUENZA A VIRUS
+  label: INFLUENZA A VIRUS=Influenza A virus
+- code: INFLUENZA B VIRUS
+  label: INFLUENZA B VIRUS=Influenza B virus
+- code: INTACT
+  label: INTACT=Intact
+- code: INTERMEDIATE
+  label: INTERMEDIATE=Intermediate
+- code: INVALID
+  label: INVALID=Invalid
+- code: INVASIVE (INTRAVASCULAR TRANSDUCER)
+  label: INVASIVE (INTRAVASCULAR TRANSDUCER)=Invasive (intravascular transducer)
+- code: IRREGULARLY CONTRACTED CELLS
+  label: IRREGULARLY CONTRACTED CELLS=Irregularly contracted cells
+- code: KAOLIN MODIFIED BLOOD
+  label: KAOLIN MODIFIED BLOOD=Kaolin modified blood
+- code: KAOLIN-HEPARINASE MODIFIED BLOOD
+  label: KAOLIN-HEPARINASE MODIFIED BLOOD=Kaolin-heparinase modified blood
+- code: LARGE
+  label: LARGE=Large
+- code: LEFT ARM
+  label: LEFT ARM=Left arm
+- code: LEFT LEG
+  label: LEFT LEG=Left leg
+- code: LIGHT
+  label: LIGHT=Light
+- code: LIGHT AMBER
+  label: LIGHT AMBER=Light Amber
+- code: LIGHT BROWN
+  label: LIGHT BROWN=Light Brown
+- code: LIGHT ORANGE
+  label: LIGHT ORANGE=Light Orange
+- code: LIGHT PINK
+  label: LIGHT PINK=Light Pink
+- code: LIGHT RED
+  label: LIGHT RED=Light Red
+- code: LIGHT TOBACCO SMOKER
+  label: LIGHT TOBACCO SMOKER=Light tobacco smoker
+- code: LIGHT YELLOW
+  label: LIGHT YELLOW=Light Yellow
+- code: LOCALIZING PAIN
+  label: LOCALIZING PAIN=Localizing pain
+- code: LOW
+  label: LOW=Low
+- code: LYING
+  label: LYING=Lying
+- code: MACROCYTES
+  label: MACROCYTES=Macrocytes
+- code: MACROCYTES.OVAL
+  label: MACROCYTES.OVAL=Macrocytes.oval
+- code: MANY
+  label: MANY=Many
+- code: MARKED
+  label: MARKED=Marked
+- code: MICROCYTES
+  label: MICROCYTES=Microcytes
+- code: MIXED VENOUS
+  label: MIXED VENOUS=Mixed Venous
+- code: MODERATE
+  label: MODERATE=Moderate
+- code: MUTANT
+  label: MUTANT=Mutant
+- code: NAIL
+  label: NAIL=Nail
+- code: NASOPHARYNGEAL
+  label: NASOPHARYNGEAL=Nasopharyngeal
+- code: NEGATIVE
+  label: NEGATIVE=Negative
+- code: NEUTRAL
+  label: NEUTRAL=Neutral
+- code: NEVER SMOKER
+  label: NEVER SMOKER=Never smoker
+- code: 'NO'
+  label: NO=No
+- code: NO APPARENT PROBLEM
+  label: NO APPARENT PROBLEM=No apparent problem
+- code: NO EYE OPENING
+  label: NO EYE OPENING=No eye opening
+- code: NO GROWTH
+  label: NO GROWTH=No Growth
+- code: NO IMPAIRMENT
+  label: NO IMPAIRMENT=No impairment
+- code: NO LIMITATION
+  label: NO LIMITATION=No limitation
+- code: NO MOTOR RESPONSE
+  label: NO MOTOR RESPONSE=No motor response
+- code: NO VERBAL RESPONSE (>2 YRS); NO VOCAL RESPONSE (<=2 YRS)
+  label: NO VERBAL RESPONSE (>2 YRS); NO VOCAL RESPONSE (<=2 YRS)=No verbal response (>2 yrs); no vocal response (<=2 yrs)
+- code: NONE
+  label: NONE=None
+- code: NONE SEEN
+  label: NONE SEEN=None Seen
+- code: NON-IMMUNE/NOT IMMUNE
+  label: NON-IMMUNE/NOT IMMUNE=Non-Immune/Not Immune
+- code: NONREACTIVE
+  label: NONREACTIVE=Nonreactive
+- code: NORMAL
+  label: NORMAL=Normal
+- code: NORMOCHROMIC
+  label: NORMOCHROMIC=Normochromic
+- code: NORMOCYTIC
+  label: NORMOCYTIC=Normocytic
+- code: NOT DETECTED
+  label: NOT DETECTED=Not Detected
+- code: NOT INCREASED
+  label: NOT INCREASED=Not Increased
+- code: NUCLEOLAR
+  label: NUCLEOLAR=Nucleolar
+- code: O NEG
+  label: O NEG=O Neg
+- code: O POS
+  label: O POS=O Pos
+- code: OBEYS COMMANDS
+  label: OBEYS COMMANDS=Obeys commands
+- code: OCCASIONAL
+  label: OCCASIONAL=Occasional
+- code: OCCASIONALLY MOIST
+  label: OCCASIONALLY MOIST=Occasionally moist
+- code: OPAQUE
+  label: OPAQUE=Opaque
+- code: ORANGE
+  label: ORANGE=Orange
+- code: ORIENTED
+  label: ORIENTED=Oriented
+- code: OSCILLOMETRY
+  label: OSCILLOMETRY=Oscillometry
+- code: OVALOCYTES
+  label: OVALOCYTES=Ovalocytes
+- code: OVERGROWN/OVERGROWTH
+  label: OVERGROWN/OVERGROWTH=Overgrown/Overgrowth
+- code: PALE PINK
+  label: PALE PINK=Pale Pink
+- code: PALE STRAW
+  label: PALE STRAW=Pale Straw
+- code: PALE YELLOW
+  label: PALE YELLOW=Pale Yellow
+- code: PAPPENHEIMER BODIES
+  label: PAPPENHEIMER BODIES=Pappenheimer bodies
+- code: PAST INFECTION
+  label: PAST INFECTION=Past infection
+- code: PENCIL CELLS
+  label: PENCIL CELLS=Pencil cells
+- code: PERICARDIAL FLUID
+  label: PERICARDIAL FLUID=Pericardial fluid
+- code: PERIPHERAL BLOOD
+  label: PERIPHERAL BLOOD=Peripheral Blood
+- code: PERITONEAL FLUID
+  label: PERITONEAL FLUID=Peritoneal fluid
+- code: PERITONEAL FLUID/ASCITES
+  label: PERITONEAL FLUID/ASCITES=Peritoneal Fluid/Ascites
+- code: PINK
+  label: PINK=Pink
+- code: PLASMA
+  label: PLASMA=Plasma
+- code: PLEURAL FLUID
+  label: PLEURAL FLUID=Pleural Fluid
+- code: POIKILOCYTOSIS
+  label: POIKILOCYTOSIS=Poikilocytosis
+- code: POLYCHROMASIA
+  label: POLYCHROMASIA=Polychromasia
+- code: POSITIVE
+  label: POSITIVE=Positive
+- code: POTENTIAL PROBLEM
+  label: POTENTIAL PROBLEM=Potential problem
+- code: PREKERATOCYTES
+  label: PREKERATOCYTES=Prekeratocytes
+- code: PRESENT
+  label: PRESENT=Present
+- code: PRESUMPTIVE POSITIVE
+  label: PRESUMPTIVE POSITIVE=Presumptive positive
+- code: PROBABLY INADEQUATE
+  label: PROBABLY INADEQUATE=Probably inadequate
+- code: PROBLEM
+  label: PROBLEM=Problem
+- code: PRONE
+  label: PRONE=Prone
+- code: PYKNOSIS
+  label: PYKNOSIS=Pyknosis
+- code: RANDOM
+  label: RANDOM=Random
+- code: RARE
+  label: RARE=Rare
+- code: RARELY MOIST
+  label: RARELY MOIST=Rarely moist
+- code: REACTIVE
+  label: REACTIVE=Reactive
+- code: RECENT INFECTION
+  label: RECENT INFECTION=Recent infection
+- code: RED
+  label: RED=Red
+- code: RESISTANT
+  label: RESISTANT=Resistant
+- code: RESPIRATORY
+  label: RESPIRATORY=Respiratory
+- code: RIGHT ARM
+  label: RIGHT ARM=Right arm
+- code: RIGHT LEG
+  label: RIGHT LEG=Right leg
+- code: ROULEAUX
+  label: ROULEAUX=Rouleaux
+- code: SARS CORONAVIRUS 2
+  label: SARS CORONAVIRUS 2=SARS coronavirus 2
+- code: SCHISTOCYTES
+  label: SCHISTOCYTES=Schistocytes
+- code: SENSITIVE
+  label: SENSITIVE=Sensitive
+- code: SICKLE CELLS
+  label: SICKLE CELLS=Sickle cells
+- code: SIDEROCYTES
+  label: SIDEROCYTES=Siderocytes
+- code: SITTING
+  label: SITTING=Sitting
+- code: SKIN
+  label: SKIN=Skin
+- code: SLIGHT
+  label: SLIGHT=Slight
+- code: SLIGHTLY CLOUDY
+  label: SLIGHTLY CLOUDY=Slightly Cloudy
+- code: SLIGHTLY LIMITED
+  label: SLIGHTLY LIMITED=Slightly limited
+- code: SMALL
+  label: SMALL=Small
+- code: SMOKER, CURRENT STATUS UNKNOWN
+  label: SMOKER, CURRENT STATUS UNKNOWN=Smoker, current status unknown
+- code: SPECIMEN UNSATISFACTORY
+  label: SPECIMEN UNSATISFACTORY=Specimen unsatisfactory
+- code: SPECIMEN UNSATISFACTORY FOR EVALUATION
+  label: SPECIMEN UNSATISFACTORY FOR EVALUATION=Specimen unsatisfactory for evaluation
+- code: SPECKLED
+  label: SPECKLED=Speckled
+- code: SPHEROCYTES
+  label: SPHEROCYTES=Spherocytes
+- code: SPHEROCYTES.MICRO
+  label: SPHEROCYTES.MICRO=Spherocytes.micro
+- code: STANDING
+  label: STANDING=Standing
+- code: STOMATOCYTES
+  label: STOMATOCYTES=Stomatocytes
+- code: STOOL
+  label: STOOL=Stool
+- code: STRAW
+  label: STRAW=Straw
+- code: SUPINE
+  label: SUPINE=Supine
+- code: SUSCEPTIBLE
+  label: SUSCEPTIBLE=Susceptible
+- code: SUSPECTED
+  label: SUSPECTED=Suspected
+- code: SYNOVIAL FLUID
+  label: SYNOVIAL FLUID=Synovial fluid
+- code: TARGET CELLS
+  label: TARGET CELLS=Target cells
+- code: TRACE
+  label: TRACE=Trace
+- code: TRACE-INTACT
+  label: TRACE-INTACT=Trace-Intact
+- code: TRACE-LYSED
+  label: TRACE-LYSED=Trace-Lysed
+- code: TRANSFUSED
+  label: TRANSFUSED=Transfused
+- code: TRANSLUCENT
+  label: TRANSLUCENT=Translucent
+- code: TURBID
+  label: TURBID=Turbid
+- code: UNDETECTABLE
+  label: UNDETECTABLE=Undetectable
+- code: UNDETERMINED
+  label: UNDETERMINED=Undetermined
+- code: UNINTERPRETIBLE
+  label: UNINTERPRETIBLE=Uninterpretible
+- code: UNKNOWN IF EVER SMOKED
+  label: UNKNOWN IF EVER SMOKED=Unknown if ever smoked
+- code: URINE
+  label: URINE=Urine
+- code: VENOUS LINE
+  label: VENOUS LINE=Venous line
+- code: VERY CLOUDY
+  label: VERY CLOUDY=Very Cloudy
+- code: VERY LIMITED
+  label: VERY LIMITED=Very limited
+- code: VERY MOIST
+  label: VERY MOIST=Very moist
+- code: VERY POOR
+  label: VERY POOR=Very poor
+- code: WALKS FREQUENTLY
+  label: WALKS FREQUENTLY=Walks frequently
+- code: WALKS OCCASIONALLY
+  label: WALKS OCCASIONALLY=Walks occasionally
+- code: WATERY
+  label: WATERY=Watery
+- code: WHITE
+  label: WHITE=White
+- code: WILD TYPE
+  label: WILD TYPE=Wild Type
+- code: WITHDRAWAL FROM PAIN
+  label: WITHDRAWAL FROM PAIN=Withdrawal from pain
+- code: YELLOW
+  label: YELLOW=Yellow
+- code: 'YES'
+  label: YES=Yes
+- code: NI
+  label: NI=No Information
+- code: UN
+  label: UN=Unknown
+- code: OT
+  label: OT=Other

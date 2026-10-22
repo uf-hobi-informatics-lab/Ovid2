@@ -1,0 +1,172 @@
+v: 1
+name: obs_gen
+composite_key:
+- OBSGENID
+domain_description: Table to store everything else.
+domain_order: 18
+constraints:
+- field: OBSGENID
+  rule: unique
+  order: 73
+- field: OBSGENID
+  rule: required, not null
+  order: 74
+- field: PATID
+  rule: required, not null
+  order: 75
+- field: OBSGEN_START_DATE
+  rule: required, not null
+  order: 76
+relations:
+- relation: PK
+  details: OBSGENID
+  order: 53
+- relation: FK (many to one)
+  details: OBSGEN.PATID references DEMOGRAPHIC.PATID
+  order: 54
+- relation: FK (zero/many to one)
+  details: OBSGEN.ENCOUNTERID references ENCOUNTER.ENCOUNTERID
+  order: 55
+- relation: FK (many to one)
+  details: OBSGEN.OBSGEN_PROVIDERID references PROVIDER.PROVIDERID
+  order: 56
+fields:
+- name: OBSGENID
+  rdbms_type: RDBMS Text(x)
+  order: 293
+  sas_type: SAS Char(x)
+  definition: Arbitrary identifier for each unique OBS_GEN record.
+- name: PATID
+  rdbms_type: RDBMS Text(x)
+  order: 294
+  sas_type: SAS Char(x)
+  definition: Arbitrary person-level identifier. Used to link across tables.
+- name: ENCOUNTERID
+  rdbms_type: RDBMS Text(x)
+  order: 295
+  sas_type: SAS Char(x)
+  definition: Arbitrary encounter-level identifier used to link across tables. This field should be populated
+    if the observation was recorded as part of a healthcare encounter.
+- name: OBSGEN_PROVIDERID
+  rdbms_type: RDBMS Text(x)
+  order: 296
+  sas_type: SAS Char(x)
+  definition: Provider code for the provider who recorded the observation. The provider code is a pseudoidentifier
+    with a consistent crosswalk to the real identifier.
+- name: OBSGEN_START_DATE
+  rdbms_type: RDBMS Date
+  order: 297
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Date of observation/measurement
+- name: OBSGEN_START_TIME
+  rdbms_type: RDBMS Text(5)
+  order: 298
+  sas_type: SAS Time (Numeric)
+  data_format: HH:MI using 24-hour clock and zero-padding for hour and minute
+  unit_of_measure: TIME
+  definition: Time of observation/measurement.
+- name: OBSGEN_STOP_DATE
+  rdbms_type: RDBMS Date
+  order: 299
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Date observation/measurement ended.
+- name: OBSGEN_STOP_TIME
+  rdbms_type: RDBMS Text(5)
+  order: 300
+  sas_type: SAS Time (Numeric)
+  data_format: HH:MI using 24-hour clock and zero-padding for hour and minute
+  unit_of_measure: TIME
+  definition: Time observation/measurement ended.
+- name: OBSGEN_TYPE
+  rdbms_type: RDBMS Text(30)
+  order: 301
+  sas_type: SAS Char(30)
+  valueset: pcornet_7_0.obs_gen.obsgen_type
+  definition: "Terminology/vocabulary used to describe the observation.\nNetworks/pipelines can define\
+    \ their own terminologies with strings starting with “UD_”. \nStrings that start with “PC_” are reserved\
+    \ for network-wide activities and will be assigned by the Coordinating Center."
+- name: OBSGEN_CODE
+  rdbms_type: RDBMS Text(50)
+  order: 302
+  sas_type: SAS Char(50)
+  definition: Standardized code denoting the observations based on the terminology/vocabulary specified
+    in OBSGEN_TYPE
+- name: OBSGEN_RESULT_QUAL
+  rdbms_type: RDBMS Text(x)
+  order: 303
+  sas_type: SAS Char(x)
+  definition: Standardized result for qualitative results. This variable should be NI for quantitative
+    results.
+- name: OBSGEN_RESULT_TEXT
+  rdbms_type: RDBMS Text(x)
+  order: 304
+  sas_type: SAS Char(x)
+  definition: Narrative/textual observations.
+- name: OBSGEN_RESULT_NUM
+  rdbms_type: RDBMS Number(x)
+  order: 305
+  sas_type: SAS Numeric(length 8)
+  data_format: RDBMS number supports 15 total digits, 8 after decimal; SAS numeric length 8
+  definition: Standardized/converted result for quantitative results.
+- name: OBSGEN_RESULT_MODIFIER
+  rdbms_type: RDBMS Text(2)
+  order: 306
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.obs_gen.obsgen_result_modifier
+  definition: Modifier for result values.
+- name: OBSGEN_RESULT_UNIT
+  rdbms_type: RDBMS Text(x)
+  order: 307
+  sas_type: SAS Char(x)
+  definition: Converted/standardized units for the result.
+- name: OBSGEN_TABLE_MODIFIED
+  rdbms_type: RDBMS Text(3)
+  order: 308
+  sas_type: SAS Char(3)
+  valueset: pcornet_7_0.obs_gen.obsgen_table_modified
+  definition: Table name when observation describes attributes of an existing record in the CDM.
+- name: OBSGEN_ID_MODIFIED
+  rdbms_type: RDBMS Text(x)
+  order: 309
+  sas_type: SAS Char(x)
+  definition: Identifier when observation describes attributes of an existing record in the CDM.
+- name: OBSGEN_SOURCE
+  rdbms_type: RDBMS Text(2)
+  order: 310
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.obs_gen.obsgen_source
+  definition: Source of the information for the observation or measurement.
+- name: OBSGEN_ABN_IND
+  rdbms_type: RDBMS Text(2)
+  order: 311
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.obs_gen.obsgen_abn_ind
+  definition: Abnormal result indicator. This value comes from the source data; do not apply logic to
+    create it.  If field is blank in source data, map to the appropriate flavor of null.
+- name: RAW_OBSGEN_NAME
+  rdbms_type: RDBMS Text(x)
+  order: 312
+  sas_type: SAS Char(x)
+  definition: Local name related to an individual clinical observation/measurement.
+- name: RAW_OBSGEN_CODE
+  rdbms_type: RDBMS Text(x)
+  order: 313
+  sas_type: SAS Char(x)
+  definition: Local code related to an individual clinical observation/measurement.
+- name: RAW_OBSGEN_TYPE
+  rdbms_type: RDBMS Text(x)
+  order: 314
+  sas_type: SAS Char(x)
+  definition: Terminology related to the code in RAW_OBSGEN_CODE.
+- name: RAW_OBSGEN_RESULT
+  rdbms_type: RDBMS Text(x)
+  order: 315
+  sas_type: SAS Char(x)
+  definition: The original test result value as seen in your source data.
+- name: RAW_OBSGEN_UNIT
+  rdbms_type: RDBMS Text(x)
+  order: 316
+  sas_type: SAS Char(x)
+  definition: Original units for the result in your source data.

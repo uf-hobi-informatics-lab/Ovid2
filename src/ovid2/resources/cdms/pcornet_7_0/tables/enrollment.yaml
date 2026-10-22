@@ -1,0 +1,81 @@
+v: 1
+name: enrollment
+composite_key:
+- PATID
+- ENR_START_DATE
+- ENR_BASIS
+domain_description: Enrollment is a concept that defines a period of time during which a person is expected
+  to have complete data capture. This concept is often insurance-based, but other methods of defining
+  enrollment are possible.
+domain_order: 2
+constraints:
+- field: PATID + ENR_START_DATE + ENR_BASIS
+  rule: unique
+  order: 3
+- field: PATID
+  rule: required, not null
+  order: 4
+- field: ENR_START_DATE
+  rule: required, not null
+  order: 5
+- field: ENR_BASIS
+  rule: required, not null
+  order: 6
+relations:
+- relation: Composite Key
+  details: PATID + ENR_START_DATE + ENR_BASIS
+  order: 2
+- relation: FK (many to one)
+  details: ENROLLMENT.PATID references DEMOGRAPHIC.PATID
+  order: 3
+fields:
+- name: PATID
+  rdbms_type: RDBMS Text(x)
+  order: 56
+  sas_type: SAS Char(x)
+  definition: Arbitrary person-level identifier used to link across tables.
+- name: ENR_START_DATE
+  rdbms_type: RDBMS Date
+  order: 57
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Optional field for locally-defined identifier intended for local use; for example, where
+    a network may have multiple sites contributing to a central data repository. This attribute may be
+    sensitive in certain contexts; the intent is for internal network use only, and not to enable site
+    quality comparisons.
+- name: ENR_END_DATE
+  rdbms_type: RDBMS Date
+  order: 58
+  sas_type: SAS Date (Numeric)
+  unit_of_measure: DATE
+  definition: Date of the end of the enrollment period. If the exact date is unknown, use the last day
+    of the month.
+- name: CHART
+  rdbms_type: RDBMS Text(1)
+  order: 59
+  sas_type: SAS Char(1)
+  valueset: pcornet_7_0.enrollment.chart
+  definition: 'Chart abstraction flag is intended to answer the question, "Are you able to request (or
+    review) charts for this person?" This flag does not address chart availability.  Note: This field
+    is most relevant for health insurers that can request charts from affiliated providers. This field
+    allows exclusion of patients from studies that require chart review to validate exposures and/or outcomes.
+    It identifies patients for whom charts are never available and for whom the chart can never be requested.'
+- name: ENR_BASIS
+  rdbms_type: RDBMS Text(1)
+  order: 60
+  sas_type: SAS Char(1)
+  valueset: pcornet_7_0.enrollment.enr_basis
+  definition: 'ENR_BASIS is a property of the time period defined. A patient can have multiple entries
+    in the table. Details of categorical definitions: Medical insurance coverage: The start and stop dates
+    are based upon enrollment where the health plan has any responsibility for covering medical care for
+    the member during this enrollment period (i.e., if you expect to observe medical care provided to
+    this member during the enrollment period). Outpatient prescription drug coverage: The start and stop
+    dates are based on enrollment where the health plan has any responsibility for covering outpatient
+    prescription drugs for the member during this enrollment period (i.e., if you expect to observe outpatient
+    pharmacy dispensings for this member during this enrollment period). (New value set item added in
+    v3.1.) Geography: An assertion of complete data capture between the start and end dates based upon
+    geographic characteristics, such as regional isolation. Algorithmic: An assertion of complete data
+    capture between the start and end dates, based on a locally developed or applied algorithm, often
+    using multiple criteria. Encounter-based: The start and stop dates are populated from the earliest-observed
+    encounter and latest-observed encounter. Field definition and value sets modified in v3.1 to include
+    drug coverage.'

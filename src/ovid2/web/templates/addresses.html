@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block title %}Addresses &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <div class="page-header">
+    <h1>Address configs</h1>
+    <div class="page-actions">
+      {% set has_connection_addresses = addresses | selectattr('connection') | list | length > 0 %}
+      {% if has_connection_addresses %}
+        <button type="button" id="test-all-btn" class="button small"
+                data-test-all="addresses">Test all connections</button>
+      {% endif %}
+      <a href="/addresses/new" class="button primary small">+ New address</a>
+    </div>
+  </div>
+  {% if addresses %}
+    <div id="test-all-summary" class="flash" style="display: none;"></div>
+    <div class="table-wrap">
+    <table class="runs-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Connection</th>
+          <th>Path</th>
+          <th>Result</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in addresses %}
+          <tr data-address-row="{{ a.name }}"
+              data-connection="{{ a.connection or '' }}">
+            <td><a href="/addresses/{{ a.name }}">{{ a.name }}</a></td>
+            <td>{{ a.src_name }}</td>
+            <td class="mono small">
+              {% if a.connection %}
+                <a href="/connections/{{ a.connection }}">{{ a.connection }}</a>
+              {% else %}
+                <span style="color: var(--fg-muted);"
+                      title="Legacy pre-W7 address. Run 'ovid2 tools migrate-addresses' to convert.">(legacy)</span>
+              {% endif %}
+            </td>
+            <td class="mono small">{{ a.path }}</td>
+            <td class="test-result-cell" data-test-cell="{{ a.name }}">
+              {% if a.connection %}
+                <span class="small" style="color: var(--fg-muted);">&mdash;</span>
+              {% else %}
+                <span class="small" style="color: var(--fg-muted);"
+                      title="Legacy address (no backing connection to probe).">n/a</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if a.connection %}
+                <button type="button" class="button small"
+                        data-test-connection="{{ a.connection }}"
+                        data-address="{{ a.name }}"
+                        title="Probe connection '{{ a.connection }}'.">Test</button>
+              {% endif %}
+              <a href="/addresses/{{ a.name }}/edit" class="small">edit</a>
+              <form action="/addresses/{{ a.name }}/delete" method="post" style="display: inline;"
+                    onsubmit="return confirm('Delete address {{ a.name }}?')">
+                <button type="submit" class="link-button small danger">delete</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% else %}
+    <p class="empty">
+      No address configs found. Click <a href="/addresses/new">New address</a>
+      to create one, or run <code>ovid2 init</code> to lay out the XDG
+      config tree and drop JSON files under
+      <code>$XDG_CONFIG_HOME/ovid2/configs/</code>.
+    </p>
+  {% endif %}
+</section>
+
+{% if has_connection_addresses %}
+<script>
+(function () {
+  "use strict";
+
+  var MAX_PARALLEL = 4;
+
+  function escape(s) {
+    return String(s == null ? "" : s).replace(/[<>&"']/g, function (c) {
+      return { "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function badgeHtml(cls, code, message) {
+    return '<span class="badge ' + cls + '" title="' + escape(message) + '">' + escape(code) + '</span>';
+  }
+
+  function setPending(cell) {
+    cell.innerHTML = '<span class="badge status-processing" title="Testing…">testing…</span>';
+  }
+
+  function setResult(cell, ok, code, message) {
+    var cls = ok ? "severity-ok" : "severity-error";
+    if (!ok && (code === "not_implemented" || code === "skipped")) {
+      cls = "severity-warning";
+    }
+    cell.innerHTML = badgeHtml(cls, code || (ok ? "ok" : "error"), message || "");
+  }
+
+  function setError(cell, message) {
+    cell.innerHTML = badgeHtml("severity-error", "error", message || "Request failed");
+  }
+
+  function runOne(addressName, connectionName) {
+    var cell = document.querySelector('[data-test-cell="' + addressName + '"]');
+    if (!cell) return Promise.resolve({ ok: false, name: addressName });
+    setPending(cell);
+    return fetch("/api/v1/connections/" + encodeURIComponent(connectionName) + "/test", {
+      method: "POST",
+      headers: { "Accept": "application/json" },
+    })
+      .then(function (r) {
+        return r.json().then(function (body) { return { status: r.status, body: body }; });
+      })
+      .then(function (res) {
+        var body = res.body || {};
+        if (res.status >= 400) {
+          var msg = body.detail || body.message || ("HTTP " + res.status);
+          setError(cell, msg);
+          return { ok: false, name: addressName };
+        }
+        setResult(cell, !!body.ok, body.code, body.message);
+        return { ok: !!body.ok, name: addressName };
+      })
+      .catch(function (err) {
+        setError(cell, (err && err.message) || "Network error");
+        return { ok: false, name: addressName };
+      });
+  }
+
+  function runPool(pairs) {
+    var summary = document.getElementById("test-all-summary");
+    if (summary) {
+      summary.className = "flash";
+      summary.style.display = "block";
+      summary.textContent = "Testing " + pairs.length + " addresses…";
+    }
+    var idx = 0;
+    var oks = 0;
+    var fails = 0;
+    return new Promise(function (resolve) {
+      function next() {
+        if (idx >= pairs.length) return;
+        var p = pairs[idx++];
+        runOne(p.address, p.connection).then(function (r) {
+          if (r.ok) oks++; else fails++;
+          if (oks + fails === pairs.length) {
+            if (summary) {
+              summary.className = fails === 0 ? "flash ok" : "flash error";
+              summary.textContent = oks + " ok, " + fails + " failed";
+            }
+            resolve();
+          } else {
+            next();
+          }
+        });
+      }
+      var slots = Math.min(MAX_PARALLEL, pairs.length);
+      for (var i = 0; i < slots; i++) next();
+    });
+  }
+
+  document.addEventListener("click", function (evt) {
+    var t = evt.target;
+    if (!(t instanceof HTMLElement)) return;
+    var conn = t.getAttribute("data-test-connection");
+    var addr = t.getAttribute("data-address");
+    if (conn && addr) {
+      evt.preventDefault();
+      runOne(addr, conn);
+      return;
+    }
+    if (t.getAttribute("data-test-all") === "addresses") {
+      evt.preventDefault();
+      var rows = document.querySelectorAll("[data-address-row]");
+      var pairs = [];
+      rows.forEach(function (r) {
+        var c = r.getAttribute("data-connection");
+        if (c) {
+          pairs.push({ address: r.getAttribute("data-address-row"), connection: c });
+        }
+      });
+      if (pairs.length) runPool(pairs);
+    }
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

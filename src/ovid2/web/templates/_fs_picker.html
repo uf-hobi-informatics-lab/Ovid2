@@ -1,0 +1,120 @@
+{#
+  HTMX partial rendered inside #fs-picker-modal. Two states:
+   1) `error` set → render a message + close button.
+   2) `listing` set → render the current directory with breadcrumbs,
+      an "Up" button, subdirectory links (issuing hx-get for the
+      next level), and per-row "Choose" buttons that inject the
+      picked path back into the target field on the parent form.
+
+  The picker only offers directories as pickable choices. Files are
+  shown for context but their "Choose" button is suppressed — the
+  disc connection's ``host_path`` must be a directory.
+#}
+<div class="fs-picker" style="position: relative; max-width: 720px; margin: 4em auto;
+                              background: var(--color-surface, #fff);
+                              border-radius: 6px; box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+                              padding: 1.25em 1.5em;">
+  <div style="display: flex; justify-content: space-between; align-items: center;
+              gap: 1em; margin-bottom: 0.75em;">
+    <h3 style="margin: 0;">Pick a directory</h3>
+    <button type="button" class="button"
+            onclick="document.getElementById('fs-picker-modal').style.display='none';
+                     document.getElementById('fs-picker-modal').innerHTML='';">
+      Close
+    </button>
+  </div>
+
+  {% if error %}
+    <div class="flash error">{{ error }}</div>
+    {% if roots %}
+      <p class="small">Jump to a curated starting point:</p>
+      <ul class="mono">
+        {% for r in roots %}
+          <li>
+            <a href="#"
+               hx-get="/fs/picker?path={{ r.path|urlencode }}&target={{ target }}"
+               hx-target="#fs-picker-modal"
+               hx-swap="innerHTML">{{ r.label }}</a>
+            <span class="small">— {{ r.path }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  {% else %}
+    <div class="path-picker-current mono" style="margin-bottom: 0.5em;">
+      <strong>{{ listing.path }}</strong>
+    </div>
+
+    <div style="display: flex; gap: 0.5em; margin-bottom: 0.75em; flex-wrap: wrap;">
+      {% if listing.parent %}
+        <button type="button" class="button"
+                hx-get="/fs/picker?path={{ listing.parent|urlencode }}&target={{ target }}"
+                hx-target="#fs-picker-modal"
+                hx-swap="innerHTML">
+          &uarr; Up
+        </button>
+      {% endif %}
+      <button type="button" class="button primary"
+              onclick="(function(){
+                var input = document.getElementById('{{ target }}');
+                if (input) { input.value = '{{ listing.path|e }}'; input.dispatchEvent(new Event('change')); }
+                var modal = document.getElementById('fs-picker-modal');
+                modal.style.display='none'; modal.innerHTML='';
+              })();">
+        Choose this directory
+      </button>
+      {% if roots %}
+        <details style="align-self: center;">
+          <summary class="small" style="cursor: pointer;">Jump to&hellip;</summary>
+          <ul class="mono" style="margin: 0.5em 0 0 0; padding-left: 1.5em;">
+            {% for r in roots %}
+              <li>
+                <a href="#"
+                   hx-get="/fs/picker?path={{ r.path|urlencode }}&target={{ target }}"
+                   hx-target="#fs-picker-modal"
+                   hx-swap="innerHTML">{{ r.label }}</a>
+              </li>
+            {% endfor %}
+          </ul>
+        </details>
+      {% endif %}
+    </div>
+
+    <div style="max-height: 340px; overflow-y: auto; border: 1px solid var(--border);
+                border-radius: 4px;">
+      <table class="kv-table" style="margin: 0; width: 100%;">
+        <tbody>
+          {% for e in listing.entries %}
+            <tr>
+              <td class="mono" style="width: 1.5em;">
+                {% if e.type == 'dir' %}&#128193;{% elif e.type == 'symlink' %}&#128279;{% elif e.type == 'file' %}&#128196;{% else %}&#8226;{% endif %}
+              </td>
+              <td>
+                {% if e.type == 'dir' %}
+                  <a href="#"
+                     hx-get="/fs/picker?path={{ (listing.path.rstrip('/') + '/' + e.name)|urlencode }}&target={{ target }}"
+                     hx-target="#fs-picker-modal"
+                     hx-swap="innerHTML"
+                     class="mono">{{ e.name }}/</a>
+                {% else %}
+                  <span class="mono" style="color: var(--fg-muted);">{{ e.name }}</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="2" class="small">(empty)</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top: 0.75em;">
+      <input type="text" id="fs-picker-typed" placeholder="/absolute/path"
+             class="mono wide"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();
+               htmx.ajax('GET','/fs/picker?path='+encodeURIComponent(this.value)+'&target={{ target }}',
+                        {target:'#fs-picker-modal', swap:'innerHTML'});}">
+      <div class="small">Type an absolute path and press Enter to jump directly.</div>
+    </div>
+  {% endif %}
+</div>

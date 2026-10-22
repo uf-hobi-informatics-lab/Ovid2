@@ -1,0 +1,41 @@
+v: 1
+name: pcornet_7_0.obs_gen.obsgen_abn_ind
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 OBS_GEN.OBSGEN_ABN_IND code set.
+code_column: code
+description_column: label
+items:
+- code: AB
+  label: AB=Abnormal
+  order: 11515
+- code: AH
+  label: AH=Abnormally high
+  order: 11516
+- code: AL
+  label: AL=Abnormally low
+  order: 11517
+- code: CH
+  label: CH=Critically high
+  order: 11518
+- code: CL
+  label: CL=Critically low
+  order: 11519
+- code: CR
+  label: CR=Critical
+  order: 11520
+- code: IN
+  label: IN=Inconclusive
+  order: 11521
+- code: NL
+  label: NL=Normal
+  order: 11522
+- code: NI
+  label: NI=No information
+  order: 11523
+- code: UN
+  label: UN=Unknown
+  order: 11524
+- code: OT
+  label: OT=Other
+  order: 11525

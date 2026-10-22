@@ -1,0 +1,30 @@
+id: "2.03"
+name: DC 2.03
+part: part2
+edc_table: Table IIIC
+description: More than 5% of records have illogical date sequences
+operator: illogical_date
+source_tables:
+  - ENCOUNTER
+  - DIAGNOSIS
+  - PROCEDURES
+  - DEATH
+params:
+  pairs:
+    - {table: ENCOUNTER, earlier: ADMIT_DATE, later: DISCHARGE_DATE}
+    - {table: DIAGNOSIS, earlier: ADMIT_DATE, later: DX_DATE}
+    - {table: PROCEDURES, earlier: ADMIT_DATE, later: PX_DATE}
+metrics:
+  - ILLOGICAL_DATE_PCT
+exception_metrics:
+  - ILLOGICAL_DATE_PCT
+thresholds:
+  illogical_pct_gt: 5.0
+enabled: true
+doc_summary: >-
+  DC 2.03 (Table IIIC): fewer than 5% of records carry an illogical date
+  sequence (a later date preceding its earlier partner, e.g. DISCHARGE_DATE
+  before ADMIT_DATE).
+doc_interpretation: >-
+  ILLOGICAL_DATE_PCT above 5% (EXCEPTION) means illogical date ordering is
+  common and should be corrected.

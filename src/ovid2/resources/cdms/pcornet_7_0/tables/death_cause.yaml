@@ -1,0 +1,72 @@
+v: 1
+name: death_cause
+composite_key:
+- PATID
+- DEATH_CAUSE
+- DEATH_CAUSE_CODE
+- DEATH_CAUSE_TYPE
+- DEATH_CAUSE_SOURCE
+domain_description: The individual causes associated with a reported death.
+domain_order: 14
+constraints:
+- field: PATID + DEATH_CAUSE + DEATH_CAUSE_CODE + DEATH_CAUSE_TYPE + DEATH_CAUSE_SOURCE
+  rule: unique
+  order: 57
+- field: PATID
+  rule: required, not null
+  order: 58
+- field: DEATH_CAUSE
+  rule: required, not null
+  order: 59
+- field: DEATH_CAUSE_CODE
+  rule: required, not null
+  order: 60
+- field: DEATH_CAUSE_TYPE
+  rule: required, not null
+  order: 61
+- field: DEATH_CAUSE_SOURCE
+  rule: required, not null
+  order: 62
+relations:
+- relation: Composite Key
+  details: PATID + DEATH_CAUSE + DEATH_CAUSE_CODE + DEATH_CAUSE_TYPE + DEATH_CAUSE_SOURCE
+  order: 37
+- relation: FK (many to one)
+  details: DEATH_CAUSE.PATID references DEMOGRAPHIC.PATID
+  order: 38
+fields:
+- name: PATID
+  rdbms_type: RDBMS Text(x)
+  order: 237
+  sas_type: SAS Char(x)
+  definition: Arbitrary person-level identifier used to link across tables.
+- name: DEATH_CAUSE
+  rdbms_type: RDBMS Text(8)
+  order: 238
+  sas_type: SAS Char(8)
+  definition: Cause of death code. Please include the decimal point in ICD codes (if any).
+- name: DEATH_CAUSE_CODE
+  rdbms_type: RDBMS Text(2)
+  order: 239
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.death_cause.death_cause_code
+  definition: Cause of death code type.
+- name: DEATH_CAUSE_TYPE
+  rdbms_type: RDBMS Text(2)
+  order: 240
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.death_cause.death_cause_type
+  definition: Cause of death type. There should be only one underlying cause of death.
+- name: DEATH_CAUSE_SOURCE
+  rdbms_type: RDBMS Text(2)
+  order: 241
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.death_cause.death_cause_source
+  definition: Source of cause of death information.
+- name: DEATH_CAUSE_CONFIDENCE
+  rdbms_type: RDBMS Text(2)
+  order: 242
+  sas_type: SAS Char(2)
+  valueset: pcornet_7_0.death_cause.death_cause_confidence
+  definition: Confidence in the accuracy of the cause of death based on source, match, number of reporting
+    sources, discrepancies, etc.

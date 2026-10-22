@@ -1,0 +1,8 @@
+# PCORnet ENROLLMENT -> OMOP observation_period.
+# person_id = PATID. observation_period_id = hash_key_id(PATID, ENR_START_DATE,
+# ENR_BASIS) (deterministic surrogate, no mapping-table round-trip).
+# period_type_concept_id from the static ENR_BASIS dict.
+v: 1
+formatter: observation_period
+adapter: custom
+class: ovid2_pipelines.pcornet_to_omop.formatters_custom.observation_period_formatter.ObservationPeriodFormatter

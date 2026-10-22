@@ -1,0 +1,30 @@
+id: "3.11"
+name: DC 3.11
+part: part3
+edc_table: Table IVG
+description: Most recent month of VITAL/PRESCRIBING/LAB_RESULT_CM is zero or far below benchmark
+operator: monthly_volume
+source_tables:
+  - VITAL
+  - PRESCRIBING
+  - LAB_RESULT_CM
+na_when_empty:
+  - LAB_RESULT_CM
+  - PRESCRIBING
+  - VITAL
+params:
+  date_column: MEASURE_DATE
+metrics:
+  - RECENT_MONTH_ROWS
+exception_metrics:
+  - RECENT_MONTH_ROWS
+thresholds:
+  recent_month_pct_lt: 75.0
+enabled: true
+doc_summary: >-
+  DC 3.11 (Table IVG): the most recent complete month of VITAL, PRESCRIBING
+  and LAB_RESULT_CM data is non-zero and at least 75% of the trailing-12-month
+  mean.
+doc_interpretation: >-
+  RECENT_MONTH_ROWS below the expected floor (EXCEPTION) means the latest
+  month of vitals / meds / labs is missing or truncated.

@@ -1,0 +1,11 @@
+{
+    "src_name": "snowflake",
+    "src_args": {
+        "account":   null,
+        "warehouse": "OVID_WH",
+        "database":  null,
+        "schema":    null,
+        "role":      "OVID_ROLE",
+        "user":      null
+    }
+}

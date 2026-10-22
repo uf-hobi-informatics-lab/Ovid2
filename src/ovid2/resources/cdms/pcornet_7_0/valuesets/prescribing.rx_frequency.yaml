@@ -1,0 +1,47 @@
+v: 1
+name: pcornet_7_0.prescribing.rx_frequency
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 PRESCRIBING.RX_FREQUENCY code set.
+code_column: code
+description_column: label
+items:
+- code: '01'
+  label: 01=Every day
+  order: 6956
+- code: '02'
+  label: 02=Two times a day (BID)
+  order: 6957
+- code: '03'
+  label: 03=Three times a day (TID)
+  order: 6958
+- code: '04'
+  label: 04=Four times a day (QID)
+  order: 6959
+- code: '05'
+  label: 05=Every morning
+  order: 6960
+- code: '06'
+  label: 06=Every afternoon
+  order: 6961
+- code: '07'
+  label: 07=Before meals
+  order: 6962
+- code: 08
+  label: 08=After meals
+  order: 6963
+- code: '10'
+  label: 10=Every evening
+  order: 6964
+- code: '11'
+  label: 11=Once
+  order: 6965
+- code: NI
+  label: NI=No information
+  order: 6966
+- code: UN
+  label: UN=Unknown
+  order: 6967
+- code: OT
+  label: OT=Other
+  order: 6968

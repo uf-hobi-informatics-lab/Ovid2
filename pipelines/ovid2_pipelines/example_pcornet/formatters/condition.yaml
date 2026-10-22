@@ -1,0 +1,26 @@
+# Example PCORnet-native passthrough spec.
+v: 1
+formatter: condition
+adapter: pcornet_passthrough
+input_file_name: "*Condition_*.txt"
+
+sources:
+  condition:
+    glob: "*Condition_*.txt"
+    lowercase_columns: true
+
+projections:
+  CONDITION: condition
+  CONDITIONID: conditionid
+  CONDITION_SOURCE: condition_source
+  CONDITION_STATUS: condition_status
+  CONDITION_TYPE: condition_type
+  ENCOUNTERID: encounterid
+  ONSET_DATE: onset_date
+  PATID: patid
+  RAW_CONDITION: raw_condition
+  RAW_CONDITION_SOURCE: raw_condition_source
+  RAW_CONDITION_STATUS: raw_condition_status
+  RAW_CONDITION_TYPE: raw_condition_type
+  REPORT_DATE: report_date
+  RESOLVE_DATE: resolve_date

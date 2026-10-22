@@ -1,0 +1,25 @@
+# Example PCORnet-native passthrough spec.
+v: 1
+formatter: procedures
+adapter: pcornet_passthrough
+input_file_name: "*Procedures_*.txt"
+
+sources:
+  procedures:
+    glob: "*Procedures_*.txt"
+    lowercase_columns: true
+
+projections:
+  ADMIT_DATE: admit_date
+  ENCOUNTERID: encounterid
+  ENC_TYPE: enc_type
+  PATID: patid
+  PPX: ppx
+  PROCEDURESID: proceduresid
+  PROVIDERID: providerid
+  PX_DATE: px_date
+  PX_SOURCE: px_source
+  PX_TYPE: px_type
+  RAW_PPX: raw_ppx
+  RAW_PX: raw_px
+  RAW_PX_TYPE: raw_px_type

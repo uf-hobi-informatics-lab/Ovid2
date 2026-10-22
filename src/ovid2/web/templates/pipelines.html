@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% block title %}Pipelines &mdash; Ovid2{% endblock %}
+{% block content %}
+<section class="page">
+  <div class="page-header">
+    <h1>Pipelines</h1>
+    <div class="page-actions">
+      <a href="/pipelines/new" class="button primary small">+ New pipeline</a>
+    </div>
+  </div>
+  <p class="note">
+    A <strong>pipeline</strong> is a persisted, named job template: an
+    input storage account, an output storage account, a warehouse to
+    run on, and a pipeline type (ETL / analysis / dq_checks / copy /
+    move), plus a trigger. When the trigger fires, the pipeline submits
+    a job through the ordinary <a href="/runs">job queue</a>.
+  </p>
+
+  {% if groups %}
+    <div class="filter-bar" id="pipeline-filters" data-pipeline-filters>
+      <input type="search" id="pf-name" data-filter="name"
+             placeholder="Filter by name&hellip;" autocomplete="off">
+      <select id="pf-kind" data-filter="kind">
+        <option value="">All types</option>
+        {% for g in groups %}<option value="{{ g.kind }}">{{ g.kind }}</option>{% endfor %}
+      </select>
+      <select id="pf-trigger" data-filter="trigger">
+        <option value="">All triggers</option>
+        <option value="manual">manual</option>
+        <option value="cron">cron</option>
+        <option value="interval">interval</option>
+        <option value="watch">watch</option>
+      </select>
+      <select id="pf-enabled" data-filter="enabled">
+        <option value="">Enabled &amp; disabled</option>
+        <option value="yes">Enabled</option>
+        <option value="no">Disabled</option>
+      </select>
+      <input type="search" id="pf-cdm" data-filter="cdm"
+             placeholder="Filter by CDM&hellip;" autocomplete="off">
+    </div>
+
+    {% for g in groups %}
+      <details class="pipeline-group" data-group="{{ g.kind }}" open>
+        <summary>
+          <span class="group-kind mono">{{ g.kind }}</span>
+          <span class="group-count small">({{ g.pipelines | length }})</span>
+        </summary>
+        <div class="table-wrap">
+          <table class="runs-table">
+            <thead>
+              <tr>
+                <th>Name</th><th>Type</th><th>CDM</th>
+                <th>Input</th><th>Output</th><th>Trigger</th><th>Enabled</th>
+                <th>Next fire</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in g.pipelines %}
+                <tr class="pipeline-row"
+                    data-name="{{ r.name | lower }}"
+                    data-kind="{{ r.kind }}"
+                    data-trigger="{{ r.trigger_type }}"
+                    data-enabled="{{ 'yes' if r.enabled else 'no' }}"
+                    data-cdm="{{ (r.cdm or '') | lower }}">
+                  <td><a href="/pipelines/{{ r.name }}">{{ r.name }}</a></td>
+                  <td class="mono small">{{ r.kind }}</td>
+                  <td class="mono small">{{ r.cdm or '&mdash;' | safe }}</td>
+                  <td class="mono small">{% if r.input_address %}{{ r.input_address }}{% else %}<span class="badge">open</span>{% endif %}</td>
+                  <td class="mono small">{% if r.output_address %}{{ r.output_address }}{% else %}<span class="badge">open</span>{% endif %}</td>
+                  <td>{{ r.trigger_type }}</td>
+                  <td>{{ 'yes' if r.enabled else 'no' }}</td>
+                  <td class="mono small">{{ r.next_fire_at | localtime or '&mdash;' | safe }}</td>
+                  <td>
+                    <div class="row-actions">
+                      <button type="button" class="icon-button" title="Run"
+                              aria-label="Run {{ r.name }}"
+                              data-run-pipeline="{{ r.name }}"
+                              data-input-open="{{ 'true' if not r.input_address else 'false' }}"
+                              data-output-open="{{ 'true' if not r.output_address else 'false' }}"
+                              data-tables-required="{{ 'true' if r.kind in explicit_tables_kinds else 'false' }}"
+                              data-supports-all="{{ 'true' if r.name in supports_all_names else 'false' }}"
+                              data-tables="{{ r.tables | join(' ') }}">
+                        {{ icons.icon("play", size=16) }}
+                      </button>
+                      <a href="/pipelines/{{ r.name }}/edit" class="icon-button"
+                         title="Edit" aria-label="Edit {{ r.name }}">
+                        {{ icons.icon("edit", size=16) }}
+                      </a>
+                      <form action="/pipelines/{{ r.name }}/delete" method="post"
+                            style="display:inline;"
+                            onsubmit="return confirm('Delete pipeline {{ r.name }}?')">
+                        <button type="submit" class="icon-button danger"
+                                title="Delete" aria-label="Delete {{ r.name }}">
+                          {{ icons.icon("trash", size=16) }}
+                        </button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    {% endfor %}
+    <p class="empty" id="pf-no-matches" hidden>No pipelines match the current filters.</p>
+  {% else %}
+    <p class="empty">
+      No pipelines yet. Click <a href="/pipelines/new">New pipeline</a> to
+      create one. Files land under
+      <code>$XDG_CONFIG_HOME/ovid2/pipelines/</code>.
+    </p>
+  {% endif %}
+</section>
+
+{# ---- Shared run modal (folder/schema navigator for open sides) ---- #}
+<div class="modal-backdrop" id="run-modal" data-run-modal hidden>
+  <div class="modal-panel" role="dialog" aria-modal="true"
+       aria-labelledby="run-modal-title">
+    <div class="modal-header">
+      <h2 id="run-modal-title" class="card-title">
+        Run <span class="mono" data-run-modal-name></span>
+      </h2>
+      <button type="button" class="icon-button" data-run-modal-close
+              aria-label="Close">{{ icons.icon("close", size=18) }}</button>
+    </div>
+    <form method="post" data-run-modal-form action="">
+      <p class="note">
+        Navigate to the folder (filesystem) or schema (warehouse) to read
+        from / write to. The selected location names the batch. Sides that
+        are already bound in the pipeline config run as configured.
+      </p>
+
+      {# ---- Input side (only shown when the pipeline's input is open) ---- #}
+      <section class="storage-card" data-run-side="input" hidden>
+        <h3>{{ icons.icon("folder", size=16) }} Input storage</h3>
+        <div class="storage-picker"
+             data-storage-picker="run-input"
+             data-connection-field="input_connection"
+             data-location-field="input_location">
+          <label>Storage account
+            <select data-role="storage-select">
+              <option value="">(choose)</option>
+              {% for s in storage_accounts %}
+                <option value="{{ s.name }}">{{ s.name }} &mdash; {{ s.type }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <div data-role="crumbs" class="crumbs small"></div>
+          <div data-role="listing" class="storage-listing">
+            <p class="note">Pick a storage account to browse.</p>
+          </div>
+          <p data-role="chosen" class="chosen-chip" hidden></p>
+          <p data-role="picker-error" class="flash-error picker-error" hidden></p>
+          <input type="hidden" name="input_connection" value="">
+          <input type="hidden" name="input_location" value="">
+        </div>
+      </section>
+
+      {# ---- Output side (only shown when the pipeline's output is open) ---- #}
+      <section class="storage-card" data-run-side="output" hidden>
+        <h3>{{ icons.icon("folder", size=16) }} Output storage</h3>
+        <div class="storage-picker"
+             data-storage-picker="run-output"
+             data-connection-field="output_connection"
+             data-location-field="output_location">
+          <label>Storage account
+            <select data-role="storage-select">
+              <option value="">(choose)</option>
+              {% for s in storage_accounts %}
+                <option value="{{ s.name }}">{{ s.name }} &mdash; {{ s.type }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <div data-role="crumbs" class="crumbs small"></div>
+          <div data-role="listing" class="storage-listing">
+            <p class="note">Pick a storage account to browse.</p>
+          </div>
+          <p data-role="chosen" class="chosen-chip" hidden></p>
+          <p data-role="picker-error" class="flash-error picker-error" hidden></p>
+          <input type="hidden" name="output_connection" value="">
+          <input type="hidden" name="output_location" value="">
+        </div>
+      </section>
+
+      <p class="note" data-run-side-none hidden>
+        This pipeline is fully bound &mdash; it will run against its
+        configured input and output.
+      </p>
+
+      {# ---- Tables (copy / move only: explicit list) ---- #}
+      <section class="storage-card" data-run-tables hidden>
+        <h3>{{ icons.icon("table", size=16) }} Tables</h3>
+        <p class="note" data-run-tables-note>
+          <code>copy</code> / <code>move</code> need an explicit list of
+          tables (<code>all</code> is not supported). Enter one or more
+          whitespace-separated logical names, or
+          <code>LOGICAL=SOURCE</code> pairs
+          (e.g. <code>HASH_TOKEN=*datavant_person_tokens*</code>).
+        </p>
+        <p class="note" data-run-tables-note-all hidden>
+          This source can enumerate its own tables (e.g. a Microsoft
+          Access <code>.accdb</code> file), so you may enter
+          <code>all</code> — or leave this blank — to copy every table.
+          You can still name specific whitespace-separated logical
+          tables, or <code>LOGICAL=SOURCE</code> pairs, to narrow it.
+        </p>
+        <label>Tables
+          <input type="text" name="tables" value=""
+                 data-run-tables-input
+                 placeholder="DEMOGRAPHIC ENCOUNTER HASH_TOKEN=*tokens*"
+                 autocomplete="off">
+        </label>
+        <p class="flash-error picker-error" data-run-tables-error hidden></p>
+      </section>
+
+      <div class="modal-footer">
+        <button type="button" class="button" data-run-modal-close>Cancel</button>
+        <button type="submit" class="button primary">
+          {{ icons.icon("play", size=16) }} Run
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+<script src="/static/pipelines.js" type="module"></script>
+<script src="/static/browse.js"></script>
+<script src="/static/pipeline_run.js" type="module"></script>
+{% endblock %}

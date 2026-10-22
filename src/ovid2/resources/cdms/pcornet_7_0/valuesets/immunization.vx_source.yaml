@@ -1,0 +1,32 @@
+v: 1
+name: pcornet_7_0.immunization.vx_source
+kind: vocabulary
+version: '7'
+description: PCORNET_7_0 IMMUNIZATION.VX_SOURCE code set.
+code_column: code
+description_column: label
+items:
+- code: OD
+  label: OD=Internal administration
+  order: 11630
+- code: EF
+  label: EF=External feed
+  order: 11631
+- code: IS
+  label: IS=Immunization Information System
+  order: 11632
+- code: PR
+  label: PR=Patient-reported
+  order: 11633
+- code: DR
+  label: DR=Derived
+  order: 11634
+- code: NI
+  label: NI=No information
+  order: 11635
+- code: UN
+  label: UN=Unknown
+  order: 11636
+- code: OT
+  label: OT=Other
+  order: 11637
