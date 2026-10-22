@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 NSS_WRAPPER_LIB: str = "/opt/bitnami/common/lib/libnss_wrapper.so"
 
 #: In-container path for the synthetic ``passwd`` overlay.
-NSS_PASSWD_IN_CONTAINER: str = "/etc/nss_wrapper/passwd"
+NSS_PASSWD_IN_CONTAINER: str = "/etc/nss_wrapper/passwd"  # noqa: S105 — a path, not a secret
 
 #: In-container path for the synthetic ``group`` overlay.
 NSS_GROUP_IN_CONTAINER: str = "/etc/nss_wrapper/group"
@@ -176,7 +176,7 @@ def _secret_refs_for_addresses(address_names: list[str]) -> set[str]:
     return secret_refs_for_addresses(address_names)
 
 
-def secret_refs_for_addresses(address_names: list[str]) -> set[str]:  # noqa: D103
+def secret_refs_for_addresses(address_names: list[str]) -> set[str]:
     from ovid2.drivers.collector import (
         secret_refs_for_addresses as _impl,
     )
@@ -207,7 +207,7 @@ def _scoped_secret_mounts(args: Any, host_xdg_config: Path) -> list[str]:
     # import) to keep this module import-cheap and to let tests patch it.
     try:
         refs = _secret_refs_for_addresses(_addresses_for_args(args))
-    except Exception:  # noqa: BLE001 — fail safe: expose nothing.
+    except Exception:
         logger.warning(
             "Could not compute scoped secret refs; shadowing all secrets.",
         )
@@ -229,7 +229,9 @@ def _scoped_secret_mounts(args: Any, host_xdg_config: Path) -> list[str]:
         else:
             logger.warning(
                 "Secret ref %r referenced by this run has no file at %s; "
-                "the executor will fail loudly if it needs it.", ref, src,
+                "the executor will fail loudly if it needs it.",
+                ref,
+                src,
             )
     return mounts
 
@@ -267,11 +269,9 @@ def build_docker_command(args: Any, instance: OvidInstance) -> list[str]:
 
     if SPARK_MODE == "cluster":
         master_url = instance.spark_master_url()
-        deploy_mode_args = ["--deploy-mode", "client"]
         network_args = ["--network", instance.network_name]
     else:
         master_url = f"local[{SPARK_CORES}]"
-        deploy_mode_args = []
         network_args = []
 
     # ``ovid2 etl`` doesn't define ``--master`` / ``--conf`` / ``--deploy-mode``
@@ -316,9 +316,7 @@ def build_docker_command(args: Any, instance: OvidInstance) -> list[str]:
     # observed before this change was in place. We mount at a fixed
     # container path (``/ovid2-user-config``) so the value of
     # ``XDG_CONFIG_HOME`` is deterministic across hosts.
-    host_xdg_config = Path(
-        os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")
-    )
+    host_xdg_config = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
     xdg_env: list[str] = [
         "-e",
         "XDG_CONFIG_HOME=/ovid2-user-config",
@@ -812,9 +810,8 @@ def start_spark_cluster(
     # Lazy import so ``pyyaml`` is only needed on hosts that actually start clusters.
     from ovid2.core.compose import generate_compose_file
 
-    print(  # noqa: T201 — host-side CLI is permitted to print
-        f"[ovid2] Starting Spark cluster ({num_workers} workers, id={instance.instance_id})..."
-    )
+    msg = f"[ovid2] Starting Spark cluster ({num_workers} workers, id={instance.instance_id})..."
+    print(msg)  # noqa: T201 — host-side CLI is permitted to print
     generate_compose_file(
         instance,
         num_workers,

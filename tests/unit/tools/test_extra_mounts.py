@@ -72,18 +72,21 @@ class TestParseExtraMount:
 
     @pytest.mark.parametrize(
         "reserved",
-        ["/app", "/data", "/ovid2-user-config",
-         "/ovid_credentials", "/usr/include/rsa"],
+        ["/app", "/data", "/ovid2-user-config", "/ovid_credentials", "/usr/include/rsa"],
     )
     def test_reserved_container_paths_rejected(
-        self, tmp_path: Path, reserved: str,
+        self,
+        tmp_path: Path,
+        reserved: str,
     ) -> None:
         with pytest.raises(ExtraMountError, match="reserved"):
             parse_extra_mount(f"{tmp_path}:{reserved}")
 
     @pytest.mark.parametrize("forbidden", ["/", "/tmp"])
     def test_forbidden_container_paths_rejected(
-        self, tmp_path: Path, forbidden: str,
+        self,
+        tmp_path: Path,
+        forbidden: str,
     ) -> None:
         with pytest.raises(ExtraMountError, match="forbidden"):
             parse_extra_mount(f"{tmp_path}:{forbidden}")
@@ -101,10 +104,12 @@ class TestParseExtraMounts:
     def test_multiple_valid(self, tmp_path: Path) -> None:
         (tmp_path / "a").mkdir()
         (tmp_path / "b").mkdir()
-        result = parse_extra_mounts([
-            f"{tmp_path / 'a'}:/mnt_a",
-            f"{tmp_path / 'b'}:/mnt_b:ro",
-        ])
+        result = parse_extra_mounts(
+            [
+                f"{tmp_path / 'a'}:/mnt_a",
+                f"{tmp_path / 'b'}:/mnt_b:ro",
+            ]
+        )
         assert len(result) == 2
         assert result[0].container == "/mnt_a"
         assert result[1].mode == "ro"
@@ -113,18 +118,22 @@ class TestParseExtraMounts:
         (tmp_path / "a").mkdir()
         (tmp_path / "b").mkdir()
         with pytest.raises(ExtraMountError, match="already mounted"):
-            parse_extra_mounts([
-                f"{tmp_path / 'a'}:/mnt",
-                f"{tmp_path / 'b'}:/mnt",
-            ])
+            parse_extra_mounts(
+                [
+                    f"{tmp_path / 'a'}:/mnt",
+                    f"{tmp_path / 'b'}:/mnt",
+                ]
+            )
 
     def test_error_includes_index(self, tmp_path: Path) -> None:
         (tmp_path / "a").mkdir()
         with pytest.raises(ExtraMountError, match="extra-mount #2"):
-            parse_extra_mounts([
-                f"{tmp_path / 'a'}:/mnt_a",
-                "malformed",
-            ])
+            parse_extra_mounts(
+                [
+                    f"{tmp_path / 'a'}:/mnt_a",
+                    "malformed",
+                ]
+            )
 
 
 if __name__ == "__main__":  # pragma: no cover

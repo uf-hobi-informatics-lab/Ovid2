@@ -36,7 +36,7 @@ def test_submit_page_says_submit_a_job(web_client) -> None:  # type: ignore[no-u
     # with a description tooltip (run-kind registry), so the option
     # carries a ``title`` attribute between the value and ``selected``.
     assert 'value="etl"' in body
-    assert 'title=' in body and "selected" in body
+    assert "title=" in body and "selected" in body
     # The registry label (not the bare name) is shown for etl.
     assert ">ETL<" in body
     # New sections are present.

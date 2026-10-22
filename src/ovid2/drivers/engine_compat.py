@@ -73,16 +73,18 @@ shape that predates the driver registry never blocks a submission.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Iterable
+from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ovid2.core.engines.base import BaseEngine
     from ovid2.core.engines.stager import EngineStager
+    from ovid2.drivers.base import Driver
 
 logger = logging.getLogger(__name__)
 
 
-def _driver_class_for_address(address_name: str) -> type | None:
+def _driver_class_for_address(address_name: str) -> type[Driver] | None:
     """Return the driver class for ``address_name``, or ``None``.
 
     Mirrors the resolution in
@@ -132,7 +134,7 @@ def _driver_class_for_address(address_name: str) -> type | None:
 
 
 def assert_engine_supports_drivers(
-    engine: "BaseEngine",
+    engine: BaseEngine,
     address_names: Iterable[str],
 ) -> None:
     """Refuse the run when the engine's stager cannot reach every driver.
@@ -166,9 +168,7 @@ def assert_engine_supports_drivers(
     from ovid2.core.engines.protocols import EngineFamily
 
     engine_family_value = (
-        engine.family.value
-        if isinstance(engine.family, EngineFamily)
-        else str(engine.family)
+        engine.family.value if isinstance(engine.family, EngineFamily) else str(engine.family)
     )
     engine_type = getattr(engine, "type_name", type(engine).__name__)
     stager = engine.get_stager()
@@ -236,7 +236,7 @@ def assert_engine_type_supports_drivers(
 
 def _assert_stager_supports_drivers(
     *,
-    stager_cls: "type[EngineStager]",
+    stager_cls: type[EngineStager],
     engine_family: str,
     engine_type: str,
     address_names: Iterable[str],
@@ -268,10 +268,9 @@ def _assert_stager_supports_drivers(
         driver_type = getattr(driver_cls, "type_name", driver_cls.__name__)
         try:
             supported_ok = stager_cls.supports(driver_type)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.debug(
-                "engine_compat: stager %r raised on supports(%r); "
-                "skipping check for address %r.",
+                "engine_compat: stager %r raised on supports(%r); skipping check for address %r.",
                 stager_cls.__name__,
                 driver_type,
                 address_name,
@@ -281,7 +280,7 @@ def _assert_stager_supports_drivers(
             continue
         try:
             supported = sorted(stager_cls.supported_driver_types())
-        except Exception:  # noqa: BLE001
+        except Exception:
             supported = []
         raise RuntimeError(
             f"Engine '{engine_type}' (family '{engine_family}') is not "

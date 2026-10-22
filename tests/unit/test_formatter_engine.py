@@ -297,9 +297,7 @@ def test_execute_spec_empty_projection_fills_empty_string(spark: SparkSession) -
     raw = spec(
         formatter="external_meds",
         adapter="pcornet_passthrough",
-        sources={
-            "external_meds": {"glob": "*external_meds.csv", "lowercase_columns": True}
-        },
+        sources={"external_meds": {"glob": "*external_meds.csv", "lowercase_columns": True}},
         projections={
             "PATID": "patid",
             "ENCOUNTERID": "",  # legacy lit('') convention

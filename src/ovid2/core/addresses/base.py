@@ -81,7 +81,9 @@ class BaseAddress(ABC):
             delimiter: Optional CSV delimiter override.
         """
 
-    def create_complementary_tables(self, spark: SparkSession, pipeline: str, batch_id: str) -> None:
+    def create_complementary_tables(
+        self, spark: SparkSession, pipeline: str, batch_id: str
+    ) -> None:
         """Create empty CDM placeholders for tables missing from this run.
 
         Default implementation is a no-op; databases that need placeholders

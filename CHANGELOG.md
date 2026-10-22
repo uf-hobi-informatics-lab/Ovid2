@@ -10,6 +10,18 @@ from.
 
 ## [Unreleased] — `dev`
 
+### Fixed — CI green on every gate
+
+- All CI jobs go through `scripts/ci_checks.sh` (`lint`, `typecheck`,
+  `contract`, `unit`); run `scripts/ci_checks.sh --docker` to reproduce CI
+  locally. ruff and `mypy --strict` are clean; every job installs
+  `.[dev,spark,web,mcp,azure]`.
+- `ovid2` CLI no longer crashes on Python 3.11+ (duplicate deprecated
+  subcommand aliases).
+- Live Spark engine metrics (tasks, stages, executors) are reported again.
+- Snowpark `regexp_extract` works (it raised `TypeError` on every call).
+- A deep-linked run console renders for runs known only from their event log.
+
 ### Added — first public snapshot
 
 - **Engine**: lazy five-stage ETL (`format → deduplicate → map → fix →

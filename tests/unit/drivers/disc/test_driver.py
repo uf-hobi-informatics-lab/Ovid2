@@ -60,11 +60,13 @@ class TestContainerRequirements:
         assert m.container_path == str(tmp_path)
 
     def test_container_path_override(self, tmp_path: Path) -> None:
-        d = DiscDriver(args={
-            "host_path": str(tmp_path),
-            "container_path": "/inside",
-            "mount_mode": "ro",
-        })
+        d = DiscDriver(
+            args={
+                "host_path": str(tmp_path),
+                "container_path": "/inside",
+                "mount_mode": "ro",
+            }
+        )
         reqs = d.container_requirements_for({})
         assert reqs[0].host_path == str(tmp_path)
         assert reqs[0].container_path == "/inside"
@@ -86,7 +88,8 @@ class TestLegacyBridge:
         assert args["path"] == os.path.join(str(tmp_path), "subdir")
 
     def test_as_legacy_src_args_forwards_format_and_lowercase(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         d = DiscDriver(
             args={"host_path": str(tmp_path)},
@@ -97,7 +100,8 @@ class TestLegacyBridge:
         assert args["lowercase_columns"] is True
 
     def test_container_path_wins_over_host_in_pipeline_view(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         d = DiscDriver(
             args={

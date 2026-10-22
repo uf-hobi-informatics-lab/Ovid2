@@ -73,7 +73,7 @@ import atexit
 import logging
 import os
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ovid2.core.engines.stager import (
     SnowparkStagingStrategy,
@@ -83,6 +83,7 @@ from ovid2.core.engines.stager import (
 if TYPE_CHECKING:
     from ovid2.core.engines.protocols import EngineSession
     from ovid2.drivers.base import Driver
+    from ovid2.drivers.disc.driver import DiscDriver
 
 logger = logging.getLogger(__name__)
 
@@ -125,8 +126,8 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
 
     def materialise(
         self,
-        session: "EngineSession",
-        driver: "Driver",
+        session: EngineSession,
+        driver: Driver,
         pipeline: str,
         batch_id: str,
         file_name: str,
@@ -168,7 +169,8 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
         # are pure-Python helpers on strings and paths.
         from ovid2.drivers.disc.spark import detect_delimiter, resolve_read_path
 
-        merged = driver._merged_location_view()  # noqa: SLF001
+        # Duck-typed: the disc strategy is only routed disc drivers.
+        merged = cast("DiscDriver", driver)._merged_location_view()
         root = merged["root"]
         fmt = merged["format"]
         if fmt != "csv":
@@ -212,7 +214,9 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
         native = _native_session(session)
         put_target = f"@~/{stage_dir}/"
         logger.info(
-            "SnowparkDiscStrategy: PUT file://%s → @~/%s/", file_path, stage_dir,
+            "SnowparkDiscStrategy: PUT file://%s → @~/%s/",
+            file_path,
+            stage_dir,
         )
         # Snowpark requires a current database context to resolve
         # stage reads — even for the user stage ``@~``. Some
@@ -259,7 +263,9 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
         # (see :func:`_ensure_writable_staging_schema`).
         staging_schema = _ensure_writable_staging_schema(native)
         temp_table = _temp_table_name(
-            instance_id, pipeline, batch_id,
+            instance_id,
+            pipeline,
+            batch_id,
             os.path.splitext(staged_name)[0],
         )
         temp_fqtn = f"{staging_schema}.{temp_table}"
@@ -284,9 +290,7 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
         # affect the value mapping. This mirrors the Spark path, which
         # is case-insensitive and lowercases the same headers.
         col_ddl = ", ".join(f'"{c.upper()}" VARCHAR' for c in columns)
-        create_sql = (
-            f"CREATE OR REPLACE TRANSIENT TABLE {temp_fqtn} ({col_ddl})"
-        )
+        create_sql = f"CREATE OR REPLACE TRANSIENT TABLE {temp_fqtn} ({col_ddl})"
         copy_sql = (
             f"COPY INTO {temp_fqtn} FROM '{stage_read_target}' "
             f"FILE_FORMAT = (TYPE = 'CSV' "
@@ -297,7 +301,8 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
         )
         logger.info(
             "SnowparkDiscStrategy: CREATE %s + COPY INTO from %s",
-            temp_fqtn, stage_read_target,
+            temp_fqtn,
+            stage_read_target,
         )
         native.sql(create_sql).collect()
         native.sql(copy_sql).collect()
@@ -310,9 +315,9 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
 
     def persist(
         self,
-        session: "EngineSession",
+        session: EngineSession,
         df: Any,
-        driver: "Driver",
+        driver: Driver,
         pipeline: str,
         batch_id: str,
         table_name: str,
@@ -341,7 +346,8 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
         """
         from ovid2.config.settings import CSV_DELIMITER
 
-        merged = driver._merged_location_view()  # noqa: SLF001
+        # Duck-typed: the disc strategy is only routed disc drivers.
+        merged = cast("DiscDriver", driver)._merged_location_view()
         root = merged["root"]
         fmt = merged["format"]
         if fmt != "csv":
@@ -370,7 +376,8 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
         # merged file (Snowflake enforces a size cap; large frames
         # will split anyway).
         logger.info(
-            "SnowparkDiscStrategy: copy_into_location → @~/%s/", stage_dir,
+            "SnowparkDiscStrategy: copy_into_location → @~/%s/",
+            stage_dir,
         )
         # Ensure the session has a current database bound so
         # ``@~`` resolves (see materialise() for the rationale).
@@ -388,11 +395,11 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
         get_target_uri = f"file://{output_dir.rstrip('/')}/"
         get_stage_uri = f"@~/{stage_dir}/"
         logger.info(
-            "SnowparkDiscStrategy: GET %s → %s", get_stage_uri, get_target_uri,
+            "SnowparkDiscStrategy: GET %s → %s",
+            get_stage_uri,
+            get_target_uri,
         )
-        rows = native.sql(
-            f"GET '{get_stage_uri}' '{get_target_uri}'"
-        ).collect()  # noqa: OVID2001
+        rows = native.sql(f"GET '{get_stage_uri}' '{get_target_uri}'").collect()  # noqa: OVID2001
         if not rows:
             raise RuntimeError(
                 f"SnowparkDiscStrategy: GET {get_stage_uri} returned "
@@ -421,7 +428,9 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
     # ------------------------------------------------------------------
 
     def _maybe_schedule_cleanup(
-        self, session: "EngineSession", instance_id: str,
+        self,
+        session: EngineSession,
+        instance_id: str,
     ) -> None:
         """Register an atexit hook that removes the instance-scoped stage.
 
@@ -439,7 +448,8 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
         if SNOWPARK_STAGING_KEEP:
             logger.info(
                 "SnowparkDiscStrategy: SNOWPARK_STAGING_KEEP is set; "
-                "skipping atexit cleanup for instance %s", instance_id,
+                "skipping atexit cleanup for instance %s",
+                instance_id,
             )
             return
 
@@ -457,26 +467,33 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
                 stage = f"@~/{prefix}/{instance_id}/"
                 try:
                     native.sql(f"REMOVE '{stage}'").collect()  # noqa: OVID2001
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     logger.warning(
                         "SnowparkDiscStrategy: REMOVE %s failed (%s); "
                         "stage files may remain — clean manually with "
                         "REMOVE @~/%s/%s/ in a Snowsight worksheet.",
-                        stage, exc, prefix, instance_id,
+                        stage,
+                        exc,
+                        prefix,
+                        instance_id,
                     )
             for fqtn in temp_tables_ref:
                 try:
                     native.sql(f"DROP TABLE IF EXISTS {fqtn}").collect()
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     logger.warning(
-                        "SnowparkDiscStrategy: DROP TABLE %s failed (%s); "
-                        "clean manually.", fqtn, exc,
+                        "SnowparkDiscStrategy: DROP TABLE %s failed (%s); clean manually.",
+                        fqtn,
+                        exc,
                     )
 
         atexit.register(_cleanup)
 
     def _register_temp_table(
-        self, session: "EngineSession", instance_id: str, fqtn: str,
+        self,
+        session: EngineSession,
+        instance_id: str,
+        fqtn: str,
     ) -> None:
         """Record ``fqtn`` for atexit cleanup on this session.
 
@@ -522,7 +539,10 @@ def _ingest_stage_dir(instance_id: str, pipeline: str, batch_id: str) -> str:
 
 
 def _egest_stage_dir(
-    instance_id: str, pipeline: str, batch_id: str, table_name: str,
+    instance_id: str,
+    pipeline: str,
+    batch_id: str,
+    table_name: str,
 ) -> str:
     """Return the ``@~``-relative directory for an egest staging step."""
     from ovid2.config.settings import SNOWPARK_STAGING_EGEST_PREFIX
@@ -542,7 +562,7 @@ def _escape_sql(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "''")
 
 
-def _native_session(session: "EngineSession") -> Any:
+def _native_session(session: EngineSession) -> Any:
     """Return the real ``snowflake.snowpark.Session`` from an adapter."""
     native = getattr(session, "native", None)
     if native is None:
@@ -575,9 +595,7 @@ _DEFAULT_STAGE_SCHEMA: str = "INFORMATION_SCHEMA"
 #: database) as "no writable database bound" and raises an actionable
 #: error instead of the opaque privilege error. Compared
 #: case-insensitively after stripping quotes.
-_NON_WRITABLE_SYSTEM_DATABASES: frozenset[str] = frozenset(
-    {"SNOWFLAKE", "SNOWFLAKE_SAMPLE_DATA"}
-)
+_NON_WRITABLE_SYSTEM_DATABASES: frozenset[str] = frozenset({"SNOWFLAKE", "SNOWFLAKE_SAMPLE_DATA"})
 
 
 def _ensure_current_database(native: Any) -> None:
@@ -598,40 +616,42 @@ def _ensure_current_database(native: Any) -> None:
     """
     try:
         current_db = native.get_current_database()
-    except Exception:  # noqa: BLE001
+    except Exception:
         current_db = None
     if not current_db:
         try:
             native.sql(f"USE DATABASE {_DEFAULT_STAGE_DATABASE}").collect()
             logger.info(
-                "SnowparkDiscStrategy: bound session to database %s "
-                "for @~ resolution.", _DEFAULT_STAGE_DATABASE,
+                "SnowparkDiscStrategy: bound session to database %s for @~ resolution.",
+                _DEFAULT_STAGE_DATABASE,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning(
                 "SnowparkDiscStrategy: could not USE DATABASE %s (%s); "
                 "@~ stage reads may fail with 'DATABASE not set'.",
-                _DEFAULT_STAGE_DATABASE, exc,
+                _DEFAULT_STAGE_DATABASE,
+                exc,
             )
             return
 
     try:
         current_schema = native.get_current_schema()
-    except Exception:  # noqa: BLE001
+    except Exception:
         current_schema = None
     if current_schema:
         return
     try:
         native.sql(f"USE SCHEMA {_DEFAULT_STAGE_SCHEMA}").collect()
         logger.info(
-            "SnowparkDiscStrategy: bound session to schema %s "
-            "for @~ resolution.", _DEFAULT_STAGE_SCHEMA,
+            "SnowparkDiscStrategy: bound session to schema %s for @~ resolution.",
+            _DEFAULT_STAGE_SCHEMA,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning(
             "SnowparkDiscStrategy: could not USE SCHEMA %s (%s); "
             "@~ stage reads may fail with 'SCHEMA not set'.",
-            _DEFAULT_STAGE_SCHEMA, exc,
+            _DEFAULT_STAGE_SCHEMA,
+            exc,
         )
 
 
@@ -710,7 +730,7 @@ def _ensure_writable_staging_schema(native: Any) -> str:
             return override
         try:
             current_db = native.get_current_database()
-        except Exception:  # noqa: BLE001
+        except Exception:
             current_db = None
         current_db = _writable_current_database(current_db)
         if not current_db:
@@ -725,7 +745,7 @@ def _ensure_writable_staging_schema(native: Any) -> str:
 
     try:
         current_db = native.get_current_database()
-    except Exception:  # noqa: BLE001
+    except Exception:
         current_db = None
     current_db = _writable_current_database(current_db)
     if not current_db:
@@ -743,10 +763,11 @@ def _ensure_writable_staging_schema(native: Any) -> str:
     try:
         native.sql(f"CREATE SCHEMA IF NOT EXISTS {schema_fqn}").collect()
         logger.info(
-            "SnowparkDiscStrategy: using staging schema %s", schema_fqn,
+            "SnowparkDiscStrategy: using staging schema %s",
+            schema_fqn,
         )
         return schema_fqn
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise RuntimeError(
             f"SnowparkDiscStrategy: cannot create staging schema "
             f"{schema_fqn} ({exc}). Grant CREATE SCHEMA on {current_db}, "
@@ -755,7 +776,10 @@ def _ensure_writable_staging_schema(native: Any) -> str:
 
 
 def _temp_table_name(
-    instance_id: str, pipeline: str, batch_id: str, stem: str,
+    instance_id: str,
+    pipeline: str,
+    batch_id: str,
+    stem: str,
 ) -> str:
     """Return a schema-scoped transient table name for a staged CSV.
 
@@ -778,9 +802,7 @@ def _read_header_columns(file_path: str, delimiter: str) -> list[str]:
     with open(file_path, encoding="utf-8", errors="replace") as fh:
         first = fh.readline()
     if not first:
-        raise ValueError(
-            f"SnowparkDiscStrategy: {file_path!r} is empty; nothing to stage."
-        )
+        raise ValueError(f"SnowparkDiscStrategy: {file_path!r} is empty; nothing to stage.")
     columns: list[str] = []
     for raw in first.rstrip("\r\n").split(delimiter):
         col = raw.strip().strip('"')
@@ -802,9 +824,7 @@ def _build_all_string_schema(columns: list[str]) -> Any:
     """
     from snowflake.snowpark.types import StringType, StructField, StructType
 
-    return StructType(
-        [StructField(col, StringType(), nullable=True) for col in columns]
-    )
+    return StructType([StructField(col, StringType(), nullable=True) for col in columns])
 
 
 def _copy_into_location(
@@ -871,15 +891,16 @@ def _sorted_downloaded_files(rows: Any, output_dir: str) -> list[str]:
                 break
         if status and status.upper() not in ("DOWNLOADED", "OK", "SUCCESS"):
             logger.warning(
-                "SnowparkDiscStrategy: GET row status=%r for file=%r; "
-                "skipping.", status, name,
+                "SnowparkDiscStrategy: GET row status=%r for file=%r; skipping.",
+                status,
+                name,
             )
             continue
         abs_path = os.path.join(output_dir, os.path.basename(str(name)))
         if not os.path.exists(abs_path):
             logger.warning(
-                "SnowparkDiscStrategy: expected downloaded file %r not "
-                "on disk after GET.", abs_path,
+                "SnowparkDiscStrategy: expected downloaded file %r not on disk after GET.",
+                abs_path,
             )
             continue
         if abs_path.endswith(".gz"):
@@ -894,7 +915,9 @@ def _sorted_downloaded_files(rows: Any, output_dir: str) -> list[str]:
 
 
 def _finalise_single_file(
-    downloaded: list[str], output_dir: str, table_name: str,
+    downloaded: list[str],
+    output_dir: str,
+    table_name: str,
 ) -> None:
     """Rename a single downloaded CSV to ``{table_name}.csv``.
 
@@ -924,7 +947,9 @@ def _finalise_single_file(
 
 
 def _finalise_multi_part(
-    downloaded: list[str], output_dir: str, table_name: str,
+    downloaded: list[str],
+    output_dir: str,
+    table_name: str,
 ) -> None:
     """Rename multi-part downloads to ``{table_name}.part-<N>.csv``.
 

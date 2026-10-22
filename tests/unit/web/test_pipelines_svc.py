@@ -72,9 +72,7 @@ def test_cron_route_populates_next_fire(
 
 
 @pytest.mark.unit
-def test_interval_next_fire(
-    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_interval_next_fire(isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
     pipelines_svc.write_pipeline(
         "r_int",
@@ -92,9 +90,7 @@ def test_interval_next_fire(
 
 
 @pytest.mark.unit
-def test_invalid_cron_rejected(
-    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_invalid_cron_rejected(isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
     with pytest.raises(pipelines_svc.PipelineError, match="cron"):
         pipelines_svc.write_pipeline(
@@ -106,9 +102,7 @@ def test_invalid_cron_rejected(
 
 
 @pytest.mark.unit
-def test_run_now_submits_job(
-    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_run_now_submits_job(isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
     pipelines_svc.write_pipeline("r_manual", _base_payload(), actor="test", create_only=True)
     response = pipelines_svc.run_now("r_manual", actor="test")
@@ -185,9 +179,7 @@ def test_run_now_override_binds_open_side(
         return _Resp()
 
     monkeypatch.setattr(pipelines_svc.jobs_svc, "submit", _fake_submit)
-    pipelines_svc.run_now(
-        "r_open_bind", actor="test", input_address="in", batch_id="sch1"
-    )
+    pipelines_svc.run_now("r_open_bind", actor="test", input_address="in", batch_id="sch1")
     assert captured["input_address"] == "in"
     assert captured["batch_id"] == "sch1"
 
@@ -223,9 +215,7 @@ def test_run_now_tables_override_makes_open_copy_runnable(
         return _Resp()
 
     monkeypatch.setattr(pipelines_svc.jobs_svc, "submit", _fake_submit)
-    pipelines_svc.run_now(
-        "r_copy_tbl", actor="test", tables=["DEMOGRAPHIC", "ENCOUNTER"]
-    )
+    pipelines_svc.run_now("r_copy_tbl", actor="test", tables=["DEMOGRAPHIC", "ENCOUNTER"])
     assert captured["tables"] == ["DEMOGRAPHIC", "ENCOUNTER"]
 
 
@@ -317,9 +307,7 @@ def test_due_pipelines(isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch) -> N
 
 
 @pytest.mark.unit
-def test_delete_route_clears_state(
-    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_delete_route_clears_state(isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
     pipelines_svc.write_pipeline(
         "r_del",
@@ -330,6 +318,7 @@ def test_delete_route_clears_state(
     pipelines_svc.delete_pipeline("r_del", actor="test")
     assert pipelines_svc.get_pipeline("r_del") is None
     from ovid2.web import db as web_db
+
     with web_db.connect() as conn:
         row = conn.execute(
             "SELECT * FROM web_pipelines_state WHERE name = ?", ("r_del",)
@@ -338,9 +327,7 @@ def test_delete_route_clears_state(
 
 
 @pytest.mark.unit
-def test_unknown_pipeline_rejected(
-    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_unknown_pipeline_rejected(isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
     with pytest.raises(pipelines_svc.PipelineError, match="pipeline"):
         pipelines_svc.write_pipeline(
@@ -352,9 +339,7 @@ def test_unknown_pipeline_rejected(
 
 
 @pytest.mark.unit
-def test_unknown_address_rejected(
-    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_unknown_address_rejected(isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
     with pytest.raises(pipelines_svc.PipelineError, match="input_address"):
         pipelines_svc.write_pipeline(
@@ -469,9 +454,7 @@ def test_copy_route_accepts_all_for_access_source(
 
 
 @pytest.mark.unit
-def test_unknown_kind_rejected(
-    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_unknown_kind_rejected(isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Unknown kinds (e.g. `passthrough`) still fail with a clear message."""
     _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
     with pytest.raises(pipelines_svc.PipelineError, match="Unsupported pipeline kind"):
@@ -479,7 +462,8 @@ def test_unknown_kind_rejected(
             "r_bad_kind",
             _base_payload(kind="passthrough", tables=["t"]),
             actor="test",
-            create_only=True,        )
+            create_only=True,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -624,9 +608,7 @@ def test_package_required_kinds_still_gated(
 ) -> None:
     """etl / analysis still require an installed package."""
     _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
-    with pytest.raises(
-        pipelines_svc.PipelineError, match="is not installed under ovid2_pipelines"
-    ):
+    with pytest.raises(pipelines_svc.PipelineError, match="is not installed under ovid2_pipelines"):
         pipelines_svc.write_pipeline(
             "gated",
             _base_payload(pipeline="not-a-pipeline", kind=kind),

@@ -15,7 +15,7 @@ import importlib
 import json
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ovid2.mappers.base import MapOpContext
 from ovid2.mappers.registry import MAP_OPS
@@ -53,7 +53,9 @@ def load_secrets(pipeline: str) -> dict[str, Any]:
         logger.warning("Could not read secrets for pipeline '%s' at %s: %s", pipeline, path, exc)
         return {}
     if not isinstance(payload, dict):
-        logger.warning("Secrets for pipeline '%s' at %s is not a JSON object; ignoring", pipeline, path)
+        logger.warning(
+            "Secrets for pipeline '%s' at %s is not a JSON object; ignoring", pipeline, path
+        )
         return {}
     return payload
 
@@ -78,14 +80,14 @@ def _resolve_class(class_path: str) -> Any:
 
 
 def run(
-    df: "DataFrame",
+    df: DataFrame,
     spec: MapperSpec,
     *,
-    spark: "SparkSession",
-    cdm: "CdmHandle",
+    spark: SparkSession,
+    cdm: CdmHandle,
     pipeline_dictionaries: Any = None,
     secrets: dict[str, Any] | None = None,
-) -> "DataFrame":
+) -> DataFrame:
     """Execute a mapper spec against ``df``.
 
     Args:
@@ -110,7 +112,7 @@ def run(
         instance = klass()
         if pipeline_dictionaries is None:
             pipeline_dictionaries = _load_pipeline_dictionaries(spec.pipeline)
-        return instance.map(df, pipeline_dictionaries, spec.pipeline)
+        return cast("DataFrame", instance.map(df, pipeline_dictionaries, spec.pipeline))
 
     if pipeline_dictionaries is None:
         pipeline_dictionaries = _load_pipeline_dictionaries(spec.pipeline)

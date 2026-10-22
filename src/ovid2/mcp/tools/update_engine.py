@@ -14,9 +14,7 @@ class UpdateEngineArgs(BaseModel):
 
     name: str = Field(..., description="Filename stem of the engine.")
     type: str = Field(..., description="Engine type.")
-    args: dict[str, Any] = Field(
-        default_factory=dict, description="Non-secret compute knobs."
-    )
+    args: dict[str, Any] = Field(default_factory=dict, description="Non-secret compute knobs.")
     secrets: dict[str, Any] = Field(
         default_factory=dict,
         description=(
@@ -24,9 +22,7 @@ class UpdateEngineArgs(BaseModel):
             "the existing value on disk'."
         ),
     )
-    secret_ref: str | None = Field(
-        None, description="Override the secret filename stem."
-    )
+    secret_ref: str | None = Field(None, description="Override the secret filename stem.")
 
 
 TOOL_NAME = "update_engine"

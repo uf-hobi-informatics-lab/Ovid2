@@ -36,7 +36,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +116,7 @@ def declared_cdm_for_address(address_name: str) -> str | None:
         return None
     try:
         return cls.declared_cdm(location)
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
 
 

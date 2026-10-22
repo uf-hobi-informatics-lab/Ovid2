@@ -74,13 +74,23 @@ def _signed_cookie_value(session_id: str) -> str:
     response = Response()
     cookie_mod.issue_cookie(response, session_id)
     line = next(
-        value.decode("latin-1")
-        for key, value in response.raw_headers
-        if key == b"set-cookie"
+        value.decode("latin-1") for key, value in response.raw_headers if key == b"set-cookie"
     )
     jar: SimpleCookie[str] = SimpleCookie()
     jar.load(line)
     return jar["ovid2_session"].value
+
+
+def _tamper_signature(signed: str) -> str:
+    """Corrupt the HMAC segment of an itsdangerous token deterministically.
+
+    Flipping the *last* base64 char is flaky: it may only touch padding
+    bits, so the decoded signature is unchanged. The first char of the
+    signature segment always carries six significant bits.
+    """
+    head, _, sig = signed.rpartition(".")
+    first = "A" if sig[0] != "A" else "B"
+    return f"{head}.{first}{sig[1:]}"
 
 
 def _request_for_session(session_id: str) -> Request:
@@ -292,7 +302,8 @@ def test_enabled_tampered_cookie_is_none(monkeypatch: pytest.MonkeyPatch) -> Non
         idle_ttl_min=45,
     )
     signed = _signed_cookie_value(session.session_id)
-    tampered = signed[:-1] + ("A" if signed[-1] != "A" else "B")
+    tampered = _tamper_signature(signed)
+    assert tampered != signed
     request = _make_request(cookies={"ovid2_session": tampered})
     assert deps.current_user(request) is None
 

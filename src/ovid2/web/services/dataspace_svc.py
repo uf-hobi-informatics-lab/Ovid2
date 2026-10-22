@@ -30,9 +30,9 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "OdsServiceError",
     "get_dimension_catalog",
-    "list_pipelines",
-    "list_pipeline_batches",
     "list_batch_tables",
+    "list_pipeline_batches",
+    "list_pipelines",
     "resolve_path",
 ]
 
@@ -57,8 +57,7 @@ def get_dimension_catalog() -> OdsDimensionCatalog:
             # Bogus setting — surface as no-default rather than a hard error
             # so the /dataspace page renders even when settings drift.
             logger.warning(
-                "settings.ods.dimension_defaults['%s'] points at unknown "
-                "address '%s'; ignoring.",
+                "settings.ods.dimension_defaults['%s'] points at unknown address '%s'; ignoring.",
                 dim,
                 default_address,
             )

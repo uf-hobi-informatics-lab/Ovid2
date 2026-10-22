@@ -32,7 +32,9 @@ def pipeline_pkg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_xdg: 
     (pkg / "formatters").mkdir(parents=True)
     (pkg / "mappers").mkdir()
     (pkg / "__init__.py").write_text("", encoding="utf-8")
-    (pkg / "pipeline_settings.py").write_text("mappers_type = 'pcornet_mappers'\n", encoding="utf-8")
+    (pkg / "pipeline_settings.py").write_text(
+        "mappers_type = 'pcornet_mappers'\n", encoding="utf-8"
+    )
     monkeypatch.syspath_prepend(str(root))
     for mod in list(sys.modules):
         if mod == "ovid2_pipelines" or mod.startswith("ovid2_pipelines."):
@@ -113,9 +115,7 @@ def test_mapper_create_view_delete(web_client: object, pipeline_pkg: str) -> Non
         follow_redirects=False,
     )
     assert create.status_code == 303
-    assert create.headers["location"] == (
-        f"/pipeline-packages/{pipeline_pkg}/mappers/demographic"
-    )
+    assert create.headers["location"] == (f"/pipeline-packages/{pipeline_pkg}/mappers/demographic")
     view = web_client.get(  # type: ignore[attr-defined]
         f"/pipeline-packages/{pipeline_pkg}/mappers/demographic"
     )

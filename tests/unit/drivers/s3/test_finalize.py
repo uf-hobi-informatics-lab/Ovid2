@@ -24,7 +24,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Fake boto3 client + install helper
 # ---------------------------------------------------------------------------
@@ -75,10 +74,7 @@ class _FakeS3Client:
         # pin a size take the fast copy path.
         default_size = 128 * 1024 * 1024
         return {
-            "Contents": [
-                {"Key": k, "Size": self.sizes.get(k, default_size)}
-                for k in keys
-            ],
+            "Contents": [{"Key": k, "Size": self.sizes.get(k, default_size)} for k in keys],
         }
 
     def create_multipart_upload(self, **kwargs: Any) -> dict[str, Any]:
@@ -132,7 +128,8 @@ class TestFinalizeCsvMultipart:
     """Direct coverage of the module-level multipart stitch."""
 
     def test_uploads_header_then_body_parts_in_sorted_order(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Fast path: every body part is ≥ 5 MB.
 
@@ -214,7 +211,8 @@ class TestFinalizeCsvMultipart:
         assert parts[2]["ETag"] == "copy-etag-3"
 
     def test_missing_body_parts_raises(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from ovid2.drivers.s3.spark import finalize_csv_multipart
 
@@ -233,7 +231,8 @@ class TestFinalizeCsvMultipart:
         assert "create_multipart_upload" not in names
 
     def test_body_prefix_trailing_slash_enforced(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from ovid2.drivers.s3.spark import finalize_csv_multipart
 
@@ -256,7 +255,8 @@ class TestFinalizeCsvMultipart:
         assert listing["Prefix"] == "staging/body/"
 
     def test_ignores_non_part_files_under_body_prefix(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """``_SUCCESS`` markers and CRC sidecars must not become body parts."""
         from ovid2.drivers.s3.spark import finalize_csv_multipart
@@ -289,16 +289,17 @@ class TestFinalizeCsvMultipart:
         # that ``get_object`` was called on the real body key and
         # never on the marker keys.
         body_gets = [
-            k for n, k in client.calls
-            if n == "get_object" and k["Key"] != "staging/_header.csv"
+            k for n, k in client.calls if n == "get_object" and k["Key"] != "staging/_header.csv"
         ]
         assert len(body_gets) == 1
         assert body_gets[0]["Key"] == "staging/body/part-00000-x.csv"
 
         marker_reads = [
-            k for n, k in client.calls
+            k
+            for n, k in client.calls
             if n in {"get_object", "upload_part_copy"}
-            and k.get("Key", k.get("CopySource", {}).get("Key")) in {
+            and k.get("Key", k.get("CopySource", {}).get("Key"))
+            in {
                 "staging/body/_SUCCESS",
                 "staging/body/.part-00000-x.csv.crc",
             }
@@ -306,7 +307,8 @@ class TestFinalizeCsvMultipart:
         assert not marker_reads, f"Marker files leaked into finalize: {marker_reads}"
 
     def test_abort_on_complete_failure(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from ovid2.drivers.s3.spark import finalize_csv_multipart
 
@@ -333,7 +335,8 @@ class TestFinalizeCsvMultipart:
         assert client.aborted, "AbortMultipartUpload must run on failure."
 
     def test_streaming_fallback_for_small_body_parts(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """When body parts are tiny, everything streams through the
         driver so each non-terminal part clears the 5 MB minimum.
@@ -365,7 +368,7 @@ class TestFinalizeCsvMultipart:
         client = _FakeS3Client(
             listings={"staging/body/": keys},
             header_body=b"col_a,col_b\n",  # 12 bytes
-            sizes={k: 20 for k in keys},   # each body: 20 bytes (< 48)
+            sizes=dict.fromkeys(keys, 20),  # each body: 20 bytes (< 48)
             bodies={k: f"body{i:>02}--payload\n".encode() for i, k in enumerate(keys)},
         )
         _install_fake_boto3(monkeypatch, client)
@@ -390,8 +393,7 @@ class TestFinalizeCsvMultipart:
         assert len(uploads) >= 1
         for u in uploads[:-1]:
             assert len(u["Body"]) >= 48, (
-                f"Non-terminal part {u['PartNumber']} is "
-                f"{len(u['Body'])} bytes — must be ≥ 48."
+                f"Non-terminal part {u['PartNumber']} is {len(u['Body'])} bytes — must be ≥ 48."
             )
 
         # PartNumbers are contiguous and start at 1.
@@ -401,10 +403,7 @@ class TestFinalizeCsvMultipart:
         # Byte integrity: header + body(0) + body(1) + … must round-
         # trip verbatim through the uploaded parts.
         concatenated = b"".join(u["Body"] for u in uploads)
-        expected = (
-            b"col_a,col_b\n"
-            + b"".join(f"body{i:>02}--payload\n".encode() for i in range(5))
-        )
+        expected = b"col_a,col_b\n" + b"".join(f"body{i:>02}--payload\n".encode() for i in range(5))
         assert concatenated == expected
 
         # And Complete carries every ETag.
@@ -413,7 +412,8 @@ class TestFinalizeCsvMultipart:
         assert [p["PartNumber"] for p in parts] == part_numbers
 
     def test_terminal_part_may_be_smaller_than_minimum(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """The last body object is legal even when it's < 5 MB.
 
@@ -451,7 +451,8 @@ class TestFinalizeCsvMultipart:
         assert [p["PartNumber"] for p in client.completed["MultipartUpload"]["Parts"]] == [1, 2]
 
     def test_parallel_copy_dispatches_across_thread_pool(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Fast-path copies fan out across a thread pool.
 
@@ -476,7 +477,7 @@ class TestFinalizeCsvMultipart:
         keys = [f"staging/body/part-{i:05}.csv" for i in range(20)]
         client = _FakeS3Client(
             listings={"staging/body/": keys},
-            sizes={k: 128 for k in keys},
+            sizes=dict.fromkeys(keys, 128),
             bodies={k: (f"row_{i:02}\n").encode() * 20 for i, k in enumerate(keys)},
         )
         _install_fake_boto3(monkeypatch, client)
@@ -501,9 +502,7 @@ class TestFinalizeCsvMultipart:
 
         # Complete carries every part in ascending order.
         assert client.completed is not None
-        part_numbers = [
-            p["PartNumber"] for p in client.completed["MultipartUpload"]["Parts"]
-        ]
+        part_numbers = [p["PartNumber"] for p in client.completed["MultipartUpload"]["Parts"]]
         assert part_numbers == list(range(1, 21))
 
 
@@ -525,17 +524,17 @@ class _FakeWriter:
     def __init__(self, log: list[tuple[str, tuple[Any, ...]]]) -> None:
         self._log = log
 
-    def _rec(self, name: str, *args: Any) -> "_FakeWriter":
+    def _rec(self, name: str, *args: Any) -> _FakeWriter:
         self._log.append((name, args))
         return self
 
-    def option(self, *a: Any) -> "_FakeWriter":
+    def option(self, *a: Any) -> _FakeWriter:
         return self._rec("option", *a)
 
-    def format(self, *a: Any) -> "_FakeWriter":
+    def format(self, *a: Any) -> _FakeWriter:
         return self._rec("format", *a)
 
-    def mode(self, *a: Any) -> "_FakeWriter":
+    def mode(self, *a: Any) -> _FakeWriter:
         return self._rec("mode", *a)
 
     def save(self, *a: Any) -> None:
@@ -555,7 +554,7 @@ class _FakeDF:
         self.log: list[tuple[str, tuple[Any, ...]]] = []
         self.write = _FakeWriter(self.log)
 
-    def coalesce(self, n: int) -> "_FakeDF":
+    def coalesce(self, n: int) -> _FakeDF:
         self.log.append(("coalesce", (n,)))
         return self
 
@@ -577,14 +576,15 @@ class TestS3IOWriteChain:
         io.write(df, _FakeSparkSession(), "demo", "20260101", "table")  # type: ignore[arg-type]
         names = [n for n, _ in df.log]
         assert "coalesce" not in names
-        # Chain: format(csv) → option×4 → mode(overwrite) → save(...)
+        # Chain: format(csv) → optionx4 → mode(overwrite) → save(...)
         assert names[0] == "format"
         assert ("format", ("csv",)) in df.log
         assert ("mode", ("overwrite",)) in df.log
         assert ("save", ("s3a://b/demo/20260101/table.csv",)) in df.log
 
     def test_single_file_true_uses_finalize_path(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """When single_file is on, ``_write_csv_single_file`` is used."""
         from ovid2.drivers.s3 import spark as s3_spark
@@ -592,7 +592,7 @@ class TestS3IOWriteChain:
         io = self._make(single_file=True)
         called: dict[str, Any] = {}
 
-        def fake(  # noqa: PLR0913 — mirror real signature
+        def fake(
             self: Any,
             df: Any,
             pipeline: str,

@@ -183,6 +183,7 @@ SPARK_CONFIG: dict[str, str] = {
 # ---------------------------------------------------------------------------
 CSV_DELIMITER: str = "\t"
 
+
 # ---------------------------------------------------------------------------
 # CSV single-file finalize (disc / s3 / azure_blob)
 #
@@ -269,13 +270,13 @@ DISC_WRITE_PARTITIONS: int | None = _resolve_disc_write_partitions()
 # Cleanup is idempotent and best-effort (warnings on failure, never
 # raises).
 # ---------------------------------------------------------------------------
-SNOWPARK_STAGING_INGEST_PREFIX: str = os.environ.get(
-    "OVID2_SNOWPARK_STAGING_INGEST_PREFIX", "ovid_ingest"
-).strip() or "ovid_ingest"
+SNOWPARK_STAGING_INGEST_PREFIX: str = (
+    os.environ.get("OVID2_SNOWPARK_STAGING_INGEST_PREFIX", "ovid_ingest").strip() or "ovid_ingest"
+)
 
-SNOWPARK_STAGING_EGEST_PREFIX: str = os.environ.get(
-    "OVID2_SNOWPARK_STAGING_EGEST_PREFIX", "ovid_egest"
-).strip() or "ovid_egest"
+SNOWPARK_STAGING_EGEST_PREFIX: str = (
+    os.environ.get("OVID2_SNOWPARK_STAGING_EGEST_PREFIX", "ovid_egest").strip() or "ovid_egest"
+)
 
 
 def _resolve_snowpark_staging_keep() -> bool:
@@ -447,6 +448,7 @@ SNOWPARK_STAGING_DATABRICKS_BOUNCE_REGION: str | None = _resolve_optional_str(
     "OVID2_SNOWPARK_STAGING_DATABRICKS_BOUNCE_REGION"
 )
 
+
 # ---------------------------------------------------------------------------
 # Live engine metrics
 #
@@ -488,16 +490,12 @@ def _resolve_int_env(name: str, default: int) -> int:
 
 ENGINE_METRICS_ENABLED: bool = _resolve_bool_env("OVID2_ENGINE_METRICS_ENABLED", True)
 ENGINE_METRICS_SPARK_MS: int = _resolve_int_env("OVID2_ENGINE_METRICS_SPARK_MS", 500)
-ENGINE_METRICS_SNOWPARK_MS: int = _resolve_int_env(
-    "OVID2_ENGINE_METRICS_SNOWPARK_MS", 5000
-)
+ENGINE_METRICS_SNOWPARK_MS: int = _resolve_int_env("OVID2_ENGINE_METRICS_SNOWPARK_MS", 5000)
 ENGINE_METRICS_IDLE_MS: int = _resolve_int_env("OVID2_ENGINE_METRICS_IDLE_MS", 5000)
 #: How many consecutive zero-active-task samples trigger the switch to
 #: the idle rate. Keeps the log from ballooning while the cluster spins
 #: up or between tables.
-ENGINE_METRICS_IDLE_AFTER: int = _resolve_int_env(
-    "OVID2_ENGINE_METRICS_IDLE_AFTER", 5
-)
+ENGINE_METRICS_IDLE_AFTER: int = _resolve_int_env("OVID2_ENGINE_METRICS_IDLE_AFTER", 5)
 
 
 # ---------------------------------------------------------------------------

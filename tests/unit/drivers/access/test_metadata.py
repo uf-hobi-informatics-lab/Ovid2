@@ -17,9 +17,7 @@ class TestNormaliseAccessArgs:
     """Widening rules for the access arg triple (default mode ``ro``)."""
 
     def test_new_shape_round_trips(self) -> None:
-        got = normalise_access_args(
-            {"host_path": "/a", "container_path": "/b", "mount_mode": "rw"}
-        )
+        got = normalise_access_args({"host_path": "/a", "container_path": "/b", "mount_mode": "rw"})
         assert got == {
             "host_path": "/a",
             "container_path": "/b",
@@ -129,9 +127,7 @@ class TestContainerRequirements:
         )
 
     def test_legacy_path_to_file_mounts_parent_dir(self) -> None:
-        reqs = container_requirements_from(
-            {"path": "/data/refdb/drug_reference v2026.accdb"}
-        )
+        reqs = container_requirements_from({"path": "/data/refdb/drug_reference v2026.accdb"})
         assert reqs == (
             ExtraMount(
                 host_path="/data/refdb",

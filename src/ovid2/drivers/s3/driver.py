@@ -34,9 +34,13 @@ from ovid2.drivers.base import (
 )
 from ovid2.drivers.s3.metadata import (
     build_address_config,
-    connection_fields as _connection_fields,
-    location_fields as _location_fields,
     resolve_auth_mode,
+)
+from ovid2.drivers.s3.metadata import (
+    connection_fields as _connection_fields,
+)
+from ovid2.drivers.s3.metadata import (
+    location_fields as _location_fields,
 )
 from ovid2.drivers.s3.probe import list_dir_from_config, probe_auth_from_config
 
@@ -127,7 +131,9 @@ class S3Driver(Driver):
         did before the driver refactor.
         """
         merged = build_address_config(
-            dict(self.args), dict(self.secrets), dict(self.location),
+            dict(self.args),
+            dict(self.secrets),
+            dict(self.location),
         )
         return "s3", merged
 

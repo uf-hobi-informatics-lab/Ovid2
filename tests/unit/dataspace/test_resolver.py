@@ -45,9 +45,7 @@ class TestResolveSoleCandidate:
         assert target.dimension == "disc"
         assert target.tier == "sole_candidate"
 
-    def test_multiple_candidates_without_default_raises(
-        self, configs_dir: Path
-    ) -> None:
+    def test_multiple_candidates_without_default_raises(self, configs_dir: Path) -> None:
         _write_json(
             configs_dir / "d1.json",
             {"src_name": "disc", "src_args": {"path": "/tmp/1"}},
@@ -90,9 +88,7 @@ class TestResolvePrecedence:
         assert target.address_name == "d2"
         assert target.tier == "dimension_default"
 
-    def test_pipeline_route_beats_dimension_default(
-        self, configs_dir: Path
-    ) -> None:
+    def test_pipeline_route_beats_dimension_default(self, configs_dir: Path) -> None:
         _write_json(
             configs_dir / "d1.json",
             {"src_name": "disc", "src_args": {"path": "/tmp/1"}},
@@ -122,9 +118,7 @@ class TestResolvePrecedence:
             configs_dir / "d2.json",
             {"src_name": "disc", "src_args": {"path": "/tmp/2"}},
         )
-        _write_settings(
-            {"ods": {"dimension_defaults": {"disc": "d1"}}}
-        )
+        _write_settings({"ods": {"dimension_defaults": {"disc": "d1"}}})
         target = resolve("/demo", address="d2", materialise=False)
         assert target.address_name == "d2"
         assert target.tier == "explicit"
@@ -151,9 +145,7 @@ class TestResolvePrecedence:
             configs_dir / "sf.json",
             {"src_name": "snowflake", "src_args": {"account": "a"}},
         )
-        _write_settings(
-            {"ods": {"pipeline_dimensions": {"demo": "snowflake"}}}
-        )
+        _write_settings({"ods": {"pipeline_dimensions": {"demo": "snowflake"}}})
         target = resolve("/demo", materialise=False)
         assert target.dimension == "snowflake"
         assert target.address_name == "sf"
@@ -181,9 +173,7 @@ class TestResolveDim:
 
 
 class TestListPipelinesAndBatches:
-    def test_list_pipelines_walks_disc_root(
-        self, tmp_path: Path, configs_dir: Path
-    ) -> None:
+    def test_list_pipelines_walks_disc_root(self, tmp_path: Path, configs_dir: Path) -> None:
         # Build a disc tree with two pipeline dirs.
         root = tmp_path / "disc"
         (root / "demo" / "20260316").mkdir(parents=True)
@@ -227,9 +217,7 @@ class TestListPipelinesAndBatches:
             "ENCOUNTER",
         ]
 
-    def test_non_disc_dimensions_empty(
-        self, tmp_path: Path, configs_dir: Path
-    ) -> None:
+    def test_non_disc_dimensions_empty(self, tmp_path: Path, configs_dir: Path) -> None:
         _write_json(
             configs_dir / "sf.json",
             {"src_name": "snowflake", "src_args": {"account": "a"}},

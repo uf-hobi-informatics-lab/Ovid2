@@ -136,7 +136,9 @@ def table_completed(
     return Event(kind="table.completed", payload=payload, instance_id=instance_id)
 
 
-def table_failed(*, instance_id: str, pipeline: str, batch_id: str, table: str, error: str) -> Event:
+def table_failed(
+    *, instance_id: str, pipeline: str, batch_id: str, table: str, error: str
+) -> Event:
     return Event(
         kind="table.failed",
         payload={"pipeline": pipeline, "batch_id": batch_id, "table": table, "error": error},
@@ -249,7 +251,12 @@ def check_completed(
 
 
 def check_failed(
-    *, instance_id: str, check_id: str, name: str, part: str, error: str,
+    *,
+    instance_id: str,
+    check_id: str,
+    name: str,
+    part: str,
+    error: str,
     elapsed_ms: float | None = None,
 ) -> Event:
     """Emitted when a data-health check raises an error."""

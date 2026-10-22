@@ -161,7 +161,8 @@ def location_fields() -> tuple[LocationField, ...]:
 
 
 def container_requirements_from(
-    args: dict[str, Any], location: dict[str, Any] | None = None,
+    args: dict[str, Any],
+    location: dict[str, Any] | None = None,
 ) -> tuple[ContainerRequirement, ...]:
     """Return the auto-mount for a disc peripheral, given its args.
 

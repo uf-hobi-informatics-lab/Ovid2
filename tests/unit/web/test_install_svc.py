@@ -29,12 +29,7 @@ def test_run_bootstrap_creates_snowflake_template(isolated_xdg: Path) -> None:
 
     log = install_svc.run_bootstrap(actor="unit")
     assert any("snowflake.json" in line for line in log)
-    path = (
-        Path(os.environ["XDG_CONFIG_HOME"])
-        / "ovid2"
-        / "secrets.d"
-        / "snowflake.json"
-    )
+    path = Path(os.environ["XDG_CONFIG_HOME"]) / "ovid2" / "secrets.d" / "snowflake.json"
     assert path.is_file()
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
 

@@ -66,7 +66,10 @@ def _fast_fail_kwargs() -> dict[str, Any]:
 
 
 def _build_client(
-    mode: str, args: dict[str, Any], secrets: dict[str, Any], url: str,
+    mode: str,
+    args: dict[str, Any],
+    secrets: dict[str, Any],
+    url: str,
 ) -> Any:
     """Return a ready ``BlobServiceClient`` for the configured mode.
 
@@ -85,12 +88,13 @@ def _build_client(
             ``azure-identity`` for AAD modes) is not installed.
     """
     del args  # unused — kept for symmetry with the connection API.
-    from azure.storage.blob import BlobServiceClient  # type: ignore[import-not-found]
+    from azure.storage.blob import BlobServiceClient
 
     client_kwargs = _fast_fail_kwargs()
     if mode == "connection_string":
         return BlobServiceClient.from_connection_string(
-            str(secrets["connection_string"]), **client_kwargs,
+            str(secrets["connection_string"]),
+            **client_kwargs,
         )
     if mode == "account_key":
         return BlobServiceClient(
@@ -108,11 +112,12 @@ def _build_client(
             **client_kwargs,
         )
     # AAD-based modes require azure-identity.
-    from azure.identity import (  # type: ignore[import-not-found]
+    from azure.identity import (
         ClientSecretCredential,
         DefaultAzureCredential,
     )
 
+    credential: ClientSecretCredential | DefaultAzureCredential
     if mode == "service_principal":
         credential = ClientSecretCredential(
             tenant_id=str(secrets["tenant_id"]),
@@ -122,12 +127,15 @@ def _build_client(
     else:  # default_chain
         credential = DefaultAzureCredential()
     return BlobServiceClient(
-        account_url=url, credential=credential, **client_kwargs,
+        account_url=url,
+        credential=credential,
+        **client_kwargs,
     )
 
 
 def probe_auth_from_config(
-    args: dict[str, Any], secrets: dict[str, Any],
+    args: dict[str, Any],
+    secrets: dict[str, Any],
 ) -> ProbeResult:
     """Return an ``auth`` probe result for an Azure Blob connection.
 
@@ -158,7 +166,7 @@ def probe_auth_from_config(
         ``capability='auth'``.
     """
     try:
-        import azure.storage.blob  # noqa: F401 — import probe
+        import azure.storage.blob
     except ImportError:
         return ProbeResult(
             ok=False,
@@ -180,10 +188,7 @@ def probe_auth_from_config(
         return ProbeResult(
             ok=False,
             code="config",
-            message=(
-                "account_name is required unless a connection_string "
-                "secret is provided."
-            ),
+            message=("account_name is required unless a connection_string secret is provided."),
             capability="auth",
         )
 
@@ -215,7 +220,7 @@ def probe_auth_from_config(
             capability="auth",
             detail={"auth_mode": mode},
         )
-    except Exception as exc:  # noqa: BLE001 — SDK raises many concrete types
+    except Exception as exc:
         return ProbeResult(
             ok=False,
             code="config",
@@ -234,9 +239,7 @@ def probe_auth_from_config(
             return ProbeResult(
                 ok=True,
                 code="ok",
-                message=(
-                    f"get_container_properties() succeeded on {container}."
-                ),
+                message=(f"get_container_properties() succeeded on {container}."),
                 capability="auth",
                 detail={
                     "account_url": target_url,
@@ -252,11 +255,8 @@ def probe_auth_from_config(
             capability="auth",
             detail={"account_url": target_url, "auth_mode": mode},
         )
-    except Exception as exc:  # noqa: BLE001
-        code = (
-            "auth" if any(hint in str(exc) for hint in _AUTH_HINTS)
-            else "unreachable"
-        )
+    except Exception as exc:
+        code = "auth" if any(hint in str(exc) for hint in _AUTH_HINTS) else "unreachable"
         return ProbeResult(
             ok=False,
             code=code,
@@ -301,13 +301,11 @@ def list_dir_from_config(
     from ovid2.drivers.base import StorageEntry
 
     try:
-        from azure.storage.blob import (  # type: ignore[import-not-found]
+        from azure.storage.blob import (
             BlobPrefix,
         )
     except ImportError as exc:
-        raise NotImplementedError(
-            "azure-storage-blob is not installed on this host."
-        ) from exc
+        raise NotImplementedError("azure-storage-blob is not installed on this host.") from exc
 
     container = location.get("container") or args.get("container_default")
     if not container:
@@ -334,28 +332,26 @@ def list_dir_from_config(
         entries: list[StorageEntry] = []
         seen_dirs: set[str] = set()
         seen_files: set[str] = set()
-        for item in container_client.walk_blobs(
-            name_starts_with=effective or None, delimiter="/"
-        ):
+        for item in container_client.walk_blobs(name_starts_with=effective or None, delimiter="/"):
             full = str(getattr(item, "name", ""))
             is_dir = isinstance(item, BlobPrefix) or full.endswith("/")
             if is_dir:
-                name = full[len(effective):].rstrip("/")
+                name = full[len(effective) :].rstrip("/")
                 if not name or name in seen_dirs:
                     continue
                 seen_dirs.add(name)
                 # Path returned is relative to location.path so it
                 # round-trips as the next ``prefix``.
-                rel = full[len(base) + 1:].rstrip("/") if base else full.rstrip("/")
+                rel = full[len(base) + 1 :].rstrip("/") if base else full.rstrip("/")
                 entries.append(StorageEntry(name=name, kind="dir", path=rel))
             else:
-                name = full[len(effective):]
+                name = full[len(effective) :]
                 if not name or "/" in name or name in seen_files:
                     continue
                 seen_files.add(name)
-                rel = full[len(base) + 1:] if base else full
+                rel = full[len(base) + 1 :] if base else full
                 entries.append(StorageEntry(name=name, kind="file", path=rel))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise ValueError(f"Azure list failed: {exc}") from exc
 
     entries.sort(key=lambda e: (0 if e.kind == "dir" else 1, e.name.lower()))

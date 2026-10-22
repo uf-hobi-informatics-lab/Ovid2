@@ -26,6 +26,7 @@ subprocess and watches SQLite. That keeps the contract test
 from __future__ import annotations
 
 import argparse
+import contextlib
 import logging
 import os
 import re
@@ -37,6 +38,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import IO
 
 from ovid2.config.settings import DATA_DIR, LEGACY_CREDENTIALS_DIR
 from ovid2.run_kinds import get_kind
@@ -88,7 +90,7 @@ class _Running:
     job_id: str
     instance_id: str
     process: subprocess.Popen[bytes]
-    log_handle: object = field(default=None)
+    log_handle: IO[bytes] | None = field(default=None)
 
 
 class Worker:
@@ -182,7 +184,9 @@ class Worker:
                 response = pipelines_svc.run_now(detail.name, actor="worker")
                 logger.info(
                     "Pipeline %s fired job %s (trigger=%s)",
-                    detail.name, response.job_id, detail.trigger.type,
+                    detail.name,
+                    response.job_id,
+                    detail.trigger.type,
                 )
             except pipelines_svc.PipelineError:
                 logger.exception("Pipeline %s failed to fire.", detail.name)
@@ -202,9 +206,7 @@ class Worker:
         try:
             settings = settings_svc.get_settings()
         except Exception:
-            logger.exception(
-                "settings_svc.get_settings failed; skipping watch dispatch."
-            )
+            logger.exception("settings_svc.get_settings failed; skipping watch dispatch.")
             return
         if not settings.worker.route_dispatch_enabled:
             return
@@ -228,12 +230,8 @@ class Worker:
                 continue
             for batch_id in new_batches:
                 try:
-                    response = pipelines_svc.run_now(
-                        detail.name, actor="worker", batch_id=batch_id
-                    )
-                    watch_svc.record_seen(
-                        detail.name, detail.input_address, batch_id
-                    )
+                    response = pipelines_svc.run_now(detail.name, actor="worker", batch_id=batch_id)
+                    watch_svc.record_seen(detail.name, detail.input_address, batch_id)
                     logger.info(
                         "Watch pipeline %s fired job %s for new batch %s",
                         detail.name,
@@ -279,20 +277,16 @@ class Worker:
     def _drain(self) -> None:
         """SIGTERM every child and wait for it to exit."""
         for record in list(self._running.values()):
-            try:
+            with contextlib.suppress(ProcessLookupError):
                 record.process.terminate()
-            except ProcessLookupError:
-                pass
         deadline = time.time() + 30
         while self._running and time.time() < deadline:
             self._reap_finished()
             time.sleep(0.2)
         # Anything still alive at this point gets killed.
         for record in list(self._running.values()):
-            try:
+            with contextlib.suppress(ProcessLookupError):
                 record.process.kill()
-            except ProcessLookupError:
-                pass
             self._finalize(record, returncode=-9, cancelled=True)
 
     # -------------------------------------------------------------- dispatch
@@ -518,10 +512,7 @@ class Worker:
             # but defence-in-depth: ``tools copy`` requires
             # ``nargs='+'`` and would fail with a confusing argparse
             # error if we let an empty list through.
-            raise ValueError(
-                "copy jobs require an explicit `tables` list "
-                "(job.tables is empty)."
-            )
+            raise ValueError("copy jobs require an explicit `tables` list (job.tables is empty).")
         engine = str(job.extra_args.get("engine") or "pyspark")
         argv: list[str] = list(self.ovid2_bin) + [
             "tools",
@@ -567,10 +558,7 @@ class Worker:
             # but defence-in-depth: ``tools move`` requires
             # ``nargs='+'`` and would fail with a confusing argparse
             # error if we let an empty list through.
-            raise ValueError(
-                "move jobs require an explicit `tables` list "
-                "(job.tables is empty)."
-            )
+            raise ValueError("move jobs require an explicit `tables` list (job.tables is empty).")
         engine = str(job.extra_args.get("engine") or "pyspark")
         argv: list[str] = list(self.ovid2_bin) + [
             "tools",
@@ -633,8 +621,7 @@ class Worker:
             return
         with web_db.connect() as conn:
             rows = conn.execute(
-                "SELECT job_id FROM web_jobs "
-                "WHERE cancel_requested = 1 AND status = ?",
+                "SELECT job_id FROM web_jobs WHERE cancel_requested = 1 AND status = ?",
                 (jobs_svc.STATUS_RUNNING,),
             ).fetchall()
         for row in rows:
@@ -648,9 +635,7 @@ class Worker:
             #    the cluster.
             try:
                 record.process.terminate()
-                logger.info(
-                    "SIGTERM'd pid=%d for job=%s", record.process.pid, record.job_id
-                )
+                logger.info("SIGTERM'd pid=%d for job=%s", record.process.pid, record.job_id)
             except ProcessLookupError:
                 pass
             # 2) Belt-and-suspenders: directly stop the driver container
@@ -685,9 +670,7 @@ class Worker:
         """
         if not instance_id:
             return
-        safe = "".join(
-            c if (c.isalnum() or c in "._-") else "-" for c in instance_id
-        )
+        safe = "".join(c if (c.isalnum() or c in "._-") else "-" for c in instance_id)
         name = f"ovid2-driver-{safe}"
 
         def _run() -> None:
@@ -699,9 +682,7 @@ class Worker:
                     timeout=60,
                 )
             except (OSError, subprocess.SubprocessError) as exc:
-                logger.debug(
-                    "driver container stop for %s failed: %s", name, exc
-                )
+                logger.debug("driver container stop for %s failed: %s", name, exc)
 
         threading.Thread(
             target=_run,
@@ -730,9 +711,7 @@ class Worker:
         """
         if not instance_id:
             return
-        safe = "".join(
-            c if (c.isalnum() or c in "._-") else "-" for c in instance_id
-        )
+        safe = "".join(c if (c.isalnum() or c in "._-") else "-" for c in instance_id)
         project = f"ovid2-{safe}"
 
         def _run() -> None:
@@ -753,9 +732,7 @@ class Worker:
                     timeout=90,
                 )
             except (OSError, subprocess.SubprocessError) as exc:
-                logger.debug(
-                    "cluster teardown for %s failed: %s", project, exc
-                )
+                logger.debug("cluster teardown for %s failed: %s", project, exc)
 
         threading.Thread(
             target=_run,
@@ -771,18 +748,15 @@ class Worker:
         cancelled: bool,
     ) -> None:
         """Update the DB and close the log handle for a finished child."""
-        try:
-            record.log_handle.close()  # type: ignore[union-attr]
-        except Exception:  # pragma: no cover — defensive
-            pass
+        with contextlib.suppress(Exception):
+            if record.log_handle is not None:
+                record.log_handle.close()
         # Refresh cancel_requested from the DB so a race between the
         # SIGTERM and the exit is still attributed correctly.
         detail = jobs_svc.get_job(record.job_id)
         was_cancel = cancelled or (detail is not None and detail.cancel_requested)
         if was_cancel and returncode != 0:
-            jobs_svc.mark_terminal(
-                record.job_id, status=jobs_svc.STATUS_CANCELLED, error=None
-            )
+            jobs_svc.mark_terminal(record.job_id, status=jobs_svc.STATUS_CANCELLED, error=None)
         elif returncode == 0:
             jobs_svc.mark_terminal(record.job_id, status=jobs_svc.STATUS_DONE)
         else:
@@ -944,12 +918,14 @@ def _extract_error_from_log(log_path: Path) -> str | None:
         # ``[ovid2] Stopping Spark cluster …`` and its friends are the
         # last-lines of a normal cluster teardown — they arrive after
         # the real error, so we skip them to find the actual message.
-        if stripped.startswith("[ovid2] Stopping") or \
-           stripped.startswith("[ovid2] Spark cluster ready") or \
-           stripped.startswith("[ovid2] Starting Spark cluster") or \
-           stripped.startswith("[ovid2] Cluster not fully ready") or \
-           stripped.startswith("[ovid2] Shutdown reported errors") or \
-           stripped.startswith("[ovid2] Received "):
+        if (
+            stripped.startswith("[ovid2] Stopping")
+            or stripped.startswith("[ovid2] Spark cluster ready")
+            or stripped.startswith("[ovid2] Starting Spark cluster")
+            or stripped.startswith("[ovid2] Cluster not fully ready")
+            or stripped.startswith("[ovid2] Shutdown reported errors")
+            or stripped.startswith("[ovid2] Received ")
+        ):
             continue
         # ``docker compose`` (Go binary) emits a top-of-log warning
         # like ``time="…" level=warning msg="… version is obsolete

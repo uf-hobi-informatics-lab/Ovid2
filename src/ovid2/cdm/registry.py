@@ -112,7 +112,7 @@ def resolve_cdm_for_pipeline(pipeline: str) -> CdmHandle:
     if pipeline in GENERIC_CDM_LABELS:
         return get_cdm(GENERIC_CDM_LABELS[pipeline])
 
-    _LEGACY_MAPPERS_TO_CDM: dict[str, str] = {
+    legacy_mappers_to_cdm: dict[str, str] = {
         "pcornet_mappers": "pcornet_7_0",
         "veritas_mappers": "ovid2_pipeline_veritas_v1",
         "nursing_mappers": "ovid2_pipeline_nursing_v1",
@@ -132,7 +132,7 @@ def resolve_cdm_for_pipeline(pipeline: str) -> CdmHandle:
         else:
             legacy = getattr(settings, "mappers_type", None)
             if legacy:
-                cdm_name = _LEGACY_MAPPERS_TO_CDM.get(str(legacy))
+                cdm_name = legacy_mappers_to_cdm.get(str(legacy))
 
     return get_cdm(cdm_name)
 

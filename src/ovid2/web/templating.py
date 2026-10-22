@@ -49,7 +49,7 @@ def _resolve_tz(tz: str | None) -> ZoneInfo:
             from ovid2.web.services import settings_svc
 
             name = settings_svc.get_settings().ui.display_timezone
-        except Exception:  # noqa: BLE001 — display must never break render
+        except Exception:
             name = "UTC"
     try:
         return ZoneInfo(name)
@@ -144,10 +144,7 @@ def localtime_pretty(value: object, tz: str | None = None) -> str:
     local = dt.astimezone(_resolve_tz(tz))
     day = local.day
     # Ordinal suffix — the 11/12/13 teens always take "th".
-    if 11 <= (day % 100) <= 13:
-        suffix = "th"
-    else:
-        suffix = {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
+    suffix = "th" if 11 <= day % 100 <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
     time_part = local.strftime("%I:%M %p").lstrip("0")
     return f"{local.strftime('%b')} {day}{suffix}, {time_part}"
 
@@ -184,7 +181,7 @@ def _current_ctx(request: object) -> AuthContext | None:
         return None
     try:
         return deps.current_user(request)
-    except Exception:  # noqa: BLE001 — display must never break render.
+    except Exception:
         return None
 
 
@@ -243,7 +240,7 @@ def _auth_enabled() -> bool:
         from ovid2.web.services import settings_svc
 
         return bool(settings_svc.get_settings().auth.enabled)
-    except Exception:  # noqa: BLE001 — display must never break render.
+    except Exception:
         return False
 
 

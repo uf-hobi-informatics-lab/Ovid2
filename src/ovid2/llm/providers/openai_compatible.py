@@ -58,8 +58,9 @@ def _msg_chars(m: ChatMessage) -> int:
     return n
 
 
-def trim_to_context(messages: list[ChatMessage], context_window: int,
-                    reserve: int) -> list[ChatMessage]:
+def trim_to_context(
+    messages: list[ChatMessage], context_window: int, reserve: int
+) -> list[ChatMessage]:
     """Drop the oldest non-system turns until the rough token estimate fits.
 
     Uses a 4-chars-per-token heuristic; good enough to keep requests
@@ -109,8 +110,9 @@ class OpenAiCompatibleProvider(Provider):
         if ca_bundle:
             verify = ca_bundle
         timeout = _float(self.args.get("timeout_s"), 60.0)
-        return httpx.Client(timeout=httpx.Timeout(timeout, connect=min(timeout, 10.0)),
-                            verify=verify)
+        return httpx.Client(
+            timeout=httpx.Timeout(timeout, connect=min(timeout, 10.0)), verify=verify
+        )
 
     def _prepare(self, messages: list[ChatMessage]) -> list[ChatMessage]:
         prompt = str(self.args.get("system_prompt") or "").strip()
@@ -124,8 +126,13 @@ class OpenAiCompatibleProvider(Provider):
             _int(self.args.get("max_tokens"), 2048),
         )
 
-    def _body(self, messages: list[ChatMessage], *, stream: bool,
-              tools: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    def _body(
+        self,
+        messages: list[ChatMessage],
+        *,
+        stream: bool,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         body: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
@@ -187,15 +194,17 @@ class OpenAiCompatibleProvider(Provider):
         ids = [str(m.get("id")) for m in (data.get("data") or []) if isinstance(m, dict)]
         detail = {"base_url": self.base_url, "model": self.model, "models_visible": len(ids)}
         if ids and self.model not in ids:
-            return ProbeResult(False, "model_not_found",
-                               f"Authenticated, but model '{self.model}' is not "
-                               "available to this key.",
-                               {**detail, "sample": ids[:10]})
-        return ProbeResult(True, "ok", f"Authenticated; model '{self.model}' available.",
-                           detail)
+            return ProbeResult(
+                False,
+                "model_not_found",
+                f"Authenticated, but model '{self.model}' is not available to this key.",
+                {**detail, "sample": ids[:10]},
+            )
+        return ProbeResult(True, "ok", f"Authenticated; model '{self.model}' available.", detail)
 
-    def chat_stream(self, messages: list[ChatMessage],
-                    tools: list[dict[str, Any]] | None = None) -> Iterator[LlmEvent]:
+    def chat_stream(
+        self, messages: list[ChatMessage], tools: list[dict[str, Any]] | None = None
+    ) -> Iterator[LlmEvent]:
         """Stream ``reasoning`` / ``delta`` / ``usage`` events.
 
         With ``tools``, streamed ``delta.tool_calls`` fragments are
@@ -207,10 +216,15 @@ class OpenAiCompatibleProvider(Provider):
         body = self._body(self._prepare(messages), stream=True, tools=tools)
         calls: dict[int, dict[str, str]] = {}
         try:
-            with self._client() as client, client.stream(
-                "POST", f"{self.base_url}/chat/completions",
-                headers={**self._headers(), "Accept": "text/event-stream"}, json=body,
-            ) as resp:
+            with (
+                self._client() as client,
+                client.stream(
+                    "POST",
+                    f"{self.base_url}/chat/completions",
+                    headers={**self._headers(), "Accept": "text/event-stream"},
+                    json=body,
+                ) as resp,
+            ):
                 if resp.status_code >= 400:
                     resp.read()
                     self._raise_for_status(resp.status_code, resp.text)
@@ -221,14 +235,19 @@ class OpenAiCompatibleProvider(Provider):
         except Exception as exc:
             raise self._translate(exc) from exc
         if calls:
-            yield {"type": "_tool_calls",
-                   "calls": [{"id": c["id"] or f"call_{i}", "name": c["name"],
-                              "arguments": c["arguments"]}
-                             for i, c in sorted(calls.items()) if c["name"]]}
+            yield {
+                "type": "_tool_calls",
+                "calls": [
+                    {"id": c["id"] or f"call_{i}", "name": c["name"], "arguments": c["arguments"]}
+                    for i, c in sorted(calls.items())
+                    if c["name"]
+                ],
+            }
 
     @staticmethod
-    def _parse_sse_line(line: str,
-                        calls: dict[int, dict[str, str]] | None = None) -> Iterator[LlmEvent]:
+    def _parse_sse_line(
+        line: str, calls: dict[int, dict[str, str]] | None = None
+    ) -> Iterator[LlmEvent]:
         line = line.strip()
         if not line.startswith("data:"):
             return
@@ -272,19 +291,21 @@ class OpenAiCompatibleProvider(Provider):
                             slot["arguments"] += str(fn["arguments"])
         usage = chunk.get("usage")
         if isinstance(usage, dict):
-            yield {"type": "usage",
-                   "prompt_tokens": _int(usage.get("prompt_tokens"), 0),
-                   "completion_tokens": _int(usage.get("completion_tokens"), 0)}
+            yield {
+                "type": "usage",
+                "prompt_tokens": _int(usage.get("prompt_tokens"), 0),
+                "completion_tokens": _int(usage.get("completion_tokens"), 0),
+            }
 
     def decide(self, messages: list[ChatMessage]) -> Decision:
         """Ask the model for a strict-JSON decision (System 1 stop-gap)."""
-        prepared = [{"role": "system", "content": _DECISION_INSTRUCTIONS},
-                    *self._prepare(messages)]
+        prepared = [{"role": "system", "content": _DECISION_INSTRUCTIONS}, *self._prepare(messages)]
         body = self._body(prepared, stream=False)
         try:
             with self._client() as client:
-                resp = client.post(f"{self.base_url}/chat/completions",
-                                   headers=self._headers(), json=body)
+                resp = client.post(
+                    f"{self.base_url}/chat/completions", headers=self._headers(), json=body
+                )
                 self._raise_for_status(resp.status_code, resp.text)
                 payload = resp.json()
         except Exception as exc:
@@ -304,13 +325,18 @@ def parse_decision(content: str) -> Decision:
     """
     match = re.search(r"\{.*\}", content, flags=re.DOTALL)
     if not match:
-        return Decision(in_scope=False, decision="", confidence=0.0,
-                        rationale="System 1 reply was not JSON.")
+        return Decision(
+            in_scope=False, decision="", confidence=0.0, rationale="System 1 reply was not JSON."
+        )
     try:
         raw = json.loads(match.group(0))
     except json.JSONDecodeError:
-        return Decision(in_scope=False, decision="", confidence=0.0,
-                        rationale="System 1 reply was not valid JSON.")
+        return Decision(
+            in_scope=False,
+            decision="",
+            confidence=0.0,
+            rationale="System 1 reply was not valid JSON.",
+        )
     if not isinstance(raw, dict):
         return Decision(in_scope=False, decision="", confidence=0.0)
     confidence = max(0.0, min(1.0, _float(raw.get("confidence"), 0.0)))

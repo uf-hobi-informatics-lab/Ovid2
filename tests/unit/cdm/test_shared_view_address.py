@@ -45,16 +45,14 @@ def test_parse_shared_view_address_kind() -> None:
 
 @pytest.mark.unit
 def test_parse_shared_view_address_requires_address_field() -> None:
-    with pytest.raises(CdmYamlError, match="source.address"):
+    with pytest.raises(CdmYamlError, match=r"source\.address"):
         _parse_shared_views([{"view_name": "concept", "source": {"kind": "address"}}])
 
 
 @pytest.mark.unit
 def test_parse_shared_view_unknown_kind_rejected() -> None:
-    with pytest.raises(CdmYamlError, match="unknown source.kind"):
-        _parse_shared_views(
-            [{"view_name": "concept", "source": {"kind": "database", "path": "x"}}]
-        )
+    with pytest.raises(CdmYamlError, match=r"unknown source\.kind"):
+        _parse_shared_views([{"view_name": "concept", "source": {"kind": "database", "path": "x"}}])
 
 
 # ---------------------------------------------------------------------------
@@ -67,10 +65,10 @@ class _FakeDF:
         self.columns = columns
         self.registered_as: str | None = None
 
-    def toDF(self, *cols: str) -> "_FakeDF":  # noqa: N802 — mirror pyspark
+    def toDF(self, *cols: str) -> _FakeDF:
         return _FakeDF(list(cols))
 
-    def createOrReplaceTempView(self, name: str) -> None:  # noqa: N802
+    def createOrReplaceTempView(self, name: str) -> None:
         self.registered_as = name
 
 
@@ -127,9 +125,7 @@ def test_register_address_view_lowercases_and_registers(monkeypatch: pytest.Monk
         resolved["kwargs"] = kwargs
         return f"driver:{address_name}"
 
-    monkeypatch.setattr(
-        "ovid2.drivers.registry.driver_from_address", _fake_driver_from_address
-    )
+    monkeypatch.setattr("ovid2.drivers.registry.driver_from_address", _fake_driver_from_address)
 
     view = SharedViewSpec(
         view_name="concept",
@@ -137,7 +133,7 @@ def test_register_address_view_lowercases_and_registers(monkeypatch: pytest.Monk
         address="omop_concept_sf",
         required=False,
     )
-    pipeline._register_shared_view_from_address(  # noqa: SLF001
+    pipeline._register_shared_view_from_address(
         view=view,
         engine=engine,
         session=session,
@@ -164,10 +160,8 @@ def test_register_address_view_no_engine_warns_when_optional() -> None:
     import ovid2.core.pipeline as pipeline
 
     bus = _RecordingBus()
-    view = SharedViewSpec(
-        view_name="concept", source_kind="address", address="x", required=False
-    )
-    pipeline._register_shared_view_from_address(  # noqa: SLF001
+    view = SharedViewSpec(view_name="concept", source_kind="address", address="x", required=False)
+    pipeline._register_shared_view_from_address(
         view=view,
         engine=None,
         session=object(),
@@ -184,11 +178,9 @@ def test_register_address_view_no_engine_warns_when_optional() -> None:
 def test_register_address_view_no_engine_raises_when_required() -> None:
     import ovid2.core.pipeline as pipeline
 
-    view = SharedViewSpec(
-        view_name="concept", source_kind="address", address="x", required=True
-    )
+    view = SharedViewSpec(view_name="concept", source_kind="address", address="x", required=True)
     with pytest.raises(RuntimeError, match="no engine"):
-        pipeline._register_shared_view_from_address(  # noqa: SLF001
+        pipeline._register_shared_view_from_address(
             view=view,
             engine=None,
             session=object(),

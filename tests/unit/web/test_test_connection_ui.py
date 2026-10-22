@@ -58,9 +58,7 @@ def _write_w7_address(name: str, connection: str, sub: str = "sub") -> None:
 
 
 @pytest.mark.unit
-def test_connections_list_renders_test_column_and_buttons(
-    web_client, isolated_xdg: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_connections_list_renders_test_column_and_buttons(web_client, isolated_xdg: Path) -> None:  # type: ignore[no-untyped-def]
     """`/connections` shows a Result column, per-row Test, and Test all."""
     _write_connection(isolated_xdg, "c_one", str(isolated_xdg))
     _write_connection(isolated_xdg, "c_two", str(isolated_xdg))
@@ -84,9 +82,7 @@ def test_connections_list_renders_test_column_and_buttons(
 
 
 @pytest.mark.unit
-def test_connections_empty_hides_test_all(
-    web_client, isolated_xdg: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_connections_empty_hides_test_all(web_client, isolated_xdg: Path) -> None:  # type: ignore[no-untyped-def]
     """The Test all button is not rendered when there are no storage accounts."""
     response = web_client.get("/connections")
     assert response.status_code == 200
@@ -96,9 +92,7 @@ def test_connections_empty_hides_test_all(
 
 
 @pytest.mark.unit
-def test_connection_edit_page_shows_test_button(
-    web_client, isolated_xdg: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_connection_edit_page_shows_test_button(web_client, isolated_xdg: Path) -> None:  # type: ignore[no-untyped-def]
     """Edit-mode surfaces a Test form pointing at the probe URL."""
     _write_connection(isolated_xdg, "c_edit", str(isolated_xdg))
     response = web_client.get("/connections/c_edit/edit")
@@ -109,9 +103,7 @@ def test_connection_edit_page_shows_test_button(
 
 
 @pytest.mark.unit
-def test_connection_new_page_omits_test_button(
-    web_client, isolated_xdg: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_connection_new_page_omits_test_button(web_client, isolated_xdg: Path) -> None:  # type: ignore[no-untyped-def]
     """The New form has nothing on disk to probe, so no Test button."""
     response = web_client.get("/connections/new")
     assert response.status_code == 200
@@ -128,9 +120,7 @@ def test_connection_new_page_omits_test_button(
 
 
 @pytest.mark.unit
-def test_address_detail_shows_probe_only_when_w7(
-    web_client, isolated_xdg: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_address_detail_shows_probe_only_when_w7(web_client, isolated_xdg: Path) -> None:  # type: ignore[no-untyped-def]
     """Address detail exposes a probe form only for connection-shaped addresses."""
     _write_connection(isolated_xdg, "c_shared", str(isolated_xdg))
     _write_w7_address("a_w7", "c_shared")
@@ -153,9 +143,7 @@ def test_address_detail_shows_probe_only_when_w7(
 
 
 @pytest.mark.unit
-def test_addresses_list_test_button_gating(
-    web_client, isolated_xdg: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_addresses_list_test_button_gating(web_client, isolated_xdg: Path) -> None:  # type: ignore[no-untyped-def]
     """The addresses list view now redirects to the storage-accounts index.
 
     Addresses were folded into storage accounts; per-run location is
@@ -171,9 +159,7 @@ def test_addresses_list_test_button_gating(
 
 
 @pytest.mark.unit
-def test_addresses_list_hides_test_all_when_no_w7(
-    web_client, isolated_xdg: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_addresses_list_hides_test_all_when_no_w7(web_client, isolated_xdg: Path) -> None:  # type: ignore[no-untyped-def]
     """``GET /addresses`` redirects to the storage-accounts index."""
     _write_legacy_address("a_legacy", "/tmp")
     response = web_client.get("/addresses")
@@ -182,9 +168,7 @@ def test_addresses_list_hides_test_all_when_no_w7(
 
 
 @pytest.mark.unit
-def test_connection_test_html_route_still_returns_flash(
-    web_client, isolated_xdg: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_connection_test_html_route_still_returns_flash(web_client, isolated_xdg: Path) -> None:  # type: ignore[no-untyped-def]
     """The existing POST /connections/{name}/test still re-renders detail."""
     root = isolated_xdg
     _write_connection(isolated_xdg, "c_probe_ui", str(root))

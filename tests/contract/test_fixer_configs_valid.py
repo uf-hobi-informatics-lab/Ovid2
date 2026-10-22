@@ -45,7 +45,9 @@ def _pipeline_names() -> list[str]:
     return names
 
 
-def _load_configs(pipeline: str) -> tuple[dict[str, list[dict[str, object]]], list[dict[str, object]]]:
+def _load_configs(
+    pipeline: str,
+) -> tuple[dict[str, list[dict[str, object]]], list[dict[str, object]]]:
     """Return ``(FIXER_CHAINS, MULTI_TABLE_FIXES)`` for a pipeline, or empties."""
     try:
         module = importlib.import_module(f"ovid2_pipelines.{pipeline}.fixer_configs")
@@ -72,9 +74,7 @@ def test_every_fix_chain_names_a_registered_fixer() -> None:
         for i, entry in enumerate(multi):
             fix_name = str(entry.get("fix", ""))
             if fix_name and fix_name not in COMMON_FIXES:
-                offenders.append(
-                    f"{pipeline}.MULTI_TABLE_FIXES[{i}]: unknown fix '{fix_name}'"
-                )
+                offenders.append(f"{pipeline}.MULTI_TABLE_FIXES[{i}]: unknown fix '{fix_name}'")
     assert not offenders, "Unknown fixer references:\n  " + "\n  ".join(offenders)
 
 

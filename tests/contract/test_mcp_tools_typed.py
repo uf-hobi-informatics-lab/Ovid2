@@ -110,15 +110,11 @@ def test_mcp_tool_names_unique(src_root: Path) -> None:
                 and any(isinstance(t, ast.Name) and t.id == "TOOL_NAME" for t in node.targets)
             ):
                 continue
-            if not (
-                isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)
-            ):
+            if not (isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)):
                 continue
             name = node.value.value
             if name in names:
-                duplicates.append(
-                    f"{py.name} reuses TOOL_NAME='{name}' (also in {names[name]})"
-                )
+                duplicates.append(f"{py.name} reuses TOOL_NAME='{name}' (also in {names[name]})")
             else:
                 names[name] = py.name
     assert not duplicates, "Duplicate MCP TOOL_NAME values:\n" + "\n".join(duplicates)

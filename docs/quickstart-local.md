@@ -57,6 +57,7 @@ the installed `ovid2` package required):
 
 ```python
 """Minimal demo pipeline settings + in-code CDM registration."""
+
 from __future__ import annotations
 
 from ovid2.cdm.handle import CdmHandle

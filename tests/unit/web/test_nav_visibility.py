@@ -64,9 +64,7 @@ def _signed_cookie_value(session_id: str) -> str:
     response = Response()
     cookie_mod.issue_cookie(response, session_id)
     line = next(
-        value.decode("latin-1")
-        for key, value in response.raw_headers
-        if key == b"set-cookie"
+        value.decode("latin-1") for key, value in response.raw_headers if key == b"set-cookie"
     )
     jar: SimpleCookie[str] = SimpleCookie()
     jar.load(line)
@@ -107,9 +105,7 @@ def _nav_region(body: str) -> str:
     """
     import re
 
-    match = re.search(
-        r'<aside id="site-nav".*?</aside>', body, re.DOTALL
-    )
+    match = re.search(r'<aside id="site-nav".*?</aside>', body, re.DOTALL)
     assert match is not None, "nav drawer not found in page"
     return match.group(0)
 
@@ -139,9 +135,7 @@ def test_guest_nav_omits_privileged_links(
 
 
 @pytest.mark.unit
-def test_guest_sees_logout_link(
-    monkeypatch: pytest.MonkeyPatch, app_client: TestClient
-) -> None:
+def test_guest_sees_logout_link(monkeypatch: pytest.MonkeyPatch, app_client: TestClient) -> None:
     """A resolved (guest) user gets a Logout link in the topbar."""
     _enable_auth(monkeypatch, enabled=True)
     _set_cookie(app_client, _cookie_for_role(Role.GUEST, "guest-logout"))

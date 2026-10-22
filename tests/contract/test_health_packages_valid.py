@@ -83,6 +83,4 @@ def test_registry_loads_all_packages_most_recent_first() -> None:
     packages = load_all_packages()
     assert len(packages) == len(_package_files())
     released = [p.released for p in packages]
-    assert released == sorted(released, reverse=True), (
-        "packages must be ordered most-recent first"
-    )
+    assert released == sorted(released, reverse=True), "packages must be ordered most-recent first"

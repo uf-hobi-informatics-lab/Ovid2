@@ -93,9 +93,7 @@ class TestConstruction:
             AzureBlobAddress({"account_name": "acct"})
 
     def test_endpoint_suffix_override(self) -> None:
-        addr = AzureBlobAddress(
-            _make_config(endpoint_suffix="core.usgovcloudapi.net")
-        )
+        addr = AzureBlobAddress(_make_config(endpoint_suffix="core.usgovcloudapi.net"))
         assert addr.endpoint_suffix == "core.usgovcloudapi.net"
 
 
@@ -121,24 +119,22 @@ class TestAuthMode:
         assert addr.auth_mode == "connection_string"
 
     def test_account_key_beats_sas(self) -> None:
-        addr = AzureBlobAddress(
-            _make_config(account_key="k", sas_token="?sv=…")
-        )
+        addr = AzureBlobAddress(_make_config(account_key="k", sas_token="?sv=…"))
         assert addr.auth_mode == "account_key"
 
     def test_sas_beats_spn(self) -> None:
         addr = AzureBlobAddress(
             _make_config(
                 sas_token="?sv=…",
-                tenant_id="t", client_id="c", client_secret="s",
+                tenant_id="t",
+                client_id="c",
+                client_secret="s",
             )
         )
         assert addr.auth_mode == "sas_token"
 
     def test_full_spn_selected(self) -> None:
-        addr = AzureBlobAddress(
-            _make_config(tenant_id="t", client_id="c", client_secret="s")
-        )
+        addr = AzureBlobAddress(_make_config(tenant_id="t", client_id="c", client_secret="s"))
         assert addr.auth_mode == "service_principal"
 
     def test_partial_spn_falls_through_to_managed_identity(self) -> None:
@@ -146,9 +142,7 @@ class TestAuthMode:
         assert addr.auth_mode == "managed_identity"
 
     def test_empty_strings_are_ignored(self) -> None:
-        addr = AzureBlobAddress(
-            _make_config(account_key="", sas_token="   ")
-        )
+        addr = AzureBlobAddress(_make_config(account_key="", sas_token="   "))
         assert addr.auth_mode == "managed_identity"
 
 
@@ -182,9 +176,7 @@ class TestPaths:
         )
 
     def test_read_path_respects_custom_suffix(self) -> None:
-        addr = AzureBlobAddress(
-            _make_config(endpoint_suffix="core.chinacloudapi.cn")
-        )
+        addr = AzureBlobAddress(_make_config(endpoint_suffix="core.chinacloudapi.cn"))
         assert (
             addr._resolve_read_path("p", "b", "f")
             == "abfss://landing@acct.dfs.core.chinacloudapi.cn/p/b/f"
@@ -229,7 +221,9 @@ class TestSparkConf:
     def test_service_principal_populates_oauth_confs(self) -> None:
         addr = AzureBlobAddress(
             _make_config(
-                tenant_id="tid", client_id="cid", client_secret="sec",
+                tenant_id="tid",
+                client_id="cid",
+                client_secret="sec",
             )
         )
         spark = _make_spark()
@@ -304,9 +298,7 @@ class TestRead:
         spark = _make_spark(columns=["A"])
         addr.read(spark, "demo", "b1", "d.csv", delimiter="|")
         # option("delimiter", "|") must have been invoked.
-        assert (
-            call("delimiter", "|") in spark.read.option.call_args_list
-        )
+        assert call("delimiter", "|") in spark.read.option.call_args_list
 
     def test_parquet_dispatch(self) -> None:
         addr = AzureBlobAddress(_make_config(format="parquet"))
@@ -366,9 +358,7 @@ class TestWrite:
 
         df.coalesce.assert_not_called()
         df.write.format.assert_called_once_with("csv")
-        writer.save.assert_called_once_with(
-            self._write_target(addr, "demo", "b1", "demographic")
-        )
+        writer.save.assert_called_once_with(self._write_target(addr, "demo", "b1", "demographic"))
 
     def test_parquet_write(self) -> None:
         addr = AzureBlobAddress(_make_config(format="parquet"))
@@ -390,9 +380,7 @@ class TestWrite:
 
         addr.write(df, _make_spark(), "demo", "b1", "demographic")
 
-        writer.json.assert_called_once_with(
-            self._write_target(addr, "demo", "b1", "demographic")
-        )
+        writer.json.assert_called_once_with(self._write_target(addr, "demo", "b1", "demographic"))
 
     def test_unknown_format_raises(self) -> None:
         addr = AzureBlobAddress(_make_config(format="avro"))
@@ -439,10 +427,7 @@ class TestRegistration:
     def test_address_type_map_registers_azure_blob(self) -> None:
         from ovid2.config.addresses import ADDRESS_TYPE_MAP
 
-        assert (
-            ADDRESS_TYPE_MAP["azure_blob"]
-            == "ovid2.drivers.azure_blob.AzureBlobAddress"
-        )
+        assert ADDRESS_TYPE_MAP["azure_blob"] == "ovid2.drivers.azure_blob.AzureBlobAddress"
 
     def test_connection_bridge_registers_azure_blob(self) -> None:
         from ovid2.config.addresses import CONNECTION_TO_SRC_NAME
@@ -462,4 +447,3 @@ class TestRegistration:
 # module is not intended to be executable — the guard was dropped
 # alongside the guard test. This matches the equivalent shape of
 # :mod:`ovid2.drivers.s3.legacy` after D3.s3.
-

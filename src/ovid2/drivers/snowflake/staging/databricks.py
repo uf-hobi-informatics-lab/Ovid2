@@ -102,8 +102,8 @@ Operator requirements
 from __future__ import annotations
 
 import atexit
+import contextlib
 import logging
-import os
 import re
 from typing import TYPE_CHECKING, Any
 
@@ -113,6 +113,8 @@ from ovid2.core.engines.stager import (
 )
 
 if TYPE_CHECKING:
+    from mypy_boto3_s3.type_defs import ObjectIdentifierTypeDef
+
     from ovid2.core.engines.protocols import EngineSession
     from ovid2.drivers.base import Driver
 
@@ -157,8 +159,8 @@ class SnowparkDatabricksStrategy(SnowparkStagingStrategy):
 
     def materialise(
         self,
-        session: "EngineSession",
-        driver: "Driver",
+        session: EngineSession,
+        driver: Driver,
         pipeline: str,
         batch_id: str,
         file_name: str,
@@ -198,7 +200,11 @@ class SnowparkDatabricksStrategy(SnowparkStagingStrategy):
         instance_id = _current_instance_id()
 
         bounce_bucket, bounce_prefix = _resolve_bounce_target(
-            instance_id, pipeline, batch_id, table_stem, kind="in",
+            instance_id,
+            pipeline,
+            batch_id,
+            table_stem,
+            kind="in",
         )
         bounce_uri = _s3_dir_uri(bounce_bucket, bounce_prefix)
 
@@ -214,8 +220,9 @@ class SnowparkDatabricksStrategy(SnowparkStagingStrategy):
             field_delimiter=delim,
         )
         logger.info(
-            "SnowparkDatabricksStrategy: INSERT OVERWRITE DIRECTORY "
-            "'%s' FROM %s", bounce_uri, qualified,
+            "SnowparkDatabricksStrategy: INSERT OVERWRITE DIRECTORY '%s' FROM %s",
+            bounce_uri,
+            qualified,
         )
         _run_databricks_sql(merged, unload_sql)
 
@@ -233,7 +240,11 @@ class SnowparkDatabricksStrategy(SnowparkStagingStrategy):
             _ensure_writable_staging_schema,
             _escape_sql,
             _read_header_columns_from_s3,
+        )
+        from ovid2.drivers.snowflake.staging.s3 import (
             _stage_name as _s3_stage_name,
+        )
+        from ovid2.drivers.snowflake.staging.s3 import (
             _temp_table_fqtn as _s3_temp_table_fqtn,
         )
 
@@ -241,7 +252,11 @@ class SnowparkDatabricksStrategy(SnowparkStagingStrategy):
         staging_schema = _ensure_writable_staging_schema(native)
 
         stage_name = _s3_stage_name(
-            instance_id, pipeline, batch_id, table_stem, kind="in",
+            instance_id,
+            pipeline,
+            batch_id,
+            table_stem,
+            kind="in",
         )
         # Override the "S3" stage prefix with a Databricks-specific
         # one so operator reap-queries can distinguish the two.
@@ -254,7 +269,8 @@ class SnowparkDatabricksStrategy(SnowparkStagingStrategy):
         )
         logger.info(
             "SnowparkDatabricksStrategy: CREATE TEMPORARY STAGE %s URL=%s",
-            stage_name, bounce_uri,
+            stage_name,
+            bounce_uri,
         )
         native.sql(create_stage_sql).collect()
 
@@ -265,7 +281,9 @@ class SnowparkDatabricksStrategy(SnowparkStagingStrategy):
         # call so the header read + COPY INTO ``FILES`` clause can
         # narrow to the right object.
         header_key = _first_part_key_under(
-            bucket=bounce_bucket, prefix=bounce_prefix, merged_config=s3_merged,
+            bucket=bounce_bucket,
+            prefix=bounce_prefix,
+            merged_config=s3_merged,
         )
         columns = _read_header_columns_from_s3(
             bucket=bounce_bucket,
@@ -275,13 +293,15 @@ class SnowparkDatabricksStrategy(SnowparkStagingStrategy):
         )
 
         temp_fqtn = _s3_temp_table_fqtn(
-            staging_schema, instance_id, pipeline, batch_id, table_stem,
+            staging_schema,
+            instance_id,
+            pipeline,
+            batch_id,
+            table_stem,
         )
         temp_fqtn = _rebrand_temp_table_fqtn(temp_fqtn)
         col_ddl = ", ".join(f'"{c}" VARCHAR' for c in columns)
-        native.sql(
-            f"CREATE OR REPLACE TRANSIENT TABLE {temp_fqtn} ({col_ddl})"
-        ).collect()
+        native.sql(f"CREATE OR REPLACE TRANSIENT TABLE {temp_fqtn} ({col_ddl})").collect()
 
         # COPY INTO — narrow to the specific object under the
         # directory-scoped stage.
@@ -297,7 +317,9 @@ class SnowparkDatabricksStrategy(SnowparkStagingStrategy):
         )
         logger.info(
             "SnowparkDatabricksStrategy: COPY INTO %s FROM @%s (file=%s)",
-            temp_fqtn, stage_name, basename,
+            temp_fqtn,
+            stage_name,
+            basename,
         )
         native.sql(copy_sql).collect()
 
@@ -305,9 +327,9 @@ class SnowparkDatabricksStrategy(SnowparkStagingStrategy):
 
     def persist(
         self,
-        session: "EngineSession",
+        session: EngineSession,
         df: Any,
-        driver: "Driver",
+        driver: Driver,
         pipeline: str,
         batch_id: str,
         table_name: str,
@@ -340,7 +362,11 @@ class SnowparkDatabricksStrategy(SnowparkStagingStrategy):
         instance_id = _current_instance_id()
 
         bounce_bucket, bounce_prefix = _resolve_bounce_target(
-            instance_id, pipeline, batch_id, table_name, kind="out",
+            instance_id,
+            pipeline,
+            batch_id,
+            table_name,
+            kind="out",
         )
         bounce_uri = _s3_dir_uri(bounce_bucket, bounce_prefix)
 
@@ -355,13 +381,19 @@ class SnowparkDatabricksStrategy(SnowparkStagingStrategy):
             _build_create_stage_sql,
             _copy_into_location,
             _ensure_current_database,
+        )
+        from ovid2.drivers.snowflake.staging.s3 import (
             _stage_name as _s3_stage_name,
         )
 
         _ensure_current_database(native)
 
         stage_name = _s3_stage_name(
-            instance_id, pipeline, batch_id, table_name, kind="out",
+            instance_id,
+            pipeline,
+            batch_id,
+            table_name,
+            kind="out",
         )
         stage_name = _rebrand_stage_name(stage_name)
 
@@ -372,13 +404,14 @@ class SnowparkDatabricksStrategy(SnowparkStagingStrategy):
         )
         logger.info(
             "SnowparkDatabricksStrategy: CREATE TEMPORARY STAGE %s URL=%s",
-            stage_name, bounce_uri,
+            stage_name,
+            bounce_uri,
         )
         native.sql(create_stage_sql).collect()
 
         logger.info(
-            "SnowparkDatabricksStrategy: copy_into_location → @%s/ "
-            "(bounce)", stage_name,
+            "SnowparkDatabricksStrategy: copy_into_location → @%s/ (bounce)",
+            stage_name,
         )
         _copy_into_location(
             df,
@@ -396,7 +429,8 @@ class SnowparkDatabricksStrategy(SnowparkStagingStrategy):
         )
         logger.info(
             "SnowparkDatabricksStrategy: COPY INTO %s FROM '%s'",
-            qualified, bounce_uri,
+            qualified,
+            bounce_uri,
         )
         _run_databricks_sql(merged, load_sql)
 
@@ -405,7 +439,9 @@ class SnowparkDatabricksStrategy(SnowparkStagingStrategy):
     # ------------------------------------------------------------------
 
     def _maybe_schedule_cleanup(
-        self, session: "EngineSession", instance_id: str,
+        self,
+        session: EngineSession,
+        instance_id: str,
     ) -> None:
         """Register an atexit hook that removes bounce objects.
 
@@ -420,7 +456,8 @@ class SnowparkDatabricksStrategy(SnowparkStagingStrategy):
         if SNOWPARK_STAGING_KEEP:
             logger.info(
                 "SnowparkDatabricksStrategy: SNOWPARK_STAGING_KEEP is set; "
-                "skipping bounce cleanup for instance %s", instance_id,
+                "skipping bounce cleanup for instance %s",
+                instance_id,
             )
             return
 
@@ -436,17 +473,22 @@ class SnowparkDatabricksStrategy(SnowparkStagingStrategy):
             for bucket, prefix in prefixes_ref:
                 try:
                     _remove_bounce_prefix(bucket, prefix)
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     logger.warning(
                         "SnowparkDatabricksStrategy: bounce cleanup of "
                         "s3://%s/%s failed (%s); clean manually.",
-                        bucket, prefix, exc,
+                        bucket,
+                        prefix,
+                        exc,
                     )
 
         atexit.register(_cleanup)
 
     def _register_bounce_prefix(
-        self, session: "EngineSession", bucket: str, prefix: str,
+        self,
+        session: EngineSession,
+        bucket: str,
+        prefix: str,
     ) -> None:
         """Record a bounce prefix for atexit cleanup on this session."""
         self._bounce_prefixes.setdefault(id(session), []).append((bucket, prefix))
@@ -478,11 +520,9 @@ def _current_instance_id() -> str:
 def _merged_config(driver: Any) -> dict[str, Any]:
     """Return the driver's merged connection+secrets+location config."""
     if hasattr(driver, "as_legacy_src_args"):
-        try:
+        with contextlib.suppress(Exception):
             _, merged = driver.as_legacy_src_args()
             return dict(merged)
-        except Exception:  # noqa: BLE001
-            pass
     location = getattr(driver, "location", None) or {}
     return dict(location)
 
@@ -542,10 +582,7 @@ def _qualify_table(merged: dict[str, Any], reference: str) -> str:
         schema = schema_fallback
         table = parts[0]
     else:
-        raise ValueError(
-            f"SnowparkDatabricksStrategy: empty table reference "
-            f"({reference!r})."
-        )
+        raise ValueError(f"SnowparkDatabricksStrategy: empty table reference ({reference!r}).")
     return f"`{_escape_backtick(catalog)}`.`{_escape_backtick(schema)}`.`{_escape_backtick(table)}`"
 
 
@@ -564,7 +601,7 @@ def _escape_sql(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "''")
 
 
-def _native_session(session: "EngineSession") -> Any:
+def _native_session(session: EngineSession) -> Any:
     """Return the real ``snowflake.snowpark.Session`` from an adapter."""
     native = getattr(session, "native", None)
     if native is None:
@@ -573,7 +610,11 @@ def _native_session(session: "EngineSession") -> Any:
 
 
 def _resolve_bounce_target(
-    instance_id: str, pipeline: str, batch_id: str, table_stem: str, *,
+    instance_id: str,
+    pipeline: str,
+    batch_id: str,
+    table_stem: str,
+    *,
     kind: str,
 ) -> tuple[str, str]:
     """Return ``(bounce_bucket, bounce_key_prefix)`` for this call.
@@ -602,7 +643,8 @@ def _resolve_bounce_target(
     bucket, base_prefix = _parse_s3_uri(uri)
 
     safe = re.sub(
-        r"[^A-Za-z0-9]+", "_",
+        r"[^A-Za-z0-9]+",
+        "_",
         f"{instance_id}_{pipeline}_{batch_id}_{table_stem}_{kind}",
     )
     # Instance-scoped, human-readable per-invocation subdir.
@@ -662,6 +704,7 @@ def _bounce_s3_merged_config(merged: dict[str, Any]) -> dict[str, Any]:
         SNOWPARK_STAGING_DATABRICKS_BOUNCE_AWS_SESSION_TOKEN,
         SNOWPARK_STAGING_DATABRICKS_BOUNCE_REGION,
     )
+
     del merged  # currently no per-driver override; may become one later
     out: dict[str, Any] = {"format": "csv"}
     aki = _nonempty(SNOWPARK_STAGING_DATABRICKS_BOUNCE_AWS_ACCESS_KEY_ID)
@@ -679,7 +722,8 @@ def _bounce_s3_merged_config(merged: dict[str, Any]) -> dict[str, Any]:
 
 
 def _stage_credentials_config(
-    merged: dict[str, Any], s3_merged: dict[str, Any],
+    merged: dict[str, Any],
+    s3_merged: dict[str, Any],
 ) -> dict[str, Any]:
     """Return the merged-config dict passed to :func:`s3._build_create_stage_sql`.
 
@@ -793,7 +837,7 @@ def _run_databricks_sql(merged: dict[str, Any], sql: str) -> None:
 
     try:
         from databricks import sql as dbx_sql  # type: ignore[import-not-found]
-    except ImportError as exc:  # noqa: BLE001
+    except ImportError as exc:
         raise RuntimeError(
             "SnowparkDatabricksStrategy: databricks-sql-connector is "
             "not installed. Install it into the environment running "
@@ -822,7 +866,10 @@ def _run_databricks_sql(merged: dict[str, Any], sql: str) -> None:
 
 
 def _first_part_key_under(
-    *, bucket: str, prefix: str, merged_config: dict[str, Any],
+    *,
+    bucket: str,
+    prefix: str,
+    merged_config: dict[str, Any],
 ) -> str:
     """Return the key of the first ``part-*.csv`` under ``s3://<bucket>/<prefix>/``.
 
@@ -842,7 +889,7 @@ def _first_part_key_under(
         ValueError: When no ``part-*`` file is found under the
             prefix.
     """
-    import boto3  # noqa: PLC0415  # local import per module docstring
+    import boto3  # local import per module docstring
 
     kwargs: dict[str, Any] = {"service_name": "s3"}
     region = _nonempty(merged_config.get("region"))
@@ -878,11 +925,11 @@ def _remove_bounce_prefix(bucket: str, prefix: str) -> None:
     Called from the atexit hook. Any per-object failure is logged
     at debug level so the hook can never crash the interpreter.
     """
-    import boto3  # noqa: PLC0415
+    import boto3
 
     client = boto3.client("s3")
     paginator = client.get_paginator("list_objects_v2")
-    to_delete: list[dict[str, str]] = []
+    to_delete: list[ObjectIdentifierTypeDef] = []
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix + "/"):
         for entry in page.get("Contents", []) or []:
             key = entry.get("Key")
@@ -892,14 +939,17 @@ def _remove_bounce_prefix(bucket: str, prefix: str) -> None:
         return
     # delete_objects tops out at 1000 keys per call.
     for chunk_start in range(0, len(to_delete), 1000):
-        chunk = to_delete[chunk_start:chunk_start + 1000]
+        chunk = to_delete[chunk_start : chunk_start + 1000]
         try:
             client.delete_objects(Bucket=bucket, Delete={"Objects": chunk})
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.debug(
                 "SnowparkDatabricksStrategy: bounce delete_objects "
                 "chunk failed (%s); some objects may remain under "
-                "s3://%s/%s/", exc, bucket, prefix,
+                "s3://%s/%s/",
+                exc,
+                bucket,
+                prefix,
             )
 
 

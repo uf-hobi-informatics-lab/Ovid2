@@ -86,8 +86,10 @@ def test_mixed_shape_rejected(isolated_xdg: Path) -> None:
         addresses_svc.write_address(
             "addr_bad",
             AddressWrite(
-                src_name="disc", src_args={"path": "/tmp"},
-                connection="c", location={"path": "x"},
+                src_name="disc",
+                src_args={"path": "/tmp"},
+                connection="c",
+                location={"path": "x"},
             ),
             actor="test",
             create_only=True,
@@ -127,6 +129,7 @@ def test_legacy_edit_round_trip(isolated_xdg: Path) -> None:
     """
     # Land a legacy config on disk directly — mimics a pre-existing file.
     import os
+
     configs = Path(os.environ["OVID2_CONFIGS_DIR"])
     (configs / "addr_legacy.json").write_text(
         json.dumps({"src_name": "disc", "src_args": {"path": "/tmp/legacy"}}),
@@ -157,6 +160,7 @@ def test_is_legacy_shape_detail(isolated_xdg: Path) -> None:
     assert addresses_svc.is_legacy_shape(new_detail) is False
 
     import os
+
     configs = Path(os.environ["OVID2_CONFIGS_DIR"])
     (configs / "legacy1.json").write_text(
         json.dumps({"src_name": "disc", "src_args": {"path": "/tmp/x"}}),
@@ -183,6 +187,7 @@ def test_config_loader_resolves_new_shape(
         create_only=True,
     )
     from ovid2.config import addresses as _addresses
+
     cfg = _addresses.load_address_config("addr_new")
     assert cfg["_shape"] == "connection"
     assert cfg["connection"] == "conn_disc"
@@ -190,9 +195,7 @@ def test_config_loader_resolves_new_shape(
 
 
 @pytest.mark.unit
-def test_load_address_dereferences_connection(
-    isolated_xdg: Path
-) -> None:
+def test_load_address_dereferences_connection(isolated_xdg: Path) -> None:
     """The pipeline entry point returns a working DiscAddress via the shim."""
     _make_connection(isolated_xdg)
     addresses_svc.write_address(
@@ -202,6 +205,7 @@ def test_load_address_dereferences_connection(
         create_only=True,
     )
     from ovid2.config import addresses as _addresses
+
     addr = _addresses.load_address("addr_new")
     assert addr.__class__.__name__ == "DiscAddress"
     # Root path is combined with the location's sub-path.

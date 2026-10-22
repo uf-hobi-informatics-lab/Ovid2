@@ -37,6 +37,23 @@ def _load_app() -> object:
     return app
 
 
+#: Components FastAPI generates itself (422 bodies). Their shape follows
+#: the installed FastAPI version (0.12x added ``input``/``ctx``), not our
+#: API, so they are excluded from the drift check.
+_FRAMEWORK_COMPONENTS: frozenset[str] = frozenset({"ValidationError", "HTTPValidationError"})
+
+
+def _without_framework_components(schema: dict[str, object]) -> dict[str, object]:
+    """Return ``schema`` minus FastAPI-owned component schemas."""
+    components = dict(schema.get("components") or {})  # type: ignore[call-overload]
+    schemas = {
+        k: v
+        for k, v in dict(components.get("schemas") or {}).items()
+        if k not in _FRAMEWORK_COMPONENTS
+    }
+    return {**schema, "components": {**components, "schemas": schemas}}
+
+
 @pytest.mark.contract
 def test_openapi_snapshot_matches() -> None:
     """The generated OpenAPI must match the committed snapshot."""
@@ -54,9 +71,8 @@ def test_openapi_snapshot_matches() -> None:
             "Run with OVID2_UPDATE_OPENAPI_SNAPSHOT=1 to create it."
         )
 
-    expected = json.loads(_SNAPSHOT.read_text(encoding="utf-8"))
-    actual = json.loads(json.dumps(schema, sort_keys=True))
+    expected = _without_framework_components(json.loads(_SNAPSHOT.read_text(encoding="utf-8")))
+    actual = _without_framework_components(json.loads(json.dumps(schema, sort_keys=True)))
     assert actual == expected, (
-        "OpenAPI schema drifted. "
-        "If intentional, regenerate with OVID2_UPDATE_OPENAPI_SNAPSHOT=1."
+        "OpenAPI schema drifted. If intentional, regenerate with OVID2_UPDATE_OPENAPI_SNAPSHOT=1."
     )

@@ -9,7 +9,6 @@ CRUD suite.
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -21,9 +20,7 @@ from ovid2.web.services import connections_svc
 def _setup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Point the XDG dirs at a fresh temp tree."""
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-    monkeypatch.setenv(
-        "OVID2_CONNECTIONS_DIR", str(tmp_path / "config" / "ovid2" / "connections")
-    )
+    monkeypatch.setenv("OVID2_CONNECTIONS_DIR", str(tmp_path / "config" / "ovid2" / "connections"))
     conns = tmp_path / "config" / "ovid2" / "connections"
     conns.mkdir(parents=True, exist_ok=True)
     return conns
@@ -49,14 +46,16 @@ class TestLegacyReadCompat:
     ) -> None:
         conns = _setup(tmp_path, monkeypatch)
         (conns / "new_disc.json").write_text(
-            json.dumps({
-                "type": "disc",
-                "args": {
-                    "host_path": "/host/x",
-                    "container_path": "/mnt/x",
-                    "mount_mode": "ro",
-                },
-            }),
+            json.dumps(
+                {
+                    "type": "disc",
+                    "args": {
+                        "host_path": "/host/x",
+                        "container_path": "/mnt/x",
+                        "mount_mode": "ro",
+                    },
+                }
+            ),
             encoding="utf-8",
         )
         detail = connections_svc.get_connection("new_disc")
@@ -114,9 +113,7 @@ class TestNewShapeWriteValidation:
             secrets={},
         )
         with pytest.raises(connections_svc.ConnectionError):
-            connections_svc.write_connection(
-                "bad", payload, actor="test", create_only=True
-            )
+            connections_svc.write_connection("bad", payload, actor="test", create_only=True)
 
     def test_write_rejects_missing_host_path(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -124,6 +121,4 @@ class TestNewShapeWriteValidation:
         _setup(tmp_path, monkeypatch)
         payload = ConnectionWrite(type="disc", args={}, secrets={})
         with pytest.raises(connections_svc.ConnectionError):
-            connections_svc.write_connection(
-                "empty", payload, actor="test", create_only=True
-            )
+            connections_svc.write_connection("empty", payload, actor="test", create_only=True)

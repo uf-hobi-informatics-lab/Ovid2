@@ -20,9 +20,7 @@ from pathlib import Path
 
 import pytest
 
-FORBIDDEN_METHODS: frozenset[str] = frozenset({
-    "collect", "toPandas", "take", "first", "count"
-})
+FORBIDDEN_METHODS: frozenset[str] = frozenset({"collect", "toPandas", "take", "first", "count"})
 
 
 def _forbidden_calls(source: str) -> list[str]:
@@ -30,22 +28,19 @@ def _forbidden_calls(source: str) -> list[str]:
     tree = ast.parse(source)
     hits: list[str] = []
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-            if node.func.attr in FORBIDDEN_METHODS:
-                hits.append(node.func.attr)
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in FORBIDDEN_METHODS
+        ):
+            hits.append(node.func.attr)
     return hits
 
 
 @pytest.mark.contract
 def test_metrics_sampler_has_no_eager_actions() -> None:
     """``metrics_sampler.py`` never calls a Spark eager action."""
-    src_path = (
-        Path(__file__).resolve().parents[2]
-        / "src"
-        / "ovid2"
-        / "core"
-        / "metrics_sampler.py"
-    )
+    src_path = Path(__file__).resolve().parents[2] / "src" / "ovid2" / "core" / "metrics_sampler.py"
     source = src_path.read_text(encoding="utf-8")
     hits = _forbidden_calls(source)
     assert not hits, (
@@ -78,6 +73,5 @@ def test_engine_get_metrics_has_no_eager_actions() -> None:
         source = textwrap.dedent(source)
         hits = _forbidden_calls(source)
         assert not hits, (
-            f"Engine '{type_name}' get_metrics contains forbidden "
-            f"calls: {sorted(set(hits))}"
+            f"Engine '{type_name}' get_metrics contains forbidden calls: {sorted(set(hits))}"
         )

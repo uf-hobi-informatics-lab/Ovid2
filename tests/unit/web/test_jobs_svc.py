@@ -16,15 +16,15 @@ from ovid2.web.services import jobs_svc
 
 
 @pytest.fixture()
-def registered_pipeline(
-    isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> str:
+def registered_pipeline(isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     """Register a stub pipeline package with valid address configs."""
     root = tmp_path / "pipelines_root"
     pkg = root / "ovid2_pipelines" / "tp_jobs"
     (pkg / "formatters").mkdir(parents=True)
     (pkg / "__init__.py").write_text("", encoding="utf-8")
-    (pkg / "pipeline_settings.py").write_text("mappers_type = 'pcornet_mappers'\n", encoding="utf-8")
+    (pkg / "pipeline_settings.py").write_text(
+        "mappers_type = 'pcornet_mappers'\n", encoding="utf-8"
+    )
     monkeypatch.syspath_prepend(str(root))
     for mod in list(sys.modules):
         if mod == "ovid2_pipelines" or mod.startswith("ovid2_pipelines."):
@@ -223,9 +223,7 @@ def test_submit_health_generic_label_needs_no_installed_package(
     conndir = isolated_xdg / "config" / "ovid2" / "connections"
     conndir.mkdir(parents=True, exist_ok=True)
     (conndir / "c.json").write_text(
-        json.dumps(
-            {"type": "disc", "args": {"host_path": "/d", "container_path": "/data"}}
-        ),
+        json.dumps({"type": "disc", "args": {"host_path": "/d", "container_path": "/data"}}),
         encoding="utf-8",
     )
     response = jobs_svc.submit(
@@ -313,9 +311,7 @@ def test_submit_copy_move_without_package_ok(registered_pipeline: str) -> None:
 @pytest.mark.unit
 def test_submit_analysis_without_package_rejected(registered_pipeline: str) -> None:
     """analysis still requires an installed package."""
-    with pytest.raises(
-        jobs_svc.SubmitError, match="is not installed under ovid2_pipelines"
-    ):
+    with pytest.raises(jobs_svc.SubmitError, match="is not installed under ovid2_pipelines"):
         jobs_svc.submit(
             JobSubmitRequest(
                 kind="analysis",
@@ -388,7 +384,8 @@ def test_submit_copy_rejects_transformations(registered_pipeline: str) -> None:
 
 @pytest.mark.unit
 def test_submit_copy_persists_extra_mounts(
-    registered_pipeline: str, tmp_path: Path,
+    registered_pipeline: str,
+    tmp_path: Path,
 ) -> None:
     """Well-formed extra_mounts are persisted verbatim in extra_args."""
     (tmp_path / "a").mkdir()
@@ -413,7 +410,8 @@ def test_submit_copy_persists_extra_mounts(
 
 @pytest.mark.unit
 def test_submit_copy_rejects_bad_extra_mount(
-    registered_pipeline: str, tmp_path: Path,
+    registered_pipeline: str,
+    tmp_path: Path,
 ) -> None:
     """A malformed extra-mount is caught at submit time, not by the worker."""
     with pytest.raises(jobs_svc.SubmitError, match="extra_mounts"):
@@ -433,7 +431,8 @@ def test_submit_copy_rejects_bad_extra_mount(
 
 @pytest.mark.unit
 def test_submit_cdm_rejects_extra_mounts(
-    registered_pipeline: str, tmp_path: Path,
+    registered_pipeline: str,
+    tmp_path: Path,
 ) -> None:
     """extra_mounts is copy-kind-only; other kinds must refuse it."""
     (tmp_path / "a").mkdir()
@@ -635,9 +634,7 @@ def test_resume_in_flight_cancels_when_flagged(registered_pipeline: str) -> None
     jobs_svc.claim_next_queued()
     jobs_svc.mark_running_pid(resp.job_id, 999_999_999)
     with web_db.connect() as conn:
-        conn.execute(
-            "UPDATE web_jobs SET cancel_requested = 1 WHERE job_id = ?", (resp.job_id,)
-        )
+        conn.execute("UPDATE web_jobs SET cancel_requested = 1 WHERE job_id = ?", (resp.job_id,))
     jobs_svc.resume_in_flight()
     detail = jobs_svc.get_job(resp.job_id)
     assert detail is not None
@@ -742,9 +739,7 @@ def test_submit_move_rejects_all_tables(registered_pipeline: str) -> None:
 @pytest.mark.unit
 def test_submit_move_rejects_transformations(registered_pipeline: str) -> None:
     """Move jobs must not carry a transformations list — parity with copy."""
-    with pytest.raises(
-        jobs_svc.SubmitError, match="do not accept `transformations`"
-    ):
+    with pytest.raises(jobs_svc.SubmitError, match="do not accept `transformations`"):
         jobs_svc.submit(
             JobSubmitRequest(
                 kind="move",
@@ -802,9 +797,7 @@ def test_submit_move_strict_types_default_omits_key(
 @pytest.mark.unit
 def test_submit_cdm_rejects_strict_types(registered_pipeline: str) -> None:
     """strict_types is move-kind-only; other kinds must refuse it."""
-    with pytest.raises(
-        jobs_svc.SubmitError, match="only accepted on kind='move'"
-    ):
+    with pytest.raises(jobs_svc.SubmitError, match="only accepted on kind='move'"):
         jobs_svc.submit(
             JobSubmitRequest(
                 kind="cdm",
@@ -821,9 +814,7 @@ def test_submit_cdm_rejects_strict_types(registered_pipeline: str) -> None:
 @pytest.mark.unit
 def test_submit_copy_rejects_strict_types(registered_pipeline: str) -> None:
     """strict_types is move-only even though copy shares most other rules."""
-    with pytest.raises(
-        jobs_svc.SubmitError, match="only accepted on kind='move'"
-    ):
+    with pytest.raises(jobs_svc.SubmitError, match="only accepted on kind='move'"):
         jobs_svc.submit(
             JobSubmitRequest(
                 kind="copy",
@@ -840,7 +831,8 @@ def test_submit_copy_rejects_strict_types(registered_pipeline: str) -> None:
 
 @pytest.mark.unit
 def test_submit_move_accepts_extra_mounts(
-    registered_pipeline: str, tmp_path: Path,
+    registered_pipeline: str,
+    tmp_path: Path,
 ) -> None:
     """extra_mounts is copy-and-move-kind; move should accept it."""
     (tmp_path / "out").mkdir()

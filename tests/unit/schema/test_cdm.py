@@ -105,7 +105,9 @@ class TestSnowflakeTypeFor:
         f = CdmField(table="LAB_RESULT_CM", name="RESULT_NUM", rdbms_type="RDBMS Number(x)")
         assert _snowflake_type_for(f) == "NUMBER(38,10)"
 
-    def test_unknown_type_falls_back_to_default_varchar(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_unknown_type_falls_back_to_default_varchar(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
         f = CdmField(table="ODDBALL", name="MYSTERY", rdbms_type="SomethingUnknown")
         result = _snowflake_type_for(f)
         assert result == "VARCHAR(256)"
@@ -119,9 +121,7 @@ class TestBuildDdl:
         # PATID is harmonised (VARCHAR(64)), TOKEN_ENCRYPTION_KEY_ID is declared 50,
         # TOKEN_01 is declared 256.
         assert ddl == (
-            "PATID VARCHAR(64), "
-            "TOKEN_ENCRYPTION_KEY_ID VARCHAR(50), "
-            "TOKEN_01 VARCHAR(256)"
+            "PATID VARCHAR(64), TOKEN_ENCRYPTION_KEY_ID VARCHAR(50), TOKEN_01 VARCHAR(256)"
         )
 
     def test_demographic_ddl_mixes_types(self) -> None:
@@ -149,10 +149,7 @@ class TestBuildSnowflakeTypedColumns:
         assert as_dict["RESULT_NUM"] == "NUMBER(38,10)"
         assert as_dict["ENCOUNTERID"] == "VARCHAR(128)"
         # Every entry is an uppercase (name, type) tuple.
-        assert all(
-            isinstance(n, str) and n == n.upper() and isinstance(t, str)
-            for n, t in cols
-        )
+        assert all(isinstance(n, str) and n == n.upper() and isinstance(t, str) for n, t in cols)
 
     def test_missing_table_returns_empty_list(self) -> None:
         from ovid2.schema.cdm import build_snowflake_typed_columns
@@ -168,9 +165,7 @@ class TestWhitespaceInRdbmsType:
         assert _snowflake_type_for(f) == "VARCHAR(64)"
 
     def test_text_space_paren_x_non_id_defaults(self) -> None:
-        f = CdmField(
-            table="IMMUNIZATION", name="VX_BODY_SITE", rdbms_type="RDBMS Text (x)"
-        )
+        f = CdmField(table="IMMUNIZATION", name="VX_BODY_SITE", rdbms_type="RDBMS Text (x)")
         assert _snowflake_type_for(f) == "VARCHAR(256)"
 
     def test_text_space_paren_width(self) -> None:
@@ -184,9 +179,7 @@ class TestBuildSnowflakeWriteSchema:
 
         spec = {
             name: (kind, width)
-            for name, kind, width in build_snowflake_write_schema(
-                "pcornet_7_0.HASH_TOKEN"
-            )
+            for name, kind, width in build_snowflake_write_schema("pcornet_7_0.HASH_TOKEN")
         }
         # PATID harmonised to 64; declared widths otherwise.
         assert spec["PATID"] == ("varchar", 64)
@@ -198,9 +191,7 @@ class TestBuildSnowflakeWriteSchema:
 
         spec = {
             name: (kind, width)
-            for name, kind, width in build_snowflake_write_schema(
-                "pcornet_7_0.DEMOGRAPHIC"
-            )
+            for name, kind, width in build_snowflake_write_schema("pcornet_7_0.DEMOGRAPHIC")
         }
         assert spec["BIRTH_DATE"] == ("date", 0)
         assert spec["SEX"] == ("varchar", 2)
@@ -211,9 +202,7 @@ class TestBuildSnowflakeWriteSchema:
 
         spec = {
             name: (kind, width)
-            for name, kind, width in build_snowflake_write_schema(
-                "pcornet_7_0.LAB_RESULT_CM"
-            )
+            for name, kind, width in build_snowflake_write_schema("pcornet_7_0.LAB_RESULT_CM")
         }
         assert spec["RESULT_NUM"][0] == "number"
         # Text(x) non-ID column falls back to the default VARCHAR width.

@@ -135,7 +135,11 @@ def _entry(args: argparse.Namespace) -> int:
     # checks / parts / packages, so a bare run does something sensible.
     parts = getattr(args, "parts", None)
     parts_is_default = parts is None or parts == ["all"] or parts == "all"
-    if not getattr(args, "packages", None) and not getattr(args, "checks", None) and parts_is_default:
+    if (
+        not getattr(args, "packages", None)
+        and not getattr(args, "checks", None)
+        and parts_is_default
+    ):
         from ovid2.transformations.quality.registry import latest_package
 
         latest = latest_package()
@@ -148,6 +152,4 @@ def _entry(args: argparse.Namespace) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(
-        "This module is a subcommand plugin; run it via `ovid2 dq_checks`."
-    )
+    raise SystemExit("This module is a subcommand plugin; run it via `ovid2 dq_checks`.")

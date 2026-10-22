@@ -66,7 +66,7 @@ def test_web_aliases_match_registry() -> None:
     from ovid2.web.models import PACKAGE_FREE_KINDS, PIPELINE_KINDS
 
     assert tuple(PIPELINE_KINDS) == all_kinds()
-    assert PACKAGE_FREE_KINDS == package_free_kinds()
+    assert package_free_kinds() == PACKAGE_FREE_KINDS
 
 
 @pytest.mark.contract

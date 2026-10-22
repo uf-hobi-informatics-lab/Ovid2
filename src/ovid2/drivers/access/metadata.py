@@ -156,11 +156,7 @@ def parse_table_list(raw: Any) -> tuple[str, ...]:
     """
     if raw is None:
         return ()
-    items = (
-        [str(x) for x in raw]
-        if isinstance(raw, (list, tuple))
-        else str(raw).split(",")
-    )
+    items = [str(x) for x in raw] if isinstance(raw, (list, tuple)) else str(raw).split(",")
     seen: set[str] = set()
     result: list[str] = []
     for item in items:
@@ -176,7 +172,8 @@ def parse_table_list(raw: Any) -> tuple[str, ...]:
 
 
 def container_requirements_from(
-    args: dict[str, Any], location: dict[str, Any] | None = None,
+    args: dict[str, Any],
+    location: dict[str, Any] | None = None,
 ) -> tuple[ContainerRequirement, ...]:
     """Return the auto-mount for an Access peripheral, given its args.
 

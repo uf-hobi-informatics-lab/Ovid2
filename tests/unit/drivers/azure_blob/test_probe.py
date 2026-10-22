@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import sys
 import types
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -81,7 +80,8 @@ class TestSkipsWhenSdkAbsent:
     """A host without the Azure SDK gets a clean ``skipped`` result."""
 
     def test_missing_azure_storage_blob(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         # Guarantee the import fails: pre-populate sys.modules with
         # ``azure.storage.blob = None`` so the ``import`` statement
@@ -94,7 +94,8 @@ class TestSkipsWhenSdkAbsent:
         assert "azure-storage-blob" in (result.message or "")
 
     def test_missing_azure_identity_for_managed_identity(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         _install_fake_azure(monkeypatch, identity=False)
         # Force ``import azure.identity`` to fail.
@@ -105,7 +106,8 @@ class TestSkipsWhenSdkAbsent:
         assert "azure-identity" in (result.message or "")
 
     def test_missing_azure_identity_for_service_principal(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         _install_fake_azure(monkeypatch, identity=False)
         monkeypatch.setitem(sys.modules, "azure.identity", None)
@@ -120,7 +122,8 @@ class TestConfigGuards:
     """Missing required config surfaces as ``code='config'``."""
 
     def test_missing_account_name_without_connection_string(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         _install_fake_azure(monkeypatch)
         result = probe_auth_from_config({}, {})
@@ -129,12 +132,11 @@ class TestConfigGuards:
         assert "account_name" in (result.message or "")
 
     def test_connection_string_bypasses_account_name_requirement(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         handles = _install_fake_azure(monkeypatch)
-        handles["BlobServiceClient"].from_connection_string.return_value = (
-            _fake_ok_client()
-        )
+        handles["BlobServiceClient"].from_connection_string.return_value = _fake_ok_client()
         result = probe_auth_from_config(
             {},
             {"connection_string": "DefaultEndpointsProtocol=https;"},
@@ -147,7 +149,8 @@ class TestSuccessfulProbes:
     """Happy-path probes return ``code='ok'``."""
 
     def test_container_default_triggers_get_container_properties(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         handles = _install_fake_azure(monkeypatch)
         blob_client = _fake_ok_client()
@@ -168,7 +171,8 @@ class TestSuccessfulProbes:
         blob_client.get_container_client.assert_called_with("landing")
 
     def test_no_container_default_falls_back_to_get_account_info(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         handles = _install_fake_azure(monkeypatch)
         blob_client = _fake_ok_client()
@@ -181,7 +185,8 @@ class TestSuccessfulProbes:
         blob_client.get_account_information.assert_called_once()
 
     def test_default_chain_used_when_no_secrets(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         handles = _install_fake_azure(monkeypatch)
         blob_client = _fake_ok_client()
@@ -196,35 +201,42 @@ class TestFailureClassification:
 
     @pytest.mark.parametrize("hint", _AUTH_HINTS)
     def test_auth_hint_downgrades_to_auth(
-        self, monkeypatch: pytest.MonkeyPatch, hint: str,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        hint: str,
     ) -> None:
         handles = _install_fake_azure(monkeypatch)
         blob_client = _fake_failing_client(f"XYZ {hint} XYZ")
         handles["BlobServiceClient"].return_value = blob_client
         result = probe_auth_from_config(
-            {"account_name": "acct"}, {"account_key": "k"},
+            {"account_name": "acct"},
+            {"account_key": "k"},
         )
         assert result.ok is False
         assert result.code == "auth"
 
     def test_arbitrary_failure_is_unreachable(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         handles = _install_fake_azure(monkeypatch)
         blob_client = _fake_failing_client("connection refused")
         handles["BlobServiceClient"].return_value = blob_client
         result = probe_auth_from_config(
-            {"account_name": "acct"}, {"account_key": "k"},
+            {"account_name": "acct"},
+            {"account_key": "k"},
         )
         assert result.code == "unreachable"
 
     def test_client_construction_failure_is_config(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         handles = _install_fake_azure(monkeypatch)
         handles["BlobServiceClient"].side_effect = ValueError("bad url")
         result = probe_auth_from_config(
-            {"account_name": "acct"}, {"account_key": "k"},
+            {"account_name": "acct"},
+            {"account_key": "k"},
         )
         assert result.code == "config"
 
@@ -236,7 +248,8 @@ class TestTimeoutConstant:
         assert 0 < _PROBE_TIMEOUT_SECONDS <= 60
 
     def test_get_container_properties_uses_timeout(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         handles = _install_fake_azure(monkeypatch)
         blob_client = _fake_ok_client()

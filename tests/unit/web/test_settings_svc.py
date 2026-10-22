@@ -34,9 +34,7 @@ def test_save_and_reload(isolated_xdg: Path) -> None:
 @pytest.mark.unit
 def test_cache_is_mtime_aware(isolated_xdg: Path) -> None:
     settings_svc.invalidate_cache()
-    settings_svc.save_settings(
-        GlobalSettings(defaults=SettingsDefaults(engine="v1")), actor="test"
-    )
+    settings_svc.save_settings(GlobalSettings(defaults=SettingsDefaults(engine="v1")), actor="test")
     first = settings_svc.get_settings()
     assert first.defaults.engine == "v1"
     # Overwrite the file on disk (bumping mtime) — cache must invalidate.

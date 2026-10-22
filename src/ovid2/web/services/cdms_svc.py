@@ -36,8 +36,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "list_cdms",
     "get_cdm_detail",
+    "list_cdms",
 ]
 
 
@@ -93,7 +93,7 @@ def list_cdms() -> list[CdmSummary]:
     return out
 
 
-def _table_rows(handle: "CdmHandle") -> list[CdmTableSummary]:
+def _table_rows(handle: CdmHandle) -> list[CdmTableSummary]:
     """Flatten ``handle.composite_keys`` into API rows."""
     reference = set(handle.reference_tables)
     rows: list[CdmTableSummary] = []
@@ -108,7 +108,7 @@ def _table_rows(handle: "CdmHandle") -> list[CdmTableSummary]:
     return rows
 
 
-def _id_column_rows(handle: "CdmHandle") -> list[CdmIdColumn]:
+def _id_column_rows(handle: CdmHandle) -> list[CdmIdColumn]:
     """Flatten ``handle.id_columns`` into API rows, sorted by role."""
     rows: list[CdmIdColumn] = []
     for role in sorted(handle.id_columns.keys()):
@@ -124,7 +124,7 @@ def _id_column_rows(handle: "CdmHandle") -> list[CdmIdColumn]:
     return rows
 
 
-def _shared_view_rows(handle: "CdmHandle") -> list[CdmSharedView]:
+def _shared_view_rows(handle: CdmHandle) -> list[CdmSharedView]:
     """Flatten ``handle.shared_views`` into API rows."""
     return [
         CdmSharedView(
@@ -138,7 +138,7 @@ def _shared_view_rows(handle: "CdmHandle") -> list[CdmSharedView]:
     ]
 
 
-def _valueset_rows(handle: "CdmHandle") -> list[CdmValuesetSummary]:
+def _valueset_rows(handle: CdmHandle) -> list[CdmValuesetSummary]:
     """Flatten ``handle.valuesets`` into API rows.
 
     Sorted by ``(table, column)`` for stable output; the caller does
@@ -159,7 +159,7 @@ def _valueset_rows(handle: "CdmHandle") -> list[CdmValuesetSummary]:
     return rows
 
 
-def _flavour_of_null_list(handle: "CdmHandle") -> list[str | None]:
+def _flavour_of_null_list(handle: CdmHandle) -> list[str | None]:
     """Return ``flavour_of_null`` as a stable JSON-friendly list.
 
     ``None`` sorts last; string sentinels are alphabetically ordered.
@@ -204,4 +204,4 @@ if __name__ == "__main__":  # pragma: no cover - manual smoke test
     import json
 
     for row in list_cdms():
-        print(json.dumps(row.model_dump(), sort_keys=True))
+        print(json.dumps(row.model_dump(), sort_keys=True))  # noqa: T201 — __main__ smoke test

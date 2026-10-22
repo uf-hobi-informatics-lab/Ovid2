@@ -33,7 +33,6 @@ from ovid2.drivers.snowflake.metadata import (
     location_fields,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fresh key material fixtures
 # ---------------------------------------------------------------------------
@@ -90,10 +89,7 @@ class TestConnectionFields:
         by_name = {f.name: f for f in spec.args}
         assert by_name["credentials_dir"].default == DEFAULT_CREDENTIALS_DIR
         assert by_name["private_key_file"].default == DEFAULT_PRIVATE_KEY_FILE
-        assert (
-            by_name["private_key_passphrase_file"].default
-            == DEFAULT_PASSPHRASE_FILE
-        )
+        assert by_name["private_key_passphrase_file"].default == DEFAULT_PASSPHRASE_FILE
 
     def test_password_is_optional(self) -> None:
         """Password auth is opt-in; key-pair auth is the default."""
@@ -141,7 +137,8 @@ class TestBuildAddressConfigPasswordAuth:
         }
 
     def test_password_bypasses_pem_load(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """Even with an unreadable credentials_dir, password wins."""
         got = build_address_config(
@@ -161,7 +158,9 @@ class TestBuildAddressConfigKeyPairAuth:
     """Key-pair auth reads PEM + passphrase and emits DER bytes."""
 
     def test_unencrypted_pem_produces_der_bytes(
-        self, tmp_path: Path, rsa_pem: bytes,
+        self,
+        tmp_path: Path,
+        rsa_pem: bytes,
     ) -> None:
         key_file = tmp_path / "rsa_key.p8"
         key_file.write_bytes(rsa_pem)
@@ -181,7 +180,8 @@ class TestBuildAddressConfigKeyPairAuth:
         assert got["database"] == "DB"
 
     def test_encrypted_pem_needs_passphrase_file(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         from cryptography.hazmat.primitives import serialization
         from cryptography.hazmat.primitives.asymmetric import rsa
@@ -211,11 +211,11 @@ class TestBuildAddressConfigErrorHandling:
     """File-read and decode errors log a warning and drop private_key."""
 
     def test_missing_key_file_logs_warning(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture,
+        self,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
-        with caplog.at_level(
-            logging.WARNING, logger="ovid2.drivers.snowflake.metadata"
-        ):
+        with caplog.at_level(logging.WARNING, logger="ovid2.drivers.snowflake.metadata"):
             got = build_address_config(
                 args={
                     "account": "a",
@@ -228,12 +228,12 @@ class TestBuildAddressConfigErrorHandling:
             )
         assert "private_key" not in got
         assert got["database"] == "DB"
-        assert any(
-            "private key" in rec.message.lower() for rec in caplog.records
-        )
+        assert any("private key" in rec.message.lower() for rec in caplog.records)
 
     def test_missing_passphrase_file_logs_warning(
-        self, tmp_path: Path, rsa_pem: bytes,
+        self,
+        tmp_path: Path,
+        rsa_pem: bytes,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         (tmp_path / "rsa_key.p8").write_bytes(rsa_pem)
@@ -241,9 +241,7 @@ class TestBuildAddressConfigErrorHandling:
         # ``FileNotFoundError`` on the explicit-filename path; the
         # merger logs and drops ``private_key`` rather than fail
         # loudly (matches the pre-D3.snowflake behaviour).
-        with caplog.at_level(
-            logging.WARNING, logger="ovid2.drivers.snowflake.metadata"
-        ):
+        with caplog.at_level(logging.WARNING, logger="ovid2.drivers.snowflake.metadata"):
             got = build_address_config(
                 args={
                     "account": "a",
@@ -255,12 +253,11 @@ class TestBuildAddressConfigErrorHandling:
                 location={"database": "DB"},
             )
         assert "private_key" not in got
-        assert any(
-            "passphrase" in rec.message.lower() for rec in caplog.records
-        )
+        assert any("passphrase" in rec.message.lower() for rec in caplog.records)
 
     def test_explicit_empty_key_filename_opts_out(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """A blank ``private_key_file`` means 'no key-pair auth attempted'."""
         got = build_address_config(

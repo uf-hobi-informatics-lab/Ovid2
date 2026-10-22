@@ -44,8 +44,7 @@ def test_no_inline_secret_in_connection_files() -> None:
     candidates: list[Path] = []
     if REPO_CONNECTIONS_DIR.is_dir():
         candidates.extend(
-            p for p in REPO_CONNECTIONS_DIR.iterdir()
-            if p.is_file() and p.suffix == ".json"
+            p for p in REPO_CONNECTIONS_DIR.iterdir() if p.is_file() and p.suffix == ".json"
         )
     if not candidates:
         pytest.skip("No repo-tracked connection files to check.")
@@ -61,9 +60,7 @@ def test_no_inline_secret_in_connection_files() -> None:
         args = data.get("args") or {}
         inline = sorted(set(args) & secrets)
         if inline:
-            offenders.append(
-                f"{path}: inline secret keys in args -> {inline}"
-            )
+            offenders.append(f"{path}: inline secret keys in args -> {inline}")
     assert not offenders, (
         "Connection files must not carry raw secret material — "
         "move sensitive values into secrets.d/ and reference via secret_ref:\n"

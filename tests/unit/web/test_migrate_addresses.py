@@ -20,14 +20,12 @@ def clean_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 @pytest.mark.unit
-def test_dry_run_leaves_disk_untouched(
-    isolated_xdg: Path, clean_cwd: Path
-) -> None:
+def test_dry_run_leaves_disk_untouched(isolated_xdg: Path, clean_cwd: Path) -> None:
     configs = Path(os.environ["OVID2_CONFIGS_DIR"])
     configs.mkdir(parents=True, exist_ok=True)
-    (configs / "legacy.json").write_text(json.dumps(
-        {"src_name": "disc", "src_args": {"path": "/data/x"}}
-    ))
+    (configs / "legacy.json").write_text(
+        json.dumps({"src_name": "disc", "src_args": {"path": "/data/x"}})
+    )
     rc = migrate_addresses.main(argparse.Namespace(write=False, only=[]))
     assert rc == 0
     # Address JSON must not have been rewritten.
@@ -41,9 +39,9 @@ def test_migrate_disc_produces_connection_and_empty_location(
 ) -> None:
     configs = Path(os.environ["OVID2_CONFIGS_DIR"])
     configs.mkdir(parents=True, exist_ok=True)
-    (configs / "legacy.json").write_text(json.dumps(
-        {"src_name": "disc", "src_args": {"path": "/data/xyz"}}
-    ))
+    (configs / "legacy.json").write_text(
+        json.dumps({"src_name": "disc", "src_args": {"path": "/data/xyz"}})
+    )
     rc = migrate_addresses.main(argparse.Namespace(write=True, only=[]))
     assert rc == 0
     address = json.loads((configs / "legacy.json").read_text())
@@ -59,16 +57,23 @@ def test_migrate_disc_produces_connection_and_empty_location(
 
 
 @pytest.mark.unit
-def test_migrate_snowflake_writes_secret_with_0600(
-    isolated_xdg: Path, clean_cwd: Path
-) -> None:
+def test_migrate_snowflake_writes_secret_with_0600(isolated_xdg: Path, clean_cwd: Path) -> None:
     configs = Path(os.environ["OVID2_CONFIGS_DIR"])
     configs.mkdir(parents=True, exist_ok=True)
-    (configs / "sf.json").write_text(json.dumps(
-        {"src_name": "snowflake",
-         "src_args": {"account": "a", "user": "u", "password": "p",
-                      "database": "D", "schema": "S"}}
-    ))
+    (configs / "sf.json").write_text(
+        json.dumps(
+            {
+                "src_name": "snowflake",
+                "src_args": {
+                    "account": "a",
+                    "user": "u",
+                    "password": "p",
+                    "database": "D",
+                    "schema": "S",
+                },
+            }
+        )
+    )
     rc = migrate_addresses.main(argparse.Namespace(write=True, only=[]))
     assert rc == 0
     # Address ends up in new shape.
@@ -92,9 +97,9 @@ def test_migrate_snowflake_writes_secret_with_0600(
 def test_migrate_is_idempotent(isolated_xdg: Path, clean_cwd: Path) -> None:
     configs = Path(os.environ["OVID2_CONFIGS_DIR"])
     configs.mkdir(parents=True, exist_ok=True)
-    (configs / "legacy.json").write_text(json.dumps(
-        {"src_name": "disc", "src_args": {"path": "/data/x"}}
-    ))
+    (configs / "legacy.json").write_text(
+        json.dumps({"src_name": "disc", "src_args": {"path": "/data/x"}})
+    )
     migrate_addresses.main(argparse.Namespace(write=True, only=[]))
     # A second run must be a no-op (nothing left to migrate).
     rc = migrate_addresses.main(argparse.Namespace(write=True, only=[]))
@@ -105,12 +110,8 @@ def test_migrate_is_idempotent(isolated_xdg: Path, clean_cwd: Path) -> None:
 def test_only_filter_scopes_migration(isolated_xdg: Path, clean_cwd: Path) -> None:
     configs = Path(os.environ["OVID2_CONFIGS_DIR"])
     configs.mkdir(parents=True, exist_ok=True)
-    (configs / "a.json").write_text(json.dumps(
-        {"src_name": "disc", "src_args": {"path": "/a"}}
-    ))
-    (configs / "b.json").write_text(json.dumps(
-        {"src_name": "disc", "src_args": {"path": "/b"}}
-    ))
+    (configs / "a.json").write_text(json.dumps({"src_name": "disc", "src_args": {"path": "/a"}}))
+    (configs / "b.json").write_text(json.dumps({"src_name": "disc", "src_args": {"path": "/b"}}))
     migrate_addresses.main(argparse.Namespace(write=True, only=["a"]))
     # ``a`` moved, ``b`` is untouched.
     a = json.loads((configs / "a.json").read_text())

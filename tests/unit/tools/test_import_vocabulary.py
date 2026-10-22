@@ -11,7 +11,6 @@ import yaml
 
 from ovid2.tools import import_vocabulary as iv
 
-
 # ---------------------------------------------------------------------------
 # Synthetic CONCEPT.csv fixtures
 # ---------------------------------------------------------------------------
@@ -30,8 +29,7 @@ def _write_concept(dir_: Path, rows: list[tuple[str, str]]) -> Path:
         fh.write(CONCEPT_HEADER)
         for i, (vid, code) in enumerate(rows, start=1):
             fh.write(
-                f"{i}\tsample_{code}\tDrug\t{vid}\tClinical\tS\t{code}\t"
-                f"2020-01-01\t2099-12-31\t\n"
+                f"{i}\tsample_{code}\tDrug\t{vid}\tClinical\tS\t{code}\t2020-01-01\t2099-12-31\t\n"
             )
     return concept_path
 
@@ -40,7 +38,9 @@ def _write_vocabulary_csv(dir_: Path, versions: dict[str, str]) -> Path:
     """Write a minimal VOCABULARY.csv keyed by vocabulary_id → version."""
     path = dir_ / "VOCABULARY.csv"
     with path.open("w", encoding="utf-8") as fh:
-        fh.write("vocabulary_id\tvocabulary_name\tvocabulary_reference\tvocabulary_version\tvocabulary_concept_id\n")
+        fh.write(
+            "vocabulary_id\tvocabulary_name\tvocabulary_reference\tvocabulary_version\tvocabulary_concept_id\n"
+        )
         for vid, ver in versions.items():
             fh.write(f"{vid}\tname\turl\t{ver}\t0\n")
     return path
@@ -56,7 +56,12 @@ class TestVocabCatalogue:
 
     def test_known_slugs_match_expected_set(self) -> None:
         assert set(iv._KNOWN_SLUGS) == {
-            "loinc", "snomed", "icd10cm", "icd9cm", "rxnorm", "ndc",
+            "loinc",
+            "snomed",
+            "icd10cm",
+            "icd9cm",
+            "rxnorm",
+            "ndc",
         }
 
     def test_spec_lookup_by_slug(self) -> None:
@@ -104,7 +109,9 @@ class TestReadVocabularyVersions:
         assert result == {"LOINC": "2.78", "NDC": "20250223"}
 
     def test_missing_returns_empty(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture,
+        self,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         with caplog.at_level("WARNING", logger="ovid2.tools.import_vocabulary"):
             result = iv._read_vocabulary_versions(tmp_path)
@@ -112,7 +119,9 @@ class TestReadVocabularyVersions:
         assert any("No VOCABULARY.csv" in rec.message for rec in caplog.records)
 
     def test_missing_columns_returns_empty(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture,
+        self,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         (tmp_path / "VOCABULARY.csv").write_text("id\tname\n1\tLOINC\n")
         with caplog.at_level("WARNING", logger="ovid2.tools.import_vocabulary"):
@@ -238,7 +247,9 @@ class TestMain:
         assert "No CONCEPT.csv" in capsys.readouterr().err
 
     def test_dry_run_reports_counts(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         _write_concept(tmp_path, [("LOINC", "1"), ("LOINC", "2"), ("SNOMED", "3")])
         _write_vocabulary_csv(tmp_path, {"LOINC": "2.78"})
@@ -284,7 +295,9 @@ class TestMain:
         assert not (slice_dir / "loinc.csv.tmp").exists()
 
     def test_empty_slice_fails_by_default(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         _write_concept(tmp_path, [("SNOMED", "1")])  # no LOINC rows
         slice_dir = tmp_path / "slices"
@@ -348,13 +361,19 @@ class TestRegister:
         parser = argparse.ArgumentParser()
         subs = parser.add_subparsers()
         iv.register(subs)
-        args = parser.parse_args([
-            "import-vocabulary",
-            "--source", "/a",
-            "--vocab", "loinc",
-            "--slice-dir", "/b",
-            "--out-dir", "/c",
-        ])
+        args = parser.parse_args(
+            [
+                "import-vocabulary",
+                "--source",
+                "/a",
+                "--vocab",
+                "loinc",
+                "--slice-dir",
+                "/b",
+                "--out-dir",
+                "/c",
+            ]
+        )
         assert args.source == "/a"
         assert args.vocab == ["loinc"]
         assert args.write is False
@@ -364,10 +383,16 @@ class TestRegister:
         subs = parser.add_subparsers()
         iv.register(subs)
         with pytest.raises(SystemExit):
-            parser.parse_args([
-                "import-vocabulary",
-                "--source", "/a",
-                "--vocab", "totally_fake",
-                "--slice-dir", "/b",
-                "--out-dir", "/c",
-            ])
+            parser.parse_args(
+                [
+                    "import-vocabulary",
+                    "--source",
+                    "/a",
+                    "--vocab",
+                    "totally_fake",
+                    "--slice-dir",
+                    "/b",
+                    "--out-dir",
+                    "/c",
+                ]
+            )

@@ -21,9 +21,10 @@ never imports a CDM module directly. That is the entire boundary.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ovid2.schema.cdm import CdmField
@@ -134,7 +135,7 @@ class CdmHandle:
     flavour_of_null: frozenset[str | None] = field(default_factory=frozenset)
     shared_views: tuple[SharedViewSpec, ...] = ()
     schema_source: Path | None = None
-    schema_loader: Callable[[str, str], list["CdmField"]] | None = None
+    schema_loader: Callable[[str, str], list[CdmField]] | None = None
     valuesets: dict[str, dict[str, tuple[str, ...]]] = field(default_factory=dict)
 
     # ------------------------------------------------------------------ #
@@ -186,7 +187,7 @@ class CdmHandle:
 
         return load_cdm_table_columns(f"{self.name}.{table}")
 
-    def load_table_fields(self, table: str) -> list["CdmField"]:
+    def load_table_fields(self, table: str) -> list[CdmField]:
         """Return the full :class:`~ovid2.schema.cdm.CdmField` rows for ``table``."""
         if self.schema_loader is not None:
             return self.schema_loader(self.name, table)

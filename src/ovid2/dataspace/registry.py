@@ -112,10 +112,7 @@ def list_addresses_by_dimension(dimension: str) -> list[str]:
         KeyError: When ``dimension`` is not a registered dimension.
     """
     if dimension not in CONNECTION_TYPE_MAP:
-        raise KeyError(
-            f"Unknown ODS dimension '{dimension}'. "
-            f"Registered: {list_dimensions()}."
-        )
+        raise KeyError(f"Unknown ODS dimension '{dimension}'. Registered: {list_dimensions()}.")
     matches: list[str] = []
     for address_name in _address_config.list_available_addresses():
         if dimension_for_address(address_name) == dimension:

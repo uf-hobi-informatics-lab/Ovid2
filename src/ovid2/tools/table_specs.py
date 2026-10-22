@@ -37,8 +37,8 @@ continues to behave identically (``file_name == table_name``).
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +126,10 @@ def parse_table_spec(spec: str) -> TableSpec:
             "the destination file will be named %r literally. If you "
             "meant to use %r as the source-side pattern, use the "
             "'LOGICAL=SOURCE' form (e.g. 'HASH_TOKEN=%s').",
-            spec, table_name, table_name, table_name,
+            spec,
+            table_name,
+            table_name,
+            table_name,
         )
 
     return TableSpec(table_name=table_name, file_name=file_name)

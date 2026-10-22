@@ -62,6 +62,7 @@ cleans before the session naturally ends. Skipped when
 from __future__ import annotations
 
 import atexit
+import contextlib
 import logging
 import os
 import re
@@ -113,8 +114,8 @@ class SnowparkAzureBlobStrategy(SnowparkStagingStrategy):
 
     def materialise(
         self,
-        session: "EngineSession",
-        driver: "Driver",
+        session: EngineSession,
+        driver: Driver,
         pipeline: str,
         batch_id: str,
         file_name: str,
@@ -137,7 +138,12 @@ class SnowparkAzureBlobStrategy(SnowparkStagingStrategy):
         table_stem = os.path.splitext(os.path.basename(file_name))[0]
         stage_name = _stage_name(instance_id, pipeline, batch_id, table_stem, kind="in")
         read_dir_url = _azure_dir_url(
-            account, endpoint_suffix, container, prefix, pipeline, batch_id,
+            account,
+            endpoint_suffix,
+            container,
+            prefix,
+            pipeline,
+            batch_id,
         )
 
         native = _native_session(session)
@@ -153,7 +159,8 @@ class SnowparkAzureBlobStrategy(SnowparkStagingStrategy):
         )
         logger.info(
             "SnowparkAzureBlobStrategy: CREATE TEMPORARY STAGE %s URL=%s",
-            stage_name, read_dir_url,
+            stage_name,
+            read_dir_url,
         )
         native.sql(create_stage_sql).collect()
         self._register_stage(session, stage_name)
@@ -168,12 +175,14 @@ class SnowparkAzureBlobStrategy(SnowparkStagingStrategy):
         )
 
         temp_fqtn = _temp_table_fqtn(
-            staging_schema, instance_id, pipeline, batch_id, table_stem,
+            staging_schema,
+            instance_id,
+            pipeline,
+            batch_id,
+            table_stem,
         )
         col_ddl = ", ".join(f'"{c}" VARCHAR' for c in columns)
-        native.sql(
-            f"CREATE OR REPLACE TRANSIENT TABLE {temp_fqtn} ({col_ddl})"
-        ).collect()
+        native.sql(f"CREATE OR REPLACE TRANSIENT TABLE {temp_fqtn} ({col_ddl})").collect()
         self._register_temp_table(session, temp_fqtn)
 
         copy_sql = (
@@ -187,7 +196,9 @@ class SnowparkAzureBlobStrategy(SnowparkStagingStrategy):
         )
         logger.info(
             "SnowparkAzureBlobStrategy: COPY INTO %s FROM @%s (file=%s)",
-            temp_fqtn, stage_name, file_name,
+            temp_fqtn,
+            stage_name,
+            file_name,
         )
         native.sql(copy_sql).collect()
 
@@ -195,9 +206,9 @@ class SnowparkAzureBlobStrategy(SnowparkStagingStrategy):
 
     def persist(
         self,
-        session: "EngineSession",
+        session: EngineSession,
         df: Any,
-        driver: "Driver",
+        driver: Driver,
         pipeline: str,
         batch_id: str,
         table_name: str,
@@ -217,10 +228,19 @@ class SnowparkAzureBlobStrategy(SnowparkStagingStrategy):
 
         instance_id = _current_instance_id()
         stage_name = _stage_name(
-            instance_id, pipeline, batch_id, table_name, kind="out",
+            instance_id,
+            pipeline,
+            batch_id,
+            table_name,
+            kind="out",
         )
         write_dir_url = _azure_dir_url(
-            account, endpoint_suffix, container, prefix, pipeline, batch_id,
+            account,
+            endpoint_suffix,
+            container,
+            prefix,
+            pipeline,
+            batch_id,
         )
 
         native = _native_session(session)
@@ -235,7 +255,8 @@ class SnowparkAzureBlobStrategy(SnowparkStagingStrategy):
         )
         logger.info(
             "SnowparkAzureBlobStrategy: CREATE TEMPORARY STAGE %s URL=%s",
-            stage_name, write_dir_url,
+            stage_name,
+            write_dir_url,
         )
         native.sql(create_stage_sql).collect()
         self._register_stage(session, stage_name)
@@ -243,7 +264,8 @@ class SnowparkAzureBlobStrategy(SnowparkStagingStrategy):
         stage_target = f"@{stage_name}/{table_name}/"
         logger.info(
             "SnowparkAzureBlobStrategy: copy_into_location → %s (single=%s)",
-            stage_target, single_file,
+            stage_target,
+            single_file,
         )
         _copy_into_location(
             df,
@@ -257,7 +279,9 @@ class SnowparkAzureBlobStrategy(SnowparkStagingStrategy):
     # ------------------------------------------------------------------
 
     def _maybe_schedule_cleanup(
-        self, session: "EngineSession", instance_id: str,
+        self,
+        session: EngineSession,
+        instance_id: str,
     ) -> None:
         """Register an atexit hook that drops the stages + transient tables."""
         from ovid2.config.settings import SNOWPARK_STAGING_KEEP
@@ -265,7 +289,8 @@ class SnowparkAzureBlobStrategy(SnowparkStagingStrategy):
         if SNOWPARK_STAGING_KEEP:
             logger.info(
                 "SnowparkAzureBlobStrategy: SNOWPARK_STAGING_KEEP is set; "
-                "skipping atexit cleanup for instance %s", instance_id,
+                "skipping atexit cleanup for instance %s",
+                instance_id,
             )
             return
 
@@ -283,27 +308,30 @@ class SnowparkAzureBlobStrategy(SnowparkStagingStrategy):
             for stage in stages_ref:
                 try:
                     native.sql(f"DROP STAGE IF EXISTS {stage}").collect()
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     logger.warning(
                         "SnowparkAzureBlobStrategy: DROP STAGE %s failed "
                         "(%s); the stage is temporary and Snowflake will "
-                        "auto-clean at session end.", stage, exc,
+                        "auto-clean at session end.",
+                        stage,
+                        exc,
                     )
             for fqtn in temp_tables_ref:
                 try:
                     native.sql(f"DROP TABLE IF EXISTS {fqtn}").collect()
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     logger.warning(
-                        "SnowparkAzureBlobStrategy: DROP TABLE %s failed "
-                        "(%s); clean manually.", fqtn, exc,
+                        "SnowparkAzureBlobStrategy: DROP TABLE %s failed (%s); clean manually.",
+                        fqtn,
+                        exc,
                     )
 
         atexit.register(_cleanup)
 
-    def _register_stage(self, session: "EngineSession", stage_name: str) -> None:
+    def _register_stage(self, session: EngineSession, stage_name: str) -> None:
         self._stages.setdefault(id(session), []).append(stage_name)
 
-    def _register_temp_table(self, session: "EngineSession", fqtn: str) -> None:
+    def _register_temp_table(self, session: EngineSession, fqtn: str) -> None:
         self._temp_tables.setdefault(id(session), []).append(fqtn)
 
 
@@ -339,11 +367,9 @@ def _merged_config(driver: Any) -> dict[str, Any]:
     neither :meth:`as_legacy_src_args` is present nor callable.
     """
     if hasattr(driver, "as_legacy_src_args"):
-        try:
+        with contextlib.suppress(Exception):
             _, merged = driver.as_legacy_src_args()
             return dict(merged)
-        except Exception:  # noqa: BLE001
-            pass
     location = getattr(driver, "location", None) or {}
     return dict(location)
 
@@ -412,7 +438,10 @@ def _parse_connection_string(conn_str: str) -> dict[str, str]:
 
 
 def _azure_blob_name(
-    prefix: str, pipeline: str, batch_id: str, file_name: str,
+    prefix: str,
+    pipeline: str,
+    batch_id: str,
+    file_name: str,
 ) -> str:
     """Assemble the container-relative blob name ``{prefix}/{pipeline}/{batch}/{file}``."""
     parts = [p for p in (prefix, pipeline, batch_id, file_name) if p]
@@ -443,11 +472,17 @@ def _azure_dir_url(
 
 
 def _stage_name(
-    instance_id: str, pipeline: str, batch_id: str, table: str, *, kind: str,
+    instance_id: str,
+    pipeline: str,
+    batch_id: str,
+    table: str,
+    *,
+    kind: str,
 ) -> str:
     """Return a stage name safe for DDL interpolation."""
     safe = re.sub(
-        r"[^A-Za-z0-9]+", "_",
+        r"[^A-Za-z0-9]+",
+        "_",
         f"{kind}_{instance_id}_{pipeline}_{batch_id}_{table}",
     )
     return f"OVID2_STG_AZ_{safe}".upper()
@@ -461,9 +496,7 @@ def _temp_table_fqtn(
     stem: str,
 ) -> str:
     """Return the fully-qualified transient-table name."""
-    safe = re.sub(
-        r"[^A-Za-z0-9]+", "_", f"{instance_id}_{pipeline}_{batch_id}_{stem}"
-    )
+    safe = re.sub(r"[^A-Za-z0-9]+", "_", f"{instance_id}_{pipeline}_{batch_id}_{stem}")
     return f"{staging_schema}.OVID2_STG_AZ_{safe}".upper()
 
 
@@ -472,7 +505,7 @@ def _escape_sql(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "''")
 
 
-def _native_session(session: "EngineSession") -> Any:
+def _native_session(session: EngineSession) -> Any:
     """Return the real Snowpark session from an engine adapter."""
     native = getattr(session, "native", None)
     if native is None:
@@ -488,30 +521,32 @@ def _ensure_current_database(native: Any) -> None:
     """Bind a current database + schema when either is missing."""
     try:
         current_db = native.get_current_database()
-    except Exception:  # noqa: BLE001
+    except Exception:
         current_db = None
     if not current_db:
         try:
             native.sql(f"USE DATABASE {_DEFAULT_STAGE_DATABASE}").collect()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning(
                 "SnowparkAzureBlobStrategy: could not USE DATABASE %s (%s)",
-                _DEFAULT_STAGE_DATABASE, exc,
+                _DEFAULT_STAGE_DATABASE,
+                exc,
             )
             return
 
     try:
         current_schema = native.get_current_schema()
-    except Exception:  # noqa: BLE001
+    except Exception:
         current_schema = None
     if current_schema:
         return
     try:
         native.sql(f"USE SCHEMA {_DEFAULT_STAGE_SCHEMA}").collect()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning(
             "SnowparkAzureBlobStrategy: could not USE SCHEMA %s (%s)",
-            _DEFAULT_STAGE_SCHEMA, exc,
+            _DEFAULT_STAGE_SCHEMA,
+            exc,
         )
 
 
@@ -523,7 +558,7 @@ def _ensure_writable_staging_schema(native: Any) -> str:
             return override
         try:
             current_db = native.get_current_database()
-        except Exception:  # noqa: BLE001
+        except Exception:
             current_db = None
         if not current_db:
             raise RuntimeError(
@@ -536,7 +571,7 @@ def _ensure_writable_staging_schema(native: Any) -> str:
 
     try:
         current_db = native.get_current_database()
-    except Exception:  # noqa: BLE001
+    except Exception:
         current_db = None
     if not current_db:
         raise RuntimeError(
@@ -550,7 +585,7 @@ def _ensure_writable_staging_schema(native: Any) -> str:
     try:
         native.sql(f"CREATE SCHEMA IF NOT EXISTS {schema_fqn}").collect()
         return schema_fqn
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise RuntimeError(
             f"SnowparkAzureBlobStrategy: cannot create staging schema "
             f"{schema_fqn} ({exc}). Grant CREATE SCHEMA on {current_db} "
@@ -629,8 +664,7 @@ def _build_create_stage_sql(
         )
 
     return (
-        f"CREATE OR REPLACE TEMPORARY STAGE {stage_name} "
-        f"URL = '{_escape_sql(url)}' {auth_clause}"
+        f"CREATE OR REPLACE TEMPORARY STAGE {stage_name} URL = '{_escape_sql(url)}' {auth_clause}"
     )
 
 
@@ -671,10 +705,7 @@ def _generate_container_sas(
             parsed = _parse_connection_string(conn_str)
             account = _nonempty(parsed.get("AccountName"))
     if not account:
-        raise ValueError(
-            "SnowparkAzureBlobStrategy: cannot generate SAS without "
-            "an account name."
-        )
+        raise ValueError("SnowparkAzureBlobStrategy: cannot generate SAS without an account name.")
 
     expiry = datetime.now(timezone.utc) + timedelta(hours=12)
     return generate_container_sas(
@@ -682,7 +713,12 @@ def _generate_container_sas(
         container_name=container,
         account_key=account_key,
         permission=ContainerSasPermissions(
-            read=True, write=True, delete=True, list=True, add=True, create=True,
+            read=True,
+            write=True,
+            delete=True,
+            list=True,
+            add=True,
+            create=True,
         ),
         expiry=expiry,
     )
@@ -732,7 +768,8 @@ def _read_header_columns_from_azure(
         client = BlobServiceClient.from_connection_string(conn_str)
     elif account_key:
         client = BlobServiceClient(
-            account_url=account_url, credential=account_key,
+            account_url=account_url,
+            credential=account_key,
         )
     elif sas:
         sas_q = sas.lstrip("?")
@@ -743,7 +780,8 @@ def _read_header_columns_from_azure(
         from azure.identity import DefaultAzureCredential
 
         client = BlobServiceClient(
-            account_url=account_url, credential=DefaultAzureCredential(),
+            account_url=account_url,
+            credential=DefaultAzureCredential(),
         )
 
     blob_client = client.get_blob_client(container=container, blob=blob)
@@ -751,8 +789,7 @@ def _read_header_columns_from_azure(
     body = stream.readall()
     if not body:
         raise ValueError(
-            f"SnowparkAzureBlobStrategy: {container}/{blob} is empty; "
-            "nothing to stage."
+            f"SnowparkAzureBlobStrategy: {container}/{blob} is empty; nothing to stage."
         )
     text = body.decode("utf-8", errors="replace")
     first = text.split("\n", 1)[0]

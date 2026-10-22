@@ -81,7 +81,8 @@ class AccessDriver(Driver):
         return _location_fields()
 
     def container_requirements_for(
-        self, location: dict[str, Any] | None = None,
+        self,
+        location: dict[str, Any] | None = None,
     ) -> tuple[ContainerRequirement, ...]:
         """Return the read-only bind-mount this Access address contributes.
 
@@ -91,7 +92,8 @@ class AccessDriver(Driver):
         ``src_args``) produces identical output.
         """
         return container_requirements_from(
-            dict(self.args), dict(location or self.location or {}),
+            dict(self.args),
+            dict(location or self.location or {}),
         )
 
     # ------------------------------------------------------------------
@@ -115,7 +117,8 @@ class AccessDriver(Driver):
         """
         normalised = self._widened()
         return probe_read_from_file(
-            self._host_file_path(), normalised,
+            self._host_file_path(),
+            normalised,
         )
 
     # ------------------------------------------------------------------
@@ -138,26 +141,18 @@ class AccessDriver(Driver):
         normalised = self._widened()
         root = os.path.realpath(str(normalised["host_path"] or ""))
         if not root or not os.path.isdir(root):
-            raise NotImplementedError(
-                f"access host_path {root!r} is not a listable directory."
-            )
+            raise NotImplementedError(f"access host_path {root!r} is not a listable directory.")
         sub = (prefix or "").strip().lstrip("/")
         target = os.path.realpath(os.path.join(root, sub)) if sub else root
         root_prefix = root.rstrip("/") + "/"
         if target != root and not target.startswith(root_prefix):
-            raise ValueError(
-                f"prefix {prefix!r} escapes the storage-account root."
-            )
+            raise ValueError(f"prefix {prefix!r} escapes the storage-account root.")
 
         if os.path.isdir(target):
             return self._list_directory(root, target)
-        if os.path.isfile(target) and target.lower().endswith(
-            ACCESS_FILE_SUFFIXES
-        ):
+        if os.path.isfile(target) and target.lower().endswith(ACCESS_FILE_SUFFIXES):
             return self._list_tables_in_file(root, target)
-        raise ValueError(
-            f"prefix {prefix!r} is neither a directory nor an Access file."
-        )
+        raise ValueError(f"prefix {prefix!r} is neither a directory nor an Access file.")
 
     def _list_directory(self, root: str, target: str) -> list[StorageEntry]:
         """List sub-directories + Access files under ``target``."""
@@ -166,28 +161,24 @@ class AccessDriver(Driver):
             for entry in scanner:
                 if entry.name.startswith("."):
                     continue
-                rel = os.path.relpath(
-                    os.path.join(target, entry.name), root
-                )
+                rel = os.path.relpath(os.path.join(target, entry.name), root)
                 try:
                     is_dir = entry.is_dir()
                 except OSError:
                     is_dir = False
                 if is_dir:
-                    entries.append(
-                        StorageEntry(name=entry.name, kind="dir", path=rel)
-                    )
+                    entries.append(StorageEntry(name=entry.name, kind="dir", path=rel))
                 elif entry.name.lower().endswith(ACCESS_FILE_SUFFIXES):
                     # An Access file is a *navigable* container of tables,
                     # so surface it as a ``dir`` the operator can descend.
-                    entries.append(
-                        StorageEntry(name=entry.name, kind="dir", path=rel)
-                    )
+                    entries.append(StorageEntry(name=entry.name, kind="dir", path=rel))
         entries.sort(key=lambda e: e.name.lower())
         return entries
 
     def _list_tables_in_file(
-        self, root: str, file_path: str,
+        self,
+        root: str,
+        file_path: str,
     ) -> list[StorageEntry]:
         """List the user tables inside an Access file as ``table`` entries.
 
@@ -215,7 +206,9 @@ class AccessDriver(Driver):
         ]
 
     def _enumerate_tables(
-        self, file_path: str, spark_file_path: str | None = None,
+        self,
+        file_path: str,
+        spark_file_path: str | None = None,
     ) -> list[str]:
         """Return the user tables in ``file_path``, Spark-free first.
 
@@ -241,7 +234,6 @@ class AccessDriver(Driver):
             session = get_active_session()
             return list_tables(session, spark_file_path or file_path)
 
-
     # ------------------------------------------------------------------
     # Table discovery (data plane helper)
     # ------------------------------------------------------------------
@@ -261,7 +253,9 @@ class AccessDriver(Driver):
         return self._apply_table_filters(all_tables, self.location)
 
     def _apply_table_filters(
-        self, all_tables: list[str], location: dict[str, Any],
+        self,
+        all_tables: list[str],
+        location: dict[str, Any],
     ) -> list[str]:
         """Apply the ``tables`` allow-list / ``exclude_tables`` deny-list.
 
@@ -270,14 +264,9 @@ class AccessDriver(Driver):
         honour the same per-address filters.
         """
         allow = {t.lower() for t in parse_table_list(location.get("tables"))}
-        deny = {
-            t.lower()
-            for t in parse_table_list(location.get("exclude_tables"))
-        }
+        deny = {t.lower() for t in parse_table_list(location.get("exclude_tables"))}
         return [
-            t
-            for t in all_tables
-            if (not allow or t.lower() in allow) and t.lower() not in deny
+            t for t in all_tables if (not allow or t.lower() in allow) and t.lower() not in deny
         ]
 
     @classmethod
@@ -286,7 +275,8 @@ class AccessDriver(Driver):
         return True
 
     def expand_all_tables(
-        self, location: dict[str, Any] | None = None,
+        self,
+        location: dict[str, Any] | None = None,
     ) -> list[str] | None:
         """Expand an ``all`` copy/move request to the file's user tables.
 
@@ -310,7 +300,8 @@ class AccessDriver(Driver):
         container_path = self._container_file_path_for(loc)
         try:
             all_tables = self._enumerate_tables(
-                host_path, spark_file_path=container_path,
+                host_path,
+                spark_file_path=container_path,
             )
         except NotImplementedError:
             return None
@@ -344,8 +335,7 @@ class AccessDriver(Driver):
         target_table = table_name or file_name
         if not target_table:
             raise ValueError(
-                "AccessDriver.read requires a table_name (or file_name "
-                "used as the table name)."
+                "AccessDriver.read requires a table_name (or file_name used as the table name)."
             )
         return read_table(
             session,  # type: ignore[arg-type]
@@ -366,9 +356,7 @@ class AccessDriver(Driver):
         if "exclude_tables" in self.location:
             merged["exclude_tables"] = self.location["exclude_tables"]
         if "lowercase_columns" in self.location:
-            merged["lowercase_columns"] = bool(
-                self.location["lowercase_columns"]
-            )
+            merged["lowercase_columns"] = bool(self.location["lowercase_columns"])
         return "access", merged
 
     # ------------------------------------------------------------------

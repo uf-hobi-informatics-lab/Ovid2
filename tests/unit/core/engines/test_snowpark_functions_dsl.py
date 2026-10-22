@@ -29,17 +29,17 @@ class _FakeCol:
         self.when_calls: list[tuple[Any, Any]] = []
         self.otherwise_value: Any = "__unset__"
 
-    def cast(self, t: str) -> "_FakeCol":
+    def cast(self, t: str) -> _FakeCol:
         return _FakeCol(f"cast({self._repr},{t})")
 
-    def __eq__(self, other: Any) -> "_FakeCol":  # type: ignore[override]
+    def __eq__(self, other: Any) -> _FakeCol:  # type: ignore[override]
         return _FakeCol(f"eq({self._repr},{other!r})")
 
-    def when(self, cond: Any, value: Any) -> "_FakeCol":
+    def when(self, cond: Any, value: Any) -> _FakeCol:
         self.when_calls.append((cond, value))
         return self
 
-    def otherwise(self, value: Any) -> "_FakeCol":
+    def otherwise(self, value: Any) -> _FakeCol:
         self.otherwise_value = value
         return self
 
@@ -92,12 +92,16 @@ class _FakeFunctions:
     def random(self, *args: Any) -> _FakeCol:
         return self._rec("random", *args)
 
+    def regexp_extract(self, *args: Any) -> _FakeCol:
+        return self._rec("regexp_extract", *args)
+
     def builtin(self, name: str) -> Any:
         """Emulate ``F.builtin('NAME')`` returning a callable.
 
         The returned callable records ``NAME(*args)`` so tests can
         assert both the builtin name and its arguments.
         """
+
         def _call(*args: Any) -> _FakeCol:
             return self._rec(name, *args)
 
@@ -223,15 +227,15 @@ class _FakeDF:
         self.drop_duplicates_arg: Any = "__unset__"
         self.with_column_calls: list[tuple[str, Any]] = []
 
-    def union_by_name(self, other: Any) -> "_FakeDF":
+    def union_by_name(self, other: Any) -> _FakeDF:
         self.union_by_name_arg = other
         return self
 
-    def drop_duplicates(self, cols: Any = "__unset__") -> "_FakeDF":
+    def drop_duplicates(self, cols: Any = "__unset__") -> _FakeDF:
         self.drop_duplicates_arg = cols
         return self
 
-    def with_column(self, name: str, col: Any) -> "_FakeDF":
+    def with_column(self, name: str, col: Any) -> _FakeDF:
         self.with_column_calls.append((name, col))
         self.columns = self.columns + [name]
         return self
@@ -372,3 +376,30 @@ def test_to_timestamp_uses_try_to_timestamp_with_varchar_cast(
     try_call = next(c for c in snowpark_functions.calls if c[0] == "TRY_TO_TIMESTAMP")
     assert "cast(" in repr(try_call[1][0])
     assert repr(try_call[1][1]) == "lit('YYYY-MM-DD HH24:MI:SS')"
+
+
+@pytest.mark.unit
+def test_regexp_extract_uses_native_group_semantics(
+    snowpark_functions: _FakeFunctions,
+) -> None:
+    """Delegates to Snowpark's Spark-compatible ``regexp_extract``.
+
+    Regression: the old ``regexp_substr(c, pattern, 1, idx)`` raised
+    ``TypeError`` (plain ints) and treated ``idx`` as an occurrence.
+    """
+    fns = _make_functions()
+    col = fns.col("x")
+    fns.regexp_extract(col, r"(\d+)-(\d+)", 2)
+    assert ("regexp_extract", (col, r"(\d+)-(\d+)", 2)) in snowpark_functions.calls
+
+
+@pytest.mark.unit
+def test_regexp_extract_builds_on_real_snowpark() -> None:
+    """Against the real SDK the expression builds (no ``TypeError``)."""
+    pytest.importorskip("snowflake.snowpark")
+    from snowflake.snowpark.functions import col
+
+    from ovid2.core.engines.snowpark import _SnowparkFunctions
+
+    expr = _SnowparkFunctions().regexp_extract(col("X"), r"a(b)", 1)
+    assert type(expr).__name__ == "Column"

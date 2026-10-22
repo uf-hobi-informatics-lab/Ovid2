@@ -64,13 +64,19 @@ class TranslateByConceptOp(BaseMapOp):
 
     def apply(
         self,
-        df: "DataFrame",
+        df: DataFrame,
         params: dict[str, Any],
         ctx: MapOpContext,
-    ) -> "DataFrame":
+    ) -> DataFrame:
         """Broadcast-join ``params['column']`` against the vocabulary view."""
         from pyspark.sql.functions import broadcast, col, upper
-        from pyspark.sql.utils import AnalysisException
+
+        try:
+            from pyspark.errors import AnalysisException
+        except ImportError:  # pyspark < 3.4
+            from pyspark.sql.utils import (  # type: ignore[attr-defined]
+                AnalysisException,
+            )
 
         # Local import — go through the registry API only. Enforced by
         # the ``test_semantic_isolation.py`` contract.

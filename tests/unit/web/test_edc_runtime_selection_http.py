@@ -17,9 +17,7 @@ import pytest
 
 
 @pytest.mark.unit
-def test_http_submit_edc_run_with_runtime_storage_selection(
-    web_client, isolated_xdg: Path
-) -> None:
+def test_http_submit_edc_run_with_runtime_storage_selection(web_client, isolated_xdg: Path) -> None:
     # A storage account to "browse" — no saved address, no package.
     conndir = Path(os.environ["OVID2_CONNECTIONS_DIR"])
     (conndir / "prod_disc.json").write_text(

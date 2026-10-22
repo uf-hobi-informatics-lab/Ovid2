@@ -66,7 +66,7 @@ class SamplerHandle:
 def run_sampler(
     *,
     instance_id: str,
-    engine: "BaseEngine",
+    engine: BaseEngine,
     bus: EventBus,
     active_ms: int | None = None,
     idle_ms: int | None = None,
@@ -111,16 +111,12 @@ def run_sampler(
     from ovid2.core.engines.protocols import EngineFamily
 
     family_value = (
-        engine.family.value
-        if isinstance(engine.family, EngineFamily)
-        else str(engine.family)
+        engine.family.value if isinstance(engine.family, EngineFamily) else str(engine.family)
     )
 
     if active_ms is None:
         active_ms = (
-            ENGINE_METRICS_SPARK_MS
-            if family_value != "snowpark"
-            else ENGINE_METRICS_SNOWPARK_MS
+            ENGINE_METRICS_SPARK_MS if family_value != "snowpark" else ENGINE_METRICS_SNOWPARK_MS
         )
     if idle_ms is None:
         idle_ms = ENGINE_METRICS_IDLE_MS
@@ -150,7 +146,7 @@ def run_sampler(
                     zero_active_streak += 1
                 else:
                     zero_active_streak = 0
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 # Metrics failure must never fail the run.
                 logger.debug("engine metrics sample failed: %s", exc)
                 zero_active_streak += 1

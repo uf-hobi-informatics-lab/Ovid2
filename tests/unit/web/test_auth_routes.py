@@ -400,9 +400,7 @@ def _signed(session_id: str) -> str:
     response = Response()
     cookie_mod.issue_cookie(response, session_id)
     line = next(
-        value.decode("latin-1")
-        for key, value in response.raw_headers
-        if key == b"set-cookie"
+        value.decode("latin-1") for key, value in response.raw_headers if key == b"set-cookie"
     )
     jar: SimpleCookie[str] = SimpleCookie()
     jar.load(line)

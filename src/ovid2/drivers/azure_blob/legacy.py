@@ -95,7 +95,10 @@ class AzureBlobConnection(BaseConnection):
         so the SDK-lazy pattern is defined in exactly one place.
         """
         return _build_client(
-            self._auth_mode(), dict(self.args), dict(self.secrets), url,
+            self._auth_mode(),
+            dict(self.args),
+            dict(self.secrets),
+            url,
         )
 
     # ------------------------------------------------------------------
@@ -119,7 +122,9 @@ class AzureBlobConnection(BaseConnection):
     def as_address_config(self, location: dict[str, Any]) -> dict[str, Any]:
         """Merge account credentials with per-address container + path."""
         return build_address_config(
-            dict(self.args), dict(self.secrets), dict(location),
+            dict(self.args),
+            dict(self.secrets),
+            dict(location),
         )
 
 
@@ -203,7 +208,10 @@ class AzureBlobAddress(BaseAddress):
         return self._io._base_uri()
 
     def _resolve_read_path(
-        self, pipeline: str, batch_id: str, file_name: str,
+        self,
+        pipeline: str,
+        batch_id: str,
+        file_name: str,
     ) -> str:
         """Assemble the fully-qualified read path."""
         return self._io._resolve_read_path(pipeline, batch_id, file_name)
@@ -256,8 +264,8 @@ class AzureBlobAddress(BaseAddress):
 __all__ = [
     "_AUTH_HINTS",
     "_PROBE_TIMEOUT_SECONDS",
-    "_build_client",
-    "_fast_fail_kwargs",
     "AzureBlobAddress",
     "AzureBlobConnection",
+    "_build_client",
+    "_fast_fail_kwargs",
 ]

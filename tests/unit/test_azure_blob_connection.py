@@ -22,7 +22,6 @@ import pytest
 
 from ovid2.drivers.azure_blob import AzureBlobConnection
 
-
 # ---------------------------------------------------------------------------
 # Helpers: install fake ``azure.storage.blob`` / ``azure.identity`` modules.
 # ---------------------------------------------------------------------------
@@ -103,7 +102,9 @@ class TestAuthModeSelection:
                 "connection_string": "DefaultEndpointsProtocol=https;AccountName=x;AccountKey=y",
                 "account_key": "should-be-ignored",
                 "sas_token": "should-be-ignored",
-                "tenant_id": "t", "client_id": "c", "client_secret": "s",
+                "tenant_id": "t",
+                "client_id": "c",
+                "client_secret": "s",
             },
         )
         assert conn._auth_mode() == "connection_string"
@@ -117,7 +118,8 @@ class TestAuthModeSelection:
 
     def test_sas_token_next(self) -> None:
         conn = AzureBlobConnection(
-            args={"account_name": "acct"}, secrets={"sas_token": "?sv=…"},
+            args={"account_name": "acct"},
+            secrets={"sas_token": "?sv=…"},
         )
         assert conn._auth_mode() == "sas_token"
 
@@ -155,7 +157,9 @@ class TestProbeSkipped:
                 monkeypatch.delitem(sys.modules, mod, raising=False)
         # Belt-and-braces: force the import to fail even if the wheel
         # is present in the environment.
-        original_import = __builtins__["__import__"] if isinstance(__builtins__, dict) else __import__
+        original_import = (
+            __builtins__["__import__"] if isinstance(__builtins__, dict) else __import__
+        )
 
         def fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
             if name.startswith("azure"):
@@ -171,7 +175,8 @@ class TestProbeSkipped:
         assert "azure-storage-blob" in result.message
 
     def test_missing_azure_identity_for_aad_mode(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         # Install azure.storage.blob but NOT azure.identity.
         _install_fake_azure(monkeypatch, identity=False)
@@ -186,7 +191,8 @@ class TestProbeConfig:
     """Cases that must return ``code='config'`` (bad inputs, no probe)."""
 
     def test_missing_account_name_without_connection_string(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         _install_fake_azure(monkeypatch)
         conn = AzureBlobConnection(args={}, secrets={"account_key": "k"})
@@ -196,13 +202,18 @@ class TestProbeConfig:
         assert "account_name" in result.message
 
     def test_connection_string_allows_missing_account_name(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         handles = _install_fake_azure(monkeypatch)
-        handles["from_connection_string"].return_value = _make_client(account_info={"sku_name": "Standard_LRS"})
+        handles["from_connection_string"].return_value = _make_client(
+            account_info={"sku_name": "Standard_LRS"}
+        )
         conn = AzureBlobConnection(
             args={},
-            secrets={"connection_string": "DefaultEndpointsProtocol=https;AccountName=x;AccountKey=y"},
+            secrets={
+                "connection_string": "DefaultEndpointsProtocol=https;AccountName=x;AccountKey=y"
+            },
         )
         result = conn.test()
         assert result.ok is True
@@ -210,7 +221,8 @@ class TestProbeConfig:
         assert result.detail["auth_mode"] == "connection_string"
 
     def test_client_construction_valueerror_maps_to_config(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         handles = _install_fake_azure(monkeypatch)
         handles["BlobServiceClient"].side_effect = ValueError("bad account_url")
@@ -230,7 +242,8 @@ class TestProbeOk:
     """Happy paths through each auth mode."""
 
     def test_account_key_probes_account_info_by_default(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         handles = _install_fake_azure(monkeypatch)
         client = _make_client(account_info={"sku_name": "Standard_LRS"})
@@ -255,7 +268,8 @@ class TestProbeOk:
         client.get_container_client.assert_not_called()
 
     def test_container_default_switches_probe_to_container_properties(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         handles = _install_fake_azure(monkeypatch)
         client = _make_client(container_props={"name": "landing"})
@@ -274,7 +288,8 @@ class TestProbeOk:
         client.get_account_information.assert_not_called()
 
     def test_service_principal_builds_client_secret_credential(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         handles = _install_fake_azure(monkeypatch)
         client = _make_client(account_info={})
@@ -290,13 +305,16 @@ class TestProbeOk:
         assert result.ok is True
         assert result.detail["auth_mode"] == "service_principal"
         handles["ClientSecretCredential"].assert_called_once_with(
-            tenant_id="t", client_id="c", client_secret="s",
+            tenant_id="t",
+            client_id="c",
+            client_secret="s",
         )
         kwargs = handles["BlobServiceClient"].call_args.kwargs
         assert kwargs["credential"] == "the-credential"
 
     def test_default_chain_when_no_secrets(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         handles = _install_fake_azure(monkeypatch)
         client = _make_client(account_info={})
@@ -337,28 +355,33 @@ class TestProbeErrors:
         ],
     )
     def test_auth_hints_map_to_auth_code(
-        self, monkeypatch: pytest.MonkeyPatch, message: str,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        message: str,
     ) -> None:
         handles = _install_fake_azure(monkeypatch)
         handles["BlobServiceClient"].return_value = _make_client(
             probe_exc=RuntimeError(message),
         )
         conn = AzureBlobConnection(
-            args={"account_name": "acct"}, secrets={"account_key": "k"},
+            args={"account_name": "acct"},
+            secrets={"account_key": "k"},
         )
         result = conn.test()
         assert result.ok is False
         assert result.code == "auth"
 
     def test_unrelated_failures_map_to_unreachable(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         handles = _install_fake_azure(monkeypatch)
         handles["BlobServiceClient"].return_value = _make_client(
             probe_exc=OSError("Name or service not known"),
         )
         conn = AzureBlobConnection(
-            args={"account_name": "acct"}, secrets={"account_key": "k"},
+            args={"account_name": "acct"},
+            secrets={"account_key": "k"},
         )
         result = conn.test()
         assert result.ok is False
@@ -379,15 +402,23 @@ class TestAsAddressConfig:
             secrets={
                 "account_key": "key",
                 "sas_token": "sas",
-                "tenant_id": "t", "client_id": "c", "client_secret": "s",
+                "tenant_id": "t",
+                "client_id": "c",
+                "client_secret": "s",
                 "connection_string": "cs",
             },
         )
         merged = conn.as_address_config({"container": "landing", "path": "/x", "format": "parquet"})
         assert merged["account_name"] == "acct"
         assert merged["endpoint_suffix"] == "core.windows.net"
-        for k in ("account_key", "sas_token", "tenant_id", "client_id",
-                  "client_secret", "connection_string"):
+        for k in (
+            "account_key",
+            "sas_token",
+            "tenant_id",
+            "client_id",
+            "client_secret",
+            "connection_string",
+        ):
             assert merged[k] is not None, f"expected {k} to survive merge"
         assert merged["container"] == "landing"
         assert merged["prefix"] == "/x"

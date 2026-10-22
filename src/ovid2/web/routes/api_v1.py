@@ -10,9 +10,10 @@ formatter update, address CRUD, ...) land in later phases.
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
-from fastapi.responses import PlainTextResponse, Response
+from fastapi.responses import PlainTextResponse, Response, StreamingResponse
 
 from ovid2.web.auth.deps import AuthContext, require_capability
 from ovid2.web.auth.roles import Capability, Role
@@ -447,12 +448,8 @@ def api_pipeline_plan(pipeline: str) -> PipelinePlanResponse:
     dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
 )
 def api_source_tables(
-    address: str = Query(
-        "", description="Saved source-address name (Saved-address mode)."
-    ),
-    connection: str = Query(
-        "", description="Storage-account name (Browse-storage mode)."
-    ),
+    address: str = Query("", description="Saved source-address name (Saved-address mode)."),
+    connection: str = Query("", description="Storage-account name (Browse-storage mode)."),
     location: str = Query(
         "",
         description="Browsed source path within the storage account "
@@ -472,9 +469,7 @@ def api_source_tables(
     if address.strip():
         tables, supported = source_tables_svc.tables_for_address(address)
     elif connection.strip():
-        tables, supported = source_tables_svc.tables_for_connection(
-            connection, location
-        )
+        tables, supported = source_tables_svc.tables_for_connection(connection, location)
     else:
         return SourceTablesResponse(
             supported=False,
@@ -487,9 +482,7 @@ def api_source_tables(
             "Source is enumerable but no tables were returned "
             "(unreadable file, or table listing unavailable in this tier)."
         )
-    return SourceTablesResponse(
-        supported=supported, tables=tables, message=message
-    )
+    return SourceTablesResponse(supported=supported, tables=tables, message=message)
 
 
 @router.get(
@@ -743,7 +736,7 @@ def api_run_events_log(instance_id: str) -> PlainTextResponse:
     response_model=list,
     dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
 )
-def api_health_checks() -> list:
+def api_health_checks() -> list[dict[str, Any]]:
     """Return the registered data-health / EDC check catalogue.
 
     Reads the packaged YAML specs directly (web-safe); does not import
@@ -759,7 +752,7 @@ def api_health_checks() -> list:
     response_model=list,
     dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
 )
-def api_health_packages() -> list:
+def api_health_packages() -> list[dict[str, Any]]:
     """Return the registered EDC/DC report-cycle package catalogue.
 
     Reads the packaged package manifests directly (web-safe); does not
@@ -817,7 +810,7 @@ def api_validate_transform(payload: TransformValidateRequest) -> TransformValida
     response_model=dict,
     dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
 )
-def api_run_health_report(instance_id: str) -> dict:
+def api_run_health_report(instance_id: str) -> dict[str, Any]:
     """Return the parsed data-health report artifact for ``instance_id``.
 
     The artifact is written by ``ovid2 health`` beside the event log
@@ -827,9 +820,7 @@ def api_run_health_report(instance_id: str) -> dict:
     """
     report = health_report_svc.get_report(instance_id)
     if report is None:
-        raise HTTPException(
-            status_code=404, detail=f"No health report for run '{instance_id}'."
-        )
+        raise HTTPException(status_code=404, detail=f"No health report for run '{instance_id}'.")
     return report
 
 
@@ -843,7 +834,7 @@ def api_run_health_report(instance_id: str) -> dict:
     summary="Most recent engine.metrics sample for a run",
     dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
 )
-def api_run_metrics_latest(instance_id: str) -> dict:
+def api_run_metrics_latest(instance_id: str) -> dict[str, Any]:
     """Return the most recent live-metrics sample for the run.
 
     Returns ``{}`` when no sample has been written yet — the sampler
@@ -862,7 +853,7 @@ def api_run_metrics_latest(instance_id: str) -> dict:
     include_in_schema=False,
     dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
 )
-def api_run_metrics_stream(instance_id: str):
+def api_run_metrics_stream(instance_id: str) -> StreamingResponse:
     """Server-Sent Events stream of live ``engine.metrics`` samples.
 
     Frames:
@@ -894,7 +885,7 @@ def api_run_metrics_stream(instance_id: str):
     summary="Live briefing of runs currently cooking",
     dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
 )
-def api_briefing_cooking() -> list[dict]:
+def api_briefing_cooking() -> list[dict[str, Any]]:
     """Return a compact list of runs currently running + their last sample.
 
     Powers the "cooking now" one-liner on the dashboard. Reads
@@ -1297,9 +1288,7 @@ def api_test_connection(name: str) -> ConnectionTestReport:
     summary="Browse a storage account's folder tree",
     dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
 )
-def api_browse_storage(
-    name: str, prefix: str | None = Query(None)
-) -> StorageBrowseResponse:
+def api_browse_storage(name: str, prefix: str | None = Query(None)) -> StorageBrowseResponse:
     """List one level of a storage account's contents.
 
     Drives the graphical folder/pipeline picker on the pipeline submit
@@ -1405,8 +1394,7 @@ def api_draft_pipeline_config(
     ``draft_pipeline_config`` tool.
     """
     body = body or PipelineRunRequest()
-    tables = ([t for t in body.tables if t and t != "all"]
-              if body.tables is not None else None)
+    tables = [t for t in body.tables if t and t != "all"] if body.tables is not None else None
     try:
         return pipelines_svc.run_now(
             name,
@@ -1428,9 +1416,7 @@ def api_draft_pipeline_config(
     summary="Submit an ETL job from this pipeline",
     dependencies=[Depends(require_capability(Capability.SUBMIT_JOBS))],
 )
-def api_run_pipeline_config(
-    name: str, body: PipelineRunRequest | None = None
-) -> JobSubmitResponse:
+def api_run_pipeline_config(name: str, body: PipelineRunRequest | None = None) -> JobSubmitResponse:
     """Convert a pipeline into a job submission and enqueue it.
 
     An optional body carries one-run overrides (``batch_id`` /
@@ -1730,10 +1716,7 @@ def api_fs_roots() -> FsRoots:
 def api_fs_list(
     path: str | None = Query(
         None,
-        description=(
-            "Absolute host path to list. Empty falls back to the first "
-            "allowlist root."
-        ),
+        description=("Absolute host path to list. Empty falls back to the first allowlist root."),
     ),
     show_hidden: bool | None = Query(
         None,
@@ -1876,7 +1859,7 @@ def _loopback_api_url(request: Request) -> str | None:
     if not server or not server[0]:
         return None
     host, port = str(server[0]), int(server[1] or 80)
-    if host in ("0.0.0.0", "::"):
+    if host in ("0.0.0.0", "::"):  # noqa: S104 — rewriting a wildcard bind, not binding
         host = "127.0.0.1"
     if ":" in host:
         host = f"[{host}]"
@@ -1917,16 +1900,18 @@ def api_llm_chat_stream(
         # The assistant may not start a nested assistant turn.
         raise HTTPException(status_code=403, detail="The assistant cannot chat with itself.")
     principal = llm_chat_svc.ChatPrincipal(
-        user_id=ctx.user_id, role=ctx.role, email=ctx.email,
+        user_id=ctx.user_id,
+        role=ctx.role,
+        email=ctx.email,
         api_url=_loopback_api_url(request),
     )
     try:
-        gen = llm_chat_svc.sse_stream(payload, actor=ctx.email or ctx.user_id,
-                                      principal=principal)
+        gen = llm_chat_svc.sse_stream(payload, actor=ctx.email or ctx.user_id, principal=principal)
     except llm_chat_svc.ChatDisabledError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return StreamingResponse(
-        gen, media_type="text/event-stream",
+        gen,
+        media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
@@ -2018,13 +2003,9 @@ def _parse_role(role: str) -> Role:
     try:
         parsed = Role(role)
     except ValueError as exc:
-        raise HTTPException(
-            status_code=400, detail=f"Unknown role: {role!r}"
-        ) from exc
+        raise HTTPException(status_code=400, detail=f"Unknown role: {role!r}") from exc
     if parsed == Role.PENDING:
-        raise HTTPException(
-            status_code=400, detail="Role 'pending' cannot be assigned."
-        )
+        raise HTTPException(status_code=400, detail="Role 'pending' cannot be assigned.")
     return parsed
 
 

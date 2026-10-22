@@ -112,12 +112,8 @@ def test_run_pipeline_puts_engine_in_transform_context(
     # reference tables.
     fake_cdm = MagicMock()
     fake_cdm.reference_tables = set()
-    monkeypatch.setattr(
-        pipeline_mod, "resolve_cdm_for_pipeline", lambda pipeline: fake_cdm
-    )
-    monkeypatch.setattr(
-        pipeline_mod, "_register_auxiliary_tables", lambda *a, **k: None
-    )
+    monkeypatch.setattr(pipeline_mod, "resolve_cdm_for_pipeline", lambda pipeline: fake_cdm)
+    monkeypatch.setattr(pipeline_mod, "_register_auxiliary_tables", lambda *a, **k: None)
 
     fake_df = MagicMock()
     monkeypatch.setattr(

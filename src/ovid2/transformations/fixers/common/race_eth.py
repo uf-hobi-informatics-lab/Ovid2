@@ -60,7 +60,7 @@ Deployment:
 
 from typing import Any
 
-from pyspark.sql import DataFrame
+from pyspark.sql import Column, DataFrame
 from pyspark.sql.functions import col, lit, when
 
 from ovid2.transformations.fixers.base import BaseFixer
@@ -104,8 +104,8 @@ class RaceEthFixer(BaseFixer):
         race_col: str = context.get("src1", "RACE")
         hispanic_col: str = context.get("src2", "HISPANIC")
 
-        race: col = col(race_col)
-        hispanic: col = col(hispanic_col)
+        race: Column = col(race_col)
+        hispanic: Column = col(hispanic_col)
 
         non_hispanic = hispanic == lit("N")
 

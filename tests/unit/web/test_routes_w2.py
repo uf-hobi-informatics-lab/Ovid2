@@ -21,7 +21,7 @@ def pipeline_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
         encoding="utf-8",
     )
     (pkg / "formatters" / "demographic.yaml").write_text(
-        'v: 1\nformatter: demographic\nadapter: source_passthrough\n'
+        "v: 1\nformatter: demographic\nadapter: source_passthrough\n"
         'sources:\n  demographic:\n    glob: "*Demographic*"\n'
         'projections:\n  PATID: "patid"\n',
         encoding="utf-8",

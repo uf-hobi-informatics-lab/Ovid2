@@ -84,19 +84,30 @@ class ReadOnlyApiClient:
 
         started = time.monotonic()
         try:
-            with httpx.Client(timeout=httpx.Timeout(self._timeout, connect=5.0),
-                              follow_redirects=False) as client:
-                resp = client.get(self.base_url + path, params=query or None,
-                                  headers={"Authorization": f"Bearer {self._token}",
-                                           "Accept": "application/json, text/plain"})
+            with httpx.Client(
+                timeout=httpx.Timeout(self._timeout, connect=5.0), follow_redirects=False
+            ) as client:
+                resp = client.get(
+                    self.base_url + path,
+                    params=query or None,
+                    headers={
+                        "Authorization": f"Bearer {self._token}",
+                        "Accept": "application/json, text/plain",
+                    },
+                )
         except httpx.HTTPError as exc:
-            return ApiResult(0, False, f"{type(exc).__name__}: {exc}",
-                             int((time.monotonic() - started) * 1000))
+            return ApiResult(
+                0, False, f"{type(exc).__name__}: {exc}", int((time.monotonic() - started) * 1000)
+            )
         text = resp.text
         with contextlib.suppress(json.JSONDecodeError, ValueError):
             text = json.dumps(resp.json(), ensure_ascii=False, separators=(",", ":"))
-        return ApiResult(resp.status_code, 200 <= resp.status_code < 300, text,
-                         int((time.monotonic() - started) * 1000))
+        return ApiResult(
+            resp.status_code,
+            200 <= resp.status_code < 300,
+            text,
+            int((time.monotonic() - started) * 1000),
+        )
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -25,10 +25,12 @@ so the output address can persist a per-run raw snapshot.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import logging
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 from ovid2.core.docker import is_inside_docker
 from ovid2.core.events import instance_finished, instance_started
@@ -80,8 +82,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     test_engine.add_argument(
         "name",
-        help="Engine config name, or a bare type name (pyspark / "
-        "databricks_spark / snowpark).",
+        help="Engine config name, or a bare type name (pyspark / databricks_spark / snowpark).",
     )
     test_engine.set_defaults(_entry=_test_engine_entry, _tool="test-engine")
 
@@ -119,7 +120,9 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     browse.add_argument("name", help="Storage account (connection) name.")
     browse.add_argument(
-        "--prefix", default=None, help="Sub-path/prefix to descend into.",
+        "--prefix",
+        default=None,
+        help="Sub-path/prefix to descend into.",
     )
     browse.set_defaults(_entry=_browse_storage_entry, _tool="browse-storage")
 
@@ -141,28 +144,34 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 
     # ``ovid2 tools migrate-addresses`` — W7 legacy → connection-shape.
     from ovid2.tools import migrate_addresses as _migrate_addresses
+
     _migrate_addresses.register(tool_subparsers)
 
     # ``ovid2 tools import-cdm`` — xlsx → resources/cdms/<cdm>/ YAML (C1).
     from ovid2.tools import import_cdm as _import_cdm
+
     _import_cdm.register(tool_subparsers)
 
     # ``ovid2 tools import-vocabulary`` — slice OMOP CONCEPT.csv into
     # per-vocabulary YAMLs under resources/semantic/vocabularies/ (S3).
     from ovid2.tools import import_vocabulary as _import_vocabulary
+
     _import_vocabulary.register(tool_subparsers)
 
     # ``ovid2 tools copy`` — one-shot address-to-address data move (C1).
     from ovid2.tools import copy as _copy
+
     _copy.register(tool_subparsers)
 
     # ``ovid2 tools move`` — driver-native successor to ``copy`` (M1).
     from ovid2.tools import move as _move
+
     _move.register(tool_subparsers)
 
     # ``ovid2 tools new-pipeline`` — scaffold a pipeline package from a
     # pipeline template (pipeline-centric panel, Phase 3).
     from ovid2.tools import new_pipeline as _new_pipeline
+
     _new_pipeline.register(tool_subparsers)
 
     # ``ovid2 tools ods ...`` — Ovid Data Space read-only helpers.
@@ -198,7 +207,9 @@ def _raw_upload_entry(args: argparse.Namespace) -> int:
     input_address = load_address(args.input_address, pipeline=args.pipeline)
     output_address = load_address(args.output_address, pipeline=args.pipeline)
     engine = load_engine(args.engine)
-    spark = engine.get_session()
+    # raw_upload reads/writes through the Spark-typed ``BaseAddress`` API;
+    # ``cli/`` may not import pyspark (even for typing), so keep it ``Any``.
+    spark: Any = engine.get_session()
 
     files = args.file or _discover_batch_files(input_address, args.pipeline, args.batch_id)
     failures = 0
@@ -206,7 +217,10 @@ def _raw_upload_entry(args: argparse.Namespace) -> int:
         try:
             table_name = _raw_table_name(args.pipeline, args.batch_id, file_name)
             df = input_address.read(
-                spark, args.pipeline, args.batch_id, file_name,
+                spark,
+                args.pipeline,
+                args.batch_id,
+                file_name,
                 table_name=table_name,
             )
             output_address.write(df, spark, args.pipeline, args.batch_id, table_name)
@@ -268,10 +282,8 @@ def _test_engine_entry(args: argparse.Namespace) -> int:
             "message": str(outcome.message),
             "detail": dict(outcome.detail),
         }
-        try:
+        with contextlib.suppress(Exception):
             engine.stop_session()
-        except Exception:  # noqa: BLE001
-            pass
     except (FileNotFoundError, ValueError, KeyError) as exc:
         result = {
             "ok": False,
@@ -279,7 +291,7 @@ def _test_engine_entry(args: argparse.Namespace) -> int:
             "message": str(exc),
             "detail": {"exception_type": type(exc).__name__},
         }
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         result = {
             "ok": False,
             "code": "error",
@@ -329,7 +341,8 @@ def _probe_connection_entry(args: argparse.Namespace) -> int:
         type_name = str(raw.get("type") or "")
         if type_name not in DRIVERS:
             result = {
-                "ok": False, "code": "config",
+                "ok": False,
+                "code": "config",
                 "message": f"Connection type '{type_name}' is not registered.",
                 "detail": {},
             }
@@ -345,13 +358,11 @@ def _probe_connection_entry(args: argparse.Namespace) -> int:
             # Surface a resolved auth-mode label (azure_blob) so the web
             # tier can display it without instantiating the connector
             # itself. Best-effort; never includes credential material.
-            try:
+            with contextlib.suppress(Exception):
                 connection = _connections.load_connection(args.name)
                 resolver = getattr(connection, "_auth_mode", None)
                 if resolver is not None:
                     detail.setdefault("auth_mode", str(resolver()))
-            except Exception:  # noqa: BLE001 — auth-mode is best-effort.
-                pass
             result = {
                 "ok": bool(probe_result.ok),
                 "code": str(probe_result.code),
@@ -360,12 +371,16 @@ def _probe_connection_entry(args: argparse.Namespace) -> int:
             }
     except (FileNotFoundError, PermissionError, ValueError, KeyError) as exc:
         result = {
-            "ok": False, "code": "config", "message": str(exc),
+            "ok": False,
+            "code": "config",
+            "message": str(exc),
             "detail": {"exception_type": type(exc).__name__},
         }
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         result = {
-            "ok": False, "code": "error", "message": str(exc),
+            "ok": False,
+            "code": "error",
+            "message": str(exc),
             "detail": {"exception_type": type(exc).__name__},
         }
 
@@ -395,7 +410,9 @@ def _browse_storage_entry(args: argparse.Namespace) -> int:
         type_name = str(raw.get("type") or "")
         if type_name not in DRIVERS:
             result = {
-                "ok": False, "supported": False, "type": type_name,
+                "ok": False,
+                "supported": False,
+                "type": type_name,
                 "prefix": prefix or "",
                 "message": f"Storage type '{type_name}' is not registered.",
                 "entries": [],
@@ -410,8 +427,11 @@ def _browse_storage_entry(args: argparse.Namespace) -> int:
             try:
                 raw_entries = driver.list_dir(prefix)
                 result = {
-                    "ok": True, "supported": True, "type": type_name,
-                    "prefix": prefix or "", "message": None,
+                    "ok": True,
+                    "supported": True,
+                    "type": type_name,
+                    "prefix": prefix or "",
+                    "message": None,
                     "entries": [
                         {"name": e.name, "kind": e.kind, "path": e.path}
                         for e in (raw_entries or [])
@@ -419,23 +439,32 @@ def _browse_storage_entry(args: argparse.Namespace) -> int:
                 }
             except NotImplementedError as exc:
                 result = {
-                    "ok": True, "supported": False, "type": type_name,
+                    "ok": True,
+                    "supported": False,
+                    "type": type_name,
                     "prefix": prefix or "",
                     "message": (
-                        f"Browsing is not available for '{type_name}' "
-                        f"storage accounts ({exc})."
+                        f"Browsing is not available for '{type_name}' storage accounts ({exc})."
                     ),
                     "entries": [],
                 }
     except (FileNotFoundError, PermissionError, ValueError, KeyError) as exc:
         result = {
-            "ok": False, "supported": True, "type": "", "prefix": prefix or "",
-            "message": str(exc), "entries": [],
+            "ok": False,
+            "supported": True,
+            "type": "",
+            "prefix": prefix or "",
+            "message": str(exc),
+            "entries": [],
         }
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         result = {
-            "ok": False, "supported": True, "type": "", "prefix": prefix or "",
-            "message": f"Listing failed: {exc}", "entries": [],
+            "ok": False,
+            "supported": True,
+            "type": "",
+            "prefix": prefix or "",
+            "message": f"Listing failed: {exc}",
+            "entries": [],
         }
 
     sys.stdout.write(_json.dumps(result) + "\n")

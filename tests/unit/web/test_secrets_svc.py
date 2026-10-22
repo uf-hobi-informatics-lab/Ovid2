@@ -50,9 +50,7 @@ def test_list_never_returns_values(isolated_xdg: Path) -> None:
 @pytest.mark.unit
 def test_get_returns_keys_only(isolated_xdg: Path) -> None:
     """``get_secret`` returns key names but never values."""
-    secrets_svc.write_secret(
-        "sf", SecretWrite(values={"user": "u", "password": "hunter2"})
-    )
+    secrets_svc.write_secret("sf", SecretWrite(values={"user": "u", "password": "hunter2"}))
     detail = secrets_svc.get_secret("sf")
     assert detail is not None
     assert set(detail.keys) == {"user", "password"}
@@ -72,8 +70,7 @@ def test_update_preserves_masked(isolated_xdg: Path) -> None:
         SecretWrite(values={"user": "u2", "password": "***"}),
     )
     raw = json.loads(
-        (Path(os.environ["XDG_CONFIG_HOME"]) / "ovid2" / "secrets.d" / "sf.json")
-        .read_text()
+        (Path(os.environ["XDG_CONFIG_HOME"]) / "ovid2" / "secrets.d" / "sf.json").read_text()
     )
     assert raw == {"user": "u2", "password": "real"}
 
@@ -87,9 +84,7 @@ def test_refuses_permissive_overwrite(isolated_xdg: Path) -> None:
     path.write_text(json.dumps({"user": "u"}), encoding="utf-8")
     path.chmod(0o644)
     with pytest.raises(secrets_svc.SecretError, match="0644"):
-        secrets_svc.write_secret(
-            "loose", SecretWrite(values={"user": "n"})
-        )
+        secrets_svc.write_secret("loose", SecretWrite(values={"user": "n"}))
 
 
 @pytest.mark.unit
@@ -113,9 +108,7 @@ def test_rejects_traversal_name(isolated_xdg: Path) -> None:
 def test_rejects_non_scalar_value(isolated_xdg: Path) -> None:
     """Nested containers are rejected — only JSON scalars allowed."""
     with pytest.raises(secrets_svc.SecretError):
-        secrets_svc.write_secret(
-            "nested", SecretWrite(values={"a": {"nested": True}})
-        )
+        secrets_svc.write_secret("nested", SecretWrite(values={"a": {"nested": True}}))
 
 
 @pytest.mark.unit

@@ -47,10 +47,10 @@ class ApplyTransformsOp(BaseMapOp):
 
     def apply(
         self,
-        df: "DataFrame",
+        df: DataFrame,
         params: dict[str, Any],
         ctx: MapOpContext,
-    ) -> "DataFrame":
+    ) -> DataFrame:
         """Resolve the transform chain and run it lazily against ``df``."""
         from ovid2.core.engines.pyspark import spark_functions
         from ovid2.transforms import engine as transforms_engine

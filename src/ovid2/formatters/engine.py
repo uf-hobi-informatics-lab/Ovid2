@@ -98,8 +98,7 @@ def execute_spec(spec: FormatterSpec, ctx: AdapterContext) -> DataFrame:
     # Projections: dict[column] = SQL expression.
     if spec.projections:
         select_exprs = [
-            f"{_projection_expr(expr)} as {column}"
-            for column, expr in spec.projections.items()
+            f"{_projection_expr(expr)} as {column}" for column, expr in spec.projections.items()
         ]
         df = df.selectExpr(*select_exprs)
 
@@ -135,9 +134,7 @@ def _empty_projected_df(df: DataFrame, spec: FormatterSpec) -> DataFrame:
     """
     from pyspark.sql.types import StringType, StructField, StructType
 
-    schema = StructType(
-        [StructField(column, StringType(), True) for column in spec.projections]
-    )
+    schema = StructType([StructField(column, StringType(), True) for column in spec.projections])
     return df.sparkSession.createDataFrame([], schema=schema)
 
 
@@ -236,7 +233,7 @@ class _SpecFormatter(BaseFormatter):
             module = importlib.import_module(module_name)
             formatter_class = getattr(module, class_name)
             return str(formatter_class().input_file_name)
-        except Exception:  # noqa: BLE001 — best-effort; format() surfaces real errors
+        except Exception:
             logger.debug(
                 "Could not resolve input_file_name from custom class %r for spec '%s'; "
                 "falling back to source glob.",

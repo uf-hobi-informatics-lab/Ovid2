@@ -222,8 +222,7 @@ KIND_REGISTRY: dict[str, KindSpec] = {
         name="copy",
         label="Copy",
         description=(
-            "One-shot address-to-address copy that bypasses the "
-            "formatter / mapper / fixer stages."
+            "One-shot address-to-address copy that bypasses the formatter / mapper / fixer stages."
         ),
         package_required=False,
         cli_subcommand="tools copy",
@@ -283,9 +282,7 @@ def all_kinds() -> tuple[str, ...]:
 
 def package_free_kinds() -> frozenset[str]:
     """Return the kinds whose executor never imports a pipeline package."""
-    return frozenset(
-        name for name, spec in KIND_REGISTRY.items() if not spec.package_required
-    )
+    return frozenset(name for name, spec in KIND_REGISTRY.items() if not spec.package_required)
 
 
 def get_kind(kind: str | None) -> KindSpec | None:

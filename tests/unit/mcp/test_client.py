@@ -17,7 +17,7 @@ def test_base_url_strips_trailing_slash() -> None:
         # Best-effort — the underlying httpx client owns a pool.
         import asyncio
 
-        asyncio.get_event_loop().run_until_complete(client.aclose())
+        asyncio.run(client.aclose())
 
 
 @pytest.mark.unit

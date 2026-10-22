@@ -49,9 +49,7 @@ def test_engine_field_spec_shape_is_stable() -> None:
             f"Engine '{type_name}' field spec has unexpected keys: {sorted(spec.keys())}"
         )
         for field in list(spec["args"]) + list(spec["secrets"]):
-            assert "name" in field, (
-                f"Engine '{type_name}' has a field with no 'name': {field}"
-            )
+            assert "name" in field, f"Engine '{type_name}' has a field with no 'name': {field}"
             assert isinstance(field["name"], str), (
                 f"Engine '{type_name}' field name must be str: {field}"
             )

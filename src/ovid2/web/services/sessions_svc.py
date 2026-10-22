@@ -12,6 +12,7 @@ Safety rules enforced here:
 5. Revoked sessions are ignored by get_valid().
 6. Purge removes both expired and revoked rows.
 """
+
 from __future__ import annotations
 
 import secrets
@@ -67,15 +68,9 @@ def create(
     absolute_deadline = (
         datetime.fromisoformat(now) + timedelta(minutes=absolute_ttl_min)
     ).isoformat()
-    idle_deadline = (
-        datetime.fromisoformat(now) + timedelta(minutes=idle_ttl_min)
-    ).isoformat()
+    idle_deadline = (datetime.fromisoformat(now) + timedelta(minutes=idle_ttl_min)).isoformat()
     # expires_at is the earlier of absolute_deadline and idle_deadline
-    expires_at = (
-        absolute_deadline
-        if absolute_deadline <= idle_deadline
-        else idle_deadline
-    )
+    expires_at = absolute_deadline if absolute_deadline <= idle_deadline else idle_deadline
 
     with web_db.connect() as conn:
         conn.execute(
@@ -144,13 +139,9 @@ def touch(session_id: str, idle_ttl_min: int) -> SessionRecord | None:
         if datetime.fromisoformat(row["absolute_deadline"]) < datetime.fromisoformat(now):
             return None
         # Compute new expiry: min(now + idle_ttl_min, absolute_deadline)
-        idle_deadline = (
-            datetime.fromisoformat(now) + timedelta(minutes=idle_ttl_min)
-        ).isoformat()
+        idle_deadline = (datetime.fromisoformat(now) + timedelta(minutes=idle_ttl_min)).isoformat()
         new_expires = (
-            idle_deadline
-            if idle_deadline <= row["absolute_deadline"]
-            else row["absolute_deadline"]
+            idle_deadline if idle_deadline <= row["absolute_deadline"] else row["absolute_deadline"]
         )
         conn.execute(
             """

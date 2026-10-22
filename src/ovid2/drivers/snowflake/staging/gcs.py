@@ -94,6 +94,7 @@ session naturally ends.
 from __future__ import annotations
 
 import atexit
+import contextlib
 import json
 import logging
 import os
@@ -150,8 +151,8 @@ class SnowparkGcsStrategy(SnowparkStagingStrategy):
 
     def materialise(
         self,
-        session: "EngineSession",
-        driver: "Driver",
+        session: EngineSession,
+        driver: Driver,
         pipeline: str,
         batch_id: str,
         file_name: str,
@@ -222,7 +223,8 @@ class SnowparkGcsStrategy(SnowparkStagingStrategy):
         )
         logger.info(
             "SnowparkGcsStrategy: CREATE TEMPORARY STAGE %s URL=%s",
-            stage_name, read_dir_uri,
+            stage_name,
+            read_dir_uri,
         )
         native.sql(create_stage_sql).collect()
         self._register_stage(session, stage_name)
@@ -238,12 +240,14 @@ class SnowparkGcsStrategy(SnowparkStagingStrategy):
 
         # Create the transient landing table.
         temp_fqtn = _temp_table_fqtn(
-            staging_schema, instance_id, pipeline, batch_id, table_stem,
+            staging_schema,
+            instance_id,
+            pipeline,
+            batch_id,
+            table_stem,
         )
         col_ddl = ", ".join(f'"{c}" VARCHAR' for c in columns)
-        native.sql(
-            f"CREATE OR REPLACE TRANSIENT TABLE {temp_fqtn} ({col_ddl})"
-        ).collect()
+        native.sql(f"CREATE OR REPLACE TRANSIENT TABLE {temp_fqtn} ({col_ddl})").collect()
         self._register_temp_table(session, temp_fqtn)
 
         # COPY INTO. Snowflake honours GCS auto-compression detection
@@ -261,7 +265,9 @@ class SnowparkGcsStrategy(SnowparkStagingStrategy):
         )
         logger.info(
             "SnowparkGcsStrategy: COPY INTO %s FROM @%s (file=%s)",
-            temp_fqtn, stage_name, file_name,
+            temp_fqtn,
+            stage_name,
+            file_name,
         )
         native.sql(copy_sql).collect()
 
@@ -269,9 +275,9 @@ class SnowparkGcsStrategy(SnowparkStagingStrategy):
 
     def persist(
         self,
-        session: "EngineSession",
+        session: EngineSession,
         df: Any,
-        driver: "Driver",
+        driver: Driver,
         pipeline: str,
         batch_id: str,
         table_name: str,
@@ -325,7 +331,8 @@ class SnowparkGcsStrategy(SnowparkStagingStrategy):
         )
         logger.info(
             "SnowparkGcsStrategy: CREATE TEMPORARY STAGE %s URL=%s",
-            stage_name, write_dir_uri,
+            stage_name,
+            write_dir_uri,
         )
         native.sql(create_stage_sql).collect()
         self._register_stage(session, stage_name)
@@ -337,7 +344,8 @@ class SnowparkGcsStrategy(SnowparkStagingStrategy):
         stage_target = f"@{stage_name}/{table_name}/"
         logger.info(
             "SnowparkGcsStrategy: copy_into_location → %s (single=%s)",
-            stage_target, single_file,
+            stage_target,
+            single_file,
         )
         _copy_into_location(
             df,
@@ -351,7 +359,9 @@ class SnowparkGcsStrategy(SnowparkStagingStrategy):
     # ------------------------------------------------------------------
 
     def _maybe_schedule_cleanup(
-        self, session: "EngineSession", instance_id: str,
+        self,
+        session: EngineSession,
+        instance_id: str,
     ) -> None:
         """Register an atexit hook that drops the stages + transient tables.
 
@@ -363,7 +373,8 @@ class SnowparkGcsStrategy(SnowparkStagingStrategy):
         if SNOWPARK_STAGING_KEEP:
             logger.info(
                 "SnowparkGcsStrategy: SNOWPARK_STAGING_KEEP is set; "
-                "skipping atexit cleanup for instance %s", instance_id,
+                "skipping atexit cleanup for instance %s",
+                instance_id,
             )
             return
 
@@ -381,28 +392,31 @@ class SnowparkGcsStrategy(SnowparkStagingStrategy):
             for stage in stages_ref:
                 try:
                     native.sql(f"DROP STAGE IF EXISTS {stage}").collect()
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     logger.warning(
                         "SnowparkGcsStrategy: DROP STAGE %s failed (%s); "
                         "the stage is temporary and Snowflake will "
-                        "auto-clean at session end.", stage, exc,
+                        "auto-clean at session end.",
+                        stage,
+                        exc,
                     )
             for fqtn in temp_tables_ref:
                 try:
                     native.sql(f"DROP TABLE IF EXISTS {fqtn}").collect()
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     logger.warning(
-                        "SnowparkGcsStrategy: DROP TABLE %s failed (%s); "
-                        "clean manually.", fqtn, exc,
+                        "SnowparkGcsStrategy: DROP TABLE %s failed (%s); clean manually.",
+                        fqtn,
+                        exc,
                     )
 
         atexit.register(_cleanup)
 
-    def _register_stage(self, session: "EngineSession", stage_name: str) -> None:
+    def _register_stage(self, session: EngineSession, stage_name: str) -> None:
         """Record ``stage_name`` for atexit cleanup on this session."""
         self._stages.setdefault(id(session), []).append(stage_name)
 
-    def _register_temp_table(self, session: "EngineSession", fqtn: str) -> None:
+    def _register_temp_table(self, session: EngineSession, fqtn: str) -> None:
         """Record ``fqtn`` for atexit cleanup on this session."""
         self._temp_tables.setdefault(id(session), []).append(fqtn)
 
@@ -440,11 +454,9 @@ def _merged_config(driver: Any) -> dict[str, Any]:
     same shape).
     """
     if hasattr(driver, "as_legacy_src_args"):
-        try:
+        with contextlib.suppress(Exception):
             _, merged = driver.as_legacy_src_args()
             return dict(merged)
-        except Exception:  # noqa: BLE001
-            pass
     location = getattr(driver, "location", None) or {}
     return dict(location)
 
@@ -500,7 +512,12 @@ def _gcs_dir_uri(bucket: str, prefix: str, pipeline: str, batch_id: str) -> str:
 
 
 def _stage_name(
-    instance_id: str, pipeline: str, batch_id: str, table: str, *, kind: str,
+    instance_id: str,
+    pipeline: str,
+    batch_id: str,
+    table: str,
+    *,
+    kind: str,
 ) -> str:
     """Return a stage name safe for interpolation into DDL.
 
@@ -512,7 +529,8 @@ def _stage_name(
     ever fails.
     """
     safe = re.sub(
-        r"[^A-Za-z0-9]+", "_",
+        r"[^A-Za-z0-9]+",
+        "_",
         f"{kind}_{instance_id}_{pipeline}_{batch_id}_{table}",
     )
     return f"OVID2_STG_GCS_{safe}".upper()
@@ -531,9 +549,7 @@ def _temp_table_fqtn(
     an operator's cleanup query (``SHOW TABLES LIKE 'OVID2_STG_%'``)
     catches every strategy's orphans.
     """
-    safe = re.sub(
-        r"[^A-Za-z0-9]+", "_", f"{instance_id}_{pipeline}_{batch_id}_{stem}"
-    )
+    safe = re.sub(r"[^A-Za-z0-9]+", "_", f"{instance_id}_{pipeline}_{batch_id}_{stem}")
     return f"{staging_schema}.OVID2_STG_GCS_{safe}".upper()
 
 
@@ -548,7 +564,7 @@ def _escape_sql(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "''")
 
 
-def _native_session(session: "EngineSession") -> Any:
+def _native_session(session: EngineSession) -> Any:
     """Return the real ``snowflake.snowpark.Session`` from an adapter."""
     native = getattr(session, "native", None)
     if native is None:
@@ -575,30 +591,32 @@ def _ensure_current_database(native: Any) -> None:
     """
     try:
         current_db = native.get_current_database()
-    except Exception:  # noqa: BLE001
+    except Exception:
         current_db = None
     if not current_db:
         try:
             native.sql(f"USE DATABASE {_DEFAULT_STAGE_DATABASE}").collect()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning(
                 "SnowparkGcsStrategy: could not USE DATABASE %s (%s)",
-                _DEFAULT_STAGE_DATABASE, exc,
+                _DEFAULT_STAGE_DATABASE,
+                exc,
             )
             return
 
     try:
         current_schema = native.get_current_schema()
-    except Exception:  # noqa: BLE001
+    except Exception:
         current_schema = None
     if current_schema:
         return
     try:
         native.sql(f"USE SCHEMA {_DEFAULT_STAGE_SCHEMA}").collect()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning(
             "SnowparkGcsStrategy: could not USE SCHEMA %s (%s)",
-            _DEFAULT_STAGE_SCHEMA, exc,
+            _DEFAULT_STAGE_SCHEMA,
+            exc,
         )
 
 
@@ -627,7 +645,7 @@ def _ensure_writable_staging_schema(native: Any) -> str:
             return override
         try:
             current_db = native.get_current_database()
-        except Exception:  # noqa: BLE001
+        except Exception:
             current_db = None
         if not current_db:
             raise RuntimeError(
@@ -640,7 +658,7 @@ def _ensure_writable_staging_schema(native: Any) -> str:
 
     try:
         current_db = native.get_current_database()
-    except Exception:  # noqa: BLE001
+    except Exception:
         current_db = None
     if not current_db:
         raise RuntimeError(
@@ -654,7 +672,7 @@ def _ensure_writable_staging_schema(native: Any) -> str:
     try:
         native.sql(f"CREATE SCHEMA IF NOT EXISTS {schema_fqn}").collect()
         return schema_fqn
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise RuntimeError(
             f"SnowparkGcsStrategy: cannot create staging schema "
             f"{schema_fqn} ({exc}). Grant CREATE SCHEMA on {current_db}, "
@@ -706,8 +724,7 @@ def _build_create_stage_sql(
 
     auth_clause = f"STORAGE_INTEGRATION = {integration}"
     return (
-        f"CREATE OR REPLACE TEMPORARY STAGE {stage_name} "
-        f"URL = '{_escape_sql(url)}' {auth_clause}"
+        f"CREATE OR REPLACE TEMPORARY STAGE {stage_name} URL = '{_escape_sql(url)}' {auth_clause}"
     )
 
 
@@ -747,7 +764,7 @@ def _read_header_columns_from_gcs(
 
     # Local imports so the module stays google-cloud-free at module
     # scope.
-    from google.cloud import storage  # type: ignore[import-not-found]
+    from google.cloud import storage
 
     project_id = _nonempty(merged_config.get("project_id"))
     sa_json = merged_config.get("service_account_json")
@@ -756,21 +773,16 @@ def _read_header_columns_from_gcs(
     if project_id:
         client_kwargs["project"] = project_id
     if sa_json:
-        from google.oauth2 import service_account  # type: ignore[import-not-found]
+        from google.oauth2 import service_account
 
         info = json.loads(sa_json) if isinstance(sa_json, str) else dict(sa_json)
-        client_kwargs["credentials"] = (
-            service_account.Credentials.from_service_account_info(info)
-        )
+        client_kwargs["credentials"] = service_account.Credentials.from_service_account_info(info)
 
     client = storage.Client(**client_kwargs)
     blob = client.bucket(bucket).blob(key)
     body = blob.download_as_bytes(start=0, end=65535)
     if not body:
-        raise ValueError(
-            f"SnowparkGcsStrategy: gs://{bucket}/{key} is empty; "
-            "nothing to stage."
-        )
+        raise ValueError(f"SnowparkGcsStrategy: gs://{bucket}/{key} is empty; nothing to stage.")
     # Decode leniently — CSV headers occasionally carry a BOM.
     text = body.decode("utf-8", errors="replace")
     # First line only.

@@ -152,9 +152,7 @@ def list_runs(
     def _keep(run: RunSummary) -> bool:
         if pipeline_filter and pipeline_filter not in (run.pipeline or "").casefold():
             return False
-        if status_filter and (run.status or "") != status_filter:
-            return False
-        return True
+        return not (status_filter and (run.status or "") != status_filter)
 
     rows = [r for r in rows if _keep(r)]
     rows.sort(key=lambda r: r.received_time or "", reverse=True)
@@ -197,9 +195,7 @@ def get_run(identifier: str) -> RunSummary | None:
     return _row_from_batch(row)
 
 
-def _row_from_web_job(
-    job: sqlite3.Row, batch: sqlite3.Row | None = None
-) -> RunSummary:
+def _row_from_web_job(job: sqlite3.Row, batch: sqlite3.Row | None = None) -> RunSummary:
     """Convert a web_jobs row into a :class:`RunSummary`.
 
     When a scheduler ``data_batch`` row exists for the same ``batch_id``

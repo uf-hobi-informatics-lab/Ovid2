@@ -21,9 +21,7 @@ import pytest
 
 
 @pytest.mark.contract
-def test_disc_connection_auto_mounts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_disc_connection_auto_mounts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A disc address must contribute an ExtraMount via build_disc_mounts."""
     host = tmp_path / "host_root"
     host.mkdir()
@@ -42,9 +40,7 @@ def test_disc_connection_auto_mounts(
         encoding="utf-8",
     )
     (cfgs / "sandbox_out.json").write_text(
-        json.dumps(
-            {"connection": "sandbox_disc", "location": {"path": "batch"}}
-        ),
+        json.dumps({"connection": "sandbox_disc", "location": {"path": "batch"}}),
         encoding="utf-8",
     )
 
@@ -77,19 +73,19 @@ def test_disc_connection_container_path_override(
     cfgs.mkdir(parents=True, exist_ok=True)
 
     (conns / "d.json").write_text(
-        json.dumps({
-            "type": "disc",
-            "args": {
-                "host_path": str(host),
-                "container_path": "/mnt/sink",
-                "mount_mode": "ro",
-            },
-        }),
+        json.dumps(
+            {
+                "type": "disc",
+                "args": {
+                    "host_path": str(host),
+                    "container_path": "/mnt/sink",
+                    "mount_mode": "ro",
+                },
+            }
+        ),
         encoding="utf-8",
     )
-    (cfgs / "a.json").write_text(
-        json.dumps({"connection": "d", "location": {}}), encoding="utf-8"
-    )
+    (cfgs / "a.json").write_text(json.dumps({"connection": "d", "location": {}}), encoding="utf-8")
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
 
     from ovid2.connections.disc_mounts import build_disc_mounts
@@ -113,15 +109,15 @@ def test_disc_connection_reserved_container_path_is_dropped(
     cfgs = tmp_path / "config" / "ovid2" / "configs"
     cfgs.mkdir(parents=True, exist_ok=True)
     (conns / "d.json").write_text(
-        json.dumps({
-            "type": "disc",
-            "args": {"host_path": str(host), "container_path": "/data"},
-        }),
+        json.dumps(
+            {
+                "type": "disc",
+                "args": {"host_path": str(host), "container_path": "/data"},
+            }
+        ),
         encoding="utf-8",
     )
-    (cfgs / "a.json").write_text(
-        json.dumps({"connection": "d", "location": {}}), encoding="utf-8"
-    )
+    (cfgs / "a.json").write_text(json.dumps({"connection": "d", "location": {}}), encoding="utf-8")
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
 
     from ovid2.connections.disc_mounts import build_disc_mounts

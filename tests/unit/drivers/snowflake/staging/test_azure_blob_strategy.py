@@ -17,7 +17,6 @@ from ovid2.core.engines.stager import (
     SnowparkStagingStrategy,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -28,7 +27,8 @@ def _isolate_env(monkeypatch, tmp_path):
     monkeypatch.setenv("OVID2_INSTANCE_ID", "20260806-150000-abcdef")
     monkeypatch.delenv("OVID2_SNOWPARK_STAGING_KEEP", raising=False)
     monkeypatch.delenv(
-        "OVID2_SNOWPARK_STAGING_AZURE_BLOB_INTEGRATION", raising=False,
+        "OVID2_SNOWPARK_STAGING_AZURE_BLOB_INTEGRATION",
+        raising=False,
     )
     monkeypatch.delenv("OVID2_SNOWPARK_STAGING_SCHEMA", raising=False)
 
@@ -70,7 +70,7 @@ class _FakeSession:
         return None
 
     @property
-    def native(self) -> "Any":
+    def native(self) -> Any:
         return self
 
 
@@ -131,6 +131,7 @@ class TestImportSafety:
                 del sys.modules[mod]
         pyspark_before = {m for m in sys.modules if m.startswith("pyspark")}
         import ovid2.drivers.snowflake.staging.azure_blob  # noqa: F401
+
         pyspark_after = {m for m in sys.modules if m.startswith("pyspark")}
         assert pyspark_after == pyspark_before
 
@@ -146,7 +147,9 @@ class TestBuildCreateStageSql:
         from ovid2.drivers.snowflake.staging import azure_blob
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_AZURE_BLOB_INTEGRATION", "AZ_INT",
+            settings,
+            "SNOWPARK_STAGING_AZURE_BLOB_INTEGRATION",
+            "AZ_INT",
         )
         sql = azure_blob._build_create_stage_sql(
             stage_name="OVID2_STG_AZ_X",
@@ -162,7 +165,9 @@ class TestBuildCreateStageSql:
         from ovid2.drivers.snowflake.staging import azure_blob
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_AZURE_BLOB_INTEGRATION", None,
+            settings,
+            "SNOWPARK_STAGING_AZURE_BLOB_INTEGRATION",
+            None,
         )
         sql = azure_blob._build_create_stage_sql(
             stage_name="OVID2_STG_AZ_X",
@@ -174,18 +179,22 @@ class TestBuildCreateStageSql:
         assert "AZURE_SAS_TOKEN = 'sig=abc&sr=c'" in sql
 
     def test_falls_back_to_generated_sas_from_account_key(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         from ovid2.config import settings
         from ovid2.drivers.snowflake.staging import azure_blob
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_AZURE_BLOB_INTEGRATION", None,
+            settings,
+            "SNOWPARK_STAGING_AZURE_BLOB_INTEGRATION",
+            None,
         )
         # Stub the SAS generator so the test doesn't need the real
         # azure-storage-blob package.
         monkeypatch.setattr(
-            azure_blob, "_generate_container_sas",
+            azure_blob,
+            "_generate_container_sas",
             lambda **kw: "sig=generated&se=2026",
         )
         sql = azure_blob._build_create_stage_sql(
@@ -200,13 +209,16 @@ class TestBuildCreateStageSql:
         assert "AZURE_SAS_TOKEN = 'sig=generated&se=2026'" in sql
 
     def test_extracts_account_key_from_connection_string(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         from ovid2.config import settings
         from ovid2.drivers.snowflake.staging import azure_blob
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_AZURE_BLOB_INTEGRATION", None,
+            settings,
+            "SNOWPARK_STAGING_AZURE_BLOB_INTEGRATION",
+            None,
         )
         captured = {}
 
@@ -215,7 +227,9 @@ class TestBuildCreateStageSql:
             return "sig=fromconn"
 
         monkeypatch.setattr(
-            azure_blob, "_generate_container_sas", _fake_generate,
+            azure_blob,
+            "_generate_container_sas",
+            _fake_generate,
         )
         sql = azure_blob._build_create_stage_sql(
             stage_name="X",
@@ -239,7 +253,9 @@ class TestBuildCreateStageSql:
         from ovid2.drivers.snowflake.staging import azure_blob
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_AZURE_BLOB_INTEGRATION", None,
+            settings,
+            "SNOWPARK_STAGING_AZURE_BLOB_INTEGRATION",
+            None,
         )
         with pytest.raises(ValueError, match="no Snowflake→Azure auth path"):
             azure_blob._build_create_stage_sql(
@@ -259,12 +275,28 @@ class TestHelpers:
     def test_azure_dir_url_composition(self) -> None:
         from ovid2.drivers.snowflake.staging.azure_blob import _azure_dir_url
 
-        assert _azure_dir_url(
-            "acct", "core.windows.net", "container", "prefix", "demo", "20260101",
-        ) == "azure://acct.blob.core.windows.net/container/prefix/demo/20260101/"
-        assert _azure_dir_url(
-            "acct", "core.windows.net", "container", "", "", "",
-        ) == "azure://acct.blob.core.windows.net/container/"
+        assert (
+            _azure_dir_url(
+                "acct",
+                "core.windows.net",
+                "container",
+                "prefix",
+                "demo",
+                "20260101",
+            )
+            == "azure://acct.blob.core.windows.net/container/prefix/demo/20260101/"
+        )
+        assert (
+            _azure_dir_url(
+                "acct",
+                "core.windows.net",
+                "container",
+                "",
+                "",
+                "",
+            )
+            == "azure://acct.blob.core.windows.net/container/"
+        )
 
     def test_azure_blob_name_composition(self) -> None:
         from ovid2.drivers.snowflake.staging.azure_blob import _azure_blob_name
@@ -272,15 +304,17 @@ class TestHelpers:
         assert _azure_blob_name("prefix", "demo", "20260101", "f.csv") == (
             "prefix/demo/20260101/f.csv"
         )
-        assert _azure_blob_name("", "demo", "20260101", "f.csv") == (
-            "demo/20260101/f.csv"
-        )
+        assert _azure_blob_name("", "demo", "20260101", "f.csv") == ("demo/20260101/f.csv")
 
     def test_stage_name_uppercased_and_sanitised(self) -> None:
         from ovid2.drivers.snowflake.staging.azure_blob import _stage_name
 
         name = _stage_name(
-            "20260806-150000-abc", "demo", "20260101", "encounter", kind="in",
+            "20260806-150000-abc",
+            "demo",
+            "20260101",
+            "encounter",
+            kind="in",
         )
         assert name.startswith("OVID2_STG_AZ_")
         assert name == name.upper()
@@ -288,24 +322,27 @@ class TestHelpers:
     def test_require_account_from_connection_string(self) -> None:
         from ovid2.drivers.snowflake.staging.azure_blob import _require_account
 
-        got = _require_account({
-            "connection_string": (
-                "DefaultEndpointsProtocol=https;AccountName=fromconn;"
-                "AccountKey=k;EndpointSuffix=core.windows.net"
-            ),
-        })
+        got = _require_account(
+            {
+                "connection_string": (
+                    "DefaultEndpointsProtocol=https;AccountName=fromconn;"
+                    "AccountKey=k;EndpointSuffix=core.windows.net"
+                ),
+            }
+        )
         assert got == "fromconn"
 
     def test_require_account_prefers_explicit(self) -> None:
         from ovid2.drivers.snowflake.staging.azure_blob import _require_account
 
-        got = _require_account({
-            "account_name": "explicit",
-            "connection_string": (
-                "AccountName=fromconn;AccountKey=k;"
-                "EndpointSuffix=core.windows.net"
-            ),
-        })
+        got = _require_account(
+            {
+                "account_name": "explicit",
+                "connection_string": (
+                    "AccountName=fromconn;AccountKey=k;EndpointSuffix=core.windows.net"
+                ),
+            }
+        )
         assert got == "explicit"
 
     def test_require_account_raises_when_missing(self) -> None:
@@ -361,7 +398,8 @@ class TestMaterialise:
         monkeypatch.setitem(sys.modules, "azure.identity", fake_identity_mod)
 
     def test_materialise_happy_path_with_account_key(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         from ovid2.config import settings
         from ovid2.drivers.snowflake.staging import azure_blob
@@ -370,35 +408,50 @@ class TestMaterialise:
         )
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_AZURE_BLOB_INTEGRATION", None,
+            settings,
+            "SNOWPARK_STAGING_AZURE_BLOB_INTEGRATION",
+            None,
         )
         # Stub the SAS generator so the CREATE STAGE has a token.
         monkeypatch.setattr(
-            azure_blob, "_generate_container_sas",
+            azure_blob,
+            "_generate_container_sas",
             lambda **kw: "sig=fake",
         )
         self._prepare_azure_stub(
-            monkeypatch, body=b"COL_A\tCOL_B\n1\t2\n",
+            monkeypatch,
+            body=b"COL_A\tCOL_B\n1\t2\n",
         )
 
         session = _FakeSession()
-        driver = _FakeAzureDriver({
-            "account_name": "acct",
-            "container": "c",
-            "prefix": "raw",
-            "endpoint_suffix": "core.windows.net",
-            "account_key": "key123",
-            "format": "csv",
-        })
+        driver = _FakeAzureDriver(
+            {
+                "account_name": "acct",
+                "container": "c",
+                "prefix": "raw",
+                "endpoint_suffix": "core.windows.net",
+                "account_key": "key123",
+                "format": "csv",
+            }
+        )
         strategy = SnowparkAzureBlobStrategy()
 
         df = strategy.materialise(
-            session, driver, "demo", "20260101",
-            "encounter.csv", None, None,
+            session,
+            driver,
+            "demo",
+            "20260101",
+            "encounter.csv",
+            None,
+            None,
         )
 
-        create_stage = [q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TEMPORARY STAGE")]
-        create_table = [q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TRANSIENT TABLE")]
+        create_stage = [
+            q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TEMPORARY STAGE")
+        ]
+        create_table = [
+            q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TRANSIENT TABLE")
+        ]
         copy_into = [q for q in session.sql_calls if q.startswith("COPY INTO")]
         assert len(create_stage) == 1
         assert len(create_table) == 1
@@ -420,13 +473,23 @@ class TestMaterialise:
         )
 
         session = _FakeSession()
-        driver = _FakeAzureDriver({
-            "account_name": "a", "container": "c", "format": "parquet",
-        })
+        driver = _FakeAzureDriver(
+            {
+                "account_name": "a",
+                "container": "c",
+                "format": "parquet",
+            }
+        )
         strategy = SnowparkAzureBlobStrategy()
         with pytest.raises(ValueError, match="only supports fmt='csv'"):
             strategy.materialise(
-                session, driver, "demo", "20260101", "f.parquet", None, None,
+                session,
+                driver,
+                "demo",
+                "20260101",
+                "f.parquet",
+                None,
+                None,
             )
 
     def test_materialise_requires_account(self) -> None:
@@ -439,7 +502,13 @@ class TestMaterialise:
         strategy = SnowparkAzureBlobStrategy()
         with pytest.raises(ValueError, match="no storage account resolved"):
             strategy.materialise(
-                session, driver, "p", "b", "f.csv", None, None,
+                session,
+                driver,
+                "p",
+                "b",
+                "f.csv",
+                None,
+                None,
             )
 
 
@@ -450,7 +519,8 @@ class TestMaterialise:
 
 class TestPersist:
     def test_persist_creates_stage_and_calls_copy_into_location(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         from ovid2.config import settings
         from ovid2.drivers.snowflake.staging.azure_blob import (
@@ -458,24 +528,36 @@ class TestPersist:
         )
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_AZURE_BLOB_INTEGRATION", "AZ_INT",
+            settings,
+            "SNOWPARK_STAGING_AZURE_BLOB_INTEGRATION",
+            "AZ_INT",
         )
         session = _FakeSession()
-        driver = _FakeAzureDriver({
-            "account_name": "acct",
-            "container": "outc",
-            "prefix": "cooked",
-            "endpoint_suffix": "core.windows.net",
-            "format": "csv",
-            "single_file": True,
-        })
+        driver = _FakeAzureDriver(
+            {
+                "account_name": "acct",
+                "container": "outc",
+                "prefix": "cooked",
+                "endpoint_suffix": "core.windows.net",
+                "format": "csv",
+                "single_file": True,
+            }
+        )
         strategy = SnowparkAzureBlobStrategy()
         df = MagicMock()
         strategy.persist(
-            session, df, driver, "demo", "20260101", "encounter", None,
+            session,
+            df,
+            driver,
+            "demo",
+            "20260101",
+            "encounter",
+            None,
         )
 
-        create_stage = [q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TEMPORARY STAGE")]
+        create_stage = [
+            q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TEMPORARY STAGE")
+        ]
         assert len(create_stage) == 1
         assert "azure://acct.blob.core.windows.net/outc/cooked/demo/20260101/" in create_stage[0]
         assert "STORAGE_INTEGRATION = AZ_INT" in create_stage[0]
@@ -494,13 +576,18 @@ class TestPersist:
         )
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_AZURE_BLOB_INTEGRATION", "I",
+            settings,
+            "SNOWPARK_STAGING_AZURE_BLOB_INTEGRATION",
+            "I",
         )
         session = _FakeSession()
-        driver = _FakeAzureDriver({
-            "account_name": "a", "container": "c",
-            "format": "csv",
-        })
+        driver = _FakeAzureDriver(
+            {
+                "account_name": "a",
+                "container": "c",
+                "format": "csv",
+            }
+        )
         df = MagicMock()
         strategy = SnowparkAzureBlobStrategy()
         strategy.persist(session, df, driver, "p", "b", "t", None)
@@ -521,7 +608,8 @@ class TestCleanup:
 
         atexit_calls: list = []
         monkeypatch.setattr(
-            "atexit.register", lambda fn: atexit_calls.append(fn),
+            "atexit.register",
+            lambda fn: atexit_calls.append(fn),
         )
         session = _FakeSession()
         strategy = SnowparkAzureBlobStrategy()
@@ -538,7 +626,8 @@ class TestCleanup:
 
         atexit_calls: list = []
         monkeypatch.setattr(
-            "atexit.register", lambda fn: atexit_calls.append(fn),
+            "atexit.register",
+            lambda fn: atexit_calls.append(fn),
         )
         monkeypatch.setattr(settings, "SNOWPARK_STAGING_KEEP", True)
         session = _FakeSession()
@@ -553,7 +642,8 @@ class TestCleanup:
 
         atexit_hooks: list = []
         monkeypatch.setattr(
-            "atexit.register", lambda fn: atexit_hooks.append(fn),
+            "atexit.register",
+            lambda fn: atexit_hooks.append(fn),
         )
         session = _FakeSession()
         strategy = SnowparkAzureBlobStrategy()

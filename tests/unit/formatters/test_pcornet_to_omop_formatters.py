@@ -27,24 +27,24 @@ if TYPE_CHECKING:
 class _StubAddress:
     """Serve each PCORnet source identifier from an inline DataFrame."""
 
-    def __init__(self, tables: dict[str, "DataFrame"]) -> None:
+    def __init__(self, tables: dict[str, DataFrame]) -> None:
         self._tables = tables
 
     def read(
         self,
-        spark: "SparkSession",
+        spark: SparkSession,
         pipeline: str,
         batch_id: str,
         glob: str,
         table_name: str | None = None,
-    ) -> "DataFrame":
+    ) -> DataFrame:
         for key in sorted(self._tables, key=len, reverse=True):
             if key in glob:
                 return self._tables[key]
         raise FileNotFoundError(glob)
 
 
-def _run(table: str, spark: "SparkSession", tables: dict[str, "DataFrame"]) -> "DataFrame":
+def _run(table: str, spark: SparkSession, tables: dict[str, DataFrame]) -> DataFrame:
     from ovid2.core.engines.pyspark import PySparkEngine
 
     engine = PySparkEngine()
@@ -60,7 +60,7 @@ def _run(table: str, spark: "SparkSession", tables: dict[str, "DataFrame"]) -> "
     return execute_spec(spec, ctx)
 
 
-def _demographic(spark: "SparkSession") -> "DataFrame":
+def _demographic(spark: SparkSession) -> DataFrame:
     rows = [
         # PATID, BIRTH_DATE, SEX, RACE, HISPANIC, SOURCE
         ("P1", "1980-05-15", "F", "05", "N", "SITE"),
@@ -68,14 +68,12 @@ def _demographic(spark: "SparkSession") -> "DataFrame":
         ("P3", "2000-12-31", "UN", "07", "R", "SITE"),
         ("P4", "1990-06-06", "", "NI", "", "SITE"),
     ]
-    return spark.createDataFrame(
-        rows, ["PATID", "BIRTH_DATE", "SEX", "RACE", "HISPANIC", "SOURCE"]
-    )
+    return spark.createDataFrame(rows, ["PATID", "BIRTH_DATE", "SEX", "RACE", "HISPANIC", "SOURCE"])
 
 
 @pytest.mark.usefixtures("spark")
 class TestPersonFormatter:
-    def test_output_columns(self, spark: "SparkSession") -> None:
+    def test_output_columns(self, spark: SparkSession) -> None:
         out = _run("person", spark, {"DEMOGRAPHIC": _demographic(spark)})
         expected = {
             "person_id",
@@ -102,12 +100,12 @@ class TestPersonFormatter:
         }
         assert set(out.columns) == expected
 
-    def test_person_id_is_patid(self, spark: "SparkSession") -> None:
+    def test_person_id_is_patid(self, spark: SparkSession) -> None:
         out = _run("person", spark, {"DEMOGRAPHIC": _demographic(spark)})
         pairs = {r["person_id"]: r["person_source_value"] for r in out.collect()}
         assert pairs == {"P1": "P1", "P2": "P2", "P3": "P3", "P4": "P4"}
 
-    def test_concept_id_dictionaries(self, spark: "SparkSession") -> None:
+    def test_concept_id_dictionaries(self, spark: SparkSession) -> None:
         out = _run("person", spark, {"DEMOGRAPHIC": _demographic(spark)})
         by_id = {r["person_id"]: r for r in out.collect()}
         # F -> 8532, M -> 8507, UN -> 4214687, '' -> 0
@@ -126,7 +124,7 @@ class TestPersonFormatter:
         assert by_id["P3"]["ethnicity_concept_id"] == "2090000003"
         assert by_id["P4"]["ethnicity_concept_id"] == "0"
 
-    def test_birth_date_split(self, spark: "SparkSession") -> None:
+    def test_birth_date_split(self, spark: SparkSession) -> None:
         out = _run("person", spark, {"DEMOGRAPHIC": _demographic(spark)})
         by_id = {r["person_id"]: r for r in out.collect()}
         assert by_id["P1"]["year_of_birth"] == "1980"
@@ -135,7 +133,7 @@ class TestPersonFormatter:
         assert by_id["P1"]["mapped_from"] == "DEMOGRAPHIC"
 
 
-def _encounter(spark: "SparkSession") -> "DataFrame":
+def _encounter(spark: SparkSession) -> DataFrame:
     rows = [
         # ENCOUNTERID, PATID, ENC_TYPE, ADMIT_DATE, DISCHARGE_DATE,
         # PROVIDERID, FACILITYID, ADMITTING_SOURCE, DISCHARGE_STATUS, SOURCE
@@ -161,7 +159,7 @@ def _encounter(spark: "SparkSession") -> "DataFrame":
 
 @pytest.mark.usefixtures("spark")
 class TestVisitOccurrenceFormatter:
-    def test_ids_and_concepts(self, spark: "SparkSession") -> None:
+    def test_ids_and_concepts(self, spark: SparkSession) -> None:
         out = _run("visit_occurrence", spark, {"ENCOUNTER": _encounter(spark)})
         by_id = {r["visit_occurrence_id"]: r for r in out.collect()}
         # visit_occurrence_id = ENCOUNTERID, person_id = PATID
@@ -176,14 +174,14 @@ class TestVisitOccurrenceFormatter:
         assert by_id["E1"]["provider_id"] == "PR1"
         assert by_id["E1"]["care_site_id"] == "F1"
 
-    def test_date_sentinel(self, spark: "SparkSession") -> None:
+    def test_date_sentinel(self, spark: SparkSession) -> None:
         out = _run("visit_occurrence", spark, {"ENCOUNTER": _encounter(spark)})
         by_id = {r["visit_occurrence_id"]: r for r in out.collect()}
         # E2 has no discharge date -> 1900-01-01 sentinel.
         assert str(by_id["E2"]["visit_end_date"]) == "1900-01-01"
 
 
-def _register_concept_views(spark: "SparkSession") -> None:
+def _register_concept_views(spark: SparkSession) -> None:
     """Register minimal ``concept`` + ``concept_relationship`` temp views."""
     concept_schema = (
         "concept_id string, concept_code string, concept_name string, "
@@ -192,11 +190,19 @@ def _register_concept_views(spark: "SparkSession") -> None:
     )
     concept_rows = [
         ("100", "E11.9", "T2DM", "Condition", "ICD-10-CM", "4-char", None, "2000-01-01", None),
-        ("200", "201826", "T2DM SNOMED", "Condition", "SNOMED", "Clinical", "S", "2000-01-01", None),
+        (
+            "200",
+            "201826",
+            "T2DM SNOMED",
+            "Condition",
+            "SNOMED",
+            "Clinical",
+            "S",
+            "2000-01-01",
+            None,
+        ),
     ]
-    spark.createDataFrame(concept_rows, concept_schema).createOrReplaceTempView(
-        "concept"
-    )
+    spark.createDataFrame(concept_rows, concept_schema).createOrReplaceTempView("concept")
     rel_schema = (
         "concept_id_1 string, concept_id_2 string, relationship_id string, "
         "valid_start_date string, valid_end_date string, invalid_reason string"
@@ -204,12 +210,10 @@ def _register_concept_views(spark: "SparkSession") -> None:
     rel_rows = [
         ("100", "200", "Maps to", "2010-01-01", "2099-12-31", None),
     ]
-    spark.createDataFrame(rel_rows, rel_schema).createOrReplaceTempView(
-        "concept_relationship"
-    )
+    spark.createDataFrame(rel_rows, rel_schema).createOrReplaceTempView("concept_relationship")
 
 
-def _diagnosis(spark: "SparkSession") -> "DataFrame":
+def _diagnosis(spark: SparkSession) -> DataFrame:
     rows = [
         # DIAGNOSISID, PATID, ENCOUNTERID, DX, DX_TYPE, DX_ORIGIN, DX_SOURCE,
         # ADMIT_DATE, DX_DATE, SOURCE
@@ -236,11 +240,9 @@ def _diagnosis(spark: "SparkSession") -> "DataFrame":
 
 @pytest.mark.usefixtures("spark")
 class TestConditionOccurrenceFormatter:
-    def test_concept_resolution_and_filter(self, spark: "SparkSession") -> None:
+    def test_concept_resolution_and_filter(self, spark: SparkSession) -> None:
         _register_concept_views(spark)
-        out = _run(
-            "condition_occurrence", spark, {"DIAGNOSIS": _diagnosis(spark)}
-        )
+        out = _run("condition_occurrence", spark, {"DIAGNOSIS": _diagnosis(spark)})
         rows = out.collect()
         by_id = {r["condition_occurrence_id"]: r for r in rows}
         # Only the mappable ICD-10 code survives (inner source-concept join).
@@ -255,11 +257,9 @@ class TestConditionOccurrenceFormatter:
         assert r["condition_source_value"] == "E11.9"
         assert r["mapped_from"] == "DIAGNOSIS"
 
-    def test_output_columns(self, spark: "SparkSession") -> None:
+    def test_output_columns(self, spark: SparkSession) -> None:
         _register_concept_views(spark)
-        out = _run(
-            "condition_occurrence", spark, {"DIAGNOSIS": _diagnosis(spark)}
-        )
+        out = _run("condition_occurrence", spark, {"DIAGNOSIS": _diagnosis(spark)})
         expected = {
             "condition_occurrence_id",
             "person_id",

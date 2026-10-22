@@ -13,7 +13,6 @@ from typing import Any
 from ovid2.transforms.base import BaseTransform, DataFrame, TransformContext
 
 
-
 class RenameColumnsTransform(BaseTransform):
     """Rename columns via an ``{old: new}`` map."""
 
@@ -46,9 +45,7 @@ class RenameColumnsTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with columns renamed."""
         mapping = params.get("map")
         if not isinstance(mapping, dict) or not mapping:
@@ -89,9 +86,7 @@ class SelectColumnsTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` projected to the named columns."""
         columns = params.get("columns")
         if not isinstance(columns, list) or not columns:
@@ -131,9 +126,7 @@ class DropColumnsTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with the named columns dropped."""
         columns = params.get("columns")
         if not isinstance(columns, list) or not columns:
@@ -173,9 +166,7 @@ class CastTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with the named columns cast."""
         types = params.get("types")
         if not isinstance(types, dict) or not types:
@@ -221,9 +212,7 @@ class PadTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with the column padded to width."""
         column = str(params["column"])
         width = int(params["width"])
@@ -274,9 +263,7 @@ class CoalesceColumnsTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with ``target`` set to the first non-null source."""
         target = str(params["target"])
         columns = params.get("columns")
@@ -316,9 +303,7 @@ class DefaultValueTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with nulls in the column replaced by the default."""
         column = str(params["column"])
         value = params["value"]

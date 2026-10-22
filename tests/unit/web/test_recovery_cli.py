@@ -93,9 +93,7 @@ def test_reset_break_glass_stores_verifiable_hash(
 ) -> None:
     breakglass._reset_lockout()
     web_db.ensure_schema()
-    monkeypatch.setattr(
-        cli.getpass, "getpass", lambda prompt="": "correct horse battery staple"
-    )
+    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt="": "correct horse battery staple")
 
     rc = cli.reset_break_glass(argparse.Namespace())
     assert rc == 0

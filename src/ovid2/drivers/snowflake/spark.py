@@ -177,7 +177,7 @@ class SnowflakeAddress(BaseAddress):
         """
         # Local import so hosts without the driver can still import the
         # module (tests, static analysis).
-        import snowflake.connector as sf  # type: ignore[import-not-found]
+        import snowflake.connector as sf
 
         kwargs: dict[str, Any] = {"account": self.account}
         for key, value in (
@@ -216,11 +216,15 @@ class SnowflakeAddress(BaseAddress):
             conn.close()
         logger.info(
             "Ensured Snowflake schema exists: %s.%s",
-            self.database, schema_name,
+            self.database,
+            schema_name,
         )
 
     def _apply_cdm_schema(
-        self, df: DataFrame, spark: SparkSession, table_name: str,
+        self,
+        df: DataFrame,
+        spark: SparkSession,
+        table_name: str,
     ) -> DataFrame:
         """Return ``df`` rebuilt with the output CDM's typed schema.
 
@@ -258,7 +262,8 @@ class SnowflakeAddress(BaseAddress):
                 "infer column types from the DataFrame. VARCHAR widths "
                 "may not match the harmonised sizes (columns may land as "
                 "VARCHAR(16777216)).",
-                self._cdm_name, table_name.upper(),
+                self._cdm_name,
+                table_name.upper(),
             )
             return df
 
@@ -272,14 +277,10 @@ class SnowflakeAddress(BaseAddress):
                 # connector only creates columns present in the DataFrame.
                 continue
             if kind == "date":
-                typed_df = typed_df.withColumn(
-                    source, to_date(col(source), "yyyy-MM-dd")
-                )
+                typed_df = typed_df.withColumn(source, to_date(col(source), "yyyy-MM-dd"))
                 fields.append(StructField(source, DateType(), True))
             elif kind == "number":
-                typed_df = typed_df.withColumn(
-                    source, col(source).cast(DoubleType())
-                )
+                typed_df = typed_df.withColumn(source, col(source).cast(DoubleType()))
                 fields.append(StructField(source, DoubleType(), True))
             else:
                 # Conform the data to the declared VARCHAR width, not just the
@@ -289,9 +290,7 @@ class SnowflakeAddress(BaseAddress):
                 # RAW_EXT_MED_NAME, or an over-long PRO_TIME). Truncating here
                 # matches Snowflake's own silent right-trim for governed loads
                 # and keeps the write from failing the whole table.
-                typed_df = typed_df.withColumn(
-                    source, substring(col(source), 1, int(width))
-                )
+                typed_df = typed_df.withColumn(source, substring(col(source), 1, int(width)))
                 fields.append(
                     StructField(
                         source,
@@ -325,9 +324,7 @@ class SnowflakeAddress(BaseAddress):
         """
         from ovid2.schema.cdm import build_snowflake_write_schema
 
-        return build_snowflake_write_schema(
-            f"{self._cdm_name}.{table_name.upper()}"
-        )
+        return build_snowflake_write_schema(f"{self._cdm_name}.{table_name.upper()}")
 
     # ------------------------------------------------------------------
     # BaseAddress contract
@@ -404,17 +401,16 @@ class SnowflakeAddress(BaseAddress):
         options["dbtable"] = dbtable
         logger.info(
             "Snowflake read: %s.%s.%s",
-            self.database, schema_name or "<default>", dbtable,
+            self.database,
+            schema_name or "<default>",
+            dbtable,
         )
-        return (
-            spark.read
-            .format("snowflake")
-            .options(**options)
-            .load()
-        )
+        return spark.read.format("snowflake").options(**options).load()
 
     def _resolve_dbtable(
-        self, file_name: str, table_name: str | None,
+        self,
+        file_name: str,
+        table_name: str | None,
     ) -> str:
         """Pick the Snowflake identifier for the read.
 
@@ -430,7 +426,8 @@ class SnowflakeAddress(BaseAddress):
                 "identifier; falling back to table_name=%r as dbtable. "
                 "Update the formatter YAML's ``input_file_name`` to the "
                 "real Snowflake table name to silence this message.",
-                file_name, table_name,
+                file_name,
+                table_name,
             )
             return table_name
         raise ValueError(
@@ -493,28 +490,35 @@ class SnowflakeAddress(BaseAddress):
                 writer.save()
                 logger.info(
                     "Snowflake write succeeded: %s.%s.%s",
-                    self.database, schema_name, table_name.upper(),
+                    self.database,
+                    schema_name,
+                    table_name.upper(),
                 )
                 return
-            except Exception as exc:  # noqa: BLE001 — vendor exceptions vary
+            except Exception as exc:
                 message = str(exc)
                 if not _is_transient_error(message):
                     logger.error(
                         "Non-transient error writing %s to Snowflake: %s",
-                        table_name, message,
+                        table_name,
+                        message,
                     )
                     raise
                 if attempt == _MAX_RETRIES:
                     logger.error(
                         "Failed to write %s after %d attempts: %s",
-                        table_name, _MAX_RETRIES, message,
+                        table_name,
+                        _MAX_RETRIES,
+                        message,
                     )
                     raise
                 logger.warning(
-                    "Transient error writing %s (attempt %d/%d), "
-                    "retrying in %ds: %s",
-                    table_name, attempt, _MAX_RETRIES,
-                    backoff_seconds, message,
+                    "Transient error writing %s (attempt %d/%d), retrying in %ds: %s",
+                    table_name,
+                    attempt,
+                    _MAX_RETRIES,
+                    backoff_seconds,
+                    message,
                 )
                 time.sleep(backoff_seconds)
                 backoff_seconds = min(backoff_seconds * 2, _MAX_BACKOFF_SECONDS)

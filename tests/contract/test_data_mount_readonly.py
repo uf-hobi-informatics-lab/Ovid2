@@ -95,8 +95,9 @@ class TestDockerRunDataMount:
     def test_etl_mounts_data_readonly(self) -> None:
         with mock.patch("ovid2.core.docker.SPARK_MODE", "local"):
             cmd = build_docker_command(_mk_args("etl"), _instance())
-        assert _find_data_mount(cmd).endswith(":/data:ro"), \
+        assert _find_data_mount(cmd).endswith(":/data:ro"), (
             "etl must never mount /data rw — inputs are immutable"
+        )
 
     def test_analysis_mounts_data_readonly(self) -> None:
         with mock.patch("ovid2.core.docker.SPARK_MODE", "local"):
@@ -111,8 +112,9 @@ class TestDockerRunDataMount:
     def test_tools_copy_mounts_data_readwrite(self) -> None:
         with mock.patch("ovid2.core.docker.SPARK_MODE", "local"):
             cmd = build_docker_command(_mk_args("tools copy"), _instance())
-        assert _find_data_mount(cmd).endswith(":/data:rw"), \
+        assert _find_data_mount(cmd).endswith(":/data:rw"), (
             "kind=copy must mount /data rw so its destination address can write"
+        )
 
     def test_missing_command_defaults_to_readonly(self) -> None:
         """A namespace without ``command`` is treated as the etl shape."""
@@ -120,8 +122,9 @@ class TestDockerRunDataMount:
         del args.command
         with mock.patch("ovid2.core.docker.SPARK_MODE", "local"):
             cmd = build_docker_command(args, _instance())
-        assert _find_data_mount(cmd).endswith(":/data:ro"), \
+        assert _find_data_mount(cmd).endswith(":/data:ro"), (
             "unknown/missing command must never widen to rw"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -137,8 +140,9 @@ class TestComposeDataMount:
         for svc in compose["services"].values():
             data_mounts = [v for v in svc["volumes"] if ":/data:" in v]
             assert data_mounts, f"service {svc} missing /data mount"
-            assert all(v.endswith(":/data:ro") for v in data_mounts), \
+            assert all(v.endswith(":/data:ro") for v in data_mounts), (
                 f"cluster ETL must not mount /data rw: {data_mounts}"
+            )
 
     def test_data_rw_flag_widens_every_service(self) -> None:
         compose = build_compose_dict(_instance(), num_workers=2, data_rw=True)
@@ -148,8 +152,9 @@ class TestComposeDataMount:
         for name, svc in compose["services"].items():
             data_mounts = [v for v in svc["volumes"] if ":/data:" in v]
             assert data_mounts, f"service {name} missing /data mount"
-            assert all(v.endswith(":/data:rw") for v in data_mounts), \
+            assert all(v.endswith(":/data:rw") for v in data_mounts), (
                 f"service {name} must mount /data rw when data_rw=True: {data_mounts}"
+            )
 
     def test_extra_mounts_appear_on_every_service(self, tmp_path) -> None:
         """A single missing worker mount silently strands whichever
@@ -158,13 +163,17 @@ class TestComposeDataMount:
 
         em = ExtraMount(host=str(tmp_path), container="/copy_out", mode="rw")
         compose = build_compose_dict(
-            _instance(), num_workers=3, data_rw=True, extra_mounts=[em],
+            _instance(),
+            num_workers=3,
+            data_rw=True,
+            extra_mounts=[em],
         )
         assert len(compose["services"]) == 4  # 1 master + 3 workers
         for name, svc in compose["services"].items():
             hit = [v for v in svc["volumes"] if "/copy_out" in v]
-            assert hit == [f"{tmp_path}:/copy_out:rw"], \
+            assert hit == [f"{tmp_path}:/copy_out:rw"], (
                 f"extra mount missing / wrong on {name}: {svc['volumes']}"
+            )
 
     def test_extra_mounts_default_none_leaves_volumes_unchanged(self) -> None:
         """The extra_mounts kwarg is optional and non-invasive by default."""
@@ -172,9 +181,11 @@ class TestComposeDataMount:
         with_none = build_compose_dict(_instance(), num_workers=1, extra_mounts=None)
         with_empty = build_compose_dict(_instance(), num_workers=1, extra_mounts=[])
         for svc_name in base["services"]:
-            assert base["services"][svc_name]["volumes"] == \
-                   with_none["services"][svc_name]["volumes"] == \
-                   with_empty["services"][svc_name]["volumes"]
+            assert (
+                base["services"][svc_name]["volumes"]
+                == with_none["services"][svc_name]["volumes"]
+                == with_empty["services"][svc_name]["volumes"]
+            )
 
 
 # ---------------------------------------------------------------------------

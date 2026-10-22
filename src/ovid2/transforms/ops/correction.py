@@ -13,7 +13,6 @@ from typing import Any
 from ovid2.transforms.base import BaseTransform, DataFrame, TransformContext
 
 
-
 class NullIfTransform(BaseTransform):
     """Set a column to null when its value matches a condition.
 
@@ -52,9 +51,7 @@ class NullIfTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with matching values in the column nulled."""
         column = str(params["column"])
         f = ctx.functions
@@ -120,9 +117,7 @@ class ClampTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with the column clamped."""
         column = str(params["column"])
         lo = params.get("min")
@@ -180,9 +175,7 @@ class StandardizeNullTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with sentinel values converted to null."""
         columns = params.get("columns")
         if not isinstance(columns, list) or not columns:
@@ -232,9 +225,7 @@ class DedupTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with duplicates dropped (lazy)."""
         subset = params.get("subset")
         if subset:
@@ -257,9 +248,7 @@ class DistinctTransform(BaseTransform):
         """Return a one-line description."""
         return "Keep only distinct rows (full-row uniqueness)."
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return distinct rows (lazy)."""
         return df.distinct()
 
@@ -300,9 +289,7 @@ class FilterExprTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` filtered by the predicate (lazy)."""
         predicate = str(params["expr"])
         f = ctx.functions

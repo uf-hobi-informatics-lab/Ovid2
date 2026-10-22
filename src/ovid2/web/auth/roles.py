@@ -9,6 +9,7 @@ from enum import Enum
 
 class Role(str, Enum):
     """User roles in the system."""
+
     SYSTEM_ADMIN = "system_admin"
     PIPELINE_OPERATOR = "pipeline_operator"
     VIEWER = "viewer"
@@ -18,6 +19,7 @@ class Role(str, Enum):
 
 class Capability(str, Enum):
     """Permissions that can be granted to roles."""
+
     VIEW_PUBLIC = "view_public"
     VIEW_RUNS = "view_runs"
     VIEW_PIPELINE_DATA = "view_pipeline_data"
@@ -35,7 +37,9 @@ _guest_caps = frozenset([Capability.VIEW_PUBLIC])
 _viewer_caps = frozenset(
     list(_guest_caps) + [Capability.VIEW_RUNS, Capability.RUN_REPORTS, Capability.USE_LLM]
 )
-_pipeline_operator_caps = frozenset(list(_viewer_caps) + [Capability.VIEW_PIPELINE_DATA, Capability.SUBMIT_JOBS])
+_pipeline_operator_caps = frozenset(
+    list(_viewer_caps) + [Capability.VIEW_PIPELINE_DATA, Capability.SUBMIT_JOBS]
+)
 _system_admin_caps = frozenset(list(Capability))  # All capabilities
 
 ROLE_CAPABILITIES = {
@@ -45,6 +49,8 @@ ROLE_CAPABILITIES = {
     Role.PIPELINE_OPERATOR: _pipeline_operator_caps,
     Role.SYSTEM_ADMIN: _system_admin_caps,
 }
+
+
 def has_capability(role: Role, cap: Capability) -> bool:
     """Check if a role has a specific capability.
 
@@ -56,4 +62,3 @@ def has_capability(role: Role, cap: Capability) -> bool:
         True if the role has the capability, False otherwise
     """
     return cap in ROLE_CAPABILITIES[role]
-

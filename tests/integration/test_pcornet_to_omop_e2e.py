@@ -23,8 +23,9 @@ if TYPE_CHECKING:
     from pyspark.sql import SparkSession
 
 
-def _write_pcornet_table(root: Path, pipeline: str, batch: str, table: str,
-                         header: list[str], rows: list[list[str]]) -> None:
+def _write_pcornet_table(
+    root: Path, pipeline: str, batch: str, table: str, header: list[str], rows: list[list[str]]
+) -> None:
     """Write a PCORnet source table as ``{root}/{pipeline}/{batch}/{TABLE}/{TABLE}.csv``."""
     table_dir = root / pipeline / batch / table
     table_dir.mkdir(parents=True, exist_ok=True)
@@ -42,7 +43,7 @@ def _read_omop_output(out_root: Path, pipeline: str, batch: str, table: str) -> 
 
 
 @pytest.mark.integration
-def test_pcornet_to_omop_disc_end_to_end(spark: "SparkSession", tmp_path: Path) -> None:
+def test_pcornet_to_omop_disc_end_to_end(spark: SparkSession, tmp_path: Path) -> None:
     from ovid2.core.engines.pyspark import PySparkEngine
     from ovid2.core.pipeline import run_pipeline
     from ovid2.drivers.disc import DiscAddress
@@ -53,7 +54,10 @@ def test_pcornet_to_omop_disc_end_to_end(spark: "SparkSession", tmp_path: Path) 
     out_root = tmp_path / "omop_out"
 
     _write_pcornet_table(
-        in_root, pipeline, batch, "DEMOGRAPHIC",
+        in_root,
+        pipeline,
+        batch,
+        "DEMOGRAPHIC",
         ["PATID", "BIRTH_DATE", "SEX", "RACE", "HISPANIC", "SOURCE"],
         [
             ["P1", "1980-05-15", "F", "05", "N", "SITE"],
@@ -61,19 +65,58 @@ def test_pcornet_to_omop_disc_end_to_end(spark: "SparkSession", tmp_path: Path) 
         ],
     )
     _write_pcornet_table(
-        in_root, pipeline, batch, "ENCOUNTER",
-        ["ENCOUNTERID", "PATID", "ENC_TYPE", "ADMIT_DATE", "DISCHARGE_DATE",
-         "PROVIDERID", "FACILITYID", "FACILITY_TYPE", "FACILITY_LOCATION",
-         "ADMITTING_SOURCE", "DISCHARGE_STATUS", "SOURCE"],
+        in_root,
+        pipeline,
+        batch,
+        "ENCOUNTER",
         [
-            ["E1", "P1", "IP", "2021-03-01", "2021-03-05", "PR1", "F1",
-             "HOSPITAL_COMMUNITY", "32601", "ED", "HO", "SITE"],
+            "ENCOUNTERID",
+            "PATID",
+            "ENC_TYPE",
+            "ADMIT_DATE",
+            "DISCHARGE_DATE",
+            "PROVIDERID",
+            "FACILITYID",
+            "FACILITY_TYPE",
+            "FACILITY_LOCATION",
+            "ADMITTING_SOURCE",
+            "DISCHARGE_STATUS",
+            "SOURCE",
+        ],
+        [
+            [
+                "E1",
+                "P1",
+                "IP",
+                "2021-03-01",
+                "2021-03-05",
+                "PR1",
+                "F1",
+                "HOSPITAL_COMMUNITY",
+                "32601",
+                "ED",
+                "HO",
+                "SITE",
+            ],
         ],
     )
     _write_pcornet_table(
-        in_root, pipeline, batch, "DIAGNOSIS",
-        ["DIAGNOSISID", "PATID", "ENCOUNTERID", "DX", "DX_TYPE", "DX_ORIGIN",
-         "DX_SOURCE", "ADMIT_DATE", "DX_DATE", "SOURCE"],
+        in_root,
+        pipeline,
+        batch,
+        "DIAGNOSIS",
+        [
+            "DIAGNOSISID",
+            "PATID",
+            "ENCOUNTERID",
+            "DX",
+            "DX_TYPE",
+            "DX_ORIGIN",
+            "DX_SOURCE",
+            "ADMIT_DATE",
+            "DX_DATE",
+            "SOURCE",
+        ],
         [
             ["D1", "P1", "E1", "E11.9", "10", "OD", "AD", "2021-03-01", "2021-03-01", "SITE"],
             ["D2", "P1", "E1", "ZZZ", "10", "OD", "AD", "2021-03-01", "2021-03-01", "SITE"],
@@ -81,7 +124,10 @@ def test_pcornet_to_omop_disc_end_to_end(spark: "SparkSession", tmp_path: Path) 
     )
     # M2 sources.
     _write_pcornet_table(
-        in_root, pipeline, batch, "ENROLLMENT",
+        in_root,
+        pipeline,
+        batch,
+        "ENROLLMENT",
         ["PATID", "ENR_START_DATE", "ENR_END_DATE", "ENR_BASIS", "SOURCE"],
         [
             ["P1", "2018-01-01", "2020-12-31", "I", "SITE"],
@@ -89,29 +135,40 @@ def test_pcornet_to_omop_disc_end_to_end(spark: "SparkSession", tmp_path: Path) 
         ],
     )
     _write_pcornet_table(
-        in_root, pipeline, batch, "PROVIDER",
-        ["PROVIDERID", "PROVIDER_NPI", "PROVIDER_SEX", "PROVIDER_SPECIALTY_PRIMARY",
-         "SOURCE"],
+        in_root,
+        pipeline,
+        batch,
+        "PROVIDER",
+        ["PROVIDERID", "PROVIDER_NPI", "PROVIDER_SEX", "PROVIDER_SPECIALTY_PRIMARY", "SOURCE"],
         [
             ["PR1", "1234567890", "F", "207R00000X", "SITE"],
         ],
     )
     _write_pcornet_table(
-        in_root, pipeline, batch, "DEATH",
+        in_root,
+        pipeline,
+        batch,
+        "DEATH",
         ["PATID", "DEATH_DATE", "DEATH_SOURCE", "SOURCE"],
         [
             ["P1", "2022-02-02", "L", "SITE"],
         ],
     )
     _write_pcornet_table(
-        in_root, pipeline, batch, "DEATH_CAUSE",
+        in_root,
+        pipeline,
+        batch,
+        "DEATH_CAUSE",
         ["PATID", "DEATH_CAUSE", "DEATH_CAUSE_SOURCE"],
         [
             ["P1", "E11.9", "L"],
         ],
     )
     _write_pcornet_table(
-        in_root, pipeline, batch, "HARVEST",
+        in_root,
+        pipeline,
+        batch,
+        "HARVEST",
         ["DATAMART_NAME", "DATAMARTID", "REFRESH_ENCOUNTER_DATE"],
         [
             ["Example Network", "EXN01", "2026-01-15"],
@@ -119,33 +176,112 @@ def test_pcornet_to_omop_disc_end_to_end(spark: "SparkSession", tmp_path: Path) 
     )
     # M3 sources.
     _write_pcornet_table(
-        in_root, pipeline, batch, "LAB_RESULT_CM",
-        ["LAB_RESULT_CM_ID", "PATID", "ENCOUNTERID", "LAB_LOINC", "LAB_RESULT_SOURCE",
-         "RESULT_DATE", "RESULT_TIME", "RESULT_NUM", "RESULT_QUAL", "RESULT_UNIT",
-         "RESULT_MODIFIER", "NORM_RANGE_LOW", "NORM_RANGE_HIGH", "LAB_PX",
-         "LAB_ORDER_DATE", "SPECIMEN_SOURCE", "SPECIMEN_DATE", "SOURCE"],
+        in_root,
+        pipeline,
+        batch,
+        "LAB_RESULT_CM",
         [
-            ["L1", "P1", "E1", "4548-4", "OD", "2021-04-01", "10:00:00", "6.5",
-             "HIGH", "%", "EQ", "4.0", "6.0", "", "2021-03-30", "BLD", "2021-04-01", "SITE"],
+            "LAB_RESULT_CM_ID",
+            "PATID",
+            "ENCOUNTERID",
+            "LAB_LOINC",
+            "LAB_RESULT_SOURCE",
+            "RESULT_DATE",
+            "RESULT_TIME",
+            "RESULT_NUM",
+            "RESULT_QUAL",
+            "RESULT_UNIT",
+            "RESULT_MODIFIER",
+            "NORM_RANGE_LOW",
+            "NORM_RANGE_HIGH",
+            "LAB_PX",
+            "LAB_ORDER_DATE",
+            "SPECIMEN_SOURCE",
+            "SPECIMEN_DATE",
+            "SOURCE",
+        ],
+        [
+            [
+                "L1",
+                "P1",
+                "E1",
+                "4548-4",
+                "OD",
+                "2021-04-01",
+                "10:00:00",
+                "6.5",
+                "HIGH",
+                "%",
+                "EQ",
+                "4.0",
+                "6.0",
+                "",
+                "2021-03-30",
+                "BLD",
+                "2021-04-01",
+                "SITE",
+            ],
         ],
     )
     _write_pcornet_table(
-        in_root, pipeline, batch, "PROCEDURES",
-        ["PROCEDURESID", "PATID", "ENCOUNTERID", "PROVIDERID", "PX", "PX_TYPE",
-         "PX_SOURCE", "PPX", "PX_DATE", "SOURCE"],
+        in_root,
+        pipeline,
+        batch,
+        "PROCEDURES",
+        [
+            "PROCEDURESID",
+            "PATID",
+            "ENCOUNTERID",
+            "PROVIDERID",
+            "PX",
+            "PX_TYPE",
+            "PX_SOURCE",
+            "PPX",
+            "PX_DATE",
+            "SOURCE",
+        ],
         [
             ["PX1", "P1", "E1", "PR1", "99213", "CH", "OD", "P", "2021-05-01", "SITE"],
         ],
     )
     _write_pcornet_table(
-        in_root, pipeline, batch, "MED_ADMIN",
-        ["MEDADMINID", "PATID", "ENCOUNTERID", "MEDADMIN_PROVIDERID", "MEDADMIN_CODE",
-         "MEDADMIN_TYPE", "MEDADMIN_START_DATE", "MEDADMIN_START_TIME",
-         "MEDADMIN_STOP_DATE", "MEDADMIN_STOP_TIME", "MEDADMIN_DOSE_ADMIN",
-         "MEDADMIN_DOSE_ADMIN_UNIT", "MEDADMIN_ROUTE", "SOURCE"],
+        in_root,
+        pipeline,
+        batch,
+        "MED_ADMIN",
         [
-            ["MA1", "P1", "E1", "PR1", "310965", "RX", "2021-09-01", "08:00:00",
-             "2021-09-02", "08:00:00", "5", "mg", "ORAL", "SITE"],
+            "MEDADMINID",
+            "PATID",
+            "ENCOUNTERID",
+            "MEDADMIN_PROVIDERID",
+            "MEDADMIN_CODE",
+            "MEDADMIN_TYPE",
+            "MEDADMIN_START_DATE",
+            "MEDADMIN_START_TIME",
+            "MEDADMIN_STOP_DATE",
+            "MEDADMIN_STOP_TIME",
+            "MEDADMIN_DOSE_ADMIN",
+            "MEDADMIN_DOSE_ADMIN_UNIT",
+            "MEDADMIN_ROUTE",
+            "SOURCE",
+        ],
+        [
+            [
+                "MA1",
+                "P1",
+                "E1",
+                "PR1",
+                "310965",
+                "RX",
+                "2021-09-01",
+                "08:00:00",
+                "2021-09-02",
+                "08:00:00",
+                "5",
+                "mg",
+                "ORAL",
+                "SITE",
+            ],
         ],
     )
 
@@ -159,14 +295,64 @@ def test_pcornet_to_omop_disc_end_to_end(spark: "SparkSession", tmp_path: Path) 
     spark.createDataFrame(
         [
             ("100", "E11.9", "T2DM", "Condition", "ICD-10-CM", "4-char", None, "2000-01-01", None),
-            ("200", "201826", "T2DM SNOMED", "Condition", "SNOMED", "Clinical", "S", "2000-01-01", None),
+            (
+                "200",
+                "201826",
+                "T2DM SNOMED",
+                "Condition",
+                "SNOMED",
+                "Clinical",
+                "S",
+                "2000-01-01",
+                None,
+            ),
             # M3 codes: Measurement (LOINC), Procedure (CPT4), Drug (RxNorm).
             ("300", "4548-4", "HbA1c", "Measurement", "LOINC", "Lab", None, "2000-01-01", None),
-            ("301", "4548-4-STD", "HbA1c STD", "Measurement", "LOINC", "Lab", "S", "2000-01-01", None),
+            (
+                "301",
+                "4548-4-STD",
+                "HbA1c STD",
+                "Measurement",
+                "LOINC",
+                "Lab",
+                "S",
+                "2000-01-01",
+                None,
+            ),
             ("400", "99213", "Office visit", "Procedure", "CPT4", "CPT4", None, "2000-01-01", None),
-            ("401", "99213-STD", "Office visit STD", "Procedure", "SNOMED", "Proc", "S", "2000-01-01", None),
-            ("600", "310965", "Ibuprofen", "Drug", "RxNorm", "Ingredient", None, "2000-01-01", None),
-            ("601", "310965-STD", "Ibuprofen STD", "Drug", "RxNorm", "Ingredient", "S", "2000-01-01", None),
+            (
+                "401",
+                "99213-STD",
+                "Office visit STD",
+                "Procedure",
+                "SNOMED",
+                "Proc",
+                "S",
+                "2000-01-01",
+                None,
+            ),
+            (
+                "600",
+                "310965",
+                "Ibuprofen",
+                "Drug",
+                "RxNorm",
+                "Ingredient",
+                None,
+                "2000-01-01",
+                None,
+            ),
+            (
+                "601",
+                "310965-STD",
+                "Ibuprofen STD",
+                "Drug",
+                "RxNorm",
+                "Ingredient",
+                "S",
+                "2000-01-01",
+                None,
+            ),
         ],
         concept_schema,
     ).createOrReplaceTempView("concept")
@@ -211,7 +397,11 @@ def test_pcornet_to_omop_disc_end_to_end(spark: "SparkSession", tmp_path: Path) 
         "fact_relationship",
     ):
         formatter = load_formatter(
-            pipeline, table, spark=spark, input_address=input_address, batch_id=batch,
+            pipeline,
+            table,
+            spark=spark,
+            input_address=input_address,
+            batch_id=batch,
             engine=engine,
         )
         run_pipeline(
@@ -234,14 +424,20 @@ def test_pcornet_to_omop_disc_end_to_end(spark: "SparkSession", tmp_path: Path) 
     assert person["P1"]["mapped_from"] == "DEMOGRAPHIC"
 
     # --- visit_occurrence ----------------------------------------------
-    visit = {r["visit_occurrence_id"]: r for r in _read_omop_output(out_root, pipeline, batch, "visit_occurrence")}
+    visit = {
+        r["visit_occurrence_id"]: r
+        for r in _read_omop_output(out_root, pipeline, batch, "visit_occurrence")
+    }
     assert set(visit) == {"E1"}
     assert visit["E1"]["person_id"] == "P1"
     assert visit["E1"]["visit_concept_id"] == "9201"
     assert visit["E1"]["visit_type_concept_id"] == "32035"
 
     # --- condition_occurrence (concept-resolved + filtered) -------------
-    cond = {r["condition_occurrence_id"]: r for r in _read_omop_output(out_root, pipeline, batch, "condition_occurrence")}
+    cond = {
+        r["condition_occurrence_id"]: r
+        for r in _read_omop_output(out_root, pipeline, batch, "condition_occurrence")
+    }
     # Only the mappable ICD-10 code survives.
     assert set(cond) == {"D1"}
     assert cond["D1"]["condition_source_concept_id"] == "100"
@@ -250,7 +446,10 @@ def test_pcornet_to_omop_disc_end_to_end(spark: "SparkSession", tmp_path: Path) 
     assert cond["D1"]["visit_occurrence_id"] == "E1"
 
     # --- observation_period (hash surrogate id + period type) -----------
-    obs = {r["person_id"]: r for r in _read_omop_output(out_root, pipeline, batch, "observation_period")}
+    obs = {
+        r["person_id"]: r
+        for r in _read_omop_output(out_root, pipeline, batch, "observation_period")
+    }
     assert set(obs) == {"P1", "P2"}
     assert obs["P1"]["period_type_concept_id"] == "32813"  # ENR_BASIS I
     assert obs["P2"]["period_type_concept_id"] == "32880"  # ENR_BASIS A
@@ -259,7 +458,10 @@ def test_pcornet_to_omop_disc_end_to_end(spark: "SparkSession", tmp_path: Path) 
     assert str(obs["P2"]["observation_period_end_date"]) == "1900-01-01"
 
     # --- provider (hash surrogate id + gender dict) ---------------------
-    prov = {r["provider_source_value"]: r for r in _read_omop_output(out_root, pipeline, batch, "provider")}
+    prov = {
+        r["provider_source_value"]: r
+        for r in _read_omop_output(out_root, pipeline, batch, "provider")
+    }
     assert set(prov) == {"PR1"}
     assert prov["PR1"]["npi"] == "1234567890"
     assert prov["PR1"]["gender_concept_id"] == "8532"  # F
@@ -267,7 +469,10 @@ def test_pcornet_to_omop_disc_end_to_end(spark: "SparkSession", tmp_path: Path) 
     assert int(prov["PR1"]["provider_id"]) >= 0
 
     # --- care_site / location (derived, deduped, matching location_id) --
-    care = {r["care_site_source_value"]: r for r in _read_omop_output(out_root, pipeline, batch, "care_site")}
+    care = {
+        r["care_site_source_value"]: r
+        for r in _read_omop_output(out_root, pipeline, batch, "care_site")
+    }
     assert set(care) == {"F1"}
     loc_rows = _read_omop_output(out_root, pipeline, batch, "location")
     loc = {r["zip"]: r for r in loc_rows}
@@ -291,7 +496,9 @@ def test_pcornet_to_omop_disc_end_to_end(spark: "SparkSession", tmp_path: Path) 
     assert src_rows[0]["cdm_version"] == "5.3"
 
     # --- measurement (LOINC lab resolved to Measurement domain) ---------
-    meas = {r["measurement_id"]: r for r in _read_omop_output(out_root, pipeline, batch, "measurement")}
+    meas = {
+        r["measurement_id"]: r for r in _read_omop_output(out_root, pipeline, batch, "measurement")
+    }
     assert "L1" in meas
     assert meas["L1"]["measurement_source_concept_id"] == "300"
     assert meas["L1"]["measurement_concept_id"] == "301"
@@ -299,14 +506,20 @@ def test_pcornet_to_omop_disc_end_to_end(spark: "SparkSession", tmp_path: Path) 
     assert meas["L1"]["visit_occurrence_id"] == "E1"
 
     # --- procedure_occurrence (CPT resolved to Procedure domain) --------
-    proc = {r["procedure_occurrence_id"]: r for r in _read_omop_output(out_root, pipeline, batch, "procedure_occurrence")}
+    proc = {
+        r["procedure_occurrence_id"]: r
+        for r in _read_omop_output(out_root, pipeline, batch, "procedure_occurrence")
+    }
     assert "PX1" in proc
     assert proc["PX1"]["procedure_source_concept_id"] == "400"
     assert proc["PX1"]["procedure_concept_id"] == "401"
     assert proc["PX1"]["provider_id"] == "PR1"
 
     # --- drug_exposure (RxNorm MED_ADMIN resolved to Drug domain) -------
-    drug = {r["drug_exposure_id"]: r for r in _read_omop_output(out_root, pipeline, batch, "drug_exposure")}
+    drug = {
+        r["drug_exposure_id"]: r
+        for r in _read_omop_output(out_root, pipeline, batch, "drug_exposure")
+    }
     assert "MA1" in drug
     assert drug["MA1"]["drug_source_concept_id"] == "600"
     assert drug["MA1"]["drug_concept_id"] == "601"
@@ -325,7 +538,7 @@ def test_pcornet_to_omop_disc_end_to_end(spark: "SparkSession", tmp_path: Path) 
 
     # --- header-only tables (device_exposure / visit_detail / note /
     #     fact_relationship): the file exists with a header, zero rows.
-    for empty_table, key_col in (
+    for empty_table, _key_col in (
         ("device_exposure", "device_exposure_id"),
         ("visit_detail", "visit_detail_id"),
         ("note", "note_id"),

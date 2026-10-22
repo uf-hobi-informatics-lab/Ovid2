@@ -228,9 +228,7 @@ def test_operator_token_reaches_submit_tier(
     """The operator token passes the VIEW_PIPELINE_DATA gate."""
     _use_settings(monkeypatch)
     _write_token_map({_hash("op-token"): "pipeline_operator"})
-    resp = app_client.get(
-        "/api/v1/pipelines", headers={"Authorization": "Bearer op-token"}
-    )
+    resp = app_client.get("/api/v1/pipelines", headers={"Authorization": "Bearer op-token"})
     assert resp.status_code == 200
 
 
@@ -241,9 +239,7 @@ def test_operator_token_cannot_manage_users(
     """The operator token cannot reach a MANAGE_USERS-tier endpoint → 403."""
     _use_settings(monkeypatch)
     _write_token_map({_hash("op-token"): "pipeline_operator"})
-    resp = app_client.get(
-        "/api/v1/secrets", headers={"Authorization": "Bearer op-token"}
-    )
+    resp = app_client.get("/api/v1/secrets", headers={"Authorization": "Bearer op-token"})
     assert resp.status_code == 403
 
 

@@ -28,10 +28,14 @@ from typing import TYPE_CHECKING, Any
 
 from ovid2.drivers.azure_blob.metadata import (
     build_address_config,
-    connection_fields as _connection_fields,
-    location_fields as _location_fields,
     resolve_address_auth_mode,
     resolve_connection_auth_mode,
+)
+from ovid2.drivers.azure_blob.metadata import (
+    connection_fields as _connection_fields,
+)
+from ovid2.drivers.azure_blob.metadata import (
+    location_fields as _location_fields,
 )
 from ovid2.drivers.azure_blob.probe import (
     list_dir_from_config,
@@ -148,7 +152,9 @@ class AzureBlobDriver(Driver):
         driver refactor.
         """
         merged = build_address_config(
-            dict(self.args), dict(self.secrets), dict(self.location),
+            dict(self.args),
+            dict(self.secrets),
+            dict(self.location),
         )
         return "azure_blob", merged
 

@@ -6,7 +6,6 @@ import inspect
 
 import pytest
 
-
 ODS_TOOL_NAMES = frozenset(
     {
         "ods_list_pipelines",

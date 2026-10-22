@@ -19,7 +19,8 @@ from ovid2.drivers.base import ProbeResult
 
 
 def probe_auth_from_config(
-    args: dict[str, Any], secrets: dict[str, Any],
+    args: dict[str, Any],
+    secrets: dict[str, Any],
 ) -> ProbeResult:
     """Return an ``auth`` probe result for an S3 connection.
 
@@ -45,7 +46,7 @@ def probe_auth_from_config(
         ``capability='auth'``.
     """
     try:
-        import boto3  # type: ignore[import-not-found]
+        import boto3
     except ImportError:
         return ProbeResult(
             ok=False,
@@ -69,7 +70,7 @@ def probe_auth_from_config(
         session_kwargs["region_name"] = region
 
     try:
-        session = boto3.session.Session(**session_kwargs)  # type: ignore[no-untyped-call]
+        session = boto3.session.Session(**session_kwargs)
         client_kwargs: dict[str, Any] = {}
         if args.get("endpoint_url"):
             client_kwargs["endpoint_url"] = args["endpoint_url"]
@@ -91,7 +92,7 @@ def probe_auth_from_config(
             message="list_buckets() succeeded.",
             capability="auth",
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return ProbeResult(
             ok=False,
             code="unreachable",
@@ -134,15 +135,14 @@ def list_dir_from_config(
     from ovid2.drivers.base import StorageEntry
 
     try:
-        import boto3  # type: ignore[import-not-found]
+        import boto3
     except ImportError as exc:
         raise NotImplementedError("boto3 is not installed on this host.") from exc
 
     bucket = location.get("bucket") or args.get("bucket_default")
     if not bucket:
         raise NotImplementedError(
-            "No bucket set on the storage account (location.bucket or "
-            "connection bucket_default)."
+            "No bucket set on the storage account (location.bucket or connection bucket_default)."
         )
 
     # Assemble the effective prefix: location.path (if any) + the
@@ -169,34 +169,32 @@ def list_dir_from_config(
         client_kwargs["endpoint_url"] = args["endpoint_url"]
 
     try:
-        session = boto3.session.Session(**session_kwargs)  # type: ignore[no-untyped-call]
+        session = boto3.session.Session(**session_kwargs)
         client = session.client("s3", **client_kwargs)
         paginator = client.get_paginator("list_objects_v2")
         entries: list[StorageEntry] = []
         seen_dirs: set[str] = set()
         seen_files: set[str] = set()
-        for page in paginator.paginate(
-            Bucket=bucket, Prefix=effective, Delimiter="/"
-        ):
+        for page in paginator.paginate(Bucket=bucket, Prefix=effective, Delimiter="/"):
             for cp in page.get("CommonPrefixes", []) or []:
                 full = str(cp.get("Prefix", ""))
-                name = full[len(effective):].rstrip("/")
+                name = full[len(effective) :].rstrip("/")
                 if not name or name in seen_dirs:
                     continue
                 seen_dirs.add(name)
                 # Path returned is relative to location.path so it
                 # round-trips as the next ``prefix``.
-                rel = full[len(base) + 1:].rstrip("/") if base else full.rstrip("/")
+                rel = full[len(base) + 1 :].rstrip("/") if base else full.rstrip("/")
                 entries.append(StorageEntry(name=name, kind="dir", path=rel))
             for obj in page.get("Contents", []) or []:
                 full = str(obj.get("Key", ""))
-                name = full[len(effective):]
+                name = full[len(effective) :]
                 if not name or "/" in name or name in seen_files:
                     continue
                 seen_files.add(name)
-                rel = full[len(base) + 1:] if base else full
+                rel = full[len(base) + 1 :] if base else full
                 entries.append(StorageEntry(name=name, kind="file", path=rel))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise ValueError(f"S3 list failed: {exc}") from exc
 
     entries.sort(key=lambda e: (0 if e.kind == "dir" else 1, e.name.lower()))

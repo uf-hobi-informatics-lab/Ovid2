@@ -43,22 +43,16 @@ _VALID_FORMATS: frozenset[str] = frozenset({"csv", "parquet", "json"})
 
 #: Class name of the Hadoop ``SimpleAWSCredentialsProvider`` — static
 #: access-key / secret-key pair (no session token).
-_SIMPLE_CREDS_PROVIDER: str = (
-    "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider"
-)
+_SIMPLE_CREDS_PROVIDER: str = "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider"
 
 #: Class name of the Hadoop ``TemporaryAWSCredentialsProvider`` — same
 #: as :data:`_SIMPLE_CREDS_PROVIDER` but for STS session credentials.
-_TEMPORARY_CREDS_PROVIDER: str = (
-    "org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider"
-)
+_TEMPORARY_CREDS_PROVIDER: str = "org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider"
 
 #: Class name of the AWS SDK default provider chain (EC2 metadata,
 #: ECS/EKS task credentials, ``AWS_*`` env, etc.). Used when the
 #: connection has no static credential fields.
-_DEFAULT_CREDS_PROVIDER: str = (
-    "com.amazonaws.auth.DefaultAWSCredentialsProviderChain"
-)
+_DEFAULT_CREDS_PROVIDER: str = "com.amazonaws.auth.DefaultAWSCredentialsProviderChain"
 
 
 def _nonempty(value: Any) -> str | None:
@@ -157,10 +151,7 @@ def location_fields() -> tuple[LocationField, ...]:
             name="bucket",
             required=False,
             widget="str",
-            help=(
-                "Bucket name. Falls back to the connection's "
-                "bucket_default when blank."
-            ),
+            help=("Bucket name. Falls back to the connection's bucket_default when blank."),
         ),
         LocationField(
             name="path",

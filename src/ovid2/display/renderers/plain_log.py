@@ -8,7 +8,7 @@ overwrite.
 from __future__ import annotations
 
 import sys
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import IO, Any
 
 from ovid2.core.events import Event
@@ -64,7 +64,7 @@ def _format_record(record: Mapping[str, Any]) -> str:
     return " ".join(part for part in [*prefix_parts, suffix] if part)
 
 
-def render_stream(records: object, stream: IO[str] | None = None) -> None:
+def render_stream(records: Iterable[object], stream: IO[str] | None = None) -> None:
     """Write formatted lines for every record in ``records`` to ``stream``.
 
     Args:
@@ -74,7 +74,7 @@ def render_stream(records: object, stream: IO[str] | None = None) -> None:
         stream: Output stream. Defaults to ``sys.stderr``.
     """
     out = stream if stream is not None else sys.stderr
-    for record in records:  # type: ignore[assignment]
+    for record in records:
         if not isinstance(record, Mapping):
             continue
         print(_format_record(record), file=out, flush=True)

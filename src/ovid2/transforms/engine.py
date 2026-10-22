@@ -33,15 +33,15 @@ class TransformFamilyError(RuntimeError):
 
 
 def run(
-    df: "DataFrame",
+    df: DataFrame,
     spec: TransformSpec,
     *,
-    session: "EngineSession",
-    functions: "EngineFunctions",
+    session: EngineSession,
+    functions: EngineFunctions,
     engine_family: str = "spark",
     pipeline: str | None = None,
     secrets: dict[str, Any] | None = None,
-) -> "DataFrame":
+) -> DataFrame:
     """Execute a transform spec against ``df``.
 
     Args:

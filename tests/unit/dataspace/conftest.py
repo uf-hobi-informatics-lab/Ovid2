@@ -8,8 +8,8 @@ path) cannot leak the repo's real address configs into a test.
 
 from __future__ import annotations
 
+import contextlib
 import importlib
-import os
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -17,9 +17,7 @@ import pytest
 
 
 @pytest.fixture()
-def isolated_xdg(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> Iterator[Path]:
+def isolated_xdg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """XDG + cwd isolation for dataspace tests."""
     monkeypatch.chdir(tmp_path)
     for var, sub in (
@@ -33,12 +31,8 @@ def isolated_xdg(
         target.mkdir(parents=True, exist_ok=True)
         monkeypatch.setenv(var, str(target))
     monkeypatch.setenv("OVID2_WORK_DIR", str(tmp_path / "runtime" / "ovid2"))
-    monkeypatch.setenv(
-        "OVID2_SCHEDULER_DB", str(tmp_path / "state" / "ovid2" / "scheduler.db")
-    )
-    monkeypatch.setenv(
-        "OVID2_CONFIGS_DIR", str(tmp_path / "config" / "ovid2" / "configs")
-    )
+    monkeypatch.setenv("OVID2_SCHEDULER_DB", str(tmp_path / "state" / "ovid2" / "scheduler.db"))
+    monkeypatch.setenv("OVID2_CONFIGS_DIR", str(tmp_path / "config" / "ovid2" / "configs"))
     monkeypatch.setenv(
         "OVID2_CONNECTIONS_DIR",
         str(tmp_path / "config" / "ovid2" / "connections"),
@@ -56,10 +50,8 @@ def isolated_xdg(
 
     importlib.reload(_settings)
     # Bust the settings_svc cache so previous tests don't leak settings.
-    try:
+    with contextlib.suppress(Exception):
         from ovid2.web.services import settings_svc
 
         settings_svc.invalidate_cache()
-    except Exception:  # noqa: BLE001
-        pass
     yield tmp_path

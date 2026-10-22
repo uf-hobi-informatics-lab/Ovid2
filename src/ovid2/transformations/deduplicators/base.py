@@ -25,14 +25,14 @@ from __future__ import annotations
 
 import operator
 from functools import reduce
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from pyspark.sql import functions as sf
 
 from ovid2.config.settings import DEDUP_NULL_KEY_PASSTHROUGH, DEDUP_SALT_BUCKETS
 
 if TYPE_CHECKING:
-    from pyspark.sql import DataFrame
+    from pyspark.sql import Column, DataFrame
 
     from ovid2.cdm.handle import CdmHandle
     from ovid2.core.engines.base import BaseEngine
@@ -59,9 +59,9 @@ class Deduplicator:
         self,
         table_name: str,
         *,
-        cdm: "CdmHandle | None" = None,
+        cdm: CdmHandle | None = None,
         key_fields: list[str] | None = None,
-        engine: "BaseEngine | None" = None,
+        engine: BaseEngine | None = None,
     ) -> None:
         """Initialise the deduplicator.
 
@@ -77,7 +77,7 @@ class Deduplicator:
                 ``None`` or Spark-compatible the classic PySpark path runs.
         """
         self.table_name: str = table_name
-        self.engine: "BaseEngine | None" = engine
+        self.engine: BaseEngine | None = engine
         if key_fields is not None:
             self.key_fields: list[str] = list(key_fields)
             return
@@ -121,7 +121,7 @@ class Deduplicator:
         """
         if self._is_spark:
             return self._deduplicate_spark(df)
-        return self._deduplicate_portable(df)
+        return cast("DataFrame", self._deduplicate_portable(df))
 
     # ------------------------------------------------------------------
     # PySpark path (byte-identical to the pre-portability implementation)
@@ -144,7 +144,7 @@ class Deduplicator:
             return deduped
         return deduped.unionByName(without_full_key)
 
-    def _build_full_key_predicate(self) -> sf.Column:
+    def _build_full_key_predicate(self) -> Column:
         """Build a predicate that is true iff every key column is populated."""
         predicates = [sf.col(k).isNotNull() & (sf.col(k) != sf.lit("")) for k in self.key_fields]
         return reduce(operator.and_, predicates)
@@ -196,7 +196,5 @@ class Deduplicator:
 
     def _build_full_key_predicate_portable(self, fns: Any) -> Any:
         """Portable analogue of :meth:`_build_full_key_predicate`."""
-        predicates = [
-            fns.col(k).isNotNull() & (fns.col(k) != fns.lit("")) for k in self.key_fields
-        ]
+        predicates = [fns.col(k).isNotNull() & (fns.col(k) != fns.lit("")) for k in self.key_fields]
         return reduce(operator.and_, predicates)

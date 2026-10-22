@@ -22,7 +22,7 @@ from __future__ import annotations
 import importlib
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ovid2.cdm.registry import resolve_cdm_for_pipeline
 from ovid2.core.events import (
@@ -120,7 +120,9 @@ def run_pipeline(
     cdm = resolve_cdm_for_pipeline(pipeline)
 
     bus.emit(
-        table_started(instance_id=instance_id, pipeline=pipeline, batch_id=batch_id, table=table_name)
+        table_started(
+            instance_id=instance_id, pipeline=pipeline, batch_id=batch_id, table=table_name
+        )
     )
 
     if engine.session_is_spark:
@@ -175,7 +177,7 @@ def _run_pipeline_spark(
     batch_id: str,
     bus: EventBus,
     instance_id: str,
-    cdm: "CdmHandle",
+    cdm: CdmHandle,
 ) -> None:
     """Spark-family pipeline leg — byte-identical to the pre-portability path.
 
@@ -188,10 +190,13 @@ def _run_pipeline_spark(
     """
     from pyspark import StorageLevel
 
-    spark = engine.get_session()
+    # Spark-family leg: the engine session *is* a ``SparkSession``.
+    spark = cast("SparkSession", engine.get_session())
 
     # Register auxiliary tables (lazy — no data read yet).
-    _register_auxiliary_tables(spark, input_address, formatter, pipeline, batch_id, bus, instance_id)
+    _register_auxiliary_tables(
+        spark, input_address, formatter, pipeline, batch_id, bus, instance_id
+    )
 
     # Per-pipeline / per-table read hook (Datavant is the shipping example).
     df = _read_with_pipeline_hook(
@@ -252,7 +257,7 @@ def _run_pipeline_staged(
     batch_id: str,
     bus: EventBus,
     instance_id: str,
-    cdm: "CdmHandle",
+    cdm: CdmHandle,
     input_address_name: str | None,
     output_address_name: str | None,
     sf_overrides: dict[str, Any] | None,
@@ -285,15 +290,29 @@ def _run_pipeline_staged(
     stager = engine.get_stager()
 
     input_driver = driver_from_address(
-        input_address_name, pipeline=pipeline, sf_overrides=sf_overrides, cdm_name=cdm_name,
+        input_address_name,
+        pipeline=pipeline,
+        sf_overrides=sf_overrides,
+        cdm_name=cdm_name,
     )
     output_driver = driver_from_address(
-        output_address_name, pipeline=pipeline, sf_overrides=sf_overrides, cdm_name=cdm_name,
+        output_address_name,
+        pipeline=pipeline,
+        sf_overrides=sf_overrides,
+        cdm_name=cdm_name,
     )
 
     # Register auxiliary tables through the stager (engine-native views).
     _register_auxiliary_tables_staged(
-        engine, session, stager, input_driver, formatter, pipeline, batch_id, bus, instance_id,
+        engine,
+        session,
+        stager,
+        input_driver,
+        formatter,
+        pipeline,
+        batch_id,
+        bus,
+        instance_id,
     )
 
     # Materialise the main source into an engine-native DataFrame.
@@ -355,8 +374,8 @@ def register_shared_tables(
     spark: SparkSession,
     bus: EventBus | None = None,
     *,
-    cdm: "CdmHandle | None" = None,
-    engine: "BaseEngine | None" = None,
+    cdm: CdmHandle | None = None,
+    engine: BaseEngine | None = None,
     pipeline: str = "",
     batch_id: str = "",
     sf_overrides: dict[str, Any] | None = None,
@@ -469,7 +488,7 @@ def register_shared_tables(
 def _register_shared_view_from_address(
     *,
     view: Any,
-    engine: "BaseEngine | None",
+    engine: BaseEngine | None,
     session: Any,
     bus: EventBus,
     pipeline: str,
@@ -501,7 +520,10 @@ def _register_shared_view_from_address(
 
     try:
         driver = driver_from_address(
-            str(view.address), pipeline=pipeline, sf_overrides=sf_overrides, cdm_name=cdm_name,
+            str(view.address),
+            pipeline=pipeline,
+            sf_overrides=sf_overrides,
+            cdm_name=cdm_name,
         )
         stager = engine.get_stager()
         df = stager.materialise(
@@ -512,7 +534,7 @@ def _register_shared_view_from_address(
             view.delimiter,
             table_name=view.view_name,
         )
-    except Exception as exc:  # noqa: BLE001 — best-effort unless required
+    except Exception as exc:
         message = (
             f"Shared view '{view.view_name}' from address "
             f"'{view.address}' failed to materialise: {exc}"
@@ -533,7 +555,7 @@ def _register_shared_view_from_address(
 def _register_shared_view_from_local_file(
     *,
     view: Any,
-    engine: "BaseEngine | None",
+    engine: BaseEngine | None,
     session: Any,
     bus: EventBus,
 ) -> None:
@@ -586,7 +608,7 @@ def _register_shared_view_from_local_file(
             view.delimiter,
             table_name=view.view_name,
         )
-    except Exception as exc:  # noqa: BLE001 — best-effort unless required
+    except Exception as exc:
         message = (
             f"Shared view '{view.view_name}' from file "
             f"'{view.source_path}' failed to materialise: {exc}"
@@ -614,7 +636,6 @@ def _register_shared_view_from_local_file(
     _register_engine_view(session, view.view_name, df)
 
 
-
 def _register_auxiliary_tables(
     spark: SparkSession,
     input_address: BaseAddress,
@@ -633,7 +654,10 @@ def _register_auxiliary_tables(
             continue
         try:
             aux_df = input_address.read(
-                spark, pipeline, batch_id, f"*{aux_table}*",
+                spark,
+                pipeline,
+                batch_id,
+                f"*{aux_table}*",
                 table_name=aux_table,
             )
         except Exception as exc:
@@ -700,7 +724,7 @@ def _register_auxiliary_tables_staged(
                 f"*{aux_table}*",
                 table_name=aux_table,
             )
-        except Exception as exc:  # noqa: BLE001 — best-effort aux registration
+        except Exception as exc:
             bus.emit(
                 warning_event(
                     instance_id=instance_id,
@@ -771,11 +795,14 @@ def _read_with_pipeline_hook(
                 )
             )
             return input_address.read(
-                spark, pipeline, batch_id, formatter.input_file_name,
+                spark,
+                pipeline,
+                batch_id,
+                formatter.input_file_name,
                 table_name=table_name,
             )
         if result is not None:
-            return result
+            return cast("DataFrame", result)
 
     # Backwards-compat: legacy Datavant hash_token integration.
     datavant_key = getattr(pipeline_settings, "DATAVANT_KEY", None) if pipeline_settings else None
@@ -793,7 +820,10 @@ def _read_with_pipeline_hook(
 
     try:
         return input_address.read(
-            spark, pipeline, batch_id, formatter.input_file_name,
+            spark,
+            pipeline,
+            batch_id,
+            formatter.input_file_name,
             table_name=table_name,
         )
     except FileNotFoundError:
@@ -852,7 +882,10 @@ def _legacy_datavant_read(
             )
         )
         return input_address.read(
-            spark, pipeline, batch_id, formatter.input_file_name,
+            spark,
+            pipeline,
+            batch_id,
+            formatter.input_file_name,
             table_name=table_name,
         )
 
@@ -880,9 +913,15 @@ def _legacy_datavant_read(
                 instance_id=instance_id,
             )
         )
-        return input_address.read(
-            spark, pipeline, batch_id, formatter.input_file_name,
-            table_name=table_name,
+        return cast(
+            "DataFrame",
+            input_address.read(
+                spark,
+                pipeline,
+                batch_id,
+                formatter.input_file_name,
+                table_name=table_name,
+            ),
         )
 
     return (

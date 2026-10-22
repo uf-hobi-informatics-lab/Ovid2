@@ -44,7 +44,6 @@ from ovid2.drivers.s3.metadata import (
     _TEMPORARY_CREDS_PROVIDER,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fakes: a Spark session that records every ``conf.set(…)`` call.
 # ---------------------------------------------------------------------------
@@ -155,10 +154,7 @@ class TestPathResolution:
 
     def test_write_dir_with_multi_segment_prefix(self) -> None:
         a = S3Address({"bucket": "b", "prefix": "region1/out"})
-        assert (
-            a._resolve_write_dir("acme", "20260610")
-            == "s3a://b/region1/out/acme/20260610"
-        )
+        assert a._resolve_write_dir("acme", "20260610") == "s3a://b/region1/out/acme/20260610"
 
 
 # ---------------------------------------------------------------------------
@@ -265,34 +261,34 @@ class _FakeDF:
         self.write = self  # so ``df.write.mode(...)`` etc. resolve to us
         self.columns = ["A", "B"]
 
-    def _record(self, name: str, *args: Any) -> "_FakeDF":
+    def _record(self, name: str, *args: Any) -> _FakeDF:
         self.calls.append((name, args))
         return self
 
     # Reader-side chain
-    def option(self, *a: Any, **kw: Any) -> "_FakeDF":  # noqa: ARG002
+    def option(self, *a: Any, **kw: Any) -> _FakeDF:
         return self._record("option", *a)
 
-    def csv(self, path: str) -> "_FakeDF":
+    def csv(self, path: str) -> _FakeDF:
         return self._record("csv", path)
 
-    def parquet(self, path: str) -> "_FakeDF":
+    def parquet(self, path: str) -> _FakeDF:
         return self._record("parquet", path)
 
-    def json(self, path: str) -> "_FakeDF":
+    def json(self, path: str) -> _FakeDF:
         return self._record("json", path)
 
-    def toDF(self, *columns: str) -> "_FakeDF":  # noqa: N802 — mimic Spark API
+    def toDF(self, *columns: str) -> _FakeDF:
         return self._record("toDF", *columns)
 
     # Writer-side chain
-    def coalesce(self, n: int) -> "_FakeDF":
+    def coalesce(self, n: int) -> _FakeDF:
         return self._record("coalesce", n)
 
-    def format(self, fmt: str) -> "_FakeDF":
+    def format(self, fmt: str) -> _FakeDF:
         return self._record("format", fmt)
 
-    def mode(self, m: str) -> "_FakeDF":
+    def mode(self, m: str) -> _FakeDF:
         return self._record("mode", m)
 
     def save(self, path: str) -> None:
@@ -439,8 +435,11 @@ class TestRegistration:
             json.dumps(
                 {
                     "src_name": "s3",
-                    "src_args": {"bucket": "b", "aws_access_key_id": "A",
-                                 "aws_secret_access_key": "S"},
+                    "src_args": {
+                        "bucket": "b",
+                        "aws_access_key_id": "A",
+                        "aws_secret_access_key": "S",
+                    },
                 }
             )
         )

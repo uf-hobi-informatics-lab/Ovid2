@@ -16,17 +16,19 @@ class GcsConnection(BaseConnection):
     def test(self) -> ConnectionTestResult:
         """Probe by listing buckets via ``google-cloud-storage``."""
         try:
-            from google.cloud import storage  # type: ignore[import-not-found]
-            from google.oauth2 import service_account  # type: ignore[import-not-found]
+            from google.cloud import storage
+            from google.oauth2 import service_account
         except ImportError:
             return ConnectionTestResult(
-                ok=False, code="skipped",
+                ok=False,
+                code="skipped",
                 message="google-cloud-storage is not installed on this host.",
             )
         sa_json = self.secrets.get("service_account_json")
         if not sa_json:
             return ConnectionTestResult(
-                ok=False, code="config",
+                ok=False,
+                code="config",
                 message="service_account_json secret is required.",
             )
         try:
@@ -40,17 +42,20 @@ class GcsConnection(BaseConnection):
             if bucket:
                 client.get_bucket(bucket)
                 return ConnectionTestResult(
-                    ok=True, code="ok",
+                    ok=True,
+                    code="ok",
                     message=f"get_bucket({bucket}) succeeded.",
                 )
             list(client.list_buckets(page_size=1))
             return ConnectionTestResult(
-                ok=True, code="ok",
+                ok=True,
+                code="ok",
                 message="list_buckets(page_size=1) succeeded.",
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return ConnectionTestResult(
-                ok=False, code="unreachable",
+                ok=False,
+                code="unreachable",
                 message=f"GCS probe failed: {exc}",
             )
 

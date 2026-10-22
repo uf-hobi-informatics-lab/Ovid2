@@ -27,9 +27,9 @@ class PassthroughOp(BaseMapOp):
 
     def apply(
         self,
-        df: "DataFrame",
+        df: DataFrame,
         params: dict[str, Any],
         ctx: MapOpContext,
-    ) -> "DataFrame":
+    ) -> DataFrame:
         """Return ``df`` unchanged."""
         return df

@@ -126,7 +126,7 @@ class EngineStager(ABC):
     #: bare string so the module can stay pyspark-free.
     family: str = ""
 
-    def __init__(self, engine: "BaseEngine") -> None:
+    def __init__(self, engine: BaseEngine) -> None:
         self._engine = engine
 
     # ------------------------------------------------------------------
@@ -167,7 +167,7 @@ class EngineStager(ABC):
     @abstractmethod
     def materialise(
         self,
-        driver: "Driver",
+        driver: Driver,
         pipeline: str,
         batch_id: str,
         file_name: str,
@@ -202,7 +202,7 @@ class EngineStager(ABC):
     def persist(
         self,
         df: Any,
-        driver: "Driver",
+        driver: Driver,
         pipeline: str,
         batch_id: str,
         table_name: str,
@@ -224,7 +224,7 @@ class EngineStager(ABC):
     # Convenience
     # ------------------------------------------------------------------
 
-    def session(self) -> "EngineSession":
+    def session(self) -> EngineSession:
         """Return the underlying engine session (cached by the engine)."""
         return self._engine.get_session()
 
@@ -264,7 +264,7 @@ class SparkEngineStager(EngineStager):
 
     def materialise(
         self,
-        driver: "Driver",
+        driver: Driver,
         pipeline: str,
         batch_id: str,
         file_name: str,
@@ -284,7 +284,7 @@ class SparkEngineStager(EngineStager):
     def persist(
         self,
         df: Any,
-        driver: "Driver",
+        driver: Driver,
         pipeline: str,
         batch_id: str,
         table_name: str,
@@ -321,8 +321,8 @@ class SnowparkStagingStrategy(ABC):
     @abstractmethod
     def materialise(
         self,
-        session: "EngineSession",
-        driver: "Driver",
+        session: EngineSession,
+        driver: Driver,
         pipeline: str,
         batch_id: str,
         file_name: str,
@@ -333,9 +333,9 @@ class SnowparkStagingStrategy(ABC):
     @abstractmethod
     def persist(
         self,
-        session: "EngineSession",
+        session: EngineSession,
         df: Any,
-        driver: "Driver",
+        driver: Driver,
         pipeline: str,
         batch_id: str,
         table_name: str,
@@ -366,8 +366,8 @@ class _NativeSnowparkStrategy(SnowparkStagingStrategy):
 
     def materialise(
         self,
-        session: "EngineSession",
-        driver: "Driver",
+        session: EngineSession,
+        driver: Driver,
         pipeline: str,
         batch_id: str,
         file_name: str,
@@ -387,9 +387,12 @@ class _NativeSnowparkStrategy(SnowparkStagingStrategy):
         # Snowpark: prefer ``file_name`` when it's a valid SQL id,
         # else fall back to ``table_name``.
         import re
-        _ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
-        candidate = file_name if _ID_RE.match(file_name or "") else (
-            table_name if _ID_RE.match(table_name or "") else None
+
+        id_re = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
+        candidate = (
+            file_name
+            if id_re.match(file_name or "")
+            else (table_name if id_re.match(table_name or "") else None)
         )
         if not candidate:
             raise ValueError(
@@ -413,9 +416,9 @@ class _NativeSnowparkStrategy(SnowparkStagingStrategy):
 
     def persist(
         self,
-        session: "EngineSession",
+        session: EngineSession,
         df: Any,
-        driver: "Driver",
+        driver: Driver,
         pipeline: str,
         batch_id: str,
         table_name: str,
@@ -435,10 +438,11 @@ class _NativeSnowparkStrategy(SnowparkStagingStrategy):
             # Reuse the legacy helper for backwards compatibility with
             # the existing OVID_* materialisation contract.
             from ovid2.drivers.snowflake.spark import SnowflakeAddress
+
             legacy = SnowflakeAddress(dict(location))
-            legacy._validate_database()  # noqa: SLF001
+            legacy._validate_database()
             database = legacy.database
-            schema = legacy._schema_name(pipeline, batch_id)  # noqa: SLF001
+            schema = legacy._schema_name(pipeline, batch_id)
 
         # Ensure the target schema exists — Snowpark ``save_as_table``
         # will not auto-create it. Runs for both the driver-provided
@@ -489,7 +493,8 @@ class _NativeSnowparkStrategy(SnowparkStagingStrategy):
             # fall back to the untyped all-string create, matching the
             # Spark path's warn-and-infer behaviour.
             df.write.save_as_table(
-                [database, schema, table_name.upper()], mode="overwrite",
+                [database, schema, table_name.upper()],
+                mode="overwrite",
             )
 
 
@@ -544,7 +549,8 @@ def _all_string_table(native: Any, fqtn: str) -> Any:
 
 
 def _resolve_typed_columns(
-    driver: Any, table_name: str,
+    driver: Any,
+    table_name: str,
 ) -> list[tuple[str, str]]:
     """Return the output CDM's ``(COLUMN, snowflake_type)`` list, or ``[]``.
 
@@ -560,15 +566,23 @@ def _resolve_typed_columns(
 
     try:
         return build_snowflake_typed_columns(f"{cdm_name}.{table_name.upper()}")
-    except Exception:  # noqa: BLE001 — CDM lookup is best-effort
+    except Exception:
         return []
 
 
 #: Snowflake types that require a lenient ``TRY_CAST`` from the
 #: all-string DataFrame. VARCHAR / TEXT columns are copied verbatim.
 _NON_VARCHAR_PREFIXES: tuple[str, ...] = (
-    "NUMBER", "FLOAT", "DOUBLE", "INT", "DECIMAL", "NUMERIC",
-    "DATE", "TIMESTAMP", "TIME", "BOOLEAN",
+    "NUMBER",
+    "FLOAT",
+    "DOUBLE",
+    "INT",
+    "DECIMAL",
+    "NUMERIC",
+    "DATE",
+    "TIMESTAMP",
+    "TIME",
+    "BOOLEAN",
 )
 
 
@@ -613,9 +627,14 @@ def _write_typed(
     # CREATE TABLE AS SELECT can reference it by name. The view lives in
     # the session's current (workspace) schema; the CTAS target is
     # fully-qualified, so no session-schema switch is needed.
-    view_name = "OVID2_SNOWPARK_WRITE_" + re.sub(
-        r"[^A-Za-z0-9]+", "_", target_fqtn,
-    ).upper()
+    view_name = (
+        "OVID2_SNOWPARK_WRITE_"
+        + re.sub(
+            r"[^A-Za-z0-9]+",
+            "_",
+            target_fqtn,
+        ).upper()
+    )
     _register_engine_view_local(df, view_name)
 
     select_exprs: list[str] = []
@@ -624,14 +643,15 @@ def _write_typed(
         if upper_name not in df_columns:
             # The formatter did not produce this CDM column — emit a
             # typed NULL so the table shape still matches the CDM.
-            select_exprs.append(f"CAST(NULL AS {sf_type}) AS \"{upper_name}\"")
+            select_exprs.append(f'CAST(NULL AS {sf_type}) AS "{upper_name}"')
             continue
         src = f'"{upper_name}"'
-        if sf_type.upper().startswith(_NON_VARCHAR_PREFIXES) and not sf_type.upper().startswith("VARCHAR"):
+        if sf_type.upper().startswith(_NON_VARCHAR_PREFIXES) and not sf_type.upper().startswith(
+            "VARCHAR"
+        ):
             # Lenient cast: empty string → NULL, bad value → NULL.
             select_exprs.append(
-                f"TRY_CAST(NULLIF(TRIM(TO_VARCHAR({src})), '') AS {sf_type}) "
-                f'AS "{upper_name}"'
+                f"TRY_CAST(NULLIF(TRIM(TO_VARCHAR({src})), '') AS {sf_type}) AS \"{upper_name}\""
             )
         else:
             width_match = _varchar_width_re.match(sf_type)
@@ -646,19 +666,13 @@ def _write_typed(
                 # lands truncated instead of failing the table.
                 width = width_match.group(1)
                 select_exprs.append(
-                    f"CAST(LEFT(TO_VARCHAR({src}), {width}) AS {sf_type}) "
-                    f'AS "{upper_name}"'
+                    f'CAST(LEFT(TO_VARCHAR({src}), {width}) AS {sf_type}) AS "{upper_name}"'
                 )
             else:
-                select_exprs.append(
-                    f"CAST({src} AS {sf_type}) AS \"{upper_name}\""
-                )
+                select_exprs.append(f'CAST({src} AS {sf_type}) AS "{upper_name}"')
 
     select_clause = ", ".join(select_exprs)
-    ctas = (
-        f"CREATE OR REPLACE TABLE {target_fqtn} AS "
-        f"SELECT {select_clause} FROM {view_name}"
-    )
+    ctas = f"CREATE OR REPLACE TABLE {target_fqtn} AS SELECT {select_clause} FROM {view_name}"
     native.sql(ctas).collect()  # noqa: OVID2001 — CTAS is the write action
 
 
@@ -718,7 +732,7 @@ class SnowparkEngineStager(EngineStager):
     def supported_driver_types(cls) -> frozenset[str]:
         return frozenset(cls._STRATEGIES)
 
-    def _strategy_for(self, driver: "Driver") -> SnowparkStagingStrategy:
+    def _strategy_for(self, driver: Driver) -> SnowparkStagingStrategy:
         driver_type = getattr(driver, "type_name", "") or type(driver).__name__
         cls = type(self)._STRATEGIES.get(driver_type)
         if cls is None:
@@ -727,7 +741,7 @@ class SnowparkEngineStager(EngineStager):
 
     def materialise(
         self,
-        driver: "Driver",
+        driver: Driver,
         pipeline: str,
         batch_id: str,
         file_name: str,
@@ -737,14 +751,19 @@ class SnowparkEngineStager(EngineStager):
     ) -> Any:
         strategy = self._strategy_for(driver)
         return strategy.materialise(
-            self.session(), driver, pipeline, batch_id,
-            file_name, delimiter, table_name,
+            self.session(),
+            driver,
+            pipeline,
+            batch_id,
+            file_name,
+            delimiter,
+            table_name,
         )
 
     def persist(
         self,
         df: Any,
-        driver: "Driver",
+        driver: Driver,
         pipeline: str,
         batch_id: str,
         table_name: str,
@@ -752,8 +771,13 @@ class SnowparkEngineStager(EngineStager):
     ) -> None:
         strategy = self._strategy_for(driver)
         strategy.persist(
-            self.session(), df, driver, pipeline, batch_id,
-            table_name, delimiter,
+            self.session(),
+            df,
+            driver,
+            pipeline,
+            batch_id,
+            table_name,
+            delimiter,
         )
 
 

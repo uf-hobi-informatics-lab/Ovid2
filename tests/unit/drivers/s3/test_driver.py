@@ -17,7 +17,6 @@ Verifies that:
 from __future__ import annotations
 
 import sys
-from types import ModuleType
 from typing import Any
 
 import pytest
@@ -135,7 +134,8 @@ class TestProbeAuth:
     """The probe routes through :func:`probe_auth_from_config`."""
 
     def test_boto3_absent_gives_skipped(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setitem(sys.modules, "boto3", None)
         d = S3Driver(args={"region": "us-east-1"}, secrets={})

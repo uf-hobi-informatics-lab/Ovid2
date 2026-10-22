@@ -16,10 +16,12 @@ import argparse
 import logging
 import os
 import sys
+from typing import Any
 
 from ovid2.config.settings import DEFAULT_SF_ACCOUNT
 from ovid2.core.docker import is_inside_docker, submit_to_docker, submit_with_cluster
 from ovid2.core.events import (
+    EventBus,
     instance_finished,
     instance_started,
     set_default_bus,
@@ -170,6 +172,7 @@ def main(args: argparse.Namespace) -> int:
         from ovid2.drivers.engine_compat import (
             assert_engine_type_supports_drivers,
         )
+
         assert_engine_type_supports_drivers(
             args.engine,
             [args.input_address, args.output_address],
@@ -211,8 +214,16 @@ def _run_host_mode(args: argparse.Namespace) -> int:
     # ``--extra-mount`` from the operator, so ``parsed_extra_mounts``
     # here carries only the auto-derived list.
     from ovid2.connections.disc_mounts import build_disc_mounts
+
     args.parsed_extra_mounts = build_disc_mounts(
-        [getattr(args, "input_address", None), getattr(args, "output_address", None)],
+        [
+            name
+            for name in (
+                getattr(args, "input_address", None),
+                getattr(args, "output_address", None),
+            )
+            if name
+        ],
     )
 
     if SPARK_MODE == "cluster":
@@ -240,8 +251,8 @@ def _run_container_mode(args: argparse.Namespace) -> int:
     WORK_DIR.mkdir(parents=True, exist_ok=True)
     event_log = WORK_DIR / f"events-{instance_id}.jsonl"
     jsonl_bus = JsonlEventBus(event_log)
-    bus: object = TeeEventBus(jsonl_bus, PlainLogBus()) if args.stderr_log else jsonl_bus
-    set_default_bus(bus)  # type: ignore[arg-type]
+    bus: EventBus = TeeEventBus(jsonl_bus, PlainLogBus()) if args.stderr_log else jsonl_bus
+    set_default_bus(bus)
 
     bus.emit(instance_started(instance_id=instance_id, pipeline=pipeline))
 
@@ -252,7 +263,9 @@ def _run_container_mode(args: argparse.Namespace) -> int:
     from ovid2.core.engines.family import assert_pipeline_engine_compatible
 
     assert_pipeline_engine_compatible(engine, pipeline)
-    spark = engine.get_session()
+    # Spark-typed legacy ``BaseAddress`` / ``register_shared_tables`` take
+    # this session; ``cli/`` may not import pyspark (even for typing).
+    spark: Any = engine.get_session()
 
     # Cooperative-cancel handler. When an operator cancels a run from
     # the web panel the worker delivers a SIGTERM to the host-side
@@ -276,7 +289,7 @@ def _run_container_mode(args: argparse.Namespace) -> int:
         print(f"[ovid2] {name} received — cancelling run", file=sys.stderr)
         try:
             engine.cancel_running_queries()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("cancel_running_queries failed: %s", exc)
         raise KeyboardInterrupt(f"cancelled via {name}")
 
@@ -319,8 +332,8 @@ def _run_container_mode(args: argparse.Namespace) -> int:
     )
 
     register_shared_tables(
-        spark,  # type: ignore[arg-type]
-        bus,  # type: ignore[arg-type]
+        spark,
+        bus,
         engine=engine,
         pipeline=pipeline,
         batch_id=batch_id,
@@ -330,7 +343,7 @@ def _run_container_mode(args: argparse.Namespace) -> int:
     # Runs on a daemon thread, stops in the ``finally`` block below.
     from ovid2.core.metrics_sampler import run_sampler
 
-    sampler = run_sampler(instance_id=instance_id, engine=engine, bus=bus)  # type: ignore[arg-type]
+    sampler = run_sampler(instance_id=instance_id, engine=engine, bus=bus)
 
     failures = 0
     cancelled = False
@@ -355,7 +368,7 @@ def _run_container_mode(args: argparse.Namespace) -> int:
                     transformations=transformers,
                     pipeline=pipeline,
                     batch_id=batch_id,
-                    event_bus=bus,  # type: ignore[arg-type]
+                    event_bus=bus,
                     instance_id=instance_id,
                     input_address_name=args.input_address,
                     output_address_name=args.output_address,
@@ -397,8 +410,7 @@ def _run_container_mode(args: argparse.Namespace) -> int:
     success = failures == 0 and not cancelled
     print(
         f"[ovid2] Complete. failed={failures} "
-        f"succeeded={len(tables) - failures}"
-        + (" (cancelled)" if cancelled else "")
+        f"succeeded={len(tables) - failures}" + (" (cancelled)" if cancelled else "")
     )
 
     bus.emit(instance_finished(instance_id=instance_id, success=success))

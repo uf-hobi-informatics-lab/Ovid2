@@ -70,9 +70,7 @@ def test_pyspark_and_databricks_share_spark_family() -> None:
 @pytest.mark.unit
 def test_engine_operation_unsupported_has_useful_message() -> None:
     """The Spark-only-op exception carries the engine name + operation."""
-    exc = EngineOperationUnsupported(
-        "snowpark", "input_file_name", "no analog in Snowpark"
-    )
+    exc = EngineOperationUnsupported("snowpark", "input_file_name", "no analog in Snowpark")
     assert "snowpark" in str(exc)
     assert "input_file_name" in str(exc)
     assert exc.engine_type == "snowpark"

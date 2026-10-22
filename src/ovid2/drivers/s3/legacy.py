@@ -75,7 +75,9 @@ class S3Connection(BaseConnection):
     def as_address_config(self, location: dict[str, Any]) -> dict[str, Any]:
         """Merge connection args + secrets with a per-address bucket + prefix."""
         return build_address_config(
-            dict(self.args), dict(self.secrets), dict(location),
+            dict(self.args),
+            dict(self.secrets),
+            dict(location),
         )
 
 
@@ -145,7 +147,10 @@ class S3Address(BaseAddress):
         return self._io._base_uri()
 
     def _resolve_read_path(
-        self, pipeline: str, batch_id: str, file_name: str,
+        self,
+        pipeline: str,
+        batch_id: str,
+        file_name: str,
     ) -> str:
         """Assemble the fully-qualified read path."""
         return self._io._resolve_read_path(pipeline, batch_id, file_name)

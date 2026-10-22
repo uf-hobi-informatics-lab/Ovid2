@@ -127,17 +127,17 @@ SPEC = spec(
     joins=[
         {
             "with": "concept",
-            "on":   "concept.concept_id = condition_occurrence.condition_concept_id",
-            "how":  "left",
+            "on": "concept.concept_id = condition_occurrence.condition_concept_id",
+            "how": "left",
             "prefix": "cond",
             "domain_filter": ["Condition"],
         },
     ],
     projections={
-        "CONDITIONID":  "condition_occurrence.condition_occurrence_id",
-        "PATID":        "condition_occurrence.person_id",
-        "ONSET_DATE":   "condition_occurrence.condition_start_date",
-        "CONDITION":    "cond_concept_code",
+        "CONDITIONID": "condition_occurrence.condition_occurrence_id",
+        "PATID": "condition_occurrence.person_id",
+        "ONSET_DATE": "condition_occurrence.condition_start_date",
+        "CONDITION": "cond_concept_code",
         "CONDITION_TYPE": "cond_vocabulary_id",
     },
     output_columns_from="pcornet_7_0.CONDITION",

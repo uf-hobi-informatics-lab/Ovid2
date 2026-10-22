@@ -24,8 +24,6 @@ from cdm.pcornet_lite_1_0 import PCORNET_LITE_1_0  # noqa: E402
 @pytest.mark.contract
 def test_synthetic_cdm_registers_without_error() -> None:
     """A minimal handle registers and resolves like any bundled CDM."""
-    from ovid2.cdm.registry import _clear, get_cdm, register, registered_cdms
-
     # Snapshot then restore the registry so the test is idempotent.
     from ovid2.cdm import (  # noqa: F401 — force default registrations
         nursing_v1,
@@ -33,6 +31,7 @@ def test_synthetic_cdm_registers_without_error() -> None:
         tumor_v1,
         veritas_v1,
     )
+    from ovid2.cdm.registry import _clear, get_cdm, register, registered_cdms
 
     before = set(registered_cdms())
     try:
@@ -79,7 +78,7 @@ def test_mapper_spec_engine_runs_against_synthetic_cdm_without_pcornet_reference
         def __init__(self) -> None:
             self.calls: list[str] = []
 
-        def withColumn(self, name: str, expr: object) -> "StubDataFrame":  # noqa: N802
+        def withColumn(self, name: str, expr: object) -> StubDataFrame:
             self.calls.append(name)
             return self
 

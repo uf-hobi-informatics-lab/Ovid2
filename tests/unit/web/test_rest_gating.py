@@ -63,9 +63,7 @@ def _signed_cookie_value(session_id: str) -> str:
     response = Response()
     cookie_mod.issue_cookie(response, session_id)
     line = next(
-        value.decode("latin-1")
-        for key, value in response.raw_headers
-        if key == b"set-cookie"
+        value.decode("latin-1") for key, value in response.raw_headers if key == b"set-cookie"
     )
     jar: SimpleCookie[str] = SimpleCookie()
     jar.load(line)
@@ -202,9 +200,7 @@ def test_runs_view_runs_pending_forbidden(
 
 
 @pytest.mark.unit
-def test_runs_view_runs_unauth_401(
-    monkeypatch: pytest.MonkeyPatch, app_client: TestClient
-) -> None:
+def test_runs_view_runs_unauth_401(monkeypatch: pytest.MonkeyPatch, app_client: TestClient) -> None:
     """No session → 401 on /runs."""
     _enable_auth(monkeypatch, enabled=True)
     assert _get(app_client, "/api/v1/runs", None) == 401
@@ -385,9 +381,7 @@ def test_disabled_auth_secrets_open(
 
 
 @pytest.mark.unit
-def test_disabled_auth_runs_open(
-    monkeypatch: pytest.MonkeyPatch, app_client: TestClient
-) -> None:
+def test_disabled_auth_runs_open(monkeypatch: pytest.MonkeyPatch, app_client: TestClient) -> None:
     """auth.enabled=False → the VIEW_RUNS endpoint is open (no cookie)."""
     _enable_auth(monkeypatch, enabled=False)
     assert _get(app_client, "/api/v1/runs", None) == 200

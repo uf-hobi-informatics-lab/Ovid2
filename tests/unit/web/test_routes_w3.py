@@ -11,9 +11,7 @@ import pytest
 
 
 @pytest.fixture()
-def pipeline_env_w3(
-    isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> str:
+def pipeline_env_w3(isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     """Register a stub pipeline + two address configs."""
     root = tmp_path / "pipelines_root"
     pkg = root / "ovid2_pipelines" / "tp_w3"
@@ -154,9 +152,7 @@ def test_rerun_html_form_redirects(web_client: object, pipeline_env_w3: str) -> 
 
 
 @pytest.mark.unit
-def test_rerun_html_fetch_returns_json(
-    web_client: object, pipeline_env_w3: str
-) -> None:
+def test_rerun_html_fetch_returns_json(web_client: object, pipeline_env_w3: str) -> None:
     """A background fetch (X-Requested-With: fetch) gets JSON, not a 303.
 
     This is what the ▶ Rerun console button uses to swap the new run in

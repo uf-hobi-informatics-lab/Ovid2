@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -13,11 +12,13 @@ from ovid2.drivers.disc import DiscConnection, normalise_disc_args
 
 class TestNormaliseDiscArgs:
     def test_new_shape_round_trips(self) -> None:
-        got = normalise_disc_args({
-            "host_path": "/a",
-            "container_path": "/b",
-            "mount_mode": "ro",
-        })
+        got = normalise_disc_args(
+            {
+                "host_path": "/a",
+                "container_path": "/b",
+                "mount_mode": "ro",
+            }
+        )
         assert got == {"host_path": "/a", "container_path": "/b", "mount_mode": "ro"}
 
     def test_container_defaults_to_host(self) -> None:
@@ -100,9 +101,7 @@ class TestDiscAsAddressConfig:
 
     def test_format_and_lowercase_forwarded(self, tmp_path: Path) -> None:
         conn = DiscConnection(args={"host_path": str(tmp_path)}, secrets={})
-        result = conn.as_address_config(
-            {"path": "s", "format": "csv", "lowercase_columns": True}
-        )
+        result = conn.as_address_config({"path": "s", "format": "csv", "lowercase_columns": True})
         assert result["format"] == "csv"
         assert result["lowercase_columns"] is True
 
@@ -117,9 +116,7 @@ class TestDiscMountBuilder:
             json.dumps({"type": "disc", "args": args}), encoding="utf-8"
         )
 
-    def _write_addr(
-        self, tmp_path: Path, name: str, payload: dict[str, object]
-    ) -> None:
+    def _write_addr(self, tmp_path: Path, name: str, payload: dict[str, object]) -> None:
         cfgs = tmp_path / "config" / "ovid2" / "configs"
         cfgs.mkdir(parents=True, exist_ok=True)
         (cfgs / f"{name}.json").write_text(json.dumps(payload), encoding="utf-8")
@@ -155,15 +152,11 @@ class TestDiscMountBuilder:
         host.mkdir()
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
         self._write_disc(tmp_path, "d", {"host_path": str(host)})
-        self._write_addr(
-            tmp_path, "a", {"connection": "d", "location": {}}
-        )
+        self._write_addr(tmp_path, "a", {"connection": "d", "location": {}})
         from ovid2.connections.disc_mounts import build_disc_mounts
 
         caplog.set_level("WARNING")
-        mounts = build_disc_mounts(
-            ["a"], explicit_container_paths=[str(host)]
-        )
+        mounts = build_disc_mounts(["a"], explicit_container_paths=[str(host)])
         assert mounts == []
         assert any("overrides auto-mount" in r.message for r in caplog.records)
 
@@ -192,9 +185,7 @@ class TestDiscMountBuilder:
         host = tmp_path / "d1"
         host.mkdir()
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-        self._write_disc(
-            tmp_path, "d", {"host_path": str(host), "container_path": "/data"}
-        )
+        self._write_disc(tmp_path, "d", {"host_path": str(host), "container_path": "/data"})
         self._write_addr(tmp_path, "a", {"connection": "d", "location": {}})
         from ovid2.connections.disc_mounts import build_disc_mounts
 
@@ -247,12 +238,8 @@ class TestDiscMountBuilder:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
         self._write_disc(tmp_path, "d", {"host_path": str(host)})
         # Two different addresses sharing the same disc connection.
-        self._write_addr(
-            tmp_path, "a1", {"connection": "d", "location": {"path": "one"}}
-        )
-        self._write_addr(
-            tmp_path, "a2", {"connection": "d", "location": {"path": "two"}}
-        )
+        self._write_addr(tmp_path, "a1", {"connection": "d", "location": {"path": "one"}})
+        self._write_addr(tmp_path, "a2", {"connection": "d", "location": {"path": "two"}})
         from ovid2.connections.disc_mounts import build_disc_mounts
 
         mounts = build_disc_mounts(["a1", "a2"])

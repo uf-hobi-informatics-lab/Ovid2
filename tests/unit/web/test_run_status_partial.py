@@ -30,9 +30,7 @@ from ovid2.web.services import jobs_svc
 
 
 @pytest.fixture()
-def stub_pipeline(
-    isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> str:
+def stub_pipeline(isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     """Register a stub pipeline + two addresses so submit() succeeds."""
     root = tmp_path / "pipelines_root"
     pkg = root / "ovid2_pipelines" / "tp_status"
@@ -77,7 +75,9 @@ class TestStatusPartialEndpoint:
     """The new ``GET /partials/runs/{instance_id}/status`` endpoint."""
 
     def test_queued_partial_reflects_queued_status(
-        self, stub_pipeline: str, web_client: object,
+        self,
+        stub_pipeline: str,
+        web_client: object,
     ) -> None:
         job_id = _submit(stub_pipeline)
         detail = jobs_svc.get_job(job_id)
@@ -94,7 +94,9 @@ class TestStatusPartialEndpoint:
         assert "removeAttribute" not in response.text
 
     def test_failed_partial_reflects_failed_status_and_reason(
-        self, stub_pipeline: str, web_client: object,
+        self,
+        stub_pipeline: str,
+        web_client: object,
     ) -> None:
         from ovid2.web.worker import Worker, _Running
 
@@ -134,10 +136,12 @@ class TestStatusPartialEndpoint:
         assert "HASH_TOKEN" in text
         # The terminal-state guard is present so the poll halts.
         assert "removeAttribute" in text
-        assert 'run-job-status' in text
+        assert "run-job-status" in text
 
     def test_done_partial_emits_terminal_guard(
-        self, stub_pipeline: str, web_client: object,
+        self,
+        stub_pipeline: str,
+        web_client: object,
     ) -> None:
         """The stop-polling script is emitted for ``done`` too, not just failed."""
         from ovid2.web.worker import Worker, _Running
@@ -168,7 +172,9 @@ class TestStatusPartialEndpoint:
         assert "Failure reason" not in response.text
 
     def test_missing_instance_returns_empty_partial(
-        self, isolated_xdg: Path, web_client: object,
+        self,
+        isolated_xdg: Path,
+        web_client: object,
     ) -> None:
         """Unknown instance ids return 200 with an empty body (no job)."""
         response = web_client.get(  # type: ignore[attr-defined]
@@ -182,7 +188,9 @@ class TestRunDetailWiresPollForQueuedJob:
     """``run_detail.html`` wraps the status block with an HTMX poll."""
 
     def test_queued_run_detail_page_wires_hx_get(
-        self, stub_pipeline: str, web_client: object,
+        self,
+        stub_pipeline: str,
+        web_client: object,
     ) -> None:
         job_id = _submit(stub_pipeline)
         detail = jobs_svc.get_job(job_id)
@@ -202,7 +210,9 @@ class TestRunDetailWiresPollForQueuedJob:
         assert "job: queued" in body
 
     def test_failed_run_detail_page_omits_hx_get(
-        self, stub_pipeline: str, web_client: object,
+        self,
+        stub_pipeline: str,
+        web_client: object,
     ) -> None:
         """A page loaded for an already-failed job must not poll.
 
@@ -240,9 +250,9 @@ class TestRunDetailWiresPollForQueuedJob:
         # Wrapper is present.
         assert 'id="run-job-status"' in body
         # But the poll attributes are absent because the job is terminal.
-        assert 'hx-get="/partials/runs/' not in body.split('id="run-job-status"')[1].split(
-            "</div>"
-        )[0]
+        assert (
+            'hx-get="/partials/runs/' not in body.split('id="run-job-status"')[1].split("</div>")[0]
+        )
         assert "job: failed" in body
 
 
@@ -267,7 +277,9 @@ class TestDraftLaunchStatusIsVisible:
     """
 
     def test_status_partial_emits_machine_readable_marker(
-        self, stub_pipeline: str, web_client: object,
+        self,
+        stub_pipeline: str,
+        web_client: object,
     ) -> None:
         job_id = _draft(stub_pipeline)
         detail = jobs_svc.get_job(job_id)
@@ -282,7 +294,8 @@ class TestDraftLaunchStatusIsVisible:
         assert 'data-queue-running="0"' in body
 
     def test_queue_position_counts_running_and_ahead(
-        self, stub_pipeline: str,
+        self,
+        stub_pipeline: str,
     ) -> None:
         first = _submit(stub_pipeline)
         claimed = jobs_svc.claim_next_queued()
@@ -296,7 +309,9 @@ class TestDraftLaunchStatusIsVisible:
         assert jobs_svc.queue_position(ahead) == {"running": 1, "ahead": 0}
 
     def test_run_page_shows_queue_note_after_launch(
-        self, stub_pipeline: str, web_client: object,
+        self,
+        stub_pipeline: str,
+        web_client: object,
     ) -> None:
         _submit(stub_pipeline)
         assert jobs_svc.claim_next_queued() is not None
@@ -311,7 +326,9 @@ class TestDraftLaunchStatusIsVisible:
         assert "queued — waiting for 1 running job" in page
 
     def test_list_status_endpoint_tracks_launch(
-        self, stub_pipeline: str, web_client: object,
+        self,
+        stub_pipeline: str,
+        web_client: object,
     ) -> None:
         job_id = _draft(stub_pipeline)
         detail = jobs_svc.get_job(job_id)
@@ -325,7 +342,9 @@ class TestDraftLaunchStatusIsVisible:
         assert web_client.get(url).json() == {iid: "PROCESSING"}  # type: ignore[attr-defined]
 
     def test_list_rows_carry_instance_id_for_badge_refresh(
-        self, stub_pipeline: str, web_client: object,
+        self,
+        stub_pipeline: str,
+        web_client: object,
     ) -> None:
         job_id = _draft(stub_pipeline)
         detail = jobs_svc.get_job(job_id)

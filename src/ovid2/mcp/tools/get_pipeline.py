@@ -20,10 +20,7 @@ class GetPipelineArgs(BaseModel):
 
 
 TOOL_NAME = "get_pipeline"
-TOOL_DESCRIPTION = (
-    "Return metadata plus the formatter/mapper spec roster for one "
-    "pipeline package."
-)
+TOOL_DESCRIPTION = "Return metadata plus the formatter/mapper spec roster for one pipeline package."
 ARGS_MODEL = GetPipelineArgs
 
 

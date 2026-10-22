@@ -21,7 +21,6 @@ from pathlib import Path
 
 import pytest
 
-from ovid2.drivers.snowflake import metadata as sf_conn
 from ovid2.drivers.snowflake import (
     DEFAULT_CREDENTIALS_DIR,
     DEFAULT_PASSPHRASE_FILE,
@@ -32,7 +31,7 @@ from ovid2.drivers.snowflake import (
     _read_private_key_pem,
     _resolve_credentials_dir,
 )
-
+from ovid2.drivers.snowflake import metadata as sf_conn
 
 # ---------------------------------------------------------------------------
 # Fresh key material fixtures
@@ -71,7 +70,8 @@ def rsa_pem_encrypted() -> tuple[bytes, str]:
 
 @pytest.fixture
 def credentials_dir(
-    tmp_path: Path, rsa_pem_encrypted: tuple[bytes, str],
+    tmp_path: Path,
+    rsa_pem_encrypted: tuple[bytes, str],
 ) -> Path:
     """Materialise the legacy Ovid layout under a tmp dir.
 
@@ -123,7 +123,8 @@ def test_resolve_credentials_dir_expands_user() -> None:
 
 @pytest.mark.unit
 def test_read_private_key_pem_returns_bytes(
-    credentials_dir: Path, rsa_pem_encrypted: tuple[bytes, str],
+    credentials_dir: Path,
+    rsa_pem_encrypted: tuple[bytes, str],
 ) -> None:
     pem, _ = rsa_pem_encrypted
     assert _read_private_key_pem(credentials_dir, "rsa_key.p8") == pem
@@ -209,8 +210,11 @@ def test_build_kwargs_key_pair_end_to_end(credentials_dir: Path) -> None:
     """The credentials_dir + two-filename shape produces DER bytes."""
     conn = SnowflakeConnection(
         args={
-            "account": "acme-east", "user": "svc",
-            "warehouse": "wh", "role": "r", "authenticator": "SNOWFLAKE",
+            "account": "acme-east",
+            "user": "svc",
+            "warehouse": "wh",
+            "role": "r",
+            "authenticator": "SNOWFLAKE",
             "credentials_dir": str(credentials_dir),
             "private_key_file": "rsa_key.p8",
             "private_key_passphrase_file": "credentials",
@@ -235,7 +239,8 @@ def test_build_kwargs_password_takes_precedence(credentials_dir: Path) -> None:
     """A ``password`` secret bypasses the key-pair path entirely."""
     conn = SnowflakeConnection(
         args={
-            "account": "a", "user": "u",
+            "account": "a",
+            "user": "u",
             "credentials_dir": str(credentials_dir),
         },
         secrets={"password": "hunter2"},
@@ -252,7 +257,8 @@ def test_build_kwargs_uses_legacy_defaults_when_only_dir_given(
     """Filenames default to ``rsa_key.p8`` / ``credentials`` per legacy Ovid."""
     conn = SnowflakeConnection(
         args={
-            "account": "a", "user": "u",
+            "account": "a",
+            "user": "u",
             "credentials_dir": str(credentials_dir),
         },
         secrets={},
@@ -263,13 +269,15 @@ def test_build_kwargs_uses_legacy_defaults_when_only_dir_given(
 
 @pytest.mark.unit
 def test_build_kwargs_unencrypted_key(
-    tmp_path: Path, rsa_pem: bytes,
+    tmp_path: Path,
+    rsa_pem: bytes,
 ) -> None:
     """A blank passphrase filename means the key is unencrypted."""
     (tmp_path / "rsa_key.p8").write_bytes(rsa_pem)
     conn = SnowflakeConnection(
         args={
-            "account": "a", "user": "u",
+            "account": "a",
+            "user": "u",
             "credentials_dir": str(tmp_path),
             "private_key_passphrase_file": "",
         },
@@ -304,12 +312,14 @@ def _stub_snowflake_driver(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.unit
 def test_test_returns_auth_on_missing_key_file(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     _stub_snowflake_driver(monkeypatch)
     conn = SnowflakeConnection(
         args={
-            "account": "a", "user": "u",
+            "account": "a",
+            "user": "u",
             "credentials_dir": str(tmp_path),
             "private_key_file": "nope.p8",
         },
@@ -334,7 +344,8 @@ def test_test_returns_auth_on_missing_passphrase_file(
     # deliberately no ``credentials`` file
     conn = SnowflakeConnection(
         args={
-            "account": "a", "user": "u",
+            "account": "a",
+            "user": "u",
             "credentials_dir": str(tmp_path),
             "private_key_passphrase_file": "credentials",
         },
@@ -358,7 +369,8 @@ def test_test_returns_auth_on_bad_passphrase(
     (tmp_path / "credentials").write_text("wrong-pw\n", encoding="utf-8")
     conn = SnowflakeConnection(
         args={
-            "account": "a", "user": "u",
+            "account": "a",
+            "user": "u",
             "credentials_dir": str(tmp_path),
         },
         secrets={},
@@ -398,7 +410,9 @@ def test_as_address_config_produces_der_bytes(credentials_dir: Path) -> None:
     """Pipeline-side dict carries DER bytes, not paths."""
     conn = SnowflakeConnection(
         args={
-            "account": "a", "user": "u", "warehouse": "wh",
+            "account": "a",
+            "user": "u",
+            "warehouse": "wh",
             "credentials_dir": str(credentials_dir),
         },
         secrets={},
@@ -424,7 +438,8 @@ def test_as_address_config_password_skips_key_load(tmp_path: Path) -> None:
     # assert the resulting dict shape instead.
     conn = SnowflakeConnection(
         args={
-            "account": "a", "user": "u",
+            "account": "a",
+            "user": "u",
             "credentials_dir": str(tmp_path),
         },
         secrets={"password": "hunter2"},
@@ -437,12 +452,14 @@ def test_as_address_config_password_skips_key_load(tmp_path: Path) -> None:
 
 @pytest.mark.unit
 def test_as_address_config_swallows_key_errors(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Missing key file is logged, not raised — the address loader keeps going."""
     conn = SnowflakeConnection(
         args={
-            "account": "a", "user": "u",
+            "account": "a",
+            "user": "u",
             "credentials_dir": str(tmp_path),
             "private_key_file": "does_not_exist.p8",
         },

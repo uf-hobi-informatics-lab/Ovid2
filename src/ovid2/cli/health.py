@@ -23,6 +23,10 @@ import argparse
 import logging
 import os
 import sys
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ovid2.core.addresses.base import BaseAddress
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +45,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser.set_defaults(_command="health", _entry=main)
 
     parser.add_argument("--input_address", help="Input source address name.")
-    parser.add_argument(
-        "--output_address", help="Where to write the results table."
-    )
+    parser.add_argument("--output_address", help="Where to write the results table.")
     parser.add_argument(
         "--input_connection",
         default=None,
@@ -170,7 +172,7 @@ def _load_endpoint(
     pipeline: str,
     cdm_name: str,
     role: str,
-):  # -> BaseAddress
+) -> BaseAddress:
     """Resolve one health endpoint from either a saved address or a
     run-time-selected storage account + location.
 
@@ -178,8 +180,8 @@ def _load_endpoint(
     otherwise the saved ``address`` name is loaded. Raises ``ValueError``
     when neither is given.
     """
-    from ovid2.core.loaders import load_address
     from ovid2.config.addresses import load_address_from_connection
+    from ovid2.core.loaders import load_address
 
     if connection_name:
         return load_address_from_connection(
@@ -256,9 +258,13 @@ def _run_host_mode(args: argparse.Namespace) -> int:
     args.command = getattr(args, "command", None) or "health"
     args.parsed_extra_mounts = build_disc_mounts(
         [
-            getattr(args, "input_address", None),
-            getattr(args, "output_address", None),
-            getattr(args, "prev_input_address", None),
+            name
+            for name in (
+                getattr(args, "input_address", None),
+                getattr(args, "output_address", None),
+                getattr(args, "prev_input_address", None),
+            )
+            if name
         ],
     )
 
@@ -271,6 +277,7 @@ def _run_container_mode(args: argparse.Namespace) -> int:
     """Run the health checks directly, inside the Spark container."""
     from ovid2.config.settings import WORK_DIR
     from ovid2.core.events import (
+        EventBus,
         instance_finished,
         instance_started,
         set_default_bus,
@@ -302,13 +309,15 @@ def _run_container_mode(args: argparse.Namespace) -> int:
     WORK_DIR.mkdir(parents=True, exist_ok=True)
     event_log = WORK_DIR / f"events-{instance_id}.jsonl"
     jsonl_bus = JsonlEventBus(event_log)
-    bus: object = TeeEventBus(jsonl_bus, PlainLogBus()) if args.stderr_log else jsonl_bus
-    set_default_bus(bus)  # type: ignore[arg-type]
+    bus: EventBus = TeeEventBus(jsonl_bus, PlainLogBus()) if args.stderr_log else jsonl_bus
+    set_default_bus(bus)
 
     bus.emit(instance_started(instance_id=instance_id, pipeline=pipeline))
 
     engine = load_engine(args.engine)
-    session = engine.get_session()
+    # The Spark-typed legacy ``BaseAddress.write`` takes this session;
+    # ``cli/`` may not import pyspark (even for typing).
+    session: Any = engine.get_session()
     engine.prepare_workspace()
 
     sf_overrides = _sf_overrides(args)
@@ -368,7 +377,7 @@ def _run_container_mode(args: argparse.Namespace) -> int:
         pipeline=pipeline,
         batch_id=batch_id,
         instance_id=instance_id,
-        event_bus=bus,  # type: ignore[arg-type]
+        event_bus=bus,
     )
 
     failures = 0
@@ -384,9 +393,7 @@ def _run_container_mode(args: argparse.Namespace) -> int:
             )
             prior_tables = runner.register_prior_tables(prev_address, candidates)
 
-        outcomes = runner.run(
-            specs, available_tables=available, prior_tables=prior_tables
-        )
+        outcomes = runner.run(specs, available_tables=available, prior_tables=prior_tables)
         failures = sum(1 for o in outcomes if o.status == "error")
 
         # Durable results table -> output storage account.

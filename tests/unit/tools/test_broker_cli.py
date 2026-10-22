@@ -31,10 +31,12 @@ def xdg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def _write_disc_conn(xdg: Path, name: str, host_path: Path) -> None:
     (xdg / "ovid2" / "connections" / f"{name}.json").write_text(
-        json.dumps({
-            "type": "disc",
-            "args": {"host_path": str(host_path), "mount_mode": "ro"},
-        }),
+        json.dumps(
+            {
+                "type": "disc",
+                "args": {"host_path": str(host_path), "mount_mode": "ro"},
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -55,9 +57,7 @@ def test_probe_connection_emits_json(
 
 
 @pytest.mark.unit
-def test_probe_connection_unknown_connection(
-    xdg: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_probe_connection_unknown_connection(xdg: Path, capsys: pytest.CaptureFixture[str]) -> None:
     rc = tools_cli._probe_connection_entry(Namespace(name="nope"))
     payload = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert payload["ok"] is False
@@ -85,9 +85,7 @@ def test_browse_storage_lists_entries(
 
 
 @pytest.mark.unit
-def test_browse_storage_unknown_type_reports(
-    xdg: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_browse_storage_unknown_type_reports(xdg: Path, capsys: pytest.CaptureFixture[str]) -> None:
     (xdg / "ovid2" / "connections" / "c_bad.json").write_text(
         json.dumps({"type": "disc", "args": {}}), encoding="utf-8"
     )

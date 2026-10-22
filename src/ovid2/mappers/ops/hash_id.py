@@ -40,10 +40,10 @@ class HashIdOp(BaseMapOp):
 
     def apply(
         self,
-        df: "DataFrame",
+        df: DataFrame,
         params: dict[str, Any],
         ctx: MapOpContext,
-    ) -> "DataFrame":
+    ) -> DataFrame:
         """Return ``df`` with the named column replaced by its hash."""
         from pyspark.sql.functions import col as sf_col
         from pyspark.sql.functions import concat_ws, lit, sha2, substring

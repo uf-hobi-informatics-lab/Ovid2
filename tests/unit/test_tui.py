@@ -6,7 +6,7 @@ import pytest
 
 from ovid2.core import events as ev
 from ovid2.display.renderers._run_state import CHECK_ITEMS, TABLE_ITEMS
-from ovid2.display.renderers.tui import _State, _build_panel
+from ovid2.display.renderers.tui import _build_panel, _State
 
 _INSTANCE = "20260707-101112-abc123"
 
@@ -132,6 +132,8 @@ def test_rendering_before_item_event_does_not_lock_kind() -> None:
     assert state.aggregate.item_kind is TABLE_ITEMS
     # A subsequent check event still resolves the run kind to checks.
     state.apply(
-        ev.check_started(instance_id=_INSTANCE, check_id="dc_1_01", name="Sex", part="1").to_json_dict()
+        ev.check_started(
+            instance_id=_INSTANCE, check_id="dc_1_01", name="Sex", part="1"
+        ).to_json_dict()
     )
     assert state.aggregate.item_kind is CHECK_ITEMS

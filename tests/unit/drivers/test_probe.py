@@ -43,7 +43,10 @@ class _WrongCapabilityDriver(_BaseStub):
 
     def probe_auth(self) -> ProbeResult:
         return ProbeResult(
-            ok=True, code="ok", message="ok", capability="write",
+            ok=True,
+            code="ok",
+            message="ok",
+            capability="write",
         )
 
 

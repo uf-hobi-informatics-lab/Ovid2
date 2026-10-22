@@ -31,9 +31,12 @@ GATED_DELETE_HANDLERS: frozenset[str] = frozenset(
 def _calls_gate(func: ast.FunctionDef) -> bool:
     """Return True if the function body calls ``_gate(...)``."""
     for node in ast.walk(func):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if node.func.id == "_gate":
-                return True
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "_gate"
+        ):
+            return True
     return False
 
 
@@ -52,8 +55,7 @@ def test_destructive_deletes_are_gated(src_root: Path) -> None:
 
     missing_handlers = GATED_DELETE_HANDLERS - set(found)
     assert not missing_handlers, (
-        "Expected gated delete handlers not found in api_v1.py: "
-        f"{sorted(missing_handlers)}"
+        f"Expected gated delete handlers not found in api_v1.py: {sorted(missing_handlers)}"
     )
     ungated = sorted(name for name, gated in found.items() if not gated)
     assert not ungated, (

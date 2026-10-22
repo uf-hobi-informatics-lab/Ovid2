@@ -50,9 +50,7 @@ def test_read_csv_sets_quote_and_whitespace_options(tmp_path: Path) -> None:
     """
     csv_file = tmp_path / "pipeline" / "20260610" / "external_meds.csv"
     csv_file.parent.mkdir(parents=True)
-    csv_file.write_text(
-        '"externalmedid", "patid"\n1, p1\n', encoding="utf-8"
-    )
+    csv_file.write_text('"externalmedid", "patid"\n1, p1\n', encoding="utf-8")
     addr = DiscAddress({"path": str(tmp_path), "format": "csv"})
 
     spark, reader, _ = _make_spark()
@@ -112,9 +110,7 @@ def test_resolve_read_path_pipelined_layout_wins(tmp_path: Path) -> None:
     target.parent.mkdir(parents=True)
     target.write_text("a\n1\n", encoding="utf-8")
 
-    resolved = resolve_read_path(
-        str(tmp_path), "acme_from_disc", "20260610", "person.csv"
-    )
+    resolved = resolve_read_path(str(tmp_path), "acme_from_disc", "20260610", "person.csv")
     assert resolved == str(target)
 
 
@@ -147,9 +143,7 @@ def test_resolve_read_path_flat_fallback(tmp_path: Path) -> None:
     target.parent.mkdir(parents=True)
     target.write_text("a\n1\n", encoding="utf-8")
 
-    resolved = resolve_read_path(
-        str(tmp_path), "acme_from_disc", "20260610", "person.csv"
-    )
+    resolved = resolve_read_path(str(tmp_path), "acme_from_disc", "20260610", "person.csv")
     assert resolved == str(target)
 
 

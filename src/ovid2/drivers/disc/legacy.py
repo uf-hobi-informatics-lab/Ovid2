@@ -61,17 +61,17 @@ class DiscConnection(BaseConnection):
     @property
     def host_path(self) -> str:
         """Return the host-side path (previously ``root_path``)."""
-        return self._normalised()["host_path"]
+        return str(self._normalised()["host_path"])
 
     @property
     def container_path(self) -> str:
         """Return the container-side path (defaults to :attr:`host_path`)."""
-        return self._normalised()["container_path"]
+        return str(self._normalised()["container_path"])
 
     @property
     def mount_mode(self) -> str:
         """Return the bind-mount mode (``rw`` or ``ro``)."""
-        return self._normalised()["mount_mode"]
+        return str(self._normalised()["mount_mode"])
 
     def test(self) -> ConnectionTestResult:
         """Return ``ok`` when ``host_path`` exists and is readable."""

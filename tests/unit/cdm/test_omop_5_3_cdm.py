@@ -10,11 +10,10 @@ from __future__ import annotations
 
 import pytest
 
-from ovid2.cdm.registry import get_cdm, registered_cdms
-from ovid2.schema.cdm import build_snowflake_types_ddl
-
 # Import the package for its self-registration side effect.
 import ovid2.cdm  # noqa: F401
+from ovid2.cdm.registry import get_cdm, registered_cdms
+from ovid2.schema.cdm import build_snowflake_types_ddl
 
 _CORE_CLINICAL_TABLES = {
     "person",

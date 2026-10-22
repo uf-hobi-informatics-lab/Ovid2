@@ -25,7 +25,7 @@ message stays uniform across drivers.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from ovid2.drivers.base import ProbeResult
 
@@ -61,9 +61,11 @@ def _run_one(driver: Driver, capability: str) -> ProbeResult:
         result = method()
     except NotImplementedError:
         return _not_implemented(driver, capability)
-    except Exception as exc:  # noqa: BLE001 — harness must never propagate
+    except Exception as exc:
         logger.exception(
-            "Driver '%s' probe_%s raised", driver.type_name, capability,
+            "Driver '%s' probe_%s raised",
+            driver.type_name,
+            capability,
         )
         return ProbeResult(
             ok=False,
@@ -122,7 +124,7 @@ def run_test(driver: Driver) -> ConnectionTestResult:
     *Test connection* button in the web control panel.
     """
     result = _run_one(driver, "auth")
-    return result.to_legacy_test_result()
+    return cast("ConnectionTestResult", result.to_legacy_test_result())
 
 
 __all__ = ["run_all_probes", "run_test"]

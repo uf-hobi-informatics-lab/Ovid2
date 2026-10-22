@@ -37,10 +37,10 @@ class MapOpContext:
             engine from ``$XDG_CONFIG_HOME/ovid2/secrets.d/<pipeline>.json``.
     """
 
-    spark: "SparkSession"
+    spark: SparkSession
     pipeline: str
     table: str
-    cdm: "CdmHandle"
+    cdm: CdmHandle
     pipeline_dictionaries: Any = None
     secrets: dict[str, Any] | None = None
 
@@ -61,10 +61,10 @@ class BaseMapOp(ABC):
     @abstractmethod
     def apply(
         self,
-        df: "DataFrame",
+        df: DataFrame,
         params: dict[str, Any],
         ctx: MapOpContext,
-    ) -> "DataFrame":
+    ) -> DataFrame:
         """Apply the op to ``df`` using ``params`` and ``ctx``.
 
         Args:

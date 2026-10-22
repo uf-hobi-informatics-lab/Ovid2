@@ -198,7 +198,7 @@ class FixTransformer(BaseTransformer):
         cls,
         pipeline: str,
         *,
-        spark: "SparkSession",
+        spark: SparkSession,
         input_address: Any,
         batch_id: str,
         output_address: Any | None = None,

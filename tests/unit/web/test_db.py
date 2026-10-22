@@ -19,9 +19,8 @@ def test_ensure_schema_creates_web_tables(isolated_xdg: Path) -> None:
 
     with web_db.connect() as conn:
         tables = {
-            r[0] for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            ).fetchall()
+            r[0]
+            for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
         }
     assert {"web_jobs", "web_audit"}.issubset(tables)
 
@@ -37,9 +36,7 @@ def test_audit_appends_row(isolated_xdg: Path) -> None:
         detail_json='{"tables": ["all"]}',
     )
     with web_db.connect() as conn:
-        row = conn.execute(
-            "SELECT actor, action, target, detail_json FROM web_audit"
-        ).fetchone()
+        row = conn.execute("SELECT actor, action, target, detail_json FROM web_audit").fetchone()
     assert row["actor"] == "test"
     assert row["action"] == "run.submit"
     assert row["target"] == "demo:20260101"

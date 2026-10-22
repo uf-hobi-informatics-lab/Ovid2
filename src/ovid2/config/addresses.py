@@ -119,9 +119,7 @@ def load_address_config(address_name: str) -> dict[str, Any]:
     if "connection" in config:
         config.setdefault("location", {})
         if not isinstance(config["location"], dict):
-            raise ValueError(
-                f"Address config '{address_name}' has non-object 'location'."
-            )
+            raise ValueError(f"Address config '{address_name}' has non-object 'location'.")
         config["_shape"] = "connection"
         return config
 
@@ -268,7 +266,9 @@ def _resolve_connection_shape(
     src_args = connection.as_address_config(location)
     logger.debug(
         "Resolved connection-shape address %s via connection=%s type=%s",
-        address_name, connection_name, conn_type,
+        address_name,
+        connection_name,
+        conn_type,
     )
     return src_name, src_args
 
@@ -286,7 +286,9 @@ def _resolve_snowflake_config(
     # Tier 3: pipeline default.
     if not merged.get("database") and pipeline:
         try:
-            settings_module = importlib.import_module(f"ovid2_pipelines.{pipeline}.pipeline_settings")
+            settings_module = importlib.import_module(
+                f"ovid2_pipelines.{pipeline}.pipeline_settings"
+            )
             pipeline_db = getattr(settings_module, "DEFAULT_PIPELINE_DB_NAME", None)
             if pipeline_db:
                 merged["database"] = pipeline_db

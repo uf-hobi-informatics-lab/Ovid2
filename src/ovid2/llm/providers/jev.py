@@ -24,9 +24,9 @@ class JevProvider(Provider):
     def probe(self) -> ProbeResult:
         """Report that the JEV client is not implemented yet."""
         return ProbeResult(
-            False, "not_implemented",
-            "JEV provider is not available yet; the router will fall back to "
-            "the general LLM.",
+            False,
+            "not_implemented",
+            "JEV provider is not available yet; the router will fall back to the general LLM.",
             {"base_url": str(self.args.get("base_url") or "")},
         )
 

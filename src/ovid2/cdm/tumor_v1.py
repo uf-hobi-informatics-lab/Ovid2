@@ -12,6 +12,8 @@ each tumor table's dedup requirements are documented.
 
 from __future__ import annotations
 
+import contextlib
+
 from ovid2.cdm.handle import CdmHandle
 from ovid2.cdm.registry import register
 
@@ -30,10 +32,8 @@ TUMOR_V1: CdmHandle = CdmHandle(
 
 def _register_default() -> None:
     """Idempotently register the Tumor handle."""
-    try:
+    with contextlib.suppress(ValueError):
         register(TUMOR_V1)
-    except ValueError:
-        pass
 
 
 _register_default()

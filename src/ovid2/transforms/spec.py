@@ -27,7 +27,7 @@ import json
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 _SCHEMA_CACHE: dict[str, Any] = {}
 
@@ -81,7 +81,7 @@ def _schema() -> dict[str, Any]:
         ref = resources.files("ovid2.resources.schemas") / "transform_spec.v1.json"
         with ref.open("r", encoding="utf-8") as fh:
             _SCHEMA_CACHE["transform"] = json.load(fh)
-    return _SCHEMA_CACHE["transform"]
+    return cast("dict[str, Any]", _SCHEMA_CACHE["transform"])
 
 
 def _validate_raw(raw: dict[str, Any], *, origin: str) -> None:
@@ -89,9 +89,7 @@ def _validate_raw(raw: dict[str, Any], *, origin: str) -> None:
     try:
         from jsonschema import Draft202012Validator
     except ImportError as exc:  # pragma: no cover — dev dep
-        raise TransformSpecValidationError(
-            "jsonschema is required to validate specs."
-        ) from exc
+        raise TransformSpecValidationError("jsonschema is required to validate specs.") from exc
 
     validator = Draft202012Validator(_schema())
     errors = sorted(validator.iter_errors(raw), key=lambda e: list(e.path))

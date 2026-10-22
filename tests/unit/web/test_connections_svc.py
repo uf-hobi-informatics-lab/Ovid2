@@ -15,8 +15,16 @@ from ovid2.web.services import connections_svc
 def test_list_types_returns_every_registered_connector(isolated_xdg: Path) -> None:
     specs = connections_svc.list_connection_types()
     names = {s.type for s in specs}
-    assert {"disc", "snowflake", "s3", "azure_blob", "gcs",
-            "databricks", "postgres", "mssql"} <= names
+    assert {
+        "disc",
+        "snowflake",
+        "s3",
+        "azure_blob",
+        "gcs",
+        "databricks",
+        "postgres",
+        "mssql",
+    } <= names
 
 
 @pytest.mark.unit
@@ -42,8 +50,7 @@ def test_snowflake_field_spec_advertises_file_location_shape() -> None:
     arg_names = {f["name"] for f in spec["args"]}
     secret_names = {f["name"] for f in spec["secrets"]}
 
-    assert {"credentials_dir", "private_key_file",
-            "private_key_passphrase_file"} <= arg_names
+    assert {"credentials_dir", "private_key_file", "private_key_passphrase_file"} <= arg_names
     assert "private_key" not in secret_names
     assert "private_key_passphrase" not in secret_names
     assert secret_names == {"password"}
@@ -202,7 +209,9 @@ def test_create_only_conflict(isolated_xdg: Path, tmp_path: Path) -> None:
 
 @pytest.mark.unit
 def test_probe_deadline_returns_timeout_code(
-    isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    isolated_xdg: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A probe that outlives the deadline must not wedge the caller.
 
@@ -230,7 +239,7 @@ def test_probe_deadline_returns_timeout_code(
 
     from ovid2.web.services._broker import BrokerError
 
-    def _timeout(tool_args: object, **kw: object) -> dict:  # noqa: ANN001
+    def _timeout(tool_args: object, **kw: object) -> dict:
         raise BrokerError("Operation timed out after 0s")
 
     monkeypatch.setattr(connections_svc, "run_tool_json", _timeout)
@@ -244,7 +253,9 @@ def test_probe_deadline_returns_timeout_code(
 
 @pytest.mark.unit
 def test_probe_that_raises_reports_unreachable_not_deadline(
-    isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    isolated_xdg: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A probe failure surfaced by the broker maps to a clean report."""
     connections_svc.write_connection(
@@ -256,7 +267,7 @@ def test_probe_that_raises_reports_unreachable_not_deadline(
 
     # The executor subprocess reports the failure as a JSON result with
     # ok=False; the service must pass it through faithfully.
-    def _failed(tool_args: object, **kw: object) -> dict:  # noqa: ANN001
+    def _failed(tool_args: object, **kw: object) -> dict:
         return {
             "ok": False,
             "code": "unreachable",
@@ -368,7 +379,8 @@ def test_non_azure_connection_has_no_auth_mode(isolated_xdg: Path) -> None:
 
 @pytest.mark.unit
 def test_test_connection_via_driver_ok(
-    isolated_xdg: Path, tmp_path: Path,
+    isolated_xdg: Path,
+    tmp_path: Path,
 ) -> None:
     """Driver-based probe returns identical shape for a valid disc conn."""
     root = tmp_path / "d4_ok"
@@ -386,7 +398,8 @@ def test_test_connection_via_driver_ok(
 
 @pytest.mark.unit
 def test_test_connection_via_driver_matches_legacy(
-    isolated_xdg: Path, tmp_path: Path,
+    isolated_xdg: Path,
+    tmp_path: Path,
 ) -> None:
     """Driver + legacy probes must produce byte-identical results today.
 
@@ -426,7 +439,8 @@ def test_test_connection_via_driver_missing_returns_config(
 
 @pytest.mark.unit
 def test_test_connection_via_driver_unreachable_dir(
-    isolated_xdg: Path, tmp_path: Path,
+    isolated_xdg: Path,
+    tmp_path: Path,
 ) -> None:
     """A disc pointing at a missing directory reports unreachable."""
     connections_svc.write_connection(

@@ -30,9 +30,7 @@ def test_api_install_status(web_client: object, isolated_xdg: Path) -> None:
 
 
 @pytest.mark.unit
-def test_api_bootstrap_creates_xdg_tree(
-    web_client: object, isolated_xdg: Path
-) -> None:
+def test_api_bootstrap_creates_xdg_tree(web_client: object, isolated_xdg: Path) -> None:
     """``POST /api/v1/install/bootstrap`` creates the XDG tree."""
     r = web_client.post("/api/v1/install/bootstrap", json={})  # type: ignore[attr-defined]
     assert r.status_code == 200
@@ -65,9 +63,7 @@ def test_api_snowflake_save_rejects_incomplete_payload(
 
 
 @pytest.mark.unit
-def test_api_snowflake_save_writes_secret(
-    web_client: object, isolated_xdg: Path
-) -> None:
+def test_api_snowflake_save_writes_secret(web_client: object, isolated_xdg: Path) -> None:
     """``POST /api/v1/install/snowflake`` persists a complete payload."""
     web_client.post("/api/v1/install/bootstrap", json={})  # type: ignore[attr-defined]
     r = web_client.post(  # type: ignore[attr-defined]
@@ -89,9 +85,7 @@ def test_api_snowflake_save_writes_secret(
 
 
 @pytest.mark.unit
-def test_api_snowflake_password_never_returned(
-    web_client: object, isolated_xdg: Path
-) -> None:
+def test_api_snowflake_password_never_returned(web_client: object, isolated_xdg: Path) -> None:
     """After saving, the password is not exposed by any read endpoint."""
     web_client.post("/api/v1/install/bootstrap", json={})  # type: ignore[attr-defined]
     web_client.post(  # type: ignore[attr-defined]
@@ -257,9 +251,7 @@ def test_html_install_page(web_client: object, isolated_xdg: Path) -> None:
 
 
 @pytest.mark.unit
-def test_html_install_bootstrap_redirect(
-    web_client: object, isolated_xdg: Path
-) -> None:
+def test_html_install_bootstrap_redirect(web_client: object, isolated_xdg: Path) -> None:
     """``POST /install/bootstrap`` redirects back to the wizard with a flash."""
     r = web_client.post("/install/bootstrap", follow_redirects=False)  # type: ignore[attr-defined]
     assert r.status_code == 303
@@ -267,9 +259,7 @@ def test_html_install_bootstrap_redirect(
 
 
 @pytest.mark.unit
-def test_html_install_snowflake_form(
-    web_client: object, isolated_xdg: Path
-) -> None:
+def test_html_install_snowflake_form(web_client: object, isolated_xdg: Path) -> None:
     """``POST /install/snowflake`` accepts the wizard's form fields."""
     web_client.post("/install/bootstrap", follow_redirects=False)  # type: ignore[attr-defined]
     form: dict[str, str] = {}
@@ -286,9 +276,7 @@ def test_html_install_snowflake_form(
 
 
 @pytest.mark.unit
-def test_html_pipeline_verify_form(
-    web_client: object, isolated_xdg: Path
-) -> None:
+def test_html_pipeline_verify_form(web_client: object, isolated_xdg: Path) -> None:
     """``POST /install/pipeline/verify`` redirects with a flash on unknown pipeline."""
     r = web_client.post(  # type: ignore[attr-defined]
         "/install/pipeline/verify",

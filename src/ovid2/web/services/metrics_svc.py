@@ -32,7 +32,6 @@ import json
 import logging
 import time
 from collections.abc import Iterator
-from pathlib import Path
 from typing import Any
 
 from ovid2.web.services import events_svc
@@ -233,7 +232,7 @@ def stream(
 def _frame_sample(record: dict[str, Any]) -> bytes:
     """Frame a JSON sample dict as an SSE ``event: sample`` frame."""
     payload = json.dumps(record, separators=(",", ":"), ensure_ascii=False)
-    return f"event: sample\ndata: {payload}\n\n".encode("utf-8")
+    return f"event: sample\ndata: {payload}\n\n".encode()
 
 
 def briefing_cooking() -> list[dict[str, Any]]:
@@ -252,7 +251,7 @@ def briefing_cooking() -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     try:
         page = jobs_svc.list_jobs(status="running", limit=25)
-    except Exception:  # noqa: BLE001
+    except Exception:
         return []
     for row in page.jobs:
         instance_id = row.instance_id or ""

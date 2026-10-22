@@ -10,7 +10,6 @@ Covers:
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -18,9 +17,7 @@ import pytest
 
 
 @pytest.fixture()
-def submit_pipeline(
-    isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> str:
+def submit_pipeline(isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     """Register a stub pipeline with a YAML formatter + a disc connection."""
     root = tmp_path / "pipelines_root2"
     pkg = root / "ovid2_pipelines" / "tp_submit"
@@ -112,9 +109,7 @@ def test_submit_browse_mode_creates_address_and_queues(
 
 
 @pytest.mark.unit
-def test_submit_browse_missing_connection_errors(
-    web_client, submit_pipeline: str
-) -> None:  # type: ignore[no-untyped-def]
+def test_submit_browse_missing_connection_errors(web_client, submit_pipeline: str) -> None:  # type: ignore[no-untyped-def]
     r = web_client.post(
         "/submit",
         data={
@@ -136,9 +131,7 @@ def test_submit_browse_missing_connection_errors(
 
 
 @pytest.mark.unit
-def test_submit_empty_tables_rejected(
-    web_client, submit_pipeline: str, isolated_xdg: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_submit_empty_tables_rejected(web_client, submit_pipeline: str, isolated_xdg: Path) -> None:  # type: ignore[no-untyped-def]
     configs = isolated_xdg / "config" / "ovid2" / "configs"
     for nm in ("in_test", "out_test"):
         (configs / f"{nm}.json").write_text(
@@ -194,9 +187,7 @@ def test_submit_empty_transformations_rejected(
 
 
 @pytest.mark.unit
-def test_submit_page_renders_browse_validation_hooks(
-    web_client, submit_pipeline: str
-) -> None:  # type: ignore[no-untyped-def]
+def test_submit_page_renders_browse_validation_hooks(web_client, submit_pipeline: str) -> None:  # type: ignore[no-untyped-def]
     """The submit page must ship the per-card ``picker-error`` targets.
 
     The client-side hard block (``submit_plan.js::bindStorageValidation``)
@@ -215,4 +206,3 @@ def test_submit_page_renders_browse_validation_hooks(
     assert 'name="output_mode"' in html
     assert 'name="input_connection"' in html
     assert 'name="output_connection"' in html
-

@@ -13,7 +13,6 @@ from typing import Any
 
 from ovid2.transforms.base import BaseTransform, DataFrame, TransformContext
 
-
 _COLUMNS_SCHEMA: dict[str, Any] = {
     "type": "object",
     "required": ["columns"],
@@ -57,9 +56,7 @@ class ToUpperTransform(BaseTransform):
         """Return the JSON-schema fragment for this op."""
         return _COLUMNS_SCHEMA
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with the named columns uppercased."""
         f = ctx.functions
         for column in _columns(params):
@@ -87,9 +84,7 @@ class ToLowerTransform(BaseTransform):
         """Return the JSON-schema fragment for this op."""
         return _COLUMNS_SCHEMA
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with the named columns lowercased."""
         f = ctx.functions
         for column in _columns(params):
@@ -121,9 +116,7 @@ class ToTitleTransform(BaseTransform):
         """Return the JSON-schema fragment for this op."""
         return _COLUMNS_SCHEMA
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with the named columns title-cased."""
         f = ctx.functions
         for column in _columns(params):

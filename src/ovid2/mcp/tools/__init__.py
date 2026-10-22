@@ -75,7 +75,7 @@ def _load(module_name: str) -> ToolSpec | None:
         name=name,
         description=description,
         args_model=args_model,
-        run=runner,  # type: ignore[arg-type]
+        run=runner,
         module=module_name,
     )
 

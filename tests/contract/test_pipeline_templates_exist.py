@@ -36,9 +36,7 @@ def test_template_source_pipelines_installed() -> None:
 def test_template_cdms_registered() -> None:
     known = set(registered_cdms())
     offenders = [
-        f"{t.id}: cdm '{t.cdm}' not registered"
-        for t in list_templates()
-        if t.cdm not in known
+        f"{t.id}: cdm '{t.cdm}' not registered" for t in list_templates() if t.cdm not in known
     ]
     assert not offenders, "Template CDM issues:\n  " + "\n  ".join(offenders)
 

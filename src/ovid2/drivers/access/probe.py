@@ -17,7 +17,8 @@ from ovid2.drivers.base import ProbeResult
 
 
 def probe_auth_from_host_path(
-    host_path: str, detail: dict[str, object],
+    host_path: str,
+    detail: dict[str, object],
 ) -> ProbeResult:
     """Return an ``auth`` probe result for an Access connection directory.
 
@@ -62,7 +63,8 @@ def probe_auth_from_host_path(
 
 
 def probe_read_from_file(
-    file_path: str, detail: dict[str, object],
+    file_path: str,
+    detail: dict[str, object],
 ) -> ProbeResult:
     """Return a ``read`` probe result — verifies the Access file is readable.
 
@@ -91,9 +93,7 @@ def probe_read_from_file(
                 capability="read",
                 detail=dict(detail),
             )
-        access_files = [
-            c for c in children if c.lower().endswith(ACCESS_FILE_SUFFIXES)
-        ]
+        access_files = [c for c in children if c.lower().endswith(ACCESS_FILE_SUFFIXES)]
         if not access_files:
             return ProbeResult(
                 ok=False,
@@ -105,9 +105,7 @@ def probe_read_from_file(
         return ProbeResult(
             ok=True,
             code="ok",
-            message=(
-                f"Found {len(access_files)} Access file(s) in {file_path}"
-            ),
+            message=(f"Found {len(access_files)} Access file(s) in {file_path}"),
             capability="read",
             detail=dict(detail),
         )
@@ -124,9 +122,7 @@ def probe_read_from_file(
         return ProbeResult(
             ok=False,
             code="config",
-            message=(
-                f"Not an Access file (expected .accdb/.mdb): {file_path}"
-            ),
+            message=(f"Not an Access file (expected .accdb/.mdb): {file_path}"),
             capability="read",
             detail=dict(detail),
         )

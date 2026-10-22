@@ -19,7 +19,6 @@ from ovid2.core.engines.stager import (
     SnowparkStagingStrategy,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -73,7 +72,7 @@ class _FakeSession:
         return None  # force _ensure_writable_staging_schema to CREATE
 
     @property
-    def native(self) -> "Any":
+    def native(self) -> Any:
         return self
 
 
@@ -129,9 +128,7 @@ class TestImportSafety:
             assert not m.startswith("google.cloud.storage"), (
                 f"google.cloud.storage leaked at module scope: {m}"
             )
-            assert not m.startswith("google.oauth2"), (
-                f"google.oauth2 leaked at module scope: {m}"
-            )
+            assert not m.startswith("google.oauth2"), f"google.oauth2 leaked at module scope: {m}"
 
     def test_module_scope_does_not_import_pyspark(self) -> None:
         for mod in list(sys.modules):
@@ -139,6 +136,7 @@ class TestImportSafety:
                 del sys.modules[mod]
         pyspark_before = {m for m in sys.modules if m.startswith("pyspark")}
         import ovid2.drivers.snowflake.staging.gcs  # noqa: F401
+
         pyspark_after = {m for m in sys.modules if m.startswith("pyspark")}
         assert pyspark_after == pyspark_before
 
@@ -148,6 +146,7 @@ class TestImportSafety:
                 del sys.modules[mod]
         snowpark_before = {m for m in sys.modules if m.startswith("snowflake.snowpark")}
         import ovid2.drivers.snowflake.staging.gcs  # noqa: F401
+
         snowpark_after = {m for m in sys.modules if m.startswith("snowflake.snowpark")}
         assert snowpark_after == snowpark_before
 
@@ -163,7 +162,9 @@ class TestBuildCreateStageSql:
         from ovid2.drivers.snowflake.staging import gcs
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_GCS_INTEGRATION", "MY_GCS_INT",
+            settings,
+            "SNOWPARK_STAGING_GCS_INTEGRATION",
+            "MY_GCS_INT",
         )
         sql = gcs._build_create_stage_sql(
             stage_name="OVID2_STG_GCS_TEST",
@@ -179,7 +180,9 @@ class TestBuildCreateStageSql:
         from ovid2.drivers.snowflake.staging import gcs
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_GCS_INTEGRATION", None,
+            settings,
+            "SNOWPARK_STAGING_GCS_INTEGRATION",
+            None,
         )
         with pytest.raises(ValueError, match="no Snowflake→GCS auth path"):
             gcs._build_create_stage_sql(
@@ -192,7 +195,9 @@ class TestBuildCreateStageSql:
         from ovid2.drivers.snowflake.staging import gcs
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_GCS_INTEGRATION", None,
+            settings,
+            "SNOWPARK_STAGING_GCS_INTEGRATION",
+            None,
         )
         with pytest.raises(ValueError) as exc_info:
             gcs._build_create_stage_sql(stage_name="X", url="gcs://b/")
@@ -204,7 +209,9 @@ class TestBuildCreateStageSql:
         from ovid2.drivers.snowflake.staging import gcs
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_GCS_INTEGRATION", "INT",
+            settings,
+            "SNOWPARK_STAGING_GCS_INTEGRATION",
+            "INT",
         )
         # Contrived — the composed URL never contains a quote today,
         # but the escape guard must fire regardless.
@@ -225,7 +232,11 @@ class TestHelpers:
         from ovid2.drivers.snowflake.staging.gcs import _stage_name
 
         name = _stage_name(
-            "20260806-140000-def456", "demo", "20260101", "encounter", kind="in",
+            "20260806-140000-def456",
+            "demo",
+            "20260101",
+            "encounter",
+            kind="in",
         )
         assert name.startswith("OVID2_STG_GCS_")
         assert "-" not in name  # sanitised
@@ -266,9 +277,7 @@ class TestHelpers:
         assert _gcs_dir_uri("bucket", "prefix", "demo", "20260101") == (
             "gcs://bucket/prefix/demo/20260101/"
         )
-        assert _gcs_dir_uri("bucket", "", "demo", "20260101") == (
-            "gcs://bucket/demo/20260101/"
-        )
+        assert _gcs_dir_uri("bucket", "", "demo", "20260101") == ("gcs://bucket/demo/20260101/")
         assert _gcs_dir_uri("bucket", "", "", "") == "gcs://bucket/"
 
     def test_gcs_dir_uri_uses_gcs_scheme(self) -> None:
@@ -289,9 +298,7 @@ class TestHelpers:
         assert _gcs_key("prefix", "demo", "20260101", "file.csv") == (
             "prefix/demo/20260101/file.csv"
         )
-        assert _gcs_key("", "demo", "20260101", "file.csv") == (
-            "demo/20260101/file.csv"
-        )
+        assert _gcs_key("", "demo", "20260101", "file.csv") == ("demo/20260101/file.csv")
 
     def test_escape_sql_doubles_single_quotes(self) -> None:
         from ovid2.drivers.snowflake.staging.gcs import _escape_sql
@@ -342,7 +349,9 @@ class TestHelpers:
 
 class TestHeaderReader:
     def _prepare_gcs_stub(
-        self, monkeypatch, body: bytes,
+        self,
+        monkeypatch,
+        body: bytes,
     ) -> tuple[MagicMock, MagicMock]:
         """Install a fake google-cloud-storage module returning ``body``."""
         fake_blob = MagicMock()
@@ -368,7 +377,9 @@ class TestHeaderReader:
         monkeypatch.setitem(sys.modules, "google.cloud.storage", fake_storage)
         monkeypatch.setitem(sys.modules, "google.oauth2", fake_oauth2)
         monkeypatch.setitem(
-            sys.modules, "google.oauth2.service_account", fake_sa,
+            sys.modules,
+            "google.oauth2.service_account",
+            fake_sa,
         )
         return fake_client, fake_blob
 
@@ -378,11 +389,14 @@ class TestHeaderReader:
         )
 
         self._prepare_gcs_stub(
-            monkeypatch, body=b"COL_A,COL_B,COL_C\nrow1,x,y\n",
+            monkeypatch,
+            body=b"COL_A,COL_B,COL_C\nrow1,x,y\n",
         )
         cols = _read_header_columns_from_gcs(
-            bucket="b", key="demo/20260101/enc.csv",
-            delimiter=",", merged_config={"project_id": "proj"},
+            bucket="b",
+            key="demo/20260101/enc.csv",
+            delimiter=",",
+            merged_config={"project_id": "proj"},
         )
         assert cols == ["COL_A", "COL_B", "COL_C"]
 
@@ -393,7 +407,10 @@ class TestHeaderReader:
 
         self._prepare_gcs_stub(monkeypatch, body=b"A\tB\tC\nrow\n")
         cols = _read_header_columns_from_gcs(
-            bucket="b", key="k", delimiter="\t", merged_config={},
+            bucket="b",
+            key="k",
+            delimiter="\t",
+            merged_config={},
         )
         assert cols == ["A", "B", "C"]
 
@@ -403,10 +420,14 @@ class TestHeaderReader:
         )
 
         self._prepare_gcs_stub(
-            monkeypatch, body="\ufeffCOL_A,COL_B\n".encode("utf-8"),
+            monkeypatch,
+            body="\ufeffCOL_A,COL_B\n".encode("utf-8"),
         )
         cols = _read_header_columns_from_gcs(
-            bucket="b", key="k", delimiter=",", merged_config={},
+            bucket="b",
+            key="k",
+            delimiter=",",
+            merged_config={},
         )
         assert cols == ["COL_A", "COL_B"]
 
@@ -415,9 +436,11 @@ class TestHeaderReader:
             _read_header_columns_from_gcs,
         )
 
-        fake_client, _ = self._prepare_gcs_stub(monkeypatch, body=b"A,B\n")
+        _fake_client, _ = self._prepare_gcs_stub(monkeypatch, body=b"A,B\n")
         _read_header_columns_from_gcs(
-            bucket="b", key="k", delimiter=",",
+            bucket="b",
+            key="k",
+            delimiter=",",
             merged_config={
                 "project_id": "proj",
                 "service_account_json": '{"type": "service_account"}',
@@ -431,7 +454,8 @@ class TestHeaderReader:
         assert "credentials" in kwargs
 
     def test_falls_back_to_adc_when_no_service_account(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         from ovid2.drivers.snowflake.staging.gcs import (
             _read_header_columns_from_gcs,
@@ -439,7 +463,10 @@ class TestHeaderReader:
 
         self._prepare_gcs_stub(monkeypatch, body=b"A,B\n")
         _read_header_columns_from_gcs(
-            bucket="b", key="k", delimiter=",", merged_config={},
+            bucket="b",
+            key="k",
+            delimiter=",",
+            merged_config={},
         )
         # storage.Client called with no credentials kwarg → ADC path.
         import google.cloud.storage as storage  # type: ignore[import]
@@ -454,8 +481,10 @@ class TestHeaderReader:
 
         with pytest.raises(ValueError, match="cannot read header from a glob"):
             _read_header_columns_from_gcs(
-                bucket="b", key="path/*.csv",
-                delimiter=",", merged_config={},
+                bucket="b",
+                key="path/*.csv",
+                delimiter=",",
+                merged_config={},
             )
 
     def test_raises_on_empty_body(self, monkeypatch) -> None:
@@ -466,7 +495,10 @@ class TestHeaderReader:
         self._prepare_gcs_stub(monkeypatch, body=b"")
         with pytest.raises(ValueError, match="is empty"):
             _read_header_columns_from_gcs(
-                bucket="b", key="k", delimiter=",", merged_config={},
+                bucket="b",
+                key="k",
+                delimiter=",",
+                merged_config={},
             )
 
     def test_service_account_json_can_be_dict(self, monkeypatch) -> None:
@@ -477,7 +509,9 @@ class TestHeaderReader:
 
         self._prepare_gcs_stub(monkeypatch, body=b"A\n")
         _read_header_columns_from_gcs(
-            bucket="b", key="k", delimiter=",",
+            bucket="b",
+            key="k",
+            delimiter=",",
             merged_config={
                 "service_account_json": {"type": "service_account"},
             },
@@ -514,41 +548,58 @@ class TestMaterialise:
         monkeypatch.setitem(sys.modules, "google.cloud.storage", fake_storage)
         monkeypatch.setitem(sys.modules, "google.oauth2", fake_oauth2)
         monkeypatch.setitem(
-            sys.modules, "google.oauth2.service_account", fake_sa,
+            sys.modules,
+            "google.oauth2.service_account",
+            fake_sa,
         )
         return fake_client
 
     def test_materialise_creates_stage_and_transient_table(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         from ovid2.config import settings
         from ovid2.drivers.snowflake.staging.gcs import SnowparkGcsStrategy
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_GCS_INTEGRATION", "MY_GCS_INT",
+            settings,
+            "SNOWPARK_STAGING_GCS_INTEGRATION",
+            "MY_GCS_INT",
         )
         self._prepare_gcs_stub(
-            monkeypatch, body=b"COL_A\tCOL_B\tCOL_C\nrow1\tx\ty\n",
+            monkeypatch,
+            body=b"COL_A\tCOL_B\tCOL_C\nrow1\tx\ty\n",
         )
 
         session = _FakeSession()
-        driver = _FakeGcsDriver({
-            "bucket": "mybucket",
-            "prefix": "raw",
-            "project_id": "proj",
-            "service_account_json": '{"type": "service_account"}',
-            "format": "csv",
-        })
+        driver = _FakeGcsDriver(
+            {
+                "bucket": "mybucket",
+                "prefix": "raw",
+                "project_id": "proj",
+                "service_account_json": '{"type": "service_account"}',
+                "format": "csv",
+            }
+        )
         strategy = SnowparkGcsStrategy()
 
         df = strategy.materialise(
-            session, driver, "demo", "20260101",
-            "encounter.csv", None, None,
+            session,
+            driver,
+            "demo",
+            "20260101",
+            "encounter.csv",
+            None,
+            None,
         )
 
         # A CREATE STAGE, CREATE TRANSIENT TABLE, and COPY INTO fired.
-        create_stage = [q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TEMPORARY STAGE")]
-        create_table = [q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TRANSIENT TABLE")]
+        create_stage = [
+            q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TEMPORARY STAGE")
+        ]
+        create_table = [
+            q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TRANSIENT TABLE")
+        ]
         copy_into = [q for q in session.sql_calls if q.startswith("COPY INTO")]
         assert len(create_stage) == 1
         assert len(create_table) == 1
@@ -570,17 +621,27 @@ class TestMaterialise:
         from ovid2.drivers.snowflake.staging.gcs import SnowparkGcsStrategy
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_GCS_INTEGRATION", "INT",
+            settings,
+            "SNOWPARK_STAGING_GCS_INTEGRATION",
+            "INT",
         )
         session = _FakeSession()
-        driver = _FakeGcsDriver({
-            "bucket": "b",
-            "format": "parquet",
-        })
+        driver = _FakeGcsDriver(
+            {
+                "bucket": "b",
+                "format": "parquet",
+            }
+        )
         strategy = SnowparkGcsStrategy()
         with pytest.raises(ValueError, match="only supports fmt='csv'"):
             strategy.materialise(
-                session, driver, "demo", "20260101", "f.parquet", None, None,
+                session,
+                driver,
+                "demo",
+                "20260101",
+                "f.parquet",
+                None,
+                None,
             )
 
     def test_materialise_rejects_glob_file_name(self, monkeypatch) -> None:
@@ -588,23 +649,34 @@ class TestMaterialise:
         from ovid2.drivers.snowflake.staging.gcs import SnowparkGcsStrategy
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_GCS_INTEGRATION", "INT",
+            settings,
+            "SNOWPARK_STAGING_GCS_INTEGRATION",
+            "INT",
         )
         # Stub anyway so the reader import doesn't blow up.
         self._prepare_gcs_stub(monkeypatch, body=b"a,b\n")
 
         session = _FakeSession()
-        driver = _FakeGcsDriver({
-            "bucket": "b",
-        })
+        driver = _FakeGcsDriver(
+            {
+                "bucket": "b",
+            }
+        )
         strategy = SnowparkGcsStrategy()
         with pytest.raises(ValueError, match="cannot read header from a glob"):
             strategy.materialise(
-                session, driver, "demo", "20260101", "en*.csv", None, None,
+                session,
+                driver,
+                "demo",
+                "20260101",
+                "en*.csv",
+                None,
+                None,
             )
 
     def test_materialise_aborts_before_header_read_when_no_integration(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         """Missing integration must fail before the local GCS call.
 
@@ -616,7 +688,9 @@ class TestMaterialise:
         from ovid2.drivers.snowflake.staging.gcs import SnowparkGcsStrategy
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_GCS_INTEGRATION", None,
+            settings,
+            "SNOWPARK_STAGING_GCS_INTEGRATION",
+            None,
         )
         # Deliberately DO NOT stub google-cloud-storage. If the
         # strategy tries to reach it before the integration check
@@ -626,7 +700,13 @@ class TestMaterialise:
         strategy = SnowparkGcsStrategy()
         with pytest.raises(ValueError, match="no Snowflake→GCS auth path"):
             strategy.materialise(
-                session, driver, "demo", "20260101", "enc.csv", None, None,
+                session,
+                driver,
+                "demo",
+                "20260101",
+                "enc.csv",
+                None,
+                None,
             )
 
 
@@ -637,29 +717,42 @@ class TestMaterialise:
 
 class TestPersist:
     def test_persist_creates_stage_and_calls_copy_into_location(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         from ovid2.config import settings
         from ovid2.drivers.snowflake.staging.gcs import SnowparkGcsStrategy
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_GCS_INTEGRATION", "MY_GCS_INT",
+            settings,
+            "SNOWPARK_STAGING_GCS_INTEGRATION",
+            "MY_GCS_INT",
         )
         session = _FakeSession()
-        driver = _FakeGcsDriver({
-            "bucket": "outbucket",
-            "prefix": "cooked",
-            "format": "csv",
-            "single_file": False,
-        })
+        driver = _FakeGcsDriver(
+            {
+                "bucket": "outbucket",
+                "prefix": "cooked",
+                "format": "csv",
+                "single_file": False,
+            }
+        )
         strategy = SnowparkGcsStrategy()
 
         df = MagicMock()
         strategy.persist(
-            session, df, driver, "demo", "20260101", "encounter", None,
+            session,
+            df,
+            driver,
+            "demo",
+            "20260101",
+            "encounter",
+            None,
         )
 
-        create_stage = [q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TEMPORARY STAGE")]
+        create_stage = [
+            q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TEMPORARY STAGE")
+        ]
         assert len(create_stage) == 1
         assert "gcs://outbucket/cooked/demo/20260101/" in create_stage[0]
         assert "STORAGE_INTEGRATION = MY_GCS_INT" in create_stage[0]
@@ -681,18 +774,28 @@ class TestPersist:
         from ovid2.drivers.snowflake.staging.gcs import SnowparkGcsStrategy
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_GCS_INTEGRATION", "INT",
+            settings,
+            "SNOWPARK_STAGING_GCS_INTEGRATION",
+            "INT",
         )
         session = _FakeSession()
-        driver = _FakeGcsDriver({
-            "bucket": "b",
-            "single_file": True,
-            "format": "csv",
-        })
+        driver = _FakeGcsDriver(
+            {
+                "bucket": "b",
+                "single_file": True,
+                "format": "csv",
+            }
+        )
         strategy = SnowparkGcsStrategy()
         df = MagicMock()
         strategy.persist(
-            session, df, driver, "p", "b", "t", None,
+            session,
+            df,
+            driver,
+            "p",
+            "b",
+            "t",
+            None,
         )
         _, kwargs = df.write.copy_into_location.call_args
         assert kwargs["single"] is True
@@ -701,13 +804,22 @@ class TestPersist:
         from ovid2.drivers.snowflake.staging.gcs import SnowparkGcsStrategy
 
         session = _FakeSession()
-        driver = _FakeGcsDriver({
-            "bucket": "b", "format": "parquet",
-        })
+        driver = _FakeGcsDriver(
+            {
+                "bucket": "b",
+                "format": "parquet",
+            }
+        )
         strategy = SnowparkGcsStrategy()
         with pytest.raises(ValueError, match="only supports fmt='csv'"):
             strategy.persist(
-                session, MagicMock(), driver, "p", "b", "t", None,
+                session,
+                MagicMock(),
+                driver,
+                "p",
+                "b",
+                "t",
+                None,
             )
 
     def test_persist_rejects_missing_bucket(self, monkeypatch) -> None:
@@ -715,31 +827,48 @@ class TestPersist:
         from ovid2.drivers.snowflake.staging.gcs import SnowparkGcsStrategy
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_GCS_INTEGRATION", "INT",
+            settings,
+            "SNOWPARK_STAGING_GCS_INTEGRATION",
+            "INT",
         )
         session = _FakeSession()
         driver = _FakeGcsDriver({"format": "csv"})  # no bucket
         strategy = SnowparkGcsStrategy()
         with pytest.raises(ValueError, match="no bucket resolved"):
             strategy.persist(
-                session, MagicMock(), driver, "p", "b", "t", None,
+                session,
+                MagicMock(),
+                driver,
+                "p",
+                "b",
+                "t",
+                None,
             )
 
     def test_persist_aborts_before_stage_create_when_no_integration(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         from ovid2.config import settings
         from ovid2.drivers.snowflake.staging.gcs import SnowparkGcsStrategy
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_GCS_INTEGRATION", None,
+            settings,
+            "SNOWPARK_STAGING_GCS_INTEGRATION",
+            None,
         )
         session = _FakeSession()
         driver = _FakeGcsDriver({"bucket": "b", "format": "csv"})
         strategy = SnowparkGcsStrategy()
         with pytest.raises(ValueError, match="no Snowflake→GCS auth path"):
             strategy.persist(
-                session, MagicMock(), driver, "p", "b", "t", None,
+                session,
+                MagicMock(),
+                driver,
+                "p",
+                "b",
+                "t",
+                None,
             )
 
 
@@ -750,13 +879,15 @@ class TestPersist:
 
 class TestCleanup:
     def test_cleanup_registered_once_per_session_instance(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         from ovid2.drivers.snowflake.staging.gcs import SnowparkGcsStrategy
 
         atexit_calls: list = []
         monkeypatch.setattr(
-            "atexit.register", lambda fn: atexit_calls.append(fn),
+            "atexit.register",
+            lambda fn: atexit_calls.append(fn),
         )
         session = _FakeSession()
         strategy = SnowparkGcsStrategy()
@@ -773,7 +904,8 @@ class TestCleanup:
 
         atexit_calls: list = []
         monkeypatch.setattr(
-            "atexit.register", lambda fn: atexit_calls.append(fn),
+            "atexit.register",
+            lambda fn: atexit_calls.append(fn),
         )
         monkeypatch.setattr(settings, "SNOWPARK_STAGING_KEEP", True)
         session = _FakeSession()
@@ -786,7 +918,8 @@ class TestCleanup:
 
         atexit_hooks: list = []
         monkeypatch.setattr(
-            "atexit.register", lambda fn: atexit_hooks.append(fn),
+            "atexit.register",
+            lambda fn: atexit_hooks.append(fn),
         )
         session = _FakeSession()
         strategy = SnowparkGcsStrategy()
@@ -809,7 +942,8 @@ class TestCleanup:
 
         atexit_hooks: list = []
         monkeypatch.setattr(
-            "atexit.register", lambda fn: atexit_hooks.append(fn),
+            "atexit.register",
+            lambda fn: atexit_hooks.append(fn),
         )
         session = _FakeSession()
 

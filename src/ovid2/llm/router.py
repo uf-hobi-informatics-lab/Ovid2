@@ -89,8 +89,9 @@ class RouteConfig:
             fallback_to_general=bool(raw.get("fallback_to_general", True)),
             tools=tuple(str(t) for t in (raw.get("tools") or []) if isinstance(t, str)),
             max_tool_iterations=max(1, min(20, _int(raw.get("max_tool_iterations"), 6))),
-            tool_result_max_chars=max(256, min(200000,
-                                              _int(raw.get("tool_result_max_chars"), 8000))),
+            tool_result_max_chars=max(
+                256, min(200000, _int(raw.get("tool_result_max_chars"), 8000))
+            ),
         )
 
 
@@ -105,8 +106,9 @@ def _int(value: Any, default: int) -> int:
 ProviderFactory = Callable[[str], Provider]
 
 
-def sanitize_messages(raw: Any, *, max_messages: int = 40,
-                      max_chars: int = 32000) -> list[ChatMessage]:
+def sanitize_messages(
+    raw: Any, *, max_messages: int = 40, max_chars: int = 32000
+) -> list[ChatMessage]:
     """Keep only well-formed user/assistant turns, bounded in count and size."""
     out: list[ChatMessage] = []
     if not isinstance(raw, list):
@@ -123,10 +125,13 @@ def sanitize_messages(raw: Any, *, max_messages: int = 40,
     return out
 
 
-def route_chat(messages: list[ChatMessage], route: RouteConfig,
-               factory: ProviderFactory,
-               api_client: ReadOnlyApiClient | None = None,
-               ui_context: dict[str, Any] | None = None) -> Iterator[LlmEvent]:
+def route_chat(
+    messages: list[ChatMessage],
+    route: RouteConfig,
+    factory: ProviderFactory,
+    api_client: ReadOnlyApiClient | None = None,
+    ui_context: dict[str, Any] | None = None,
+) -> Iterator[LlmEvent]:
     """Run one chat turn and yield protocol events (always ends with ``done``).
 
     Args:
@@ -141,12 +146,19 @@ def route_chat(messages: list[ChatMessage], route: RouteConfig,
     started = time.monotonic()
 
     def done(route_name: str, ok: bool) -> LlmEvent:
-        return {"type": "done", "route": route_name, "ok": ok,
-                "elapsed_ms": int((time.monotonic() - started) * 1000)}
+        return {
+            "type": "done",
+            "route": route_name,
+            "ok": ok,
+            "elapsed_ms": int((time.monotonic() - started) * 1000),
+        }
 
     if not messages or messages[-1]["role"] != "user":
-        yield {"type": "error", "code": "bad_request",
-               "message": "The conversation must end with a user message."}
+        yield {
+            "type": "error",
+            "code": "bad_request",
+            "message": "The conversation must end with a user message.",
+        }
         yield done("none", False)
         return
 
@@ -163,35 +175,48 @@ def route_chat(messages: list[ChatMessage], route: RouteConfig,
             accepted = decision.in_scope and decision.confidence >= threshold
             yield decision.to_event(accepted=accepted, connection=route.system1)
             if accepted:
-                yield {"type": "meta", "route": "system1", "connection": route.system1,
-                       "model": s1.model}
+                yield {
+                    "type": "meta",
+                    "route": "system1",
+                    "connection": route.system1,
+                    "model": s1.model,
+                }
                 text = decision.answer or decision.decision
                 if text:
                     yield {"type": "delta", "text": text}
                 yield done("system1", True)
                 return
-            yield {"type": "notice",
-                   "message": (f"System 1 deferred (confidence "
-                               f"{decision.confidence:.2f} < {threshold:.2f}"
-                               f"{'' if decision.in_scope else ', out of scope'}).")}
+            yield {
+                "type": "notice",
+                "message": (
+                    f"System 1 deferred (confidence "
+                    f"{decision.confidence:.2f} < {threshold:.2f}"
+                    f"{'' if decision.in_scope else ', out of scope'})."
+                ),
+            }
         except NotImplementedError as exc:
             # A stub provider (e.g. JEV before it ships) is an expected,
             # permanent condition — fall through to the general LLM silently
             # instead of cluttering every chat turn with a notice.
             _LOG.debug("System 1 %s unavailable: %s", route.system1, exc)
-        except (ProviderError, FileNotFoundError, ValueError, KeyError,
-                PermissionError) as exc:
+        except (ProviderError, FileNotFoundError, ValueError, KeyError, PermissionError) as exc:
             yield {"type": "notice", "message": f"System 1 failed: {exc}"}
         if not route.fallback_to_general:
-            yield {"type": "error", "code": "no_route",
-                   "message": "System 1 did not accept and fallback is disabled."}
+            yield {
+                "type": "error",
+                "code": "no_route",
+                "message": "System 1 did not accept and fallback is disabled.",
+            }
             yield done("system1", False)
             return
 
     # ---- General ------------------------------------------------------
     if not route.general:
-        yield {"type": "error", "code": "no_route",
-               "message": "No general LLM is configured. Pick one under LLMs → Routing."}
+        yield {
+            "type": "error",
+            "code": "no_route",
+            "message": "No general LLM is configured. Pick one under LLMs → Routing.",
+        }
         yield done("none", False)
         return
     try:
@@ -200,13 +225,20 @@ def route_chat(messages: list[ChatMessage], route: RouteConfig,
         yield {"type": "error", "code": "config", "message": str(exc)}
         yield done("general", False)
         return
-    yield {"type": "meta", "route": "general", "connection": route.general,
-           "model": general.model}
-    ctx = (ToolContext(route.tools, api_client, max_iterations=route.max_tool_iterations,
-                       result_max_chars=route.tool_result_max_chars)
-           if route.tools else None)
-    prompt = BASE_SYSTEM_PROMPT + (TOOL_PROMPT if ctx and ctx.tools else
-                                   " You have no access to live Ovid2 data or tools.")
+    yield {"type": "meta", "route": "general", "connection": route.general, "model": general.model}
+    ctx = (
+        ToolContext(
+            route.tools,
+            api_client,
+            max_iterations=route.max_tool_iterations,
+            result_max_chars=route.tool_result_max_chars,
+        )
+        if route.tools
+        else None
+    )
+    prompt = BASE_SYSTEM_PROMPT + (
+        TOOL_PROMPT if ctx and ctx.tools else " You have no access to live Ovid2 data or tools."
+    )
     if ctx and any(t.ui_action for t in ctx.tools):
         prompt += ui_context_prompt(ui_context)
     convo: list[ChatMessage] = [{"role": "system", "content": prompt}, *messages]
@@ -228,5 +260,10 @@ def route_chat(messages: list[ChatMessage], route: RouteConfig,
     yield done("general", True)
 
 
-__all__ = ["BASE_SYSTEM_PROMPT", "ProviderFactory", "RouteConfig", "route_chat",
-           "sanitize_messages"]
+__all__ = [
+    "BASE_SYSTEM_PROMPT",
+    "ProviderFactory",
+    "RouteConfig",
+    "route_chat",
+    "sanitize_messages",
+]

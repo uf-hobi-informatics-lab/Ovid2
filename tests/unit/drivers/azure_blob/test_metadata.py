@@ -55,14 +55,10 @@ class TestResolveAddressAuthMode:
         )
 
     def test_account_key(self) -> None:
-        assert (
-            resolve_address_auth_mode({"account_key": "k"}) == "account_key"
-        )
+        assert resolve_address_auth_mode({"account_key": "k"}) == "account_key"
 
     def test_sas_token(self) -> None:
-        assert (
-            resolve_address_auth_mode({"sas_token": "?sv=xyz"}) == "sas_token"
-        )
+        assert resolve_address_auth_mode({"sas_token": "?sv=xyz"}) == "sas_token"
 
     def test_service_principal_requires_all_three(self) -> None:
         assert (
@@ -81,16 +77,11 @@ class TestResolveAddressAuthMode:
 
     def test_managed_identity_when_only_tenant_present(self) -> None:
         """Half-populated SPN falls through to managed identity."""
-        assert (
-            resolve_address_auth_mode({"tenant_id": "T"}) == "managed_identity"
-        )
+        assert resolve_address_auth_mode({"tenant_id": "T"}) == "managed_identity"
 
     def test_blank_values_treated_as_absent(self) -> None:
         assert (
-            resolve_address_auth_mode(
-                {"account_key": "", "sas_token": "   "}
-            )
-            == "managed_identity"
+            resolve_address_auth_mode({"account_key": "", "sas_token": "   "}) == "managed_identity"
         )
 
     def test_resolve_auth_mode_alias(self) -> None:
@@ -102,26 +93,17 @@ class TestResolveConnectionAuthMode:
     """The connection-side classifier — fifth leg is ``default_chain``."""
 
     def test_connection_string_wins(self) -> None:
-        assert (
-            resolve_connection_auth_mode({"connection_string": "x"})
-            == "connection_string"
-        )
+        assert resolve_connection_auth_mode({"connection_string": "x"}) == "connection_string"
 
     def test_account_key(self) -> None:
-        assert (
-            resolve_connection_auth_mode({"account_key": "k"}) == "account_key"
-        )
+        assert resolve_connection_auth_mode({"account_key": "k"}) == "account_key"
 
     def test_sas_token(self) -> None:
-        assert (
-            resolve_connection_auth_mode({"sas_token": "?sv=xyz"}) == "sas_token"
-        )
+        assert resolve_connection_auth_mode({"sas_token": "?sv=xyz"}) == "sas_token"
 
     def test_service_principal(self) -> None:
         assert (
-            resolve_connection_auth_mode(
-                {"tenant_id": "T", "client_id": "C", "client_secret": "S"}
-            )
+            resolve_connection_auth_mode({"tenant_id": "T", "client_id": "C", "client_secret": "S"})
             == "service_principal"
         )
 
@@ -259,7 +241,9 @@ class TestBuildAddressConfig:
 
     def test_path_None_omitted(self) -> None:
         got = build_address_config(
-            args={}, secrets={}, location={"container": "c"},
+            args={},
+            secrets={},
+            location={"container": "c"},
         )
         assert "prefix" not in got
 
@@ -291,9 +275,7 @@ class TestParseConnectionString:
         }
 
     def test_ignores_malformed_pairs(self) -> None:
-        parsed = _parse_connection_string(
-            "bad;AccountName=a;=orphan;AccountKey=k"
-        )
+        parsed = _parse_connection_string("bad;AccountName=a;=orphan;AccountKey=k")
         assert parsed == {"AccountName": "a", "AccountKey": "k"}
 
     def test_empty_input(self) -> None:
@@ -309,11 +291,19 @@ class TestImportSafety:
         # AST level; here we just document the intent so a future
         # accidental ``import azure.storage.blob`` at module scope
         # would fail this test in addition to the contract check.
-        assert "pyspark" not in sys.modules or True  # escape-hatch
-        # ``azure.storage.blob`` may be imported elsewhere by the
-        # probe tests before this test runs; the invariant this
-        # covers is metadata's import graph, checked by the AST
-        # scanner in the contract suite.
+        # A fresh interpreter isolates this from probe tests that may
+        # already have imported ``azure.storage.blob`` in-process.
+        import subprocess
+
+        code = (
+            "import sys, ovid2.drivers.azure_blob.metadata; "
+            "bad = [m for m in sys.modules if m.startswith(('azure.', 'pyspark'))]; "
+            "print(','.join(bad))"
+        )
+        out = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True, check=True
+        )
+        assert out.stdout.strip() == ""
 
 
 class TestConstantsExported:
@@ -333,17 +323,13 @@ class TestConstantsExported:
         )
 
     def test_msi_provider_is_hadoop_msi(self) -> None:
-        assert _MSI_PROVIDER == (
-            "org.apache.hadoop.fs.azurebfs.oauth2.MsiTokenProvider"
-        )
+        assert _MSI_PROVIDER == ("org.apache.hadoop.fs.azurebfs.oauth2.MsiTokenProvider")
 
     def test_fixed_sas_provider_is_hadoop_fixed_sas(self) -> None:
-        assert _FIXED_SAS_PROVIDER == (
-            "org.apache.hadoop.fs.azurebfs.sas.FixedSASTokenProvider"
-        )
+        assert _FIXED_SAS_PROVIDER == ("org.apache.hadoop.fs.azurebfs.sas.FixedSASTokenProvider")
 
     def test_valid_formats(self) -> None:
-        assert _VALID_FORMATS == frozenset({"csv", "parquet", "json"})
+        assert frozenset({"csv", "parquet", "json"}) == _VALID_FORMATS
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -100,9 +100,7 @@ class OdsPath:
         # collapsed trailing runs, so any remaining ``//`` sits in the
         # middle of the path — always a grammar error.
         if "//" in stripped:
-            raise OdsPathError(
-                f"OdsPath rejects empty components (double slash) in '{path}'."
-            )
+            raise OdsPathError(f"OdsPath rejects empty components (double slash) in '{path}'.")
 
         components = [c for c in stripped.split("/") if c != ""]
 

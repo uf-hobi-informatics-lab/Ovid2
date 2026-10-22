@@ -50,9 +50,7 @@ def test_create_get_update_delete(web_client, isolated_xdg: Path) -> None:
     r = web_client.delete("/api/v1/engines/pyspark_prod")
     assert r.status_code == 202
     approval_id = r.json()["detail"]["approval_id"]
-    web_client.post(
-        f"/api/v1/approvals/{approval_id}/approve", json={"decided_by": "test"}
-    )
+    web_client.post(f"/api/v1/approvals/{approval_id}/approve", json={"decided_by": "test"})
     r = web_client.delete("/api/v1/engines/pyspark_prod")
     assert r.status_code == 200
     # 404 after delete
@@ -110,8 +108,11 @@ def test_secrets_are_masked_on_get(web_client, isolated_xdg: Path) -> None:
 def test_html_list_page_renders(web_client, isolated_xdg: Path) -> None:
     web_client.post(
         "/api/v1/engines/render_test",
-        json={"type": "snowpark", "args": {"account": "a", "user": "u"},
-              "secrets": {"password": "p"}},
+        json={
+            "type": "snowpark",
+            "args": {"account": "a", "user": "u"},
+            "secrets": {"password": "p"},
+        },
     )
     r = web_client.get("/engines")
     assert r.status_code == 200
@@ -133,9 +134,7 @@ def test_html_new_form_switches_by_type(web_client, isolated_xdg: Path) -> None:
 
 
 @pytest.mark.unit
-def test_html_new_form_defaults_to_pyspark_for_unknown(
-    web_client, isolated_xdg: Path
-) -> None:
+def test_html_new_form_defaults_to_pyspark_for_unknown(web_client, isolated_xdg: Path) -> None:
     r = web_client.get("/engines/new?type=made_up")
     assert r.status_code == 200
     assert "spark.executor.memory" in r.text  # pyspark defaults

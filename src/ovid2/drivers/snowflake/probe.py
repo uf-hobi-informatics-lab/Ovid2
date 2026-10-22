@@ -145,7 +145,8 @@ def _pem_to_der(pem_bytes: bytes, passphrase: str | None) -> bytes:
 
 
 def build_connect_kwargs(
-    args: dict[str, Any], secrets: dict[str, Any],
+    args: dict[str, Any],
+    secrets: dict[str, Any],
 ) -> dict[str, Any]:
     """Return the kwargs dict to pass to ``snowflake.connector.connect``.
 
@@ -196,7 +197,8 @@ def build_connect_kwargs(
     credentials_dir = _resolve_credentials_dir(args.get("credentials_dir"))
     key_filename = args.get("private_key_file", DEFAULT_PRIVATE_KEY_FILE)
     passphrase_filename = args.get(
-        "private_key_passphrase_file", DEFAULT_PASSPHRASE_FILE,
+        "private_key_passphrase_file",
+        DEFAULT_PASSPHRASE_FILE,
     )
     pem_bytes = _read_private_key_pem(credentials_dir, key_filename)
     if pem_bytes is not None:
@@ -211,7 +213,8 @@ def build_connect_kwargs(
 
 
 def probe_auth_from_config(
-    args: dict[str, Any], secrets: dict[str, Any],
+    args: dict[str, Any],
+    secrets: dict[str, Any],
 ) -> ProbeResult:
     """Return an ``auth`` probe result for a Snowflake connection.
 
@@ -239,7 +242,7 @@ def probe_auth_from_config(
         ``capability='auth'``.
     """
     try:
-        import snowflake.connector as sf  # type: ignore[import-not-found]
+        import snowflake.connector as sf
     except ImportError:
         return ProbeResult(
             ok=False,
@@ -267,10 +270,7 @@ def probe_auth_from_config(
         return ProbeResult(
             ok=False,
             code="skipped",
-            message=(
-                "The 'cryptography' package is required to decode the "
-                f"private key: {exc}"
-            ),
+            message=(f"The 'cryptography' package is required to decode the private key: {exc}"),
             capability="auth",
         )
     except (ValueError, TypeError) as exc:
@@ -281,8 +281,8 @@ def probe_auth_from_config(
             capability="auth",
         )
     try:
-        conn = sf.connect(**kwargs)  # type: ignore[no-untyped-call]
-    except Exception as exc:  # noqa: BLE001 — vendor exceptions vary
+        conn = sf.connect(**kwargs)
+    except Exception as exc:
         return ProbeResult(
             ok=False,
             code="unreachable",
@@ -294,7 +294,7 @@ def probe_auth_from_config(
         cursor.execute("SELECT 1")
         cursor.fetchone()
         cursor.close()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         conn.close()
         return ProbeResult(
             ok=False,
@@ -374,17 +374,14 @@ def list_dir_from_config(
             caller (``storage_browse_svc`` maps them to a friendly
             ``message`` and never 500s).
     """
-    import snowflake.connector as sf  # type: ignore[import-not-found]
+    import snowflake.connector as sf
 
     parts = [p for p in (prefix or "").split("/") if p]
     if len(parts) > 2:
-        raise ValueError(
-            "Snowflake browse depth is database/schema/table; "
-            f"got prefix {prefix!r}."
-        )
+        raise ValueError(f"Snowflake browse depth is database/schema/table; got prefix {prefix!r}.")
 
     kwargs = build_connect_kwargs(args, secrets)
-    conn = sf.connect(**kwargs)  # type: ignore[no-untyped-call]
+    conn = sf.connect(**kwargs)
     try:
         cursor = conn.cursor()
         try:
@@ -439,9 +436,7 @@ def _list_schemas(cursor: Any, database: str) -> list[StorageEntry]:
     for name in sorted(names):
         if name.upper() in _HIDDEN_SCHEMAS:
             continue
-        entries.append(
-            StorageEntry(name=name, kind="dir", path=f"{database}/{name}")
-        )
+        entries.append(StorageEntry(name=name, kind="dir", path=f"{database}/{name}"))
     return entries
 
 
@@ -454,13 +449,11 @@ def _list_tables(cursor: Any, database: str, schema: str) -> list[StorageEntry]:
         try:
             for name in _show_names(cursor, stmt, "name"):
                 names.add(name)
-        except Exception as exc:  # noqa: BLE001 — a schema with no views still lists tables
+        except Exception as exc:
             logger.debug("SHOW %s failed for %s: %s", keyword, qualified, exc)
             continue
     return [
-        StorageEntry(
-            name=name, kind="table", path=f"{database}/{schema}/{name}"
-        )
+        StorageEntry(name=name, kind="table", path=f"{database}/{schema}/{name}")
         for name in sorted(names)
     ]
 

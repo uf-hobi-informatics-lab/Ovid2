@@ -22,9 +22,13 @@ class TestNormaliseDiscArgs:
     """
 
     def test_new_shape_round_trips(self) -> None:
-        got = normalise_disc_args({
-            "host_path": "/a", "container_path": "/b", "mount_mode": "ro",
-        })
+        got = normalise_disc_args(
+            {
+                "host_path": "/a",
+                "container_path": "/b",
+                "mount_mode": "ro",
+            }
+        )
         assert got == {"host_path": "/a", "container_path": "/b", "mount_mode": "ro"}
 
     def test_container_defaults_to_host(self) -> None:
@@ -112,9 +116,13 @@ class TestContainerRequirementsFrom:
         assert m.mode == "rw"
 
     def test_container_path_override_survives(self) -> None:
-        reqs = container_requirements_from({
-            "host_path": "/on-host", "container_path": "/inside", "mount_mode": "ro",
-        })
+        reqs = container_requirements_from(
+            {
+                "host_path": "/on-host",
+                "container_path": "/inside",
+                "mount_mode": "ro",
+            }
+        )
         assert reqs[0].container_path == "/inside"
         assert reqs[0].mode == "ro"
 

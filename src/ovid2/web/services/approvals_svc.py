@@ -29,6 +29,7 @@ back out of the actionable set so a stale approval cannot be replayed.
 from __future__ import annotations
 
 import json
+import sqlite3
 import uuid
 from datetime import datetime, timezone
 
@@ -36,12 +37,12 @@ from ovid2.web import db as web_db
 from ovid2.web.models import ApprovalDecision, ApprovalListResponse, ApprovalSummary
 
 __all__ = [
-    "ApprovalRequired",
-    "list_approvals",
-    "get_approval",
-    "require_approval",
-    "decide",
     "DESTRUCTIVE_ACTIONS",
+    "ApprovalRequired",
+    "decide",
+    "get_approval",
+    "list_approvals",
+    "require_approval",
 ]
 
 #: Actions that must pass through the human-approval gate. Extend as new
@@ -79,7 +80,7 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _row_to_summary(row: object) -> ApprovalSummary:
+def _row_to_summary(row: sqlite3.Row) -> ApprovalSummary:
     return ApprovalSummary(
         approval_id=row["approval_id"],
         created_at=row["created_at"],
@@ -205,9 +206,7 @@ def decide(
         if row is None:
             raise KeyError(f"Approval '{approval_id}' not found.")
         if row["status"] != "pending":
-            raise ValueError(
-                f"Approval '{approval_id}' is '{row['status']}', not pending."
-            )
+            raise ValueError(f"Approval '{approval_id}' is '{row['status']}', not pending.")
         conn.execute(
             "UPDATE web_approvals SET status = ?, decided_at = ?, "
             "decided_by = ?, reason = ? WHERE approval_id = ?",

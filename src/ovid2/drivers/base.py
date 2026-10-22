@@ -52,6 +52,7 @@ if TYPE_CHECKING:
 # Metadata value objects
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class FieldSpec:
     """One input on a driver form (connection or location).
@@ -128,6 +129,7 @@ class ConnectionFieldSpec:
 # Probe result
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class ProbeResult:
     """Structured outcome of a driver probe.
@@ -155,13 +157,17 @@ class ProbeResult:
         from ovid2.connections.base import ConnectionTestResult
 
         return ConnectionTestResult(
-            ok=self.ok, code=self.code, message=self.message, detail=self.detail,
+            ok=self.ok,
+            code=self.code,
+            message=self.message,
+            detail=self.detail,
         )
 
 
 # ---------------------------------------------------------------------------
 # Storage browse value object
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class StorageEntry:
@@ -192,10 +198,10 @@ class StorageEntry:
         return {"name": self.name, "kind": self.kind, "path": self.path}
 
 
-
 # ---------------------------------------------------------------------------
 # Driver ABC
 # ---------------------------------------------------------------------------
+
 
 class Driver(ABC):
     """The Ovid2 peripheral driver.
@@ -257,7 +263,8 @@ class Driver(ABC):
         return ()
 
     def container_requirements_for(
-        self, location: dict[str, Any] | None = None,
+        self,
+        location: dict[str, Any] | None = None,
     ) -> tuple[ContainerRequirement, ...]:
         """Return per-instance container requirements.
 
@@ -331,9 +338,7 @@ class Driver(ABC):
         *capability absent* — it emits a ``code='not_implemented'``
         result but does not fail the overall probe.
         """
-        raise NotImplementedError(
-            f"Driver '{self.type_name}' does not implement probe_read."
-        )
+        raise NotImplementedError(f"Driver '{self.type_name}' does not implement probe_read.")
 
     def probe_write(self) -> ProbeResult:
         """Optional: cheap round-trip that validates write access.
@@ -341,9 +346,7 @@ class Driver(ABC):
         Default raises :class:`NotImplementedError`. See
         :meth:`probe_read`.
         """
-        raise NotImplementedError(
-            f"Driver '{self.type_name}' does not implement probe_write."
-        )
+        raise NotImplementedError(f"Driver '{self.type_name}' does not implement probe_write.")
 
     # ------------------------------------------------------------------
     # Data plane
@@ -365,9 +368,7 @@ class Driver(ABC):
         override; the ``LegacyDriverAdapter`` delegates to the
         wrapped :class:`BaseAddress`.
         """
-        raise NotImplementedError(
-            f"Driver '{self.type_name}' does not implement read()."
-        )
+        raise NotImplementedError(f"Driver '{self.type_name}' does not implement read().")
 
     def write(
         self,
@@ -383,12 +384,13 @@ class Driver(ABC):
         The **only** step that materialises the lazy plan. Default
         raises :class:`NotImplementedError`.
         """
-        raise NotImplementedError(
-            f"Driver '{self.type_name}' does not implement write()."
-        )
+        raise NotImplementedError(f"Driver '{self.type_name}' does not implement write().")
 
     def create_complementary_tables(
-        self, session: EngineSession, pipeline: str, batch_id: str,
+        self,
+        session: EngineSession,
+        pipeline: str,
+        batch_id: str,
     ) -> None:
         """Create empty CDM placeholders for tables missing from this run.
 
@@ -401,7 +403,7 @@ class Driver(ABC):
     # Browse (control plane — no engine session required)
     # ------------------------------------------------------------------
 
-    def list_dir(self, prefix: str | None = None) -> list["StorageEntry"]:
+    def list_dir(self, prefix: str | None = None) -> list[StorageEntry]:
         """List the contents of this storage account at ``prefix``.
 
         A control-plane capability used by the web panel to build a
@@ -429,9 +431,7 @@ class Driver(ABC):
         Implementations must load heavy SDKs lazily inside the method
         body so the module import stays web-safe.
         """
-        raise NotImplementedError(
-            f"Driver '{self.type_name}' does not implement list_dir."
-        )
+        raise NotImplementedError(f"Driver '{self.type_name}' does not implement list_dir.")
 
     @classmethod
     def supports_expand_all(cls) -> bool:
@@ -450,7 +450,8 @@ class Driver(ABC):
         return False
 
     def expand_all_tables(
-        self, location: dict[str, Any] | None = None,
+        self,
+        location: dict[str, Any] | None = None,
     ) -> list[str] | None:
         """Return the concrete table list this source expands ``all`` to.
 

@@ -123,7 +123,9 @@ class WebApiClient:
         body: Any
         try:
             body = response.json()
-            message = body.get("detail", response.reason_phrase) if isinstance(body, dict) else str(body)
+            message = (
+                body.get("detail", response.reason_phrase) if isinstance(body, dict) else str(body)
+            )
         except json.JSONDecodeError:
             body = response.text
             message = response.text or response.reason_phrase

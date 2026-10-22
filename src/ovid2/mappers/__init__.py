@@ -34,9 +34,9 @@ from ovid2.mappers.spec import (
 )
 
 __all__ = [
+    "MAP_OPS",
     "BaseMapOp",
     "MapOpContext",
-    "MAP_OPS",
     "MapperOpSpec",
     "MapperSpec",
     "MapperSpecNotFoundError",

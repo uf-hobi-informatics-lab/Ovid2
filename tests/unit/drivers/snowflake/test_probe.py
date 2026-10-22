@@ -37,7 +37,6 @@ from ovid2.drivers.snowflake.probe import (
     probe_auth_from_config,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fresh key material fixtures
 # ---------------------------------------------------------------------------
@@ -219,7 +218,8 @@ class TestBuildConnectKwargsKeyPairAuth:
 
 class TestProbeSkipsWhenDriverAbsent:
     def test_missing_snowflake_connector(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setitem(sys.modules, "snowflake", None)
         monkeypatch.setitem(sys.modules, "snowflake.connector", None)
@@ -230,7 +230,9 @@ class TestProbeSkipsWhenDriverAbsent:
 
 class TestProbeAuthFailures:
     def test_missing_key_file_returns_auth(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
     ) -> None:
         _stub_snowflake_driver(monkeypatch)
         result = probe_auth_from_config(
@@ -246,7 +248,9 @@ class TestProbeAuthFailures:
         assert "not found" in (result.message or "").lower()
 
     def test_bad_passphrase_returns_auth(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
     ) -> None:
         from cryptography.hazmat.primitives import serialization
         from cryptography.hazmat.primitives.asymmetric import rsa
@@ -271,7 +275,9 @@ class TestProbeAuthFailures:
         assert result.code == "auth"
 
     def test_connect_failure_returns_unreachable(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
     ) -> None:
         connect = MagicMock(side_effect=RuntimeError("host down"))
         _stub_snowflake_driver(monkeypatch, connect=connect)
@@ -282,7 +288,8 @@ class TestProbeAuthFailures:
         assert result.code == "unreachable"
 
     def test_query_failure_returns_auth(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         fake_conn = MagicMock(name="SnowflakeConnection")
         fake_cursor = MagicMock(name="Cursor")
@@ -300,7 +307,8 @@ class TestProbeAuthFailures:
 
 class TestProbeSuccess:
     def test_happy_path(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         fake_conn = MagicMock(name="SnowflakeConnection")
         fake_cursor = MagicMock(name="Cursor")

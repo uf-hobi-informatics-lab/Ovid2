@@ -33,23 +33,23 @@ class SubmitMoveArgs(BaseModel):
     """
 
     pipeline: str = Field(
-        ..., description="Pipeline name (must exist under ovid2_pipelines).",
+        ...,
+        description="Pipeline name (must exist under ovid2_pipelines).",
     )
     batch_id: str = Field(
-        ..., description="Batch identifier (e.g. 20260101).",
+        ...,
+        description="Batch identifier (e.g. 20260101).",
     )
     input_address: str = Field(
         ...,
         description=(
-            "Filename stem of the source address config. Passed to "
-            "``ovid2 tools move --from``."
+            "Filename stem of the source address config. Passed to ``ovid2 tools move --from``."
         ),
     )
     output_address: str = Field(
         ...,
         description=(
-            "Filename stem of the destination address config. Passed "
-            "to ``ovid2 tools move --to``."
+            "Filename stem of the destination address config. Passed to ``ovid2 tools move --to``."
         ),
     )
     tables: list[str] = Field(
@@ -69,8 +69,7 @@ class SubmitMoveArgs(BaseModel):
     engine: str = Field(
         "pyspark",
         description=(
-            "Compute engine (default: pyspark). Passed through to "
-            "``ovid2 tools move --engine``."
+            "Compute engine (default: pyspark). Passed through to ``ovid2 tools move --engine``."
         ),
     )
     strict_types: bool = Field(

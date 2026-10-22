@@ -81,15 +81,14 @@ def _load_ods_settings() -> dict[str, Any]:
         from ovid2.web.services import settings_svc
 
         raw = settings_svc.get_settings().model_dump(mode="python")
-    except Exception:  # noqa: BLE001 — settings are optional
+    except Exception:
         raw = {}
     section = raw.get("ods") or {}
     return {
         "default_dimension": str(section.get("default_dimension") or "disc"),
         "dimension_defaults": dict(section.get("dimension_defaults") or {}),
         "pipeline_routes": {
-            str(k): dict(v or {})
-            for k, v in (section.get("pipeline_routes") or {}).items()
+            str(k): dict(v or {}) for k, v in (section.get("pipeline_routes") or {}).items()
         },
         "pipeline_dimensions": dict(section.get("pipeline_dimensions") or {}),
     }
@@ -153,9 +152,7 @@ def _pick_address_name(
         # Sanity check — explicit override must exist and match the dimension.
         actual_dim = dimension_for_address(explicit_name)
         if actual_dim is None:
-            raise OdsResolutionError(
-                f"Explicit address '{explicit_name}' does not exist."
-            )
+            raise OdsResolutionError(f"Explicit address '{explicit_name}' does not exist.")
         if actual_dim != dimension:
             raise OdsResolutionError(
                 f"Explicit address '{explicit_name}' has dimension "
@@ -244,9 +241,7 @@ def resolve(
 
     settings = _load_ods_settings()
     dimension = _pick_dimension(ods_path, dim, settings)
-    address_name, tier, candidates = _pick_address_name(
-        ods_path, dimension, address, settings
-    )
+    address_name, tier, candidates = _pick_address_name(ods_path, dimension, address, settings)
 
     address_obj: BaseAddress | None = None
     if materialise:

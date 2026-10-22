@@ -71,7 +71,6 @@ def test_console_partial_is_terminal_log_stream(web_client: object) -> None:
     assert "console-tile" not in body
 
 
-
 @pytest.mark.unit
 def test_console_partial_empty_state(web_client: object) -> None:
     """Fresh install: the runs panel shows an empty state, not a 500."""

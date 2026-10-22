@@ -72,9 +72,7 @@ def _pipelines_root() -> Path:
     for base in candidates:
         if base.is_dir():
             return base
-    raise NewPipelineError(
-        "No on-disk 'ovid2_pipelines' directory found on sys.path."
-    )
+    raise NewPipelineError("No on-disk 'ovid2_pipelines' directory found on sys.path.")
 
 
 def _source_pipeline_path(source_pipeline: str) -> Path:
@@ -82,16 +80,12 @@ def _source_pipeline_path(source_pipeline: str) -> Path:
     try:
         pkg = importlib.import_module(f"ovid2_pipelines.{source_pipeline}")
     except ModuleNotFoundError as exc:
-        raise NewPipelineError(
-            f"Source pipeline '{source_pipeline}' is not installed."
-        ) from exc
+        raise NewPipelineError(f"Source pipeline '{source_pipeline}' is not installed.") from exc
     for base in getattr(pkg, "__path__", []):
         candidate = Path(base)
         if candidate.is_dir():
             return candidate
-    raise NewPipelineError(
-        f"Source pipeline '{source_pipeline}' has no on-disk directory."
-    )
+    raise NewPipelineError(f"Source pipeline '{source_pipeline}' has no on-disk directory.")
 
 
 def _network_prefix(text: str) -> str:
@@ -135,15 +129,14 @@ def _rewrite_pipeline_settings(text: str, new_name: str, cdm: str) -> str:
             rf"(^{re.escape(constant)}\s*=\s*)(['\"])(.*?)(\2)",
             re.MULTILINE,
         )
+
         def _swap(m: re.Match[str], ph: str = placeholder) -> str:
             return f"{m.group(1)}{m.group(2)}{ph}{m.group(2)}"
 
         result = pattern.sub(_swap, result)
     cdm_pattern = re.compile(r"(^cdm\s*=\s*)(['\"])(.*?)(\2)", re.MULTILINE)
     if cdm_pattern.search(result):
-        result = cdm_pattern.sub(
-            lambda m: f"{m.group(1)}{m.group(2)}{cdm}{m.group(2)}", result
-        )
+        result = cdm_pattern.sub(lambda m: f"{m.group(1)}{m.group(2)}{cdm}{m.group(2)}", result)
     return result
 
 
@@ -184,9 +177,7 @@ def scaffold_pipeline(
     root = pipelines_root or _pipelines_root()
     dest = root / new_name
     if dest.exists():
-        raise NewPipelineError(
-            f"Pipeline package '{new_name}' already exists at {dest}."
-        )
+        raise NewPipelineError(f"Pipeline package '{new_name}' already exists at {dest}.")
 
     shutil.copytree(
         src,
@@ -231,19 +222,21 @@ def _add_scaffold_args(parser: argparse.ArgumentParser, template_ids: str) -> No
     parser.add_argument(
         "--source",
         default=None,
-        help="Explicit source pipeline to clone (used with --cdm; "
-        "an alternative to --template).",
+        help="Explicit source pipeline to clone (used with --cdm; an alternative to --template).",
     )
     parser.add_argument(
         "--cdm",
         default=None,
-        help="Target CDM name (required with --source; taken from the "
-        "template otherwise).",
+        help="Target CDM name (required with --source; taken from the template otherwise).",
     )
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
-    """Register ``new-pipeline`` plus the hidden ``new-pipeline`` alias."""
+    """Register ``new-pipeline`` plus the hidden ``new-partner`` alias.
+
+    The alias must keep a distinct name — Python 3.11+ ``argparse`` raises
+    ``conflicting subparser`` on duplicates.
+    """
     template_ids = ", ".join(t.id for t in list_templates())
     parser = subparsers.add_parser(
         "new-pipeline",
@@ -257,11 +250,11 @@ def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[ty
     _add_scaffold_args(parser, template_ids)
     parser.set_defaults(_entry=main, _tool="new-pipeline")
 
-    # Deprecated alias: ``ovid2 tools new-pipeline`` for one release.
+    # Deprecated alias: ``ovid2 tools new-partner`` for one release.
     # Omitting ``help=`` keeps it out of the tool listing.
-    alias = subparsers.add_parser("new-pipeline")
+    alias = subparsers.add_parser("new-partner")
     _add_scaffold_args(alias, template_ids)
-    alias.set_defaults(_entry=main, _tool="new-pipeline")
+    alias.set_defaults(_entry=main, _tool="new-partner")
 
 
 def main(args: argparse.Namespace) -> int:
@@ -285,8 +278,7 @@ def main(args: argparse.Namespace) -> int:
         pass
     else:
         print(
-            "error: supply either --template <id> or both --source "
-            "<pipeline> and --cdm <name>.",
+            "error: supply either --template <id> or both --source <pipeline> and --cdm <name>.",
             file=sys.stderr,
         )
         return 2
@@ -306,6 +298,5 @@ def main(args: argparse.Namespace) -> int:
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(
-        "This module is invoked via 'ovid2 tools new-pipeline'; "
-        "it is not a standalone script."
+        "This module is invoked via 'ovid2 tools new-pipeline'; it is not a standalone script."
     )

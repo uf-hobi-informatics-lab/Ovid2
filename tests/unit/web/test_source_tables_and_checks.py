@@ -22,7 +22,6 @@ import pytest
 
 from ovid2.web.models import StorageBrowseEntry, StorageBrowseResponse
 
-
 # ---------------------------------------------------------------------------
 # source_tables_svc
 # ---------------------------------------------------------------------------
@@ -56,16 +55,12 @@ def _write_disc_address(isolated_xdg: Path) -> None:
     """Drop a plain disc connection + address (not an enumerable source)."""
     conndir = Path(os.environ["OVID2_CONNECTIONS_DIR"])
     (conndir / "plain_disc.json").write_text(
-        json.dumps(
-            {"type": "disc", "args": {"host_path": "/srv/data"}}
-        ),
+        json.dumps({"type": "disc", "args": {"host_path": "/srv/data"}}),
         encoding="utf-8",
     )
     cfgdir = Path(os.environ["OVID2_CONFIGS_DIR"])
     (cfgdir / "disc_src.json").write_text(
-        json.dumps(
-            {"connection": "plain_disc", "location": {"path": "raw"}}
-        ),
+        json.dumps({"connection": "plain_disc", "location": {"path": "raw"}}),
         encoding="utf-8",
     )
 
@@ -137,9 +132,7 @@ def test_tables_for_connection_access(isolated_xdg, monkeypatch) -> None:
             entries=[StorageBrowseEntry(name="enrollment", kind="table", path="e")],
         ),
     )
-    tables, supported = source_tables_svc.tables_for_connection(
-        "drugs_access", "drugs.accdb"
-    )
+    tables, supported = source_tables_svc.tables_for_connection("drugs_access", "drugs.accdb")
     assert supported is True
     assert tables == ["enrollment"]
 
@@ -154,8 +147,11 @@ def test_tables_for_address_supported_but_empty(isolated_xdg, monkeypatch) -> No
         storage_browse_svc,
         "browse_storage",
         lambda name, prefix=None: StorageBrowseResponse(
-            storage=name, type="access", prefix=prefix or "",
-            supported=True, entries=[],
+            storage=name,
+            type="access",
+            prefix=prefix or "",
+            supported=True,
+            entries=[],
         ),
     )
     tables, supported = source_tables_svc.tables_for_address("vrx_src")
@@ -177,7 +173,9 @@ def test_http_sources_tables_access(web_client, isolated_xdg, monkeypatch) -> No
         storage_browse_svc,
         "browse_storage",
         lambda name, prefix=None: StorageBrowseResponse(
-            storage=name, type="access", prefix=prefix or "",
+            storage=name,
+            type="access",
+            prefix=prefix or "",
             supported=True,
             entries=[StorageBrowseEntry(name="lab_result_cm", kind="table", path="l")],
         ),
@@ -204,9 +202,7 @@ def test_http_sources_tables_missing_args(web_client, isolated_xdg) -> None:
 
 
 @pytest.mark.unit
-def test_submit_dq_checks_forwards_checks_subset(
-    web_client, isolated_xdg
-) -> None:
+def test_submit_dq_checks_forwards_checks_subset(web_client, isolated_xdg) -> None:
     conndir = Path(os.environ["OVID2_CONNECTIONS_DIR"])
     (conndir / "prod_disc.json").write_text(
         json.dumps({"type": "disc", "args": {"host_path": "/srv/data"}}),
@@ -252,9 +248,7 @@ def test_submit_dq_checks_forwards_checks_subset(
 
 
 @pytest.mark.unit
-def test_submit_copy_all_seeds_access_tables(
-    web_client, isolated_xdg, monkeypatch
-) -> None:
+def test_submit_copy_all_seeds_access_tables(web_client, isolated_xdg, monkeypatch) -> None:
     _write_access_address(isolated_xdg)
     conndir = Path(os.environ["OVID2_CONNECTIONS_DIR"])
     (conndir / "out_disc.json").write_text(
@@ -272,9 +266,7 @@ def test_submit_copy_all_seeds_access_tables(
     monkeypatch.setattr(
         source_tables_svc,
         "tables_for_address",
-        lambda addr: (["demographic", "drug"], True)
-        if addr == "vrx_src"
-        else ([], False),
+        lambda addr: (["demographic", "drug"], True) if addr == "vrx_src" else ([], False),
     )
     resp = web_client.post(
         "/submit",

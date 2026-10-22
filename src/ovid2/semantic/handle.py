@@ -162,15 +162,12 @@ class VocabularyHandle(SemanticHandle):
             )
         if len(set_legs) > 1:
             raise ValueError(
-                f"VocabularyHandle '{self.name}' cannot set multiple source "
-                f"legs: {set_legs}."
+                f"VocabularyHandle '{self.name}' cannot set multiple source legs: {set_legs}."
             )
         if not self.code_column:
             raise ValueError(f"VocabularyHandle '{self.name}' requires a non-empty 'code_column'.")
         if self.address is not None and not self.address_table:
-            raise ValueError(
-                f"VocabularyHandle '{self.name}': 'address' requires 'address_table'."
-            )
+            raise ValueError(f"VocabularyHandle '{self.name}': 'address' requires 'address_table'.")
 
     # ------------------------------------------------------------------ #
     # Access helpers                                                     #

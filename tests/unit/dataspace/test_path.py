@@ -65,15 +65,15 @@ class TestOdsPathRejections:
     @pytest.mark.parametrize(
         "bad",
         [
-            "demo",             # not absolute
-            "",                # empty
-            "/demo/../foo",     # parent traversal
-            "/demo/./foo",      # current dir
+            "demo",  # not absolute
+            "",  # empty
+            "/demo/../foo",  # parent traversal
+            "/demo/./foo",  # current dir
             "/demo//20260316",  # empty component
-            "/demo@disc",       # reserved
-            "/demo?dim=disc",   # query char
-            "/demo#frag",       # fragment char
-            "/demo/*/DEMO",     # wildcard
+            "/demo@disc",  # reserved
+            "/demo?dim=disc",  # query char
+            "/demo#frag",  # fragment char
+            "/demo/*/DEMO",  # wildcard
             "/demo/20260316/DEMO/columns",  # depth-4 rejected
         ],
     )

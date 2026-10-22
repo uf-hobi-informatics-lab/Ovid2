@@ -7,6 +7,8 @@ can swap only what changed.
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
@@ -213,9 +215,7 @@ def _build_palette_targets(request: Request, runs: object) -> list[dict[str, str
         capability = page.get("capability", "view_public")
         if not has_cap(request, capability):
             continue
-        targets.append(
-            {k: v for k, v in page.items() if k != "capability"}
-        )
+        targets.append({k: v for k, v in page.items() if k != "capability"})
     if not has_cap(request, "view_runs"):
         return targets
     run_rows = getattr(runs, "runs", None) or []
@@ -393,6 +393,7 @@ def _get_location_spec(conn_type: str) -> list[dict[str, object]]:
     file) surfaces as an empty form rather than a 500.
     """
     from ovid2.connections.registry import location_field_spec
+
     try:
         return location_field_spec(conn_type)
     except KeyError:
@@ -424,13 +425,14 @@ def address_new_pick_connection(
 @router.get(
     "/addresses/new/step2",
     response_class=HTMLResponse,
+    response_model=None,
     include_in_schema=False,
 )
 def address_new_step2(
     request: Request,
     connection: str,
     error: str | None = None,
-) -> HTMLResponse:
+) -> HTMLResponse | RedirectResponse:
     """Step 2 — fill the location fields for the chosen connection.
 
     Args:
@@ -532,7 +534,8 @@ async def address_create_post(request: Request) -> RedirectResponse:
     detail = connections_svc.get_connection(connection_name) if connection_name else None
     if detail is None:
         return RedirectResponse(
-            url="/addresses/new?error=Pick+a+connection+first", status_code=303,
+            url="/addresses/new?error=Pick+a+connection+first",
+            status_code=303,
         )
     location_spec = _get_location_spec(detail.type)
     location = _parse_location_form({k: str(v) for k, v in form.items()}, location_spec)
@@ -542,10 +545,7 @@ async def address_create_post(request: Request) -> RedirectResponse:
         addresses_svc.write_address(name, payload, actor="web", create_only=True)
     except (addresses_svc.AddressError, ValueError) as exc:
         return RedirectResponse(
-            url=(
-                f"/addresses/new/step2?connection={connection_name}"
-                f"&error={exc}"
-            ),
+            url=(f"/addresses/new/step2?connection={connection_name}&error={exc}"),
             status_code=303,
         )
     return RedirectResponse(url=f"/addresses/{name}", status_code=303)
@@ -588,9 +588,7 @@ def address_edit_page(
     # W7 shape: render the location-only form.
     assert detail.connection is not None  # narrowed by is_legacy_shape check
     conn_detail = connections_svc.get_connection(detail.connection)
-    location_spec = (
-        _get_location_spec(conn_detail.type) if conn_detail is not None else []
-    )
+    location_spec = _get_location_spec(conn_detail.type) if conn_detail is not None else []
     return templates.TemplateResponse(
         request,
         "address_new_form.html",
@@ -669,9 +667,7 @@ async def address_update_post(request: Request, name: str) -> RedirectResponse:
     try:
         addresses_svc.write_address(name, payload, actor="web")
     except (addresses_svc.AddressError, ValueError) as exc:
-        return RedirectResponse(
-            url=f"/addresses/{name}/edit?error={exc}", status_code=303
-        )
+        return RedirectResponse(url=f"/addresses/{name}/edit?error={exc}", status_code=303)
     return RedirectResponse(url=f"/addresses/{name}", status_code=303)
 
 
@@ -783,9 +779,7 @@ async def secret_update_post(
         payload = SecretWrite(values=values)
         secrets_svc.write_secret(name, payload, actor="web")
     except (secrets_svc.SecretError, ValueError) as exc:
-        return RedirectResponse(
-            url=f"/secrets/{name}/edit?error={exc}", status_code=303
-        )
+        return RedirectResponse(url=f"/secrets/{name}/edit?error={exc}", status_code=303)
     return RedirectResponse(url="/secrets", status_code=303)
 
 
@@ -998,9 +992,7 @@ def runs_page(
     When ``selected`` is omitted, the most-recent run is auto-selected so
     the workspace never opens with an empty canvas.
     """
-    response = runs_svc.list_runs(
-        limit=limit, offset=offset, status=status, pipeline=pipeline
-    )
+    response = runs_svc.list_runs(limit=limit, offset=offset, status=status, pipeline=pipeline)
     # Auto-select the newest run when the caller did not pin one.
     if not selected and response.runs:
         top = response.runs[0]
@@ -1016,9 +1008,7 @@ def runs_page(
     return templates.TemplateResponse(request, "runs.html", context)
 
 
-@router.get(
-    "/partials/runs/list", response_class=HTMLResponse, include_in_schema=False
-)
+@router.get("/partials/runs/list", response_class=HTMLResponse, include_in_schema=False)
 def runs_list_partial(
     request: Request,
     limit: int = Query(50, ge=1, le=500),
@@ -1033,9 +1023,7 @@ def runs_list_partial(
     scrolls into view (``hx-trigger="revealed"``). Emits only the ``<li>``
     rows plus a fresh sentinel for the following page.
     """
-    response = runs_svc.list_runs(
-        limit=limit, offset=offset, status=status, pipeline=pipeline
-    )
+    response = runs_svc.list_runs(limit=limit, offset=offset, status=status, pipeline=pipeline)
     return templates.TemplateResponse(
         request,
         "_runs_list_rows.html",
@@ -1053,6 +1041,15 @@ def _now_epoch_ms() -> int:
     from datetime import datetime, timezone
 
     return int(datetime.now(timezone.utc).timestamp() * 1000)
+
+
+def _form_text(value: object) -> str:
+    """Return a form field as text; non-text values (uploads) become ``""``.
+
+    ``""`` is the "empty" case callers already handle by falling back to
+    their numeric default.
+    """
+    return value if isinstance(value, str) else ""
 
 
 def _str_list_or_none(value: object) -> list[str] | None:
@@ -1263,9 +1260,7 @@ def _run_detail_context(identifier: str) -> dict[str, object]:
     }
 
 
-@router.get(
-    "/runs/{instance_id}/report", response_class=HTMLResponse, include_in_schema=False
-)
+@router.get("/runs/{instance_id}/report", response_class=HTMLResponse, include_in_schema=False)
 def run_report_page(request: Request, instance_id: str) -> HTMLResponse:
     """Render the clickable data-health report viewer for a run.
 
@@ -1276,12 +1271,10 @@ def run_report_page(request: Request, instance_id: str) -> HTMLResponse:
     """
     report = health_report_svc.get_report(instance_id)
     if report is None:
-        raise HTTPException(
-            status_code=404, detail=f"No health report for run '{instance_id}'."
-        )
+        raise HTTPException(status_code=404, detail=f"No health report for run '{instance_id}'.")
     # Group checks by part for the nav tree.
     checks = report.get("checks", []) if isinstance(report, dict) else []
-    parts: dict[str, list[dict]] = {}
+    parts: dict[str, list[dict[str, Any]]] = {}
     for check in checks:
         parts.setdefault(str(check.get("part", "other")), []).append(check)
     return templates.TemplateResponse(
@@ -1365,9 +1358,7 @@ def run_job_status_partial(request: Request, instance_id: str) -> HTMLResponse:
     """
     job = jobs_svc.get_job_by_instance(instance_id)
     queue = jobs_svc.queue_position(job.job_id) if job else None
-    return templates.TemplateResponse(
-        request, "_run_job_status.html", {"job": job, "queue": queue}
-    )
+    return templates.TemplateResponse(request, "_run_job_status.html", {"job": job, "queue": queue})
 
 
 @router.get(
@@ -1389,12 +1380,8 @@ def runs_list_status_partial(
     wanted = [i.strip() for i in ids.split(",") if i.strip()]
     statuses = jobs_svc.statuses_for_instances(wanted)
     return JSONResponse(
-        {
-            iid: runs_svc.list_badge_for_web_status(st)
-            for iid, st in statuses.items()
-        }
+        {iid: runs_svc.list_badge_for_web_status(st) for iid, st in statuses.items()}
     )
-
 
 
 # ---------------------------------------------------------------------------
@@ -1651,9 +1638,7 @@ async def formatter_create_post(request: Request, name: str) -> RedirectResponse
     response_class=HTMLResponse,
     include_in_schema=False,
 )
-async def formatter_update_post(
-    request: Request, name: str, table: str
-) -> RedirectResponse:
+async def formatter_update_post(request: Request, name: str, table: str) -> RedirectResponse:
     """Save an edited formatter YAML spec."""
     pipeline = name
     form = dict(await request.form())
@@ -1676,9 +1661,7 @@ async def formatter_update_post(
     response_class=HTMLResponse,
     include_in_schema=False,
 )
-def formatter_delete_post(
-    request: Request, name: str, table: str
-) -> RedirectResponse:
+def formatter_delete_post(request: Request, name: str, table: str) -> RedirectResponse:
     """Delete a formatter YAML spec."""
     pipeline = name
     try:
@@ -1811,9 +1794,7 @@ async def mapper_create_post(request: Request, name: str) -> RedirectResponse:
         return RedirectResponse(
             url=f"/pipeline-packages/{pipeline}/mappers/new?error={exc}", status_code=303
         )
-    return RedirectResponse(
-        url=f"/pipeline-packages/{pipeline}/mappers/{table}", status_code=303
-    )
+    return RedirectResponse(url=f"/pipeline-packages/{pipeline}/mappers/{table}", status_code=303)
 
 
 @router.post(
@@ -1821,9 +1802,7 @@ async def mapper_create_post(request: Request, name: str) -> RedirectResponse:
     response_class=HTMLResponse,
     include_in_schema=False,
 )
-async def mapper_update_post(
-    request: Request, name: str, table: str
-) -> RedirectResponse:
+async def mapper_update_post(request: Request, name: str, table: str) -> RedirectResponse:
     """Save an edited mapper YAML spec."""
     pipeline = name
     form = dict(await request.form())
@@ -1836,9 +1815,7 @@ async def mapper_update_post(
             url=f"/pipeline-packages/{pipeline}/mappers/{table}/edit?error={exc}",
             status_code=303,
         )
-    return RedirectResponse(
-        url=f"/pipeline-packages/{pipeline}/mappers/{table}", status_code=303
-    )
+    return RedirectResponse(url=f"/pipeline-packages/{pipeline}/mappers/{table}", status_code=303)
 
 
 @router.post(
@@ -1846,9 +1823,7 @@ async def mapper_update_post(
     response_class=HTMLResponse,
     include_in_schema=False,
 )
-def mapper_delete_post(
-    request: Request, name: str, table: str
-) -> RedirectResponse:
+def mapper_delete_post(request: Request, name: str, table: str) -> RedirectResponse:
     """Delete a mapper YAML spec."""
     pipeline = name
     try:
@@ -1901,9 +1876,7 @@ def _resolve_submit_endpoint(
     if (mode or "").strip() == "browse":
         conn = (connection or "").strip()
         if not conn:
-            raise addresses_svc.AddressError(
-                "Pick a storage account to browse before submitting."
-            )
+            raise addresses_svc.AddressError("Pick a storage account to browse before submitting.")
         folder = (location or "").strip().strip("/")
         loc: dict[str, object] = {"path": folder} if folder else {}
         return addresses_svc.resolve_or_create_address(conn, loc, actor="web")
@@ -2015,9 +1988,7 @@ def submit_form_post(
     from urllib.parse import quote as _urlquote
 
     def _error(message: str) -> RedirectResponse:
-        return RedirectResponse(
-            url=f"/submit?error={_urlquote(str(message))}", status_code=303
-        )
+        return RedirectResponse(url=f"/submit?error={_urlquote(str(message))}", status_code=303)
 
     try:
         kind_clean = normalize_kind(kind)
@@ -2045,9 +2016,7 @@ def submit_form_post(
         from ovid2.web.kinds import get_kind as _get_kind
 
         _submit_spec = _get_kind(kind_clean)
-        _explicit_tables = bool(
-            _submit_spec and _submit_spec.tables_mode == "explicit"
-        )
+        _explicit_tables = bool(_submit_spec and _submit_spec.tables_mode == "explicit")
         _health_shape = bool(_submit_spec and _submit_spec.health_selection)
         if _explicit_tables:
             table_list = [t for t in tables.split() if t and t != "all"]
@@ -2071,9 +2040,7 @@ def submit_form_post(
                     # run page fills reactively from ``table.*`` events.
                     from ovid2.web.services import source_tables_svc
 
-                    seeded, _supported = source_tables_svc.tables_for_address(
-                        resolved_input
-                    )
+                    seeded, _supported = source_tables_svc.tables_for_address(resolved_input)
                     table_list = seeded if seeded else ["all"]
                 else:
                     return _error(
@@ -2149,13 +2116,9 @@ def submit_form_post(
             # ``Form("all")`` default, so JS must send the explicit
             # sentinel rather than "".)
             if tables.strip() == "__none__" or not table_list:
-                return _error(
-                    "Select at least one table to run."
-                )
+                return _error("Select at least one table to run.")
             if transformations.strip() == "__none__" or not transformation_list:
-                return _error(
-                    "Select at least one transformation stage to run."
-                )
+                return _error("Select at least one transformation stage to run.")
             payload = JobSubmitRequest(
                 kind=kind_clean,
                 pipeline=pipeline.strip(),
@@ -2177,11 +2140,11 @@ def submit_form_post(
             )
         response = jobs_svc.submit(payload, actor="web")
     except addresses_svc.AddressError as exc:
-        return _error(exc)
+        return _error(str(exc))
     except jobs_svc.SubmitError as exc:
-        return _error(exc)
+        return _error(str(exc))
     except (ValueError, TypeError) as exc:  # invalid form encoding
-        return _error(exc)
+        return _error(str(exc))
     return RedirectResponse(
         url=f"/runs/{response.instance_id}",
         status_code=303,
@@ -2210,9 +2173,7 @@ def job_cancel_html(request: Request, job_id: str) -> RedirectResponse:
     response_model=None,
     include_in_schema=False,
 )
-def job_launch_html(
-    request: Request, job_id: str
-) -> RedirectResponse | JSONResponse:
+def job_launch_html(request: Request, job_id: str) -> RedirectResponse | JSONResponse:
     """Launch a draft job (draft → queued) — the run page's ▶ button.
 
     Mirrors :func:`job_rerun_html`: a background ``X-Requested-With:
@@ -2225,8 +2186,7 @@ def job_launch_html(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if request.headers.get("x-requested-with", "").lower() == "fetch":
         return JSONResponse(
-            {"instance_id": detail.instance_id, "job_id": detail.job_id,
-             "status": detail.status},
+            {"instance_id": detail.instance_id, "job_id": detail.job_id, "status": detail.status},
             status_code=200,
         )
     target = f"/runs/{detail.instance_id}" if detail.instance_id else "/runs"
@@ -2253,9 +2213,7 @@ def job_discard_html(request: Request, job_id: str) -> RedirectResponse:
     response_model=None,
     include_in_schema=False,
 )
-def job_rerun_html(
-    request: Request, job_id: str
-) -> RedirectResponse | JSONResponse:
+def job_rerun_html(request: Request, job_id: str) -> RedirectResponse | JSONResponse:
     """Rerun a job.
 
     Plain form submits (no-JS fallback) get a 303 redirect to the new
@@ -2341,9 +2299,7 @@ def install_bootstrap_html(request: Request) -> RedirectResponse:
         install_svc.run_bootstrap(actor="web")
     except install_svc.InstallError as exc:
         return RedirectResponse(url=f"/install?error={exc}", status_code=303)
-    return RedirectResponse(
-        url="/install?flash=XDG+tree+ready", status_code=303
-    )
+    return RedirectResponse(url="/install?flash=XDG+tree+ready", status_code=303)
 
 
 @router.post("/install/snowflake", response_class=HTMLResponse, include_in_schema=False)
@@ -2365,9 +2321,7 @@ async def install_snowflake_html(request: Request) -> RedirectResponse:
         install_svc.save_snowflake_secret(payload, actor="web")
     except (install_svc.InstallError, ValueError) as exc:
         return RedirectResponse(url=f"/install?error={exc}", status_code=303)
-    return RedirectResponse(
-        url="/install?flash=Snowflake+credentials+saved", status_code=303
-    )
+    return RedirectResponse(url="/install?flash=Snowflake+credentials+saved", status_code=303)
 
 
 @router.post(
@@ -2382,14 +2336,10 @@ async def install_image_build_html(request: Request) -> RedirectResponse:
     context = str(form.get("context", "")).strip() or None
     dockerfile = str(form.get("dockerfile", "")).strip() or None
     try:
-        install_svc.start_image_build(
-            tag=tag, context=context, dockerfile=dockerfile, actor="web"
-        )
+        install_svc.start_image_build(tag=tag, context=context, dockerfile=dockerfile, actor="web")
     except install_svc.InstallError as exc:
         return RedirectResponse(url=f"/install?error={exc}", status_code=303)
-    return RedirectResponse(
-        url="/install?flash=Docker+build+started", status_code=303
-    )
+    return RedirectResponse(url="/install?flash=Docker+build+started", status_code=303)
 
 
 @router.get(
@@ -2426,9 +2376,7 @@ async def install_pipeline_verify_html(request: Request) -> RedirectResponse:
         install_svc.verify_pipeline(name)
     except install_svc.InstallError as exc:
         return RedirectResponse(url=f"/install?error={exc}", status_code=303)
-    return RedirectResponse(
-        url=f"/install?flash=Pipeline+{name}+verified", status_code=303
-    )
+    return RedirectResponse(url=f"/install?flash=Pipeline+{name}+verified", status_code=303)
 
 
 # ---------------------------------------------------------------------------
@@ -2462,7 +2410,8 @@ def _parse_connection_form(form_body: dict[str, str]) -> tuple[dict[str, str], d
 def storage_page(request: Request) -> HTMLResponse:
     """List every storage account (backed by connection configs)."""
     return templates.TemplateResponse(
-        request, "storage.html",
+        request,
+        "storage.html",
         {"connections": connections_svc.list_connections()},
     )
 
@@ -2481,6 +2430,7 @@ def connection_new_page(
 ) -> HTMLResponse:
     """Render the "new connection" form with type-appropriate fields."""
     from ovid2.config import connections as _connections
+
     if type not in _connections.CONNECTION_TYPE_MAP:
         type = "disc"
     spec = _connections.connection_field_spec(type)
@@ -2532,6 +2482,7 @@ def connection_edit_page(
     if detail is None:
         raise HTTPException(status_code=404, detail=f"Connection '{name}' not found.")
     from ovid2.config import connections as _connections
+
     spec = _connections.connection_field_spec(detail.type)
     return templates.TemplateResponse(
         request,
@@ -2595,7 +2546,8 @@ def connection_detail_page(request: Request, name: str) -> HTMLResponse:
     if detail is None:
         raise HTTPException(status_code=404, detail=f"Connection '{name}' not found.")
     return templates.TemplateResponse(
-        request, "connection_detail.html",
+        request,
+        "connection_detail.html",
         {"connection": detail, "test_result": None},
     )
 
@@ -2614,9 +2566,7 @@ async def connection_update_post(request: Request, name: str) -> RedirectRespons
         payload = ConnectionWrite(type=type_name, args=args, secrets=secrets)
         connections_svc.write_connection(name, payload, actor="web")
     except (connections_svc.ConnectionError, ValueError) as exc:
-        return RedirectResponse(
-            url=f"/connections/{name}/edit?error={exc}", status_code=303
-        )
+        return RedirectResponse(url=f"/connections/{name}/edit?error={exc}", status_code=303)
     return RedirectResponse(url=f"/connections/{name}", status_code=303)
 
 
@@ -2629,7 +2579,8 @@ async def connection_update_post(request: Request, name: str) -> RedirectRespons
 def warehouses_page(request: Request) -> HTMLResponse:
     """List every warehouse (backed by engine configs)."""
     return templates.TemplateResponse(
-        request, "warehouses.html",
+        request,
+        "warehouses.html",
         {"engines": engines_svc.list_engines()},
     )
 
@@ -2680,9 +2631,7 @@ async def engine_create_post(request: Request) -> RedirectResponse:
         payload = EngineWrite(type=type_name, args=args, secrets=secrets)
         engines_svc.write_engine(name, payload, actor="web", create_only=True)
     except (engines_svc.EngineError, ValueError) as exc:
-        return RedirectResponse(
-            url=f"/engines/new?type={type_name}&error={exc}", status_code=303
-        )
+        return RedirectResponse(url=f"/engines/new?type={type_name}&error={exc}", status_code=303)
     return RedirectResponse(url=f"/engines/{name}", status_code=303)
 
 
@@ -2729,9 +2678,7 @@ def engine_delete_post(request: Request, name: str) -> RedirectResponse:
     try:
         engines_svc.delete_engine(name, actor="web")
     except engines_svc.EngineError as exc:
-        return RedirectResponse(
-            url=f"/engines/{name}?error={exc}", status_code=303
-        )
+        return RedirectResponse(url=f"/engines/{name}?error={exc}", status_code=303)
     return RedirectResponse(url="/engines", status_code=303)
 
 
@@ -2761,15 +2708,14 @@ def engine_test_post(request: Request, name: str) -> HTMLResponse:
     response_class=HTMLResponse,
     include_in_schema=False,
 )
-def engine_detail_page(
-    request: Request, name: str, error: str | None = None
-) -> HTMLResponse:
+def engine_detail_page(request: Request, name: str, error: str | None = None) -> HTMLResponse:
     """Render one engine detail page (masked secrets)."""
     detail = engines_svc.get_engine(name)
     if detail is None:
         raise HTTPException(status_code=404, detail=f"Engine '{name}' not found.")
     return templates.TemplateResponse(
-        request, "engine_detail.html",
+        request,
+        "engine_detail.html",
         {"engine": detail, "test_result": None, "error": error},
     )
 
@@ -2788,9 +2734,7 @@ async def engine_update_post(request: Request, name: str) -> RedirectResponse:
         payload = EngineWrite(type=type_name, args=args, secrets=secrets)
         engines_svc.write_engine(name, payload, actor="web")
     except (engines_svc.EngineError, ValueError) as exc:
-        return RedirectResponse(
-            url=f"/engines/{name}/edit?error={exc}", status_code=303
-        )
+        return RedirectResponse(url=f"/engines/{name}/edit?error={exc}", status_code=303)
     return RedirectResponse(url=f"/engines/{name}", status_code=303)
 
 
@@ -2802,9 +2746,7 @@ async def engine_update_post(request: Request, name: str) -> RedirectResponse:
 @router.get("/cdms", response_class=HTMLResponse, include_in_schema=False)
 def cdms_page(request: Request) -> HTMLResponse:
     """List every CDM registered in :mod:`ovid2.cdm.registry`."""
-    return templates.TemplateResponse(
-        request, "cdms.html", {"cdms": cdms_svc.list_cdms()}
-    )
+    return templates.TemplateResponse(request, "cdms.html", {"cdms": cdms_svc.list_cdms()})
 
 
 @router.get(
@@ -2817,9 +2759,7 @@ def cdm_detail_page(request: Request, name: str) -> HTMLResponse:
     detail = cdms_svc.get_cdm_detail(name)
     if detail is None:
         raise HTTPException(status_code=404, detail=f"CDM '{name}' not found.")
-    return templates.TemplateResponse(
-        request, "cdm_detail.html", {"cdm": detail}
-    )
+    return templates.TemplateResponse(request, "cdm_detail.html", {"cdm": detail})
 
 
 # ---------------------------------------------------------------------------
@@ -2861,11 +2801,7 @@ def _build_pipeline_write(form: dict[str, str]) -> PipelineWrite:
             # Preserve the ``all`` sentinel only for sources that can
             # expand it (validated again in ``write_pipeline``); every
             # other explicit source drops a stray ``all`` token.
-            tables = (
-                ["all"]
-                if source_supports_expand_all(_input_addr)
-                else []
-            )
+            tables = ["all"] if source_supports_expand_all(_input_addr) else []
         else:
             tables = [t for t in parsed_tables if t != "all"]
     else:
@@ -2918,7 +2854,7 @@ def _build_new_pipeline_write(
     ``/submit`` form). ``pipelines_svc._validate_kind`` accepts the
     empty list and rejects only the literal ``['all']``.
     """
-    trigger_type = (form.get("trigger_type", "watch").strip() or "watch")
+    trigger_type = form.get("trigger_type", "watch").strip() or "watch"
     cron: str | None = None
     interval_minutes: int | None = None
     watch_min_wait_minutes: int | None = None
@@ -2932,11 +2868,7 @@ def _build_new_pipeline_write(
         watch_min_wait_minutes = int(raw) if raw else None
     # EDC report-cycle packages arrive as a whitespace/comma-separated
     # list (the radio/checkbox picker submits space-joined ids).
-    packages = [
-        p.strip()
-        for p in form.get("packages", "").replace(",", " ").split()
-        if p.strip()
-    ]
+    packages = [p.strip() for p in form.get("packages", "").replace(",", " ").split() if p.strip()]
     # copy/move cannot use ``all`` — read the wizard's explicit list and
     # drop any stray ``all`` token. An empty list is a valid "open"
     # choice (tables picked on the /submit form). Every other kind keeps
@@ -2946,9 +2878,7 @@ def _build_new_pipeline_write(
 
     _spec = _get_kind(kind)
     if _spec and _spec.tables_mode == "explicit":
-        extra["tables"] = [
-            t for t in form.get("tables", "").split() if t and t != "all"
-        ]
+        extra["tables"] = [t for t in form.get("tables", "").split() if t and t != "all"]
     return PipelineWrite(
         kind=kind,
         cdm=cdm,
@@ -3003,9 +2933,7 @@ def pipelines_page(request: Request) -> HTMLResponse:
     # ``ovid2 tools copy|move`` requires. Registry-driven — no hardcoded
     # kind names in the template or JS.
     explicit_tables_kinds = sorted(
-        name
-        for name in all_kinds()
-        if (spec := get_kind(name)) and spec.tables_mode == "explicit"
+        name for name in all_kinds() if (spec := get_kind(name)) and spec.tables_mode == "explicit"
     )
     # Pipeline names whose input source's driver type can expand ``all``
     # (e.g. Access). The Run modal lets these submit an empty (== ``all``)
@@ -3189,18 +3117,12 @@ async def pipeline_config_create_post(
             # config label so several configs can target one package.
             pipeline_name = form.get("package", "").strip()
             if not pipeline_name:
-                return _error(
-                    "Pick an existing pipeline package to run analysis against."
-                )
+                return _error("Pick an existing pipeline package to run analysis against.")
         elif _create_flow == "cycle_packages":
             # dq_checks is package-free: it runs EDC report-cycle checks
             # (the pipeline's 'type'), so require at least one cycle
             # package selection. ``pipeline`` stays bound to ``name``.
-            picked = [
-                p
-                for p in form.get("packages", "").replace(",", " ").split()
-                if p.strip()
-            ]
+            picked = [p for p in form.get("packages", "").replace(",", " ").split() if p.strip()]
             if not picked:
                 return _error("Pick at least one EDC report cycle to run.")
 
@@ -3214,17 +3136,25 @@ async def pipeline_config_create_post(
             return _error("Pick an input storage account, or keep input open.")
         if not output_open and not form.get("output_connection", "").strip():
             return _error("Pick an output storage account, or keep output open.")
-        resolved_input = "" if input_open else _resolve_submit_endpoint(
-            "browse",
-            form.get("input_address", ""),
-            form.get("input_connection", ""),
-            form.get("input_location", ""),
+        resolved_input = (
+            ""
+            if input_open
+            else _resolve_submit_endpoint(
+                "browse",
+                form.get("input_address", ""),
+                form.get("input_connection", ""),
+                form.get("input_location", ""),
+            )
         )
-        resolved_output = "" if output_open else _resolve_submit_endpoint(
-            "browse",
-            form.get("output_address", ""),
-            form.get("output_connection", ""),
-            form.get("output_location", ""),
+        resolved_output = (
+            ""
+            if output_open
+            else _resolve_submit_endpoint(
+                "browse",
+                form.get("output_address", ""),
+                form.get("output_connection", ""),
+                form.get("output_location", ""),
+            )
         )
 
         # 3. Build the config. ``pipeline`` is the chosen package for
@@ -3264,6 +3194,7 @@ def pipeline_config_edit_page(
     from ovid2.config import addresses as _addresses
     from ovid2.web.kinds import kind_choices
     from ovid2.web.models import PIPELINE_KINDS
+
     return templates.TemplateResponse(
         request,
         "pipeline_edit.html",
@@ -3358,9 +3289,7 @@ def pipeline_config_run_post(
         # config's stored tables so etl-shape kinds are unaffected.
         parsed_tables = [t for t in (tables or "").split() if t and t != "all"]
         _wants_all = "all" in (tables or "").split()
-        tables_override: list[str] | None = (
-            parsed_tables if (tables or "").strip() else None
-        )
+        tables_override: list[str] | None = parsed_tables if (tables or "").strip() else None
 
         # Inline binding: an open side with a storage account chosen in
         # the run modal is resolved-or-created into an address (storing
@@ -3370,17 +3299,11 @@ def pipeline_config_run_post(
         override_output: str | None = None
         try:
             if input_open and input_conn:
-                override_input = _resolve_submit_endpoint(
-                    "browse", "", input_conn, input_loc
-                )
+                override_input = _resolve_submit_endpoint("browse", "", input_conn, input_loc)
             if output_open and output_conn:
-                override_output = _resolve_submit_endpoint(
-                    "browse", "", output_conn, output_loc
-                )
+                override_output = _resolve_submit_endpoint("browse", "", output_conn, output_loc)
         except addresses_svc.AddressError as exc:
-            return RedirectResponse(
-                url=f"/pipelines?error={_urlquote(str(exc))}", status_code=303
-            )
+            return RedirectResponse(url=f"/pipelines?error={_urlquote(str(exc))}", status_code=303)
 
         # A side that is still open (no inline pick) falls back to the
         # Submit form, where the operator can browse to a sub-folder.
@@ -3407,9 +3330,7 @@ def pipeline_config_run_post(
                 params.append(f"batch_id={_urlquote(batch_id.strip())}")
             if parsed_tables:
                 params.append(f"tables={_urlquote(' '.join(parsed_tables))}")
-            return RedirectResponse(
-                url="/submit?" + "&".join(params), status_code=303
-            )
+            return RedirectResponse(url="/submit?" + "&".join(params), status_code=303)
 
         # Derive the batch id from the browsed location leaf when the
         # operator did not type one (the run modal does not offer a free
@@ -3498,13 +3419,16 @@ def pipeline_config_disable_post(request: Request, name: str) -> RedirectRespons
 
 
 @router.get("/pipelines/{name}", response_class=HTMLResponse, include_in_schema=False)
-def pipeline_config_detail_page(request: Request, name: str, flash: str | None = None) -> HTMLResponse:
+def pipeline_config_detail_page(
+    request: Request, name: str, flash: str | None = None
+) -> HTMLResponse:
     """Render one pipeline's detail page."""
     detail = pipelines_svc.get_pipeline(name)
     if detail is None:
         raise HTTPException(status_code=404, detail=f"Pipeline '{name}' not found.")
     return templates.TemplateResponse(
-        request, "pipeline_config_detail.html",
+        request,
+        "pipeline_config_detail.html",
         {"pipeline_config": detail, "flash": flash},
     )
 
@@ -3521,9 +3445,7 @@ async def pipeline_config_update_post(request: Request, name: str) -> RedirectRe
         payload = _build_pipeline_write({k: str(v) for k, v in form.items()})
         pipelines_svc.write_pipeline(name, payload, actor="web")
     except (pipelines_svc.PipelineError, ValueError) as exc:
-        return RedirectResponse(
-            url=f"/pipelines/{name}/edit?error={exc}", status_code=303
-        )
+        return RedirectResponse(url=f"/pipelines/{name}/edit?error={exc}", status_code=303)
     return RedirectResponse(url=f"/pipelines/{name}", status_code=303)
 
 
@@ -3552,9 +3474,7 @@ def settings_page(
 
 
 @router.post("/settings", response_class=HTMLResponse, include_in_schema=False)
-async def settings_post(
-    request: Request, _csrf: None = Depends(require_csrf)
-) -> RedirectResponse:
+async def settings_post(request: Request, _csrf: None = Depends(require_csrf)) -> RedirectResponse:
     """Persist the settings form."""
     form = dict(await request.form())
     # Preserve subsections that the form does not surface (ods,
@@ -3565,38 +3485,35 @@ async def settings_post(
         payload = GlobalSettings(
             defaults=SettingsDefaults(
                 engine=str(form.get("defaults_engine", "pyspark")).strip() or "pyspark",
-                workers=int(form.get("defaults_workers", "25") or 25),
+                workers=int(_form_text(form.get("defaults_workers", "25")) or 25),
             ),
             worker=SettingsWorker(
-                poll_interval_seconds=float(form.get("worker_poll", "2.0") or 2.0),
+                poll_interval_seconds=float(_form_text(form.get("worker_poll", "2.0")) or 2.0),
                 route_dispatch_enabled=bool(form.get("route_dispatch_enabled")),
             ),
             ui=SettingsUi(
-                dashboard_poll_ms=int(form.get("ui_dash", "3000") or 3000),
-                run_events_poll_ms=int(form.get("ui_run", "2000") or 2000),
+                dashboard_poll_ms=int(_form_text(form.get("ui_dash", "3000")) or 3000),
+                run_events_poll_ms=int(_form_text(form.get("ui_run", "2000")) or 2000),
                 display_timezone=(
-                    str(form.get("ui_tz", "America/New_York")).strip()
-                    or "America/New_York"
+                    str(form.get("ui_tz", "America/New_York")).strip() or "America/New_York"
                 ),
             ),
             notifications=SettingsNotifications(
                 smtp_host=str(form.get("smtp_host", "")).strip(),
-                smtp_port=int(form.get("smtp_port", "25") or 25),
+                smtp_port=int(_form_text(form.get("smtp_port", "25")) or 25),
                 smtp_from=str(form.get("smtp_from", "")).strip(),
                 smtp_to=[t for t in str(form.get("smtp_to", "")).split() if t],
                 smtp_secret_ref=(str(form.get("smtp_secret_ref", "")).strip() or None),
             ),
             retention=SettingsRetention(
-                event_log_days=int(form.get("event_log_days", "30") or 30),
-                web_jobs_days=int(form.get("web_jobs_days", "90") or 90),
+                event_log_days=int(_form_text(form.get("event_log_days", "30")) or 30),
+                web_jobs_days=int(_form_text(form.get("web_jobs_days", "90")) or 90),
             ),
             ods=current.ods,
             fs_picker=current.fs_picker,
             llm=current.llm,
             admin=SettingsAdmin(
-                storage_account=(
-                    str(form.get("admin_storage_account", "")).strip() or None
-                ),
+                storage_account=(str(form.get("admin_storage_account", "")).strip() or None),
             ),
         )
         settings_svc.save_settings(payload, actor="web")
@@ -3645,9 +3562,7 @@ def dataspace_pipeline_page(request: Request, pipeline: str) -> HTMLResponse:
     response_class=HTMLResponse,
     include_in_schema=False,
 )
-def dataspace_batch_page(
-    request: Request, pipeline: str, batch_id: str
-) -> HTMLResponse:
+def dataspace_batch_page(request: Request, pipeline: str, batch_id: str) -> HTMLResponse:
     """Render the tables under ``/{pipeline}/{batch_id}``."""
     try:
         listing = dataspace_svc.list_batch_tables(pipeline, batch_id)

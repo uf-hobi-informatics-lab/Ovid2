@@ -87,7 +87,7 @@ class SnowflakeDriver(Driver):
         return _location_fields()
 
     @classmethod
-    def declared_cdm(cls, location: dict[str, Any]) -> str | None:
+    def declared_cdm(cls, location: dict[str, Any] | None) -> str | None:
         """Return the CDM stamp on ``location`` (D6.0 advisory type check).
 
         Snowflake is the primary CDM-carrying peripheral in the
@@ -98,6 +98,8 @@ class SnowflakeDriver(Driver):
         writes into a Snowflake address whose stamped CDM disagrees
         with the source's.
         """
+        if not location:
+            return None
         v = location.get("cdm")
         return str(v) if v else None
 
@@ -127,9 +129,7 @@ class SnowflakeDriver(Driver):
         so the ``snowflake-connector-python`` import stays lazy. See
         that function for the prefix grammar.
         """
-        return list_dir_from_config(
-            dict(self.args), dict(self.secrets), prefix
-        )
+        return list_dir_from_config(dict(self.args), dict(self.secrets), prefix)
 
     # ------------------------------------------------------------------
     # Legacy bridge
@@ -145,7 +145,9 @@ class SnowflakeDriver(Driver):
         conversion of the private key material).
         """
         merged = build_address_config(
-            dict(self.args), dict(self.secrets), dict(self.location),
+            dict(self.args),
+            dict(self.secrets),
+            dict(self.location),
         )
         return "snowflake", merged
 
@@ -184,7 +186,11 @@ class SnowflakeDriver(Driver):
         """Read a Snowflake table via the engine session."""
         addr = self._build_address()
         return addr.read(
-            session, pipeline, batch_id, file_name, delimiter,  # type: ignore[arg-type]
+            session,  # type: ignore[arg-type]  # EngineSession wraps a SparkSession at runtime
+            pipeline,
+            batch_id,
+            file_name,
+            delimiter,
             table_name=table_name,
         )
 

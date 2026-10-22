@@ -54,10 +54,10 @@ from ovid2.semantic.registry import (
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "iter_vocabulary_docs",
-    "iter_binding_docs",
-    "build_vocabulary",
     "build_binding",
+    "build_vocabulary",
+    "iter_binding_docs",
+    "iter_vocabulary_docs",
     "register_all",
     "semantic_yaml_root",
 ]
@@ -70,9 +70,7 @@ __all__ = [
 
 def semantic_yaml_root() -> Path:
     """Return the packaged root under ``src/ovid2/resources/semantic/``."""
-    with resources.as_file(
-        resources.files("ovid2.resources").joinpath("semantic")
-    ) as path:
+    with resources.as_file(resources.files("ovid2.resources").joinpath("semantic")) as path:
         return Path(path)
 
 
@@ -103,7 +101,7 @@ def _expand_path(raw: str) -> Path:
     """
     # Local import — avoids a circular import at package load time (the
     # semantic layer is imported very early in ovid2 startup).
-    from ovid2.config import settings as _settings  # noqa: PLC0415
+    from ovid2.config import settings as _settings
 
     mapping = {
         "OMOP_CDM_DIR": str(_settings.OMOP_CDM_DIR),
@@ -166,14 +164,16 @@ def iter_binding_docs() -> list[tuple[str, dict[str, Any]]]:
         cdm = payload.get("cdm")
         if not isinstance(cdm, str) or not cdm:
             logger.warning(
-                "Skipping binding YAML %s: missing/invalid 'cdm' field.", path,
+                "Skipping binding YAML %s: missing/invalid 'cdm' field.",
+                path,
             )
             continue
         if cdm != path.stem:
             logger.warning(
-                "Binding YAML %s: filename stem %r does not match 'cdm' %r; "
-                "using the YAML value.",
-                path, path.stem, cdm,
+                "Binding YAML %s: filename stem %r does not match 'cdm' %r; using the YAML value.",
+                path,
+                path.stem,
+                cdm,
             )
         result.append((cdm, payload))
     return result
@@ -200,9 +200,7 @@ def build_vocabulary(payload: dict[str, Any]) -> VocabularyHandle:
         raise ValueError("vocabulary YAML missing required 'name' field.")
     kind = payload.get("kind", "vocabulary")
     if kind != "vocabulary":
-        raise ValueError(
-            f"vocabulary YAML '{name}': kind must be 'vocabulary', got {kind!r}."
-        )
+        raise ValueError(f"vocabulary YAML '{name}': kind must be 'vocabulary', got {kind!r}.")
     code_column = payload.get("code_column")
     if not isinstance(code_column, str) or not code_column:
         raise ValueError(f"vocabulary YAML '{name}' missing 'code_column'.")
@@ -224,15 +222,9 @@ def build_vocabulary(payload: dict[str, Any]) -> VocabularyHandle:
         view_name=str(payload.get("view_name") or ""),
         code_column=code_column,
         description_column=(
-            str(payload["description_column"])
-            if payload.get("description_column")
-            else None
+            str(payload["description_column"]) if payload.get("description_column") else None
         ),
-        domain_column=(
-            str(payload["domain_column"])
-            if payload.get("domain_column")
-            else None
-        ),
+        domain_column=(str(payload["domain_column"]) if payload.get("domain_column") else None),
         source_path=source_path,
         shared_view=shared_view,
         address=str(address) if address else None,
@@ -286,11 +278,10 @@ def _resolve_shared_view(name: str, payload: dict[str, Any]):  # type: ignore[no
     view_name = raw.get("view")
     if not isinstance(cdm_name, str) or not isinstance(view_name, str):
         raise ValueError(
-            f"vocabulary '{name}': 'shared_view' requires 'cdm' and 'view' "
-            "string fields."
+            f"vocabulary '{name}': 'shared_view' requires 'cdm' and 'view' string fields."
         )
 
-    from ovid2.cdm.registry import get_cdm  # noqa: PLC0415 — avoids startup cycle
+    from ovid2.cdm.registry import get_cdm
 
     try:
         handle = get_cdm(cdm_name)
@@ -317,9 +308,7 @@ def _resolve_inline_items(
     if not raw:
         return ()
     if not isinstance(raw, list):
-        raise ValueError(
-            f"vocabulary '{payload.get('name')}': 'inline_items' must be a list."
-        )
+        raise ValueError(f"vocabulary '{payload.get('name')}': 'inline_items' must be a list.")
     items: list[tuple[str, str | None]] = []
     for entry in raw:
         if not isinstance(entry, dict):
@@ -346,9 +335,7 @@ def build_binding(cdm: str, row: dict[str, Any]) -> ColumnBinding:
     if not isinstance(column, str) or not column:
         raise ValueError(f"binding for {cdm}.{table} missing 'column'.")
     if not isinstance(vocabulary, str) or not vocabulary:
-        raise ValueError(
-            f"binding for {cdm}.{table}.{column} missing 'vocabulary'."
-        )
+        raise ValueError(f"binding for {cdm}.{table}.{column} missing 'vocabulary'.")
     return ColumnBinding(
         cdm=cdm,
         table=str(table),
@@ -397,7 +384,8 @@ def register_all() -> None:
         rows = payload.get("bindings") or []
         if not isinstance(rows, list):
             logger.warning(
-                "Binding YAML for CDM %s: 'bindings' must be a list.", cdm,
+                "Binding YAML for CDM %s: 'bindings' must be a list.",
+                cdm,
             )
             continue
         for row in rows:
@@ -407,7 +395,10 @@ def register_all() -> None:
                 binding = build_binding(cdm, row)
             except (ValueError, KeyError) as exc:
                 logger.warning(
-                    "Skipping binding row in %s: %s (row=%r)", cdm, exc, row,
+                    "Skipping binding row in %s: %s (row=%r)",
+                    cdm,
+                    exc,
+                    row,
                 )
                 continue
             try:
@@ -416,12 +407,16 @@ def register_all() -> None:
                 # Unknown vocabulary or duplicate binding — non-fatal.
                 logger.warning(
                     "Skipping binding %s.%s.%s: %s",
-                    binding.cdm, binding.table, binding.column, exc,
+                    binding.cdm,
+                    binding.table,
+                    binding.column,
+                    exc,
                 )
                 continue
             binding_count += 1
 
     logger.debug(
         "Semantic YAML loader registered %d vocabulary(ies), %d binding(s).",
-        vocab_count, binding_count,
+        vocab_count,
+        binding_count,
     )

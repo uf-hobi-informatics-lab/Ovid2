@@ -32,7 +32,7 @@ class _StubAddress:
 
 
 @pytest.mark.unit
-def test_semantic_join_via_vocabulary_name(spark: "SparkSession") -> None:
+def test_semantic_join_via_vocabulary_name(spark: SparkSession) -> None:
     """``with: omop_concept`` resolves through the semantic registry."""
     # OMOP CONCEPT is a bundled vocabulary; its temp view is ``concept``.
     concept = spark.createDataFrame(
@@ -76,7 +76,7 @@ def test_semantic_join_via_vocabulary_name(spark: "SparkSession") -> None:
 
 
 @pytest.mark.unit
-def test_semantic_join_falls_back_to_temp_view(spark: "SparkSession") -> None:
+def test_semantic_join_falls_back_to_temp_view(spark: SparkSession) -> None:
     """Unknown ``with:`` names fall back to ``spark.table(name)``.
 
     This is how OMOP-shaped specs that name the raw ``concept`` view
@@ -119,7 +119,7 @@ def test_semantic_join_falls_back_to_temp_view(spark: "SparkSession") -> None:
 
 
 @pytest.mark.unit
-def test_omop_concept_join_shim_still_works(spark: "SparkSession") -> None:
+def test_omop_concept_join_shim_still_works(spark: SparkSession) -> None:
     """The legacy ``omop_concept_join`` adapter is a subclass of the new one.
 
     Existing YAML specs continue to load through the same class name.
@@ -167,7 +167,7 @@ def test_omop_concept_join_is_subclass_of_semantic_join() -> None:
 
 
 @pytest.mark.unit
-def test_semantic_join_domain_filter_via_vocabulary(spark: "SparkSession") -> None:
+def test_semantic_join_domain_filter_via_vocabulary(spark: SparkSession) -> None:
     """domain_filter uses the vocabulary's ``domain_column``."""
     concept = spark.createDataFrame(
         [

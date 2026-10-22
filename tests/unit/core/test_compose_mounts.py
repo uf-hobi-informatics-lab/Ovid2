@@ -142,9 +142,9 @@ def test_volume_mounts_includes_spark_work_and_logs(
 
     mounts = compose_module._volume_mounts(instance=_instance)
     joined = "\n".join(mounts)
-    assert (
-        f"{_instance.spark_work_dir}:/opt/bitnami/spark/work:rw" in joined
-    ), f"spark_work_dir not bound: {joined!r}"
-    assert (
-        f"{_instance.spark_logs_dir}:/opt/bitnami/spark/logs:rw" in joined
-    ), f"spark_logs_dir not bound: {joined!r}"
+    assert f"{_instance.spark_work_dir}:/opt/bitnami/spark/work:rw" in joined, (
+        f"spark_work_dir not bound: {joined!r}"
+    )
+    assert f"{_instance.spark_logs_dir}:/opt/bitnami/spark/logs:rw" in joined, (
+        f"spark_logs_dir not bound: {joined!r}"
+    )

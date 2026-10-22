@@ -50,9 +50,9 @@ from ovid2.web.services._broker import BrokerError, run_tool_json
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "ConnectionError",
     "SENTINEL_MASK",
     "TEST_DEADLINE_SECONDS",
+    "ConnectionError",
     "delete_connection",
     "get_connection",
     "list_connection_types",
@@ -103,9 +103,7 @@ def _writable_path(name: str) -> Path:
 
 def _hash(payload: dict[str, Any]) -> str:
     """Return a stable content hash for audit rows."""
-    return hashlib.sha256(
-        json.dumps(payload, sort_keys=True).encode("utf-8")
-    ).hexdigest()
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 def _default_secret_ref(name: str) -> str:
@@ -122,9 +120,7 @@ def _validate_args_against_spec(
     known_secrets = {f["name"] for f in spec["secrets"]}
     for f in spec["args"]:
         if f.get("required") and not args.get(f["name"]):
-            raise ConnectionError(
-                f"'{type_name}' connections require the '{f['name']}' argument."
-            )
+            raise ConnectionError(f"'{type_name}' connections require the '{f['name']}' argument.")
     misplaced = sorted(set(args) & known_secrets)
     if misplaced:
         raise ConnectionError(
@@ -134,14 +130,12 @@ def _validate_args_against_spec(
     unknown_args = sorted(set(args) - known_args)
     if unknown_args:
         raise ConnectionError(
-            f"Unknown args {unknown_args} for '{type_name}'. "
-            f"Known: {sorted(known_args)}."
+            f"Unknown args {unknown_args} for '{type_name}'. Known: {sorted(known_args)}."
         )
     unknown_secrets = sorted(set(secrets) - known_secrets)
     if unknown_secrets:
         raise ConnectionError(
-            f"Unknown secrets {unknown_secrets} for '{type_name}'. "
-            f"Known: {sorted(known_secrets)}."
+            f"Unknown secrets {unknown_secrets} for '{type_name}'. Known: {sorted(known_secrets)}."
         )
 
 
@@ -175,8 +169,7 @@ def list_connections() -> list[ConnectionSummary]:
                 name=name,
                 type=str(payload.get("type", "unknown")),
                 path=str(path),
-                secret_ref=(str(payload.get("secret_ref"))
-                            if payload.get("secret_ref") else None),
+                secret_ref=(str(payload.get("secret_ref")) if payload.get("secret_ref") else None),
             )
         )
     return summaries
@@ -199,6 +192,7 @@ def get_connection(name: str) -> ConnectionDetail | None:
     # disk is rewritten — legacy files keep their original keys.
     if type_name == "disc":
         from ovid2.drivers.disc import normalise_disc_args
+
         args = {**normalise_disc_args(args)}
     secret_ref = payload.get("secret_ref") or None
     masked_secrets: dict[str, str] = {}
@@ -248,12 +242,12 @@ def _maybe_auth_mode(name: str, type_name: str) -> str | None:
         return "default_chain"
     # Feed the classifier sentinel non-empty markers keyed by the secret
     # key *names* — no value ever leaves ``secrets_svc``.
-    present = {key: "x" for key in detail.keys}
+    present = dict.fromkeys(detail.keys, "x")
     try:
         from ovid2.drivers.azure_blob.metadata import resolve_connection_auth_mode
 
         return str(resolve_connection_auth_mode(present))
-    except Exception:  # noqa: BLE001 — best-effort label.
+    except Exception:
         return None
 
 
@@ -282,9 +276,7 @@ def list_connection_types() -> list[ConnectionTypeSpec]:
 # ---------------------------------------------------------------------------
 
 
-def _merge_secret_updates(
-    ref: str | None, incoming: dict[str, Any]
-) -> dict[str, Any]:
+def _merge_secret_updates(ref: str | None, incoming: dict[str, Any]) -> dict[str, Any]:
     """Preserve on-disk secret values for keys sent as the mask sentinel."""
     existing: dict[str, Any] = {}
     if ref:
@@ -297,9 +289,7 @@ def _merge_secret_updates(
                 candidate = Path(existing_detail.path)
                 if candidate.is_file():
                     try:
-                        existing = json.loads(
-                            candidate.read_text(encoding="utf-8")
-                        )
+                        existing = json.loads(candidate.read_text(encoding="utf-8"))
                     except (OSError, json.JSONDecodeError):
                         existing = {}
         except Exception:  # pragma: no cover — defensive
@@ -376,6 +366,7 @@ def write_connection(
         merged_secrets = _merge_secret_updates(secret_ref, incoming_secrets)
         # Delegate the write — secrets_svc enforces mode 0o600.
         from ovid2.web.models import SecretWrite  # local import to avoid loop
+
         try:
             secrets_svc.write_secret(
                 secret_ref,
@@ -388,9 +379,11 @@ def write_connection(
         secret_ref = (
             str(payload.secret_ref)
             if payload.secret_ref
-            else (str(existing_raw.get("secret_ref"))
-                  if existing_raw and existing_raw.get("secret_ref")
-                  else None)
+            else (
+                str(existing_raw.get("secret_ref"))
+                if existing_raw and existing_raw.get("secret_ref")
+                else None
+            )
         )
 
     doc: dict[str, Any] = {"type": type_name, "args": incoming_args}
@@ -489,18 +482,21 @@ def test_connection_via_driver(name: str) -> ConnectionTestReport:
     # early error rather than paying the subprocess cost.
     if _connections.locate_connection(name) is None:
         return ConnectionTestReport(
-            ok=False, code="config",
+            ok=False,
+            code="config",
             message=f"Connection '{name}' not found.",
             detail={},
         )
 
     try:
         result = run_tool_json(
-            ["probe-connection", name], timeout=TEST_DEADLINE_SECONDS,
+            ["probe-connection", name],
+            timeout=TEST_DEADLINE_SECONDS,
         )
     except BrokerError as exc:
         return ConnectionTestReport(
-            ok=False, code="unreachable",
+            ok=False,
+            code="unreachable",
             message=f"Probe subprocess failed: {exc}",
             detail={},
         )

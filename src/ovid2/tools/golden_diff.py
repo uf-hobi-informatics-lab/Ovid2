@@ -171,9 +171,7 @@ def main(argv: list[str] | None = None) -> int:
 
     diff = compare_directories(Path(args.a), Path(args.b), delimiter=args.delimiter)
     for entry in diff.files:
-        badge = {"match": "OK  ", "only_a": "MISS", "only_b": "EXTRA"}.get(
-            entry.status, "DIFF"
-        )
+        badge = {"match": "OK  ", "only_a": "MISS", "only_b": "EXTRA"}.get(entry.status, "DIFF")
         print(f"[{badge}] {entry.path}  {entry.detail}")
     print(diff.summary())
     return 0 if diff.match else 1

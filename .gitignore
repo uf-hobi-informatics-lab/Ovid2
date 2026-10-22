@@ -82,3 +82,4 @@ material/
 
 # Saved external theme reference (not project source)
 docs/thems/
+.mypy_cache_ci/

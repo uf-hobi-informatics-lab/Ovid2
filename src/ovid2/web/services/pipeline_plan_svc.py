@@ -94,9 +94,7 @@ def _formatter_source(pipeline: str, table: str) -> str:
     for base in _pipeline_pkg_paths(pipeline):
         if (base / "formatters" / f"{table}.yaml").is_file():
             return "yaml"
-    if _module_exists(
-        f"ovid2_pipelines.{pipeline}.formatters_custom.{table}_formatter"
-    ):
+    if _module_exists(f"ovid2_pipelines.{pipeline}.formatters_custom.{table}_formatter"):
         return "custom"
     return ""
 
@@ -176,22 +174,14 @@ def list_pipeline_fixers(
         for table, configs in chains_raw.items():
             if not isinstance(configs, (list, tuple)):
                 continue
-            entries = [
-                e
-                for e in (_coerce_fixer_entry(c) for c in configs)
-                if e is not None
-            ]
+            entries = [e for e in (_coerce_fixer_entry(c) for c in configs) if e is not None]
             if entries:
                 per_table[str(table)] = entries
 
     multi_raw = getattr(mod, "MULTI_TABLE_FIXES", []) or []
     multi: list[FixerPlanEntry] = []
     if isinstance(multi_raw, (list, tuple)):
-        multi = [
-            e
-            for e in (_coerce_fixer_entry(c) for c in multi_raw)
-            if e is not None
-        ]
+        multi = [e for e in (_coerce_fixer_entry(c) for c in multi_raw) if e is not None]
     return per_table, multi
 
 
@@ -205,9 +195,7 @@ def get_pipeline_plan(pipeline: str) -> PipelinePlanResponse:
         raise PipelinePlanError("Pipeline name is required.")
     # A pipeline with no package at all should 404 rather than return an
     # empty (but valid-looking) plan.
-    if not _pipeline_pkg_paths(pipeline) and not _module_exists(
-        f"ovid2_pipelines.{pipeline}"
-    ):
+    if not _pipeline_pkg_paths(pipeline) and not _module_exists(f"ovid2_pipelines.{pipeline}"):
         raise PipelinePlanError(f"Pipeline '{pipeline}' not found.")
 
     cdm_name, tables = list_pipeline_tables(pipeline)
@@ -223,6 +211,4 @@ def get_pipeline_plan(pipeline: str) -> PipelinePlanResponse:
 
 
 if __name__ == "__main__":  # pragma: no cover
-    raise SystemExit(
-        "This module is imported by the ovid2 web routes; it is not a script."
-    )
+    raise SystemExit("This module is imported by the ovid2 web routes; it is not a script.")

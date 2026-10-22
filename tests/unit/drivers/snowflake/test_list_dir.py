@@ -18,7 +18,7 @@ from ovid2.drivers.snowflake.driver import SnowflakeDriver
 
 
 class _FakeCursor:
-    def __init__(self, conn: "_FakeConn") -> None:
+    def __init__(self, conn: _FakeConn) -> None:
         self.conn = conn
         self.description: list[tuple[str]] | None = None
         self._rows: list[tuple[Any, ...]] = []

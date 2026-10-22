@@ -21,7 +21,6 @@ from dataclasses import fields, is_dataclass
 import ovid2.semantic as semantic
 from ovid2.semantic.registry import registered_kinds
 
-
 # ---------------------------------------------------------------------------
 # CLI wiring
 # ---------------------------------------------------------------------------

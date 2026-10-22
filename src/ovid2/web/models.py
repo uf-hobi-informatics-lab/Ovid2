@@ -122,7 +122,10 @@ class RunEventPage(BaseModel):
 class RunStageSummary(BaseModel):
     """Aggregate counters for one pipeline stage within a run."""
 
-    stage: str = Field(..., description="``read``, ``format``, ``deduplicate``, ``map``, ``fix``, ``write``, or ``other``.")
+    stage: str = Field(
+        ...,
+        description="``read``, ``format``, ``deduplicate``, ``map``, ``fix``, ``write``, or ``other``.",
+    )
     started: int = 0
     completed: int = 0
     failed: int = 0
@@ -224,21 +227,17 @@ class ScaffoldPipelineRequest(BaseModel):
     """Payload for scaffolding a new pipeline package from a template."""
 
     name: str = Field(..., description="Name for the new pipeline package.")
-    template: str | None = Field(
-        None, description="Pipeline template id (from the catalogue)."
-    )
+    template: str | None = Field(None, description="Pipeline template id (from the catalogue).")
     source_pipeline: str | None = Field(
         None,
         description=(
-            "Explicit source pipeline to clone. Used with `cdm` as an "
-            "alternative to `template`."
+            "Explicit source pipeline to clone. Used with `cdm` as an alternative to `template`."
         ),
     )
     cdm: str | None = Field(
         None,
         description=(
-            "Target CDM name. Required with `source_pipeline`; taken "
-            "from the template otherwise."
+            "Target CDM name. Required with `source_pipeline`; taken from the template otherwise."
         ),
     )
 
@@ -266,9 +265,7 @@ class StorageBrowseResponse(BaseModel):
     storage: str = Field(..., description="Storage-account (connection) name.")
     type: str = Field(..., description="Driver type (disc / s3 / ...).")
     prefix: str = Field("", description="The listed prefix ('' = root).")
-    supported: bool = Field(
-        True, description="False when this storage type cannot be browsed."
-    )
+    supported: bool = Field(True, description="False when this storage type cannot be browsed.")
     message: str | None = Field(
         None, description="Human-facing note when not supported / on error."
     )
@@ -301,10 +298,7 @@ class TablePlanEntry(BaseModel):
     )
     source: str = Field(
         "",
-        description=(
-            "Which probe matched: 'yaml' | 'python' | 'custom' | '' "
-            "(no formatter)."
-        ),
+        description=("Which probe matched: 'yaml' | 'python' | 'custom' | '' (no formatter)."),
     )
 
 
@@ -312,9 +306,7 @@ class FixerPlanEntry(BaseModel):
     """One fixer in a table's fix chain, surfaced read-only on submit."""
 
     fix: str = Field(..., description="Registered fixer name.")
-    detail: str = Field(
-        "", description="Compact human-facing summary of the fixer's args."
-    )
+    detail: str = Field("", description="Compact human-facing summary of the fixer's args.")
 
 
 class PipelinePlanResponse(BaseModel):
@@ -468,18 +460,14 @@ class TransformSummary(BaseModel):
 class TransformValidateRequest(BaseModel):
     """Payload for ``POST /api/v1/transforms:validate``."""
 
-    spec: dict[str, Any] = Field(
-        description="Candidate transform spec (v/steps/…) to validate."
-    )
+    spec: dict[str, Any] = Field(description="Candidate transform spec (v/steps/…) to validate.")
 
 
 class TransformValidateReport(BaseModel):
     """Result of validating a candidate transform spec."""
 
     ok: bool = Field(description="True when the spec passed all checks.")
-    errors: list[str] = Field(
-        default_factory=list, description="Human-readable validation errors."
-    )
+    errors: list[str] = Field(default_factory=list, description="Human-readable validation errors.")
 
 
 # ---------------------------------------------------------------------------
@@ -573,9 +561,7 @@ class JobSubmitRequest(BaseModel):
     sf_database: str | None = Field(None, description="Snowflake DATABASE override.")
     sf_account: str | None = Field(None, description="Snowflake ACCOUNT override.")
     sf_schema: str | None = Field(None, description="Snowflake SCHEMA override.")
-    stderr_log: bool = Field(
-        False, description="Mirror events to stderr as plain-text log lines."
-    )
+    stderr_log: bool = Field(False, description="Mirror events to stderr as plain-text log lines.")
     extra_mounts: list[str] = Field(
         default_factory=list,
         description=(
@@ -844,9 +830,7 @@ class InstallStatus(BaseModel):
         ...,
         description="Machine name of the first incomplete step, or ``done``.",
     )
-    complete: bool = Field(
-        ..., description="True when every step is ``done`` or ``warning``."
-    )
+    complete: bool = Field(..., description="True when every step is ``done`` or ``warning``.")
     steps: list[InstallStepStatus] = Field(
         ..., description="Ordered list of step statuses (bootstrap first, ``done`` last)."
     )
@@ -899,9 +883,7 @@ class ImageBuildDetail(BaseModel):
     tag: str
     context: str
     dockerfile: str
-    status: str = Field(
-        ..., description="``running`` | ``succeeded`` | ``failed``."
-    )
+    status: str = Field(..., description="``running`` | ``succeeded`` | ``failed``.")
     pid: int | None = None
     started_at: str | None = None
     ended_at: str | None = None
@@ -970,9 +952,7 @@ class ConnectionTypeSpec(BaseModel):
     """Field spec catalogue entry for one connector type."""
 
     type: str = Field(..., description="Machine name, e.g. ``snowflake``.")
-    args: list[ConnectionFieldSpec] = Field(
-        default_factory=list, description="Non-secret fields."
-    )
+    args: list[ConnectionFieldSpec] = Field(default_factory=list, description="Non-secret fields.")
     secrets: list[ConnectionFieldSpec] = Field(
         default_factory=list,
         description="Fields stored in secrets.d/*.json (mode 0o600).",
@@ -1129,9 +1109,7 @@ class PipelineTrigger(BaseModel):
       of the same input.
     """
 
-    type: str = Field(
-        ..., description="``manual`` | ``cron`` | ``interval`` | ``watch``."
-    )
+    type: str = Field(..., description="``manual`` | ``cron`` | ``interval`` | ``watch``.")
     cron: str | None = Field(None, description="Crontab expression (when type=cron).")
     interval_minutes: int | None = Field(
         None, description="Minutes between fires (when type=interval)."
@@ -1238,9 +1216,7 @@ class PipelineWrite(BaseModel):
     )
     cdm: str | None = Field(
         None,
-        description=(
-            "CDM name — required when `kind=etl`, ignored otherwise."
-        ),
+        description=("CDM name — required when `kind=etl`, ignored otherwise."),
     )
     pipeline: str
     input_address: str
@@ -1276,9 +1252,7 @@ class PipelineRunRequest(BaseModel):
 
     batch_id: str | None = Field(
         None,
-        description=(
-            "Override the synthesised timestamp batch id for this run."
-        ),
+        description=("Override the synthesised timestamp batch id for this run."),
     )
     tables: list[str] | None = Field(
         None,
@@ -1361,7 +1335,6 @@ class SettingsUi(BaseModel):
         except (ZoneInfoNotFoundError, ValueError) as exc:
             raise ValueError(f"Unknown timezone: {name!r}") from exc
         return name
-
 
 
 class SettingsNotifications(BaseModel):
@@ -1471,26 +1444,41 @@ class SettingsAdmin(BaseModel):
             return None
         stripped = value.strip()
         return stripped or None
+
+
 class AuthProviderConfig(BaseModel):
     """Configuration for an authentication provider (OIDC)."""
 
     display_name: str = Field(..., description="Human-readable name for the provider")
     issuer: str = Field(..., description="OIDC discovery issuer URL")
     client_id: str = Field(..., description="OAuth 2.0 client ID")
-    scopes: list[str] = Field(default_factory=lambda: ["openid", "email", "profile"], description="OIDC scopes to request")
+    scopes: list[str] = Field(
+        default_factory=lambda: ["openid", "email", "profile"], description="OIDC scopes to request"
+    )
     enabled: bool = Field(default=True, description="Whether this provider is enabled")
 
 
 class SettingsAuth(BaseModel):
     """Authentication settings."""
+
     enabled: bool = Field(default=False, description="Whether authentication is enabled")
-    providers: dict[str, AuthProviderConfig] = Field(default_factory=dict, description="Authentication providers configuration")
-    bootstrap_admin_emails: list[str] = Field(default_factory=list, description="Email addresses of bootstrap administrators")
-    absolute_ttl_minutes: int = Field(default=480, description="Absolute session TTL in minutes (8 hours)")
+    providers: dict[str, AuthProviderConfig] = Field(
+        default_factory=dict, description="Authentication providers configuration"
+    )
+    bootstrap_admin_emails: list[str] = Field(
+        default_factory=list, description="Email addresses of bootstrap administrators"
+    )
+    absolute_ttl_minutes: int = Field(
+        default=480, description="Absolute session TTL in minutes (8 hours)"
+    )
     idle_ttl_minutes: int = Field(default=45, description="Idle session TTL in minutes")
-    silent_recheck: bool = Field(default=True, description="Whether to silently recheck token validity")
+    silent_recheck: bool = Field(
+        default=True, description="Whether to silently recheck token validity"
+    )
     cookie_name: str = Field(default="ovid2_session", description="Name of the session cookie")
-    trust_forwarded_proto: bool = Field(default=True, description="Whether to trust X-Forwarded-Proto header")
+    trust_forwarded_proto: bool = Field(
+        default=True, description="Whether to trust X-Forwarded-Proto header"
+    )
     service_principal_role: str = Field(
         default="pipeline_operator",
         description=(
@@ -1527,16 +1515,16 @@ class SettingsLlm(BaseModel):
     enabled: bool = Field(
         default=False,
         description="Kill-switch for the right-panel assistant. When False the "
-                    "chat endpoint returns 404.",
+        "chat endpoint returns 404.",
     )
-    general: str | None = Field(
-        default=None, description="General LLM connection name."
-    )
+    general: str | None = Field(default=None, description="General LLM connection name.")
     system1: str | None = Field(
         default=None, description="System 1 decision LLM connection name (e.g. JEV)."
     )
     confidence_threshold: float = Field(
-        default=0.7, ge=0.0, le=1.0,
+        default=0.7,
+        ge=0.0,
+        le=1.0,
         description="Minimum System 1 confidence to accept its decision.",
     )
     fallback_to_general: bool = Field(
@@ -1544,26 +1532,34 @@ class SettingsLlm(BaseModel):
         description="Route to the general LLM when System 1 does not accept.",
     )
     max_concurrent_chats: int = Field(
-        default=4, ge=1, le=64,
+        default=4,
+        ge=1,
+        le=64,
         description="Upper bound on simultaneous chat executor subprocesses.",
     )
     chat_timeout_seconds: int = Field(
-        default=180, ge=10, le=1800,
+        default=180,
+        ge=10,
+        le=1800,
         description="Wall-clock ceiling for one chat turn.",
     )
     tools_enabled: bool = Field(
         default=False,
         description="Let the general LLM call Ovid2 API tools (agent_tools "
-                    "catalogue). GET tools run with a per-turn read-only token "
-                    "scoped to the chatting user (capped at pipeline_operator); "
-                    "write tools are shown as proposals the user must run.",
+        "catalogue). GET tools run with a per-turn read-only token "
+        "scoped to the chatting user (capped at pipeline_operator); "
+        "write tools are shown as proposals the user must run.",
     )
     max_tool_iterations: int = Field(
-        default=6, ge=1, le=20,
+        default=6,
+        ge=1,
+        le=20,
         description="Upper bound on model round-trips per turn when tools are on.",
     )
     tool_result_max_chars: int = Field(
-        default=8000, ge=256, le=200000,
+        default=8000,
+        ge=256,
+        le=200000,
         description="Cap on one tool result fed back to the model.",
     )
 
@@ -1626,9 +1622,7 @@ class EngineTypeSpec(BaseModel):
     """Field spec catalogue entry for one engine type."""
 
     type: str = Field(..., description="Machine name, e.g. ``pyspark``.")
-    args: list[EngineFieldSpec] = Field(
-        default_factory=list, description="Non-secret fields."
-    )
+    args: list[EngineFieldSpec] = Field(default_factory=list, description="Non-secret fields.")
     secrets: list[EngineFieldSpec] = Field(
         default_factory=list,
         description="Fields stored in secrets.d/*.json (mode 0o600).",
@@ -1735,9 +1729,7 @@ class LlmDetail(LlmSummary):
     """One LLM connection with masked secret placeholders."""
 
     args: dict[str, Any] = Field(default_factory=dict)
-    secrets: dict[str, str] = Field(
-        default_factory=dict, description="Every value is ``'***'``."
-    )
+    secrets: dict[str, str] = Field(default_factory=dict, description="Every value is ``'***'``.")
 
 
 class LlmWrite(BaseModel):
@@ -1841,7 +1833,9 @@ class OdsDimensionSummary(BaseModel):
     """
 
     name: str = Field(..., description="Dimension name (matches a connection type).")
-    address_count: int = Field(0, ge=0, description="How many address configs fall under this dimension.")
+    address_count: int = Field(
+        0, ge=0, description="How many address configs fall under this dimension."
+    )
     default_address: str | None = Field(
         None,
         description="The address configured as this dimension's default (settings.ods.dimension_defaults).",
@@ -1851,7 +1845,9 @@ class OdsDimensionSummary(BaseModel):
 class OdsDimensionCatalog(BaseModel):
     """Response for ``GET /api/v1/dataspace/dimensions``."""
 
-    default_dimension: str = Field(..., description="Global default from settings.ods.default_dimension.")
+    default_dimension: str = Field(
+        ..., description="Global default from settings.ods.default_dimension."
+    )
     dimensions: list[OdsDimensionSummary] = Field(default_factory=list)
 
 
@@ -2040,8 +2036,7 @@ class FsRoot(BaseModel):
     source: str = Field(
         ...,
         description=(
-            "Origin of the root: 'home', 'allowlist', 'settings', "
-            "'connection', or 'system'."
+            "Origin of the root: 'home', 'allowlist', 'settings', 'connection', or 'system'."
         ),
     )
 

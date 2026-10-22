@@ -23,9 +23,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-TEMPLATES_ROOT = (
-    Path(__file__).resolve().parents[2] / "src" / "ovid2" / "web" / "templates"
-)
+TEMPLATES_ROOT = Path(__file__).resolve().parents[2] / "src" / "ovid2" / "web" / "templates"
 
 _ATTR_RE = re.compile(r'(?:src|href)\s*=\s*"([^"]*)"', re.IGNORECASE)
 
@@ -42,9 +40,7 @@ def _is_safe_url(url: str) -> bool:
         return True
     if url.startswith("#"):
         return True
-    if url.startswith(("mailto:", "tel:", "data:")):
-        return True
-    return False
+    return bool(url.startswith(("mailto:", "tel:", "data:")))
 
 
 def test_no_external_urls_in_templates() -> None:
@@ -60,8 +56,7 @@ def test_no_external_urls_in_templates() -> None:
     assert not bad, (
         "Third-party URLs found in web templates. Every asset must be "
         "self-hosted under /static/ or /branding/ (air-gapped install "
-        "safety). Offenders:\n  "
-        + "\n  ".join(f"{p}: {u}" for p, u in bad)
+        "safety). Offenders:\n  " + "\n  ".join(f"{p}: {u}" for p, u in bad)
     )
 
 
@@ -74,15 +69,8 @@ def test_d3_is_self_hosted() -> None:
         "CDN; the panel runs on air-gapped hospital networks."
     )
     # Bundle must actually exist alongside the template.
-    vendor = (
-        TEMPLATES_ROOT.parent
-        / "static"
-        / "vendor"
-        / "d3.v7.min.js"
-    )
-    assert vendor.exists(), (
-        f"self-hosted D3 bundle missing at {vendor}. Fetch it into place."
-    )
+    vendor = TEMPLATES_ROOT.parent / "static" / "vendor" / "d3.v7.min.js"
+    assert vendor.exists(), f"self-hosted D3 bundle missing at {vendor}. Fetch it into place."
     # Sanity — the file starts with a d3 header.
     head = vendor.read_bytes()[:200].decode("utf-8", errors="replace")
     assert "d3js.org" in head or "d3" in head.lower(), (

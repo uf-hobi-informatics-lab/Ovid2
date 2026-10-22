@@ -13,6 +13,8 @@ mapper spec engine can validate against a real, if minimal, contract.
 
 from __future__ import annotations
 
+import contextlib
+
 from ovid2.cdm.handle import CdmHandle
 from ovid2.cdm.registry import register
 
@@ -31,10 +33,8 @@ NURSING_V1: CdmHandle = CdmHandle(
 
 def _register_default() -> None:
     """Idempotently register the Nursing handle."""
-    try:
+    with contextlib.suppress(ValueError):
         register(NURSING_V1)
-    except ValueError:
-        pass
 
 
 _register_default()

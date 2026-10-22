@@ -33,7 +33,7 @@ callers never need to branch.
 from __future__ import annotations
 
 import importlib
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from ovid2.drivers.base import Driver
@@ -85,7 +85,7 @@ def list_types() -> list[str]:
     return sorted(DRIVERS.keys())
 
 
-def load_class(type_name: str) -> Callable[..., Driver]:
+def load_class(type_name: str) -> type[Driver]:
     """Import and return the registered class or factory for ``type_name``.
 
     Returns:
@@ -95,31 +95,28 @@ def load_class(type_name: str) -> Callable[..., Driver]:
         both forms because the class *is* callable.
     """
     if type_name not in DRIVERS:
-        raise KeyError(
-            f"Unknown driver type '{type_name}'. "
-            f"Registered: {list_types()}."
-        )
+        raise KeyError(f"Unknown driver type '{type_name}'. Registered: {list_types()}.")
     module_path, attr = DRIVERS[type_name].rsplit(".", 1)
     module = importlib.import_module(module_path)
-    return getattr(module, attr)  # type: ignore[no-any-return]
+    return cast("type[Driver]", getattr(module, attr))
 
 
 def instantiate(
     type_name: str,
-    args: dict | None = None,
-    secrets: dict | None = None,
-    location: dict | None = None,
+    args: dict[str, Any] | None = None,
+    secrets: dict[str, Any] | None = None,
+    location: dict[str, Any] | None = None,
 ) -> Driver:
     """One-shot: look up the driver class and construct an instance."""
     cls = load_class(type_name)
-    return cls(args=args, secrets=secrets, location=location)  # type: ignore[return-value]
+    return cls(args=args, secrets=secrets, location=location)
 
 
 def driver_from_address(
     address_name: str,
     *,
     pipeline: str | None = None,
-    sf_overrides: dict | None = None,
+    sf_overrides: dict[str, Any] | None = None,
     cdm_name: str | None = None,
 ) -> Driver:
     """Resolve a named address JSON to a native :class:`Driver` instance.
@@ -177,9 +174,7 @@ def driver_from_address(
     if shape == "connection":
         connection_name = str(config.get("connection") or "")
         if not connection_name:
-            raise ValueError(
-                f"Address '{address_name}' has empty 'connection' field."
-            )
+            raise ValueError(f"Address '{address_name}' has empty 'connection' field.")
         raw = _connections.load_connection_config(connection_name)
         type_name = str(raw.get("type") or "")
         conn_args = dict(raw.get("args") or {})
@@ -189,14 +184,16 @@ def driver_from_address(
             location["cdm"] = cdm_name
         if type_name == "snowflake":
             # Apply the four-tier resolver against a synthesised
-            # legacy-shape merge (args ∪ secrets ∪ location) so the
+            # legacy-shape merge (args + secrets + location) so the
             # driver's ``as_legacy_src_args`` sees the resolved
             # database / warehouse / role. The resolver writes back
             # onto ``conn_args`` so subsequent driver construction
             # picks it up.
             merged = {**conn_args, **conn_secrets, **location}
             resolved = _addresses._resolve_snowflake_config(
-                merged, sf_overrides, pipeline,
+                merged,
+                sf_overrides,
+                pipeline,
             )
             # Fold resolver outputs back into conn_args (the pipeline
             # side of the driver reads ``args`` for connection-level
@@ -210,19 +207,22 @@ def driver_from_address(
                 if key in resolved and key not in conn_args:
                     conn_args[key] = resolved[key]
         return instantiate(
-            type_name, args=conn_args, secrets=conn_secrets, location=location,
+            type_name,
+            args=conn_args,
+            secrets=conn_secrets,
+            location=location,
         )
 
     # Legacy shape.
     src_name = str(config.get("src_name") or "")
     if not src_name:
-        raise ValueError(
-            f"Address '{address_name}' missing both 'connection' and 'src_name'."
-        )
+        raise ValueError(f"Address '{address_name}' missing both 'connection' and 'src_name'.")
     src_args = dict(config.get("src_args") or {})
     if src_name == "snowflake":
         src_args = _addresses._resolve_snowflake_config(
-            src_args, sf_overrides, pipeline,
+            src_args,
+            sf_overrides,
+            pipeline,
         )
     if cdm_name:
         src_args["cdm"] = cdm_name
@@ -239,8 +239,9 @@ def driver_from_address(
 
 
 def _split_legacy_src_args(
-    type_name: str, src_args: dict,
-) -> tuple[dict, dict, dict]:
+    type_name: str,
+    src_args: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """Split a legacy ``src_args`` blob into ``(args, secrets, location)``.
 
     Uses the driver's own :meth:`connection_fields` +
@@ -256,15 +257,15 @@ def _split_legacy_src_args(
         cls = load_class(type_name)
         conn_spec = cls.connection_fields()
         loc_fields = cls.location_fields()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return dict(src_args), {}, {}
 
     secret_names = {f.name for f in conn_spec.secrets}
     location_names = {f.name for f in loc_fields}
 
-    args: dict = {}
-    secrets: dict = {}
-    location: dict = {}
+    args: dict[str, Any] = {}
+    secrets: dict[str, Any] = {}
+    location: dict[str, Any] = {}
     for key, value in src_args.items():
         if key in secret_names:
             secrets[key] = value
@@ -278,6 +279,7 @@ def _split_legacy_src_args(
 # ---------------------------------------------------------------------------
 # Auto-population (deferred to D2)
 # ---------------------------------------------------------------------------
+
 
 def _populate_from_legacy() -> None:
     """Populate :data:`DRIVERS` from the legacy connections catalogue.

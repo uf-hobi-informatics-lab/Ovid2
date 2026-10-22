@@ -85,9 +85,7 @@ def test_formatter_source_probe_order(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.unit
 def test_fixer_detail_formatting() -> None:
-    entry = svc._coerce_fixer_entry(
-        {"fix": "race_eth", "src1": "RACE", "src2": "HISPANIC"}
-    )
+    entry = svc._coerce_fixer_entry({"fix": "race_eth", "src1": "RACE", "src2": "HISPANIC"})
     assert entry is not None
     assert entry.fix == "race_eth"
     assert "src1=RACE" in entry.detail

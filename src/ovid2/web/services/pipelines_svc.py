@@ -40,10 +40,10 @@ from ovid2.config import addresses as _addresses
 from ovid2.run_kinds import get_kind
 from ovid2.web import db as web_db
 from ovid2.web.models import (
-    JobSubmitRequest,
-    JobSubmitResponse,
     PACKAGE_FREE_KINDS,
     PIPELINE_KINDS,
+    JobSubmitRequest,
+    JobSubmitResponse,
     PipelineConfigDetail,
     PipelineConfigSummary,
     PipelineGroup,
@@ -62,8 +62,8 @@ __all__ = [
     "delete_pipeline",
     "due_pipelines",
     "get_pipeline",
-    "list_pipelines_grouped",
     "list_pipelines",
+    "list_pipelines_grouped",
     "record_dispatch",
     "run_now",
     "set_enabled",
@@ -147,16 +147,18 @@ def _list_names() -> list[str]:
         if not directory.is_dir():
             continue
         for entry in directory.iterdir():
-            if entry.is_file() and entry.suffix == ".json" and not entry.stem.endswith(_SAMPLE_SUFFIX):
+            if (
+                entry.is_file()
+                and entry.suffix == ".json"
+                and not entry.stem.endswith(_SAMPLE_SUFFIX)
+            ):
                 seen.add(entry.stem)
     return sorted(seen)
 
 
 def _hash(payload: dict[str, Any]) -> str:
     """Return a stable content hash for audit rows."""
-    return hashlib.sha256(
-        json.dumps(payload, sort_keys=True).encode("utf-8")
-    ).hexdigest()
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 def _now() -> datetime:
@@ -174,9 +176,7 @@ def _now_iso() -> str:
 # ---------------------------------------------------------------------------
 
 
-def _validate_trigger(
-    trigger: PipelineTrigger, *, input_address: str | None = None
-) -> None:
+def _validate_trigger(trigger: PipelineTrigger, *, input_address: str | None = None) -> None:
     """Reject unsupported trigger shapes.
 
     ``watch`` triggers require ``input_address`` to resolve to a W7
@@ -187,25 +187,21 @@ def _validate_trigger(
     """
     if trigger.type not in _TRIGGER_TYPES:
         raise PipelineError(
-            f"Unsupported trigger type '{trigger.type}'. "
-            f"Supported: {sorted(_TRIGGER_TYPES)}."
+            f"Unsupported trigger type '{trigger.type}'. Supported: {sorted(_TRIGGER_TYPES)}."
         )
     if trigger.type == "cron":
         if not trigger.cron:
             raise PipelineError("cron triggers require a 'cron' expression.")
         try:
-            from croniter import croniter  # type: ignore[import-not-found]
+            from croniter import croniter
         except ImportError as exc:  # pragma: no cover — croniter is pinned
-            raise PipelineError(
-                "croniter is not installed; cannot validate cron trigger."
-            ) from exc
+            raise PipelineError("croniter is not installed; cannot validate cron trigger.") from exc
         if not croniter.is_valid(trigger.cron):
             raise PipelineError(f"Invalid cron expression: '{trigger.cron}'.")
-    if trigger.type == "interval":
-        if trigger.interval_minutes is None or trigger.interval_minutes < 1:
-            raise PipelineError(
-                "interval triggers require interval_minutes >= 1."
-            )
+    if trigger.type == "interval" and (
+        trigger.interval_minutes is None or trigger.interval_minutes < 1
+    ):
+        raise PipelineError("interval triggers require interval_minutes >= 1.")
     if trigger.type == "watch":
         wait = trigger.watch_min_wait_minutes
         if wait is not None and wait < 0:
@@ -231,8 +227,7 @@ def _assert_watchable_input(input_address: str | None) -> None:
     detail = addresses_svc.get_address(input_address or "")
     if detail is None:
         raise PipelineError(
-            f"watch triggers require a resolvable input_address; "
-            f"'{input_address}' was not found."
+            f"watch triggers require a resolvable input_address; '{input_address}' was not found."
         )
     if not detail.connection:
         raise PipelineError(
@@ -264,7 +259,8 @@ def compute_next_fire(
     if trigger.type == "manual":
         return None
     if trigger.type == "cron":
-        from croniter import croniter  # type: ignore[import-not-found]
+        from croniter import croniter
+
         base = last_fired_at or reference
         itr = croniter(str(trigger.cron), base)
         next_dt: datetime = itr.get_next(datetime)
@@ -300,9 +296,7 @@ def _read_state(name: str) -> dict[str, Any] | None:
     """Return one row of ``web_pipelines_state`` as a dict, or ``None``."""
     _ensure_state_schema()
     with web_db.connect() as conn:
-        row = conn.execute(
-            "SELECT * FROM web_pipelines_state WHERE name = ?", (name,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM web_pipelines_state WHERE name = ?", (name,)).fetchone()
     return dict(row) if row is not None else None
 
 
@@ -386,11 +380,7 @@ def _row_to_detail(name: str, path: Path, doc: dict[str, Any]) -> PipelineConfig
     # kinds ignore ``tables`` at argv time, so the value is cosmetic.
     tables_mode = spec.tables_mode if spec else "all"
     raw_tables = doc.get("tables")
-    tables = (
-        list(raw_tables or [])
-        if tables_mode == "explicit"
-        else list(raw_tables or ["all"])
-    )
+    tables = list(raw_tables or []) if tables_mode == "explicit" else list(raw_tables or ["all"])
     return PipelineConfigDetail(
         name=name,
         path=str(path),
@@ -410,12 +400,9 @@ def _row_to_detail(name: str, path: Path, doc: dict[str, Any]) -> PipelineConfig
         stderr_log=bool(doc.get("stderr_log", False)),
         enabled=bool(state.get("enabled", doc.get("enabled", True))),
         trigger=trigger,
-        last_fired_at=(str(state["last_fired_at"])
-                       if state.get("last_fired_at") else None),
-        next_fire_at=(str(state["next_fire_at"])
-                      if state.get("next_fire_at") else None),
-        last_job_id=(str(state["last_job_id"])
-                     if state.get("last_job_id") else None),
+        last_fired_at=(str(state["last_fired_at"]) if state.get("last_fired_at") else None),
+        next_fire_at=(str(state["next_fire_at"]) if state.get("next_fire_at") else None),
+        last_job_id=(str(state["last_job_id"]) if state.get("last_job_id") else None),
         created_at=doc.get("created_at"),
         updated_at=doc.get("updated_at"),
     )
@@ -448,9 +435,7 @@ def list_pipelines() -> list[PipelineConfigSummary]:
         tables_mode = spec.tables_mode if spec else "all"
         raw_tables = doc.get("tables")
         tables = (
-            list(raw_tables or [])
-            if tables_mode == "explicit"
-            else list(raw_tables or ["all"])
+            list(raw_tables or []) if tables_mode == "explicit" else list(raw_tables or ["all"])
         )
         summaries.append(
             PipelineConfigSummary(
@@ -463,10 +448,8 @@ def list_pipelines() -> list[PipelineConfigSummary]:
                 tables=tables,
                 trigger_type=str(trigger.get("type", "manual")),
                 enabled=bool(state.get("enabled", doc.get("enabled", True))),
-                last_fired_at=(str(state["last_fired_at"])
-                               if state.get("last_fired_at") else None),
-                next_fire_at=(str(state["next_fire_at"])
-                              if state.get("next_fire_at") else None),
+                last_fired_at=(str(state["last_fired_at"]) if state.get("last_fired_at") else None),
+                next_fire_at=(str(state["next_fire_at"]) if state.get("next_fire_at") else None),
             )
         )
     return summaries
@@ -522,9 +505,8 @@ def _validate_write(payload: PipelineWrite) -> None:
     # installed package for them. Package-consuming kinds (etl, whose
     # package is scaffolded before this runs, plus analysis / dq_checks
     # which resolve per-table formatters from the package) keep the gate.
-    if (
-        normalize_kind(payload.kind) not in PACKAGE_FREE_KINDS
-        and payload.pipeline not in set(pipelines_meta_svc.discover_pipelines())
+    if normalize_kind(payload.kind) not in PACKAGE_FREE_KINDS and payload.pipeline not in set(
+        pipelines_meta_svc.discover_pipelines()
     ):
         raise PipelineError(
             f"Pipeline '{payload.pipeline}' is not installed under ovid2_pipelines."
@@ -539,9 +521,7 @@ def _validate_write(payload: PipelineWrite) -> None:
             # run time on the Submit form (which requires it there), so it
             # is not expected on the config search path.
             if value and value not in known_addresses:
-                raise PipelineError(
-                    f"{label} '{value}' is not on the config search path."
-                )
+                raise PipelineError(f"{label} '{value}' is not on the config search path.")
     _validate_kind(payload)
     _validate_trigger(payload.trigger, input_address=payload.input_address)
 
@@ -626,13 +606,11 @@ def _validate_kind(payload: PipelineWrite) -> None:
         # Deferred resolution: the pipeline picks its default CDM at
         # runtime. Backwards-compatible with pre-C1 pipelines.
         return
-    from ovid2.cdm import registered_cdms  # noqa: PLC0415
+    from ovid2.cdm import registered_cdms
 
     known = set(registered_cdms())
     if payload.cdm not in known:
-        raise PipelineError(
-            f"Unknown CDM '{payload.cdm}'. Registered: {sorted(known)}."
-        )
+        raise PipelineError(f"Unknown CDM '{payload.cdm}'. Registered: {sorted(known)}.")
 
 
 def _validate_packages(packages: list[str]) -> None:
@@ -648,7 +626,7 @@ def _validate_packages(packages: list[str]) -> None:
     Raises:
         PipelineError: If any id is not a registered cycle package.
     """
-    from ovid2.web.services import health_report_svc  # noqa: PLC0415
+    from ovid2.web.services import health_report_svc
 
     known = {str(p.get("id")) for p in health_report_svc.list_packages()}
     unknown = [p for p in packages if p not in known]
@@ -741,8 +719,7 @@ def write_pipeline(
         before_hash=before_hash,
         after_hash=after_hash,
         detail_json=json.dumps(
-            {"path": str(target), "trigger": payload.trigger.type,
-             "pipeline": payload.pipeline}
+            {"path": str(target), "trigger": payload.trigger.type, "pipeline": payload.pipeline}
         ),
     )
     logger.info("Pipeline %s %s at %s", action, name, target)
@@ -754,9 +731,7 @@ def delete_pipeline(name: str, *, actor: str = "web") -> WriteResult:
     _validate_name(name)
     target = _writable_path(name)
     if not target.is_file():
-        raise PipelineError(
-            f"Pipeline '{name}' not found under {_writable_dir()}."
-        )
+        raise PipelineError(f"Pipeline '{name}' not found under {_writable_dir()}.")
     before_hash: str | None = None
     try:
         before_hash = _hash(_read_raw(target))
@@ -843,9 +818,7 @@ def _to_submit_request(
     """
     resolved_batch = batch_id or _now().strftime("%Y%m%d-%H%M%S")
     resolved_input = input_address if input_address is not None else detail.input_address
-    resolved_output = (
-        output_address if output_address is not None else detail.output_address
-    )
+    resolved_output = output_address if output_address is not None else detail.output_address
     resolved_tables = tables if tables is not None else list(detail.tables)
     return JobSubmitRequest(
         kind=detail.kind,
@@ -908,21 +881,15 @@ def run_now(
     detail = get_pipeline(name)
     if detail is None:
         raise PipelineError(f"Pipeline '{name}' not found.")
-    resolved_input = (
-        input_address if input_address is not None else detail.input_address
-    )
-    resolved_output = (
-        output_address if output_address is not None else detail.output_address
-    )
+    resolved_input = input_address if input_address is not None else detail.input_address
+    resolved_output = output_address if output_address is not None else detail.output_address
     if not (resolved_input or "").strip():
         raise PipelineError(
-            f"Pipeline '{name}' keeps its input open — choose a storage "
-            "account for this run."
+            f"Pipeline '{name}' keeps its input open — choose a storage account for this run."
         )
     if not (resolved_output or "").strip():
         raise PipelineError(
-            f"Pipeline '{name}' keeps its output open — choose a storage "
-            "account for this run."
+            f"Pipeline '{name}' keeps its output open — choose a storage account for this run."
         )
     request = _to_submit_request(
         detail,

@@ -223,9 +223,7 @@ class RunAggregate:
         total = record.get("total_fixes", 0)
         self.fix_progress = f"{current}/{total}" if total else ""
         if kind == "fix.failed":
-            self._push_error(
-                f"fix {self.fix} on {self.current_item}: {record.get('error', '')}"
-            )
+            self._push_error(f"fix {self.fix} on {self.current_item}: {record.get('error', '')}")
 
     def _clear_item_scratch(self) -> None:
         self.fix = ""

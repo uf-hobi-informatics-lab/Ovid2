@@ -164,10 +164,7 @@ def _iter_py(root: Path):
 
 def _imports_root(module_name: str, roots: tuple[str, ...]) -> bool:
     """Return True if ``module_name`` starts with any of ``roots``."""
-    for root in roots:
-        if module_name == root or module_name.startswith(root + "."):
-            return True
-    return False
+    return any(module_name == root or module_name.startswith(root + ".") for root in roots)
 
 
 def _bad_imports(py: Path, forbidden_roots: tuple[str, ...]) -> list[str]:
@@ -207,8 +204,7 @@ def test_pyspark_imports_confined_to_engine_layer(src_root: Path) -> None:
     assert not offenders, (
         "pyspark imports found outside the engine layer. "
         "Route the call through engine.get_functions() / engine.get_session() "
-        "instead, or add the file to _PYSPARK_ALLOWED with an ADR entry.\n"
-        + "\n".join(offenders)
+        "instead, or add the file to _PYSPARK_ALLOWED with an ADR entry.\n" + "\n".join(offenders)
     )
 
 

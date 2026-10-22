@@ -53,9 +53,7 @@ def settings_path() -> Path:
 
 def _hash(payload: dict[str, Any]) -> str:
     """Return a stable content hash for audit rows."""
-    return hashlib.sha256(
-        json.dumps(payload, sort_keys=True).encode("utf-8")
-    ).hexdigest()
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 def invalidate_cache() -> None:

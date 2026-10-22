@@ -54,7 +54,7 @@ from ovid2.formatters.adapters.base import AdapterContext, BaseAdapter
 from ovid2.formatters.spec import FormatterSpec, JoinSpec
 
 if TYPE_CHECKING:
-    from pyspark.sql import DataFrame, SparkSession
+    from pyspark.sql import Column, DataFrame, SparkSession
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +136,7 @@ class SemanticJoinAdapter(BaseAdapter):
         renamed = base.toDF(*[f"{join.prefix}_{column}" for column in base.columns])
         return renamed.alias(join.prefix)
 
-    def _on_expr(self, join: JoinSpec, spark: SparkSession) -> object:
+    def _on_expr(self, join: JoinSpec, spark: SparkSession) -> Column:
         """Rewrite the join's ``on:`` predicate so column refs match the prefix.
 
         Users write joins naturally::

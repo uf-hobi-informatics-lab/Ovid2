@@ -47,7 +47,10 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, TextIO
+from typing import TYPE_CHECKING, Any, TextIO
+
+if TYPE_CHECKING:
+    from _csv import Writer as _CsvWriter
 
 import yaml
 
@@ -63,10 +66,10 @@ logger = logging.getLogger(__name__)
 class _VocabSpec:
     """Static per-vocabulary metadata used to render YAML files."""
 
-    slug: str                 # snake_case identifier (== VocabularyHandle.name)
-    vocabulary_id: str        # value in CONCEPT.csv.vocabulary_id
-    description: str          # free-form summary written into the YAML
-    tags: tuple[str, ...]     # metadata tags
+    slug: str  # snake_case identifier (== VocabularyHandle.name)
+    vocabulary_id: str  # value in CONCEPT.csv.vocabulary_id
+    description: str  # free-form summary written into the YAML
+    tags: tuple[str, ...]  # metadata tags
 
 
 #: Every vocabulary this tool knows how to slice out of the OMOP bundle.
@@ -241,7 +244,7 @@ def _slice_concept_csv(
     Returns:
         ``{vocabulary_id: row_count}`` (data rows only, header excluded).
     """
-    counts: dict[str, int] = {vid: 0 for vid in wanted_ids}
+    counts: dict[str, int] = dict.fromkeys(wanted_ids, 0)
     with concept_path.open(encoding="utf-8", newline="") as fh:
         reader = csv.reader(fh, delimiter="\t")
         header = next(reader, None)
@@ -251,11 +254,9 @@ def _slice_concept_csv(
         try:
             vocab_idx = lower.index("vocabulary_id")
         except ValueError as exc:
-            raise ValueError(
-                f"{concept_path}: header missing 'vocabulary_id' column."
-            ) from exc
+            raise ValueError(f"{concept_path}: header missing 'vocabulary_id' column.") from exc
 
-        writers: dict[str, csv.writer] = {}  # type: ignore[type-arg]
+        writers: dict[str, _CsvWriter] = {}
         if outputs is not None:
             for vid, out_fh in outputs.items():
                 w = csv.writer(out_fh, delimiter="\t", lineterminator="\n")
@@ -353,10 +354,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         required=True,
         choices=list(_KNOWN_SLUGS),
         metavar="VOCAB",
-        help=(
-            "One or more vocabulary slugs to import. Choices: "
-            + ", ".join(_KNOWN_SLUGS)
-        ),
+        help=("One or more vocabulary slugs to import. Choices: " + ", ".join(_KNOWN_SLUGS)),
     )
     parser.add_argument(
         "--slice-dir",
@@ -439,7 +437,7 @@ def main(args: argparse.Namespace) -> int:
             path = slice_dir / f"{spec.slug}.csv"
             # Write to a `.tmp` then atomically rename at the end.
             tmp = path.with_suffix(path.suffix + ".tmp")
-            fh = tmp.open("w", encoding="utf-8", newline="")
+            fh: TextIO = tmp.open("w", encoding="utf-8", newline="")
             outputs[vid] = fh
             open_handles.append(fh)
 
@@ -457,9 +455,7 @@ def main(args: argparse.Namespace) -> int:
         print(f"  {spec.slug:<12} vocabulary_id={vid:<10} rows={counts[vid]:>10d}{version_note}")
 
     # Loud empty-slice failure (unless --allow-empty).
-    empty = [
-        specs_by_id[vid].slug for vid, n in counts.items() if n == 0
-    ]
+    empty = [specs_by_id[vid].slug for vid, n in counts.items() if n == 0]
     if empty and not args.allow_empty:
         print(
             f"\n[ovid2 tools import-vocabulary] refusing to write empty slice(s): "

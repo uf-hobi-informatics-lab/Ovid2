@@ -36,8 +36,7 @@ from ovid2.web.services import llm_exec, settings_svc
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["ChatDisabledError", "ChatPrincipal", "allowed_tools", "build_request",
-           "sse_stream"]
+__all__ = ["ChatDisabledError", "ChatPrincipal", "allowed_tools", "build_request", "sse_stream"]
 
 
 class ChatDisabledError(RuntimeError):
@@ -87,8 +86,7 @@ def allowed_tools(role: Role) -> list[AgentTool]:
     return out
 
 
-def build_request(body: LlmChatRequest,
-                  principal: ChatPrincipal | None = None) -> dict[str, Any]:
+def build_request(body: LlmChatRequest, principal: ChatPrincipal | None = None) -> dict[str, Any]:
     """Return the executor stdin payload for one turn.
 
     Raises:
@@ -102,7 +100,8 @@ def build_request(body: LlmChatRequest,
         tools = [t.name for t in allowed_tools(principal.role)]
     ui_context: dict[str, Any] | None = None
     if body.ui_context is not None and any(
-            t.ui_action for t in load_catalogue() if t.name in tools):
+        t.ui_action for t in load_catalogue() if t.name in tools
+    ):
         ui_context = body.ui_context.model_dump()
     return {
         "messages": [m.model_dump() for m in body.messages],
@@ -119,8 +118,9 @@ def build_request(body: LlmChatRequest,
     }
 
 
-def sse_stream(body: LlmChatRequest, *, actor: str,
-               principal: ChatPrincipal | None = None) -> Iterator[bytes]:
+def sse_stream(
+    body: LlmChatRequest, *, actor: str, principal: ChatPrincipal | None = None
+) -> Iterator[bytes]:
     """Yield SSE frames for one chat turn and audit its metadata.
 
     Args:
@@ -136,27 +136,46 @@ def sse_stream(body: LlmChatRequest, *, actor: str,
     token: str | None = None
     extra_env: dict[str, str] = {}
     if request["route"]["tools"] and principal is not None and principal.api_url:
-        token = llm_token.mint(principal.user_id, principal.role, email=principal.email,
-                               ttl_seconds=float(llm.chat_timeout_seconds) + 5.0)
+        token = llm_token.mint(
+            principal.user_id,
+            principal.role,
+            email=principal.email,
+            ttl_seconds=float(llm.chat_timeout_seconds) + 5.0,
+        )
         extra_env = {"OVID2_LLM_API_URL": principal.api_url, "OVID2_LLM_API_TOKEN": token}
 
     def _gen() -> Iterator[bytes]:
-        meta: dict[str, Any] = {"route": "none", "connection": None, "model": None,
-                                "prompt_tokens": 0, "completion_tokens": 0,
-                                "ok": False, "elapsed_ms": 0, "error": None,
-                                "decision_accepted": None, "turns": len(body.messages),
-                                "tools_offered": len(request["route"]["tools"]),
-                                "tool_calls": [], "proposals": [], "ui_actions": []}
+        meta: dict[str, Any] = {
+            "route": "none",
+            "connection": None,
+            "model": None,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "ok": False,
+            "elapsed_ms": 0,
+            "error": None,
+            "decision_accepted": None,
+            "turns": len(body.messages),
+            "tools_offered": len(request["route"]["tools"]),
+            "tool_calls": [],
+            "proposals": [],
+            "ui_actions": [],
+        }
         yield b": connected\n\n"
         try:
             for event in llm_exec.chat_stream(
-                request, timeout=float(llm.chat_timeout_seconds),
-                max_concurrent=llm.max_concurrent_chats, extra_env=extra_env,
+                request,
+                timeout=float(llm.chat_timeout_seconds),
+                max_concurrent=llm.max_concurrent_chats,
+                extra_env=extra_env,
             ):
                 kind = event.get("type")
                 if kind == "meta":
-                    meta.update(route=event.get("route"), connection=event.get("connection"),
-                                model=event.get("model"))
+                    meta.update(
+                        route=event.get("route"),
+                        connection=event.get("connection"),
+                        model=event.get("model"),
+                    )
                 elif kind == "usage":
                     meta["prompt_tokens"] += int(event.get("prompt_tokens") or 0)
                     meta["completion_tokens"] += int(event.get("completion_tokens") or 0)
@@ -165,19 +184,24 @@ def sse_stream(body: LlmChatRequest, *, actor: str,
                 elif kind == "error":
                     meta["error"] = event.get("code")
                 elif kind == "done":
-                    meta.update(ok=bool(event.get("ok")),
-                                elapsed_ms=int(event.get("elapsed_ms") or 0))
+                    meta.update(
+                        ok=bool(event.get("ok")), elapsed_ms=int(event.get("elapsed_ms") or 0)
+                    )
                 elif kind == "tool_result":
-                    entry: dict[str, Any] = {"name": event.get("name"),
-                                             "status": event.get("status"),
-                                             "ms": event.get("elapsed_ms")}
+                    entry: dict[str, Any] = {
+                        "name": event.get("name"),
+                        "status": event.get("status"),
+                        "ms": event.get("elapsed_ms"),
+                    }
                     if event.get("rejected") or not event.get("ok"):
                         entry["summary"] = str(event.get("summary") or "")[:200]
                     meta["tool_calls"].append(entry)
                 elif kind in ("proposal", "open_draft"):
-                    prop: dict[str, Any] = {"name": event.get("name"),
-                                            "method": event.get("method"),
-                                            "path": event.get("path")}
+                    prop: dict[str, Any] = {
+                        "name": event.get("name"),
+                        "method": event.get("method"),
+                        "path": event.get("path"),
+                    }
                     if kind == "open_draft":
                         prop["draft"] = True
                     meta["proposals"].append(prop)
@@ -191,9 +215,12 @@ def sse_stream(body: LlmChatRequest, *, actor: str,
             llm_token.revoke(token)
             try:
                 web_db.ensure_schema()
-                web_db.audit(actor=actor, action="llm.chat",
-                             target=str(meta.get("connection") or "none"),
-                             detail_json=json.dumps(meta))
+                web_db.audit(
+                    actor=actor,
+                    action="llm.chat",
+                    target=str(meta.get("connection") or "none"),
+                    detail_json=json.dumps(meta),
+                )
             except Exception:
                 logger.exception("Failed to audit llm.chat")
 

@@ -12,9 +12,7 @@ from ovid2.mcp.client import WebApiClient
 class GetHealthReportArgs(BaseModel):
     """Arguments for :data:`TOOL_NAME`."""
 
-    instance_id: str = Field(
-        ..., description="Instance id of the health run (from a run record)."
-    )
+    instance_id: str = Field(..., description="Instance id of the health run (from a run record).")
 
 
 TOOL_NAME = "get_health_report"

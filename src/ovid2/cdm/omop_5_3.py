@@ -18,6 +18,7 @@ new vocabulary material is required.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 
 from ovid2.cdm.handle import CdmHandle
@@ -32,11 +33,9 @@ OMOP_5_3: CdmHandle = load_cdm("omop_5_3")
 
 def _register_default() -> None:
     """Idempotently register the OMOP 5.3 handle."""
-    try:
+    # Already registered — safe in reload/test scenarios.
+    with contextlib.suppress(ValueError):
         register(OMOP_5_3)
-    except ValueError:
-        # Already registered — safe in reload/test scenarios.
-        pass
 
 
 _register_default()

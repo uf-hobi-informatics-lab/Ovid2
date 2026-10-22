@@ -52,15 +52,17 @@ def client(isolated_xdg: Path) -> Iterator[TestClient]:
 
 
 def _nemo(url: str, key: str = "sk-test") -> LlmWrite:
-    return LlmWrite(provider="openai_compatible", role="general",
-                    args={"base_url": url, "model": "general-test-model"},
-                    secrets={"api_key": key})
+    return LlmWrite(
+        provider="openai_compatible",
+        role="general",
+        args={"base_url": url, "model": "general-test-model"},
+        secrets={"api_key": key},
+    )
 
 
 def _route(**kw: object) -> None:
     current = settings_svc.get_settings()
-    settings_svc.save_settings(current.model_copy(update={"llm": SettingsLlm(**kw)}),
-                               actor="test")
+    settings_svc.save_settings(current.model_copy(update={"llm": SettingsLlm(**kw)}), actor="test")
 
 
 def _sse(text: str) -> list[dict[str, object]]:
@@ -97,21 +99,34 @@ def test_sentinel_keeps_existing_key(isolated_xdg: Path) -> None:
 
 def test_validation(isolated_xdg: Path) -> None:
     with pytest.raises(llms_svc.LlmError, match="require the 'model'"):
-        llms_svc.write_llm("x", LlmWrite(provider="openai_compatible",
-                                         args={"base_url": "https://a/v1"},
-                                         secrets={"api_key": "k"}))
+        llms_svc.write_llm(
+            "x",
+            LlmWrite(
+                provider="openai_compatible",
+                args={"base_url": "https://a/v1"},
+                secrets={"api_key": "k"},
+            ),
+        )
     with pytest.raises(llms_svc.LlmError, match="require"):
-        llms_svc.write_llm("x", LlmWrite(provider="openai_compatible",
-                                         args={"base_url": "https://a/v1", "model": "m"}))
+        llms_svc.write_llm(
+            "x",
+            LlmWrite(provider="openai_compatible", args={"base_url": "https://a/v1", "model": "m"}),
+        )
     with pytest.raises(llms_svc.LlmError, match="cannot fill role"):
-        llms_svc.write_llm("x", LlmWrite(provider="jev", role="general",
-                                         args={"base_url": "https://a"}))
+        llms_svc.write_llm(
+            "x", LlmWrite(provider="jev", role="general", args={"base_url": "https://a"})
+        )
     with pytest.raises(llms_svc.LlmError, match="https"):
-        llms_svc.write_llm("x", LlmWrite(provider="jev", role="system1",
-                                         args={"base_url": "ftp://a"}))
+        llms_svc.write_llm(
+            "x", LlmWrite(provider="jev", role="system1", args={"base_url": "ftp://a"})
+        )
     # JEV key is optional.
-    assert llms_svc.write_llm("jev", LlmWrite(provider="jev", role="system1",
-                                              args={"base_url": "https://jev"})).action == "created"
+    assert (
+        llms_svc.write_llm(
+            "jev", LlmWrite(provider="jev", role="system1", args={"base_url": "https://jev"})
+        ).action
+        == "created"
+    )
 
 
 def test_delete_refused_while_routed(isolated_xdg: Path) -> None:
@@ -155,22 +170,26 @@ def test_api_probe_bad_key(client: TestClient, gateway: str) -> None:
 
 
 def test_chat_disabled_returns_404(client: TestClient) -> None:
-    r = client.post("/api/v1/llm/chat/stream",
-                    json={"messages": [{"role": "user", "content": "hi"}]})
+    r = client.post(
+        "/api/v1/llm/chat/stream", json={"messages": [{"role": "user", "content": "hi"}]}
+    )
     assert r.status_code == 404
     assert client.get("/api/v1/llm/status").json()["enabled"] is False
 
 
 def test_chat_stream_end_to_end(client: TestClient, gateway: str) -> None:
     client.post("/api/v1/llms/nemo", json=_nemo(gateway).model_dump())
-    client.post("/api/v1/llms/jev", json={"provider": "jev", "role": "system1",
-                                          "args": {"base_url": "https://jev.invalid"}})
+    client.post(
+        "/api/v1/llms/jev",
+        json={"provider": "jev", "role": "system1", "args": {"base_url": "https://jev.invalid"}},
+    )
     _route(enabled=True, general="nemo", system1="jev")
     status = client.get("/api/v1/llm/status").json()
     assert status["general_model"] == "general-test-model" and status["system1"] == "jev"
 
-    with client.stream("POST", "/api/v1/llm/chat/stream",
-                       json={"messages": [{"role": "user", "content": "hi"}]}) as resp:
+    with client.stream(
+        "POST", "/api/v1/llm/chat/stream", json={"messages": [{"role": "user", "content": "hi"}]}
+    ) as resp:
         assert resp.status_code == 200
         assert resp.headers["content-type"].startswith("text/event-stream")
         body = "".join(resp.iter_text())
@@ -191,17 +210,30 @@ def test_chat_stream_end_to_end(client: TestClient, gateway: str) -> None:
         ).fetchone()
     meta = json.loads(row[0])
     assert meta["ok"] is True and meta["completion_tokens"] == 3
-    assert set(meta) == {"route", "connection", "model", "prompt_tokens",
-                         "completion_tokens", "ok", "elapsed_ms", "error",
-                         "decision_accepted", "turns", "tools_offered",
-                         "tool_calls", "proposals", "ui_actions"}  # metadata only
+    assert set(meta) == {
+        "route",
+        "connection",
+        "model",
+        "prompt_tokens",
+        "completion_tokens",
+        "ok",
+        "elapsed_ms",
+        "error",
+        "decision_accepted",
+        "turns",
+        "tools_offered",
+        "tool_calls",
+        "proposals",
+        "ui_actions",
+    }  # metadata only
     assert "Hello" not in row[0]
 
 
 def test_chat_rejects_system_role_from_client(client: TestClient) -> None:
     _route(enabled=True, general="nemo")
-    r = client.post("/api/v1/llm/chat/stream",
-                    json={"messages": [{"role": "system", "content": "evil"}]})
+    r = client.post(
+        "/api/v1/llm/chat/stream", json={"messages": [{"role": "system", "content": "evil"}]}
+    )
     assert r.status_code == 422
 
 
@@ -209,17 +241,31 @@ def test_html_pages_render(client: TestClient, gateway: str) -> None:
     assert client.get("/llms").status_code == 200
     page = client.get("/llms/new?provider=openai_compatible&role=general").text
     assert 'name="arg_base_url"' in page and 'name="sec_api_key"' in page
-    r = client.post("/llms", data={"name": "nemo", "provider": "openai_compatible",
-                                   "role": "general", "arg_base_url": gateway,
-                                   "arg_model": "general-test-model", "sec_api_key": "sk-test"},
-                    follow_redirects=False)
+    r = client.post(
+        "/llms",
+        data={
+            "name": "nemo",
+            "provider": "openai_compatible",
+            "role": "general",
+            "arg_base_url": gateway,
+            "arg_model": "general-test-model",
+            "sec_api_key": "sk-test",
+        },
+        follow_redirects=False,
+    )
     assert r.status_code == 303 and r.headers["location"].startswith("/llms/nemo")
     detail = client.get("/llms/nemo").text
     assert "sk-test" not in detail and "***" in detail
-    r = client.post("/llms/routing", data={"enabled": "on", "general": "nemo",
-                                           "confidence_threshold": "0.7",
-                                           "fallback_to_general": "on"},
-                    follow_redirects=False)
+    r = client.post(
+        "/llms/routing",
+        data={
+            "enabled": "on",
+            "general": "nemo",
+            "confidence_threshold": "0.7",
+            "fallback_to_general": "on",
+        },
+        follow_redirects=False,
+    )
     assert r.status_code == 303 and "error" not in r.headers["location"]
     assert settings_svc.get_settings().llm.general == "nemo"
     home = client.get("/").text
@@ -228,8 +274,9 @@ def test_html_pages_render(client: TestClient, gateway: str) -> None:
 
 
 def test_routing_rejects_unknown(client: TestClient) -> None:
-    r = client.post("/llms/routing", data={"enabled": "on", "general": "ghost"},
-                    follow_redirects=False)
+    r = client.post(
+        "/llms/routing", data={"enabled": "on", "general": "ghost"}, follow_redirects=False
+    )
     assert "error=" in r.headers["location"]
 
 
@@ -244,14 +291,17 @@ def test_rbac_when_auth_enabled(isolated_xdg: Path, monkeypatch: pytest.MonkeyPa
     from ovid2.web.models import SettingsAuth
 
     web_db.ensure_schema()
-    settings = GlobalSettings(auth=SettingsAuth(enabled=True),
-                              llm=SettingsLlm(enabled=True))
+    settings = GlobalSettings(auth=SettingsAuth(enabled=True), llm=SettingsLlm(enabled=True))
     monkeypatch.setattr(settings_svc, "get_settings", lambda: settings)
     with TestClient(create_app()) as c:
         assert c.get("/api/v1/llm/status").status_code == 401
         assert c.get("/api/v1/llms").status_code == 401
-        assert c.post("/api/v1/llm/chat/stream",
-                      json={"messages": [{"role": "user", "content": "x"}]}).status_code == 401
+        assert (
+            c.post(
+                "/api/v1/llm/chat/stream", json={"messages": [{"role": "user", "content": "x"}]}
+            ).status_code
+            == 401
+        )
 
 
 def test_executor_env_is_allow_listed(monkeypatch: pytest.MonkeyPatch) -> None:

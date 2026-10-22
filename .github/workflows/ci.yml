@@ -1,9 +1,11 @@
 # Continuous integration for Ovid2.
 #
-# Mirrors the local developer gates (.pre-commit-config.yaml + pyproject.toml)
-# so a green CI run means the same checks a contributor runs locally have
-# passed. Integration / real_connection / real_cluster / perf / endurance
-# tests are excluded here — they require live clusters, cloud credentials, or
+# Every gate calls scripts/ci_checks.sh — the same script the public-mirror
+# publisher runs before pushing, and that contributors run locally
+# (``scripts/ci_checks.sh --docker`` reproduces this environment exactly).
+# Every job installs the same extras set so results never depend on which
+# job ran a check. Integration / real_connection / real_cluster / perf /
+# endurance tests are excluded here — they require live clusters, cloud credentials, or
 # long run times and are opt-in via their pytest markers.
 
 name: CI
@@ -23,82 +25,77 @@ permissions:
 jobs:
   lint:
     name: Lint (ruff)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install ruff
-        run: python -m pip install --upgrade pip && pip install "ruff>=0.4"
-      - name: ruff check
-        run: ruff check .
-      - name: ruff format --check
-        run: ruff format --check .
+        run: python -m pip install --upgrade pip && pip install "ruff==0.16.1"
+      - name: ruff check + format --check
+        run: bash scripts/ci_checks.sh lint
 
   typecheck:
     name: Type check (mypy --strict)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - name: Install mypy + stubs
+      - name: Install package + type stubs
         run: |
           python -m pip install --upgrade pip
-          pip install "mypy>=1.10" types-pyyaml types-python-dateutil "pydantic>=2.6"
+          pip install -e ".[dev,spark,web,mcp,azure]"
       - name: mypy
-        run: mypy --config-file=pyproject.toml src/ovid2
+        run: bash scripts/ci_checks.sh typecheck
 
   contract:
     name: Contract tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - name: Install package (dev extras)
+      - name: Install package (all test extras)
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e ".[dev,spark,web,mcp,azure]"
       - name: pytest -m contract
-        run: pytest -q -m contract
+        run: bash scripts/ci_checks.sh contract
 
   unit:
     name: Unit tests (py${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - name: Set up JDK 17 (for the local Spark fixture)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
       - name: Install package (dev + spark extras)
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,spark]"
+          pip install -e ".[dev,spark,web,mcp,azure]"
       - name: Run unit suite (exclude heavyweight / opt-in markers)
-        run: >-
-          pytest -q
-          -m "not contract and not integration and not real_connection
-          and not real_cluster and not perf and not endurance"
+        run: bash scripts/ci_checks.sh unit
 
   build:
     name: Build sdist + wheel
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install build tooling

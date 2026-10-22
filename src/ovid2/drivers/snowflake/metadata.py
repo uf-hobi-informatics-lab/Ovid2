@@ -39,7 +39,7 @@ DEFAULT_CREDENTIALS_DIR: str = "/usr/include/rsa"
 DEFAULT_PRIVATE_KEY_FILE: str = "rsa_key.p8"
 
 #: Legacy Ovid default for ``SF_PRIVATE_KEY_PASSPHRASE_FILE_NAME``.
-DEFAULT_PASSPHRASE_FILE: str = "credentials"
+DEFAULT_PASSPHRASE_FILE: str = "credentials"  # noqa: S105 — a file name, not a secret
 
 
 def connection_fields() -> ConnectionFieldSpec:
@@ -80,18 +80,13 @@ def connection_fields() -> ConnectionFieldSpec:
                 name="credentials_dir",
                 required=False,
                 default=DEFAULT_CREDENTIALS_DIR,
-                help=(
-                    "Directory containing the RSA key + passphrase files."
-                ),
+                help=("Directory containing the RSA key + passphrase files."),
             ),
             FieldSpec(
                 name="private_key_file",
                 required=False,
                 default=DEFAULT_PRIVATE_KEY_FILE,
-                help=(
-                    "Filename of the .p8 private key inside "
-                    "credentials_dir."
-                ),
+                help=("Filename of the .p8 private key inside credentials_dir."),
             ),
             FieldSpec(
                 name="private_key_passphrase_file",
@@ -204,9 +199,7 @@ def build_address_config(
     if not password:
         credentials_dir = _resolve_credentials_dir(args.get("credentials_dir"))
         key_filename = args.get("private_key_file", DEFAULT_PRIVATE_KEY_FILE)
-        passphrase_filename = args.get(
-            "private_key_passphrase_file", DEFAULT_PASSPHRASE_FILE
-        )
+        passphrase_filename = args.get("private_key_passphrase_file", DEFAULT_PASSPHRASE_FILE)
         try:
             pem_bytes = _read_private_key_pem(credentials_dir, key_filename)
         except (FileNotFoundError, PermissionError, IsADirectoryError) as exc:
@@ -214,15 +207,14 @@ def build_address_config(
             pem_bytes = None
         if pem_bytes is not None:
             try:
-                passphrase = _read_passphrase(
-                    credentials_dir, passphrase_filename
-                )
+                passphrase = _read_passphrase(credentials_dir, passphrase_filename)
                 merged["private_key"] = _pem_to_der(pem_bytes, passphrase)
             except (FileNotFoundError, PermissionError, IsADirectoryError) as exc:
                 logger.warning("Snowflake passphrase unavailable: %s", exc)
             except (ImportError, ValueError, TypeError) as exc:
                 logger.warning(
-                    "Snowflake private key could not be decoded: %s", exc,
+                    "Snowflake private key could not be decoded: %s",
+                    exc,
                 )
 
     # ``path`` is the generic location form emitted by the web UI and

@@ -79,81 +79,159 @@ def engine_family(type_name: str) -> str | None:
 _FIELD_SPECS: dict[str, dict[str, list[dict[str, Any]]]] = {
     "pyspark": {
         "args": [
-            {"name": "app_name", "required": False, "default": "Ovid2 ETL",
-             "help": "Spark application name shown in the Spark UI."},
-            {"name": "master_url", "required": False,
-             "help": "Optional master URL override (e.g. spark://host:7077 or local[*])."},
-            {"name": "spark.driver.memory", "required": False, "default": "32g",
-             "help": "Driver JVM heap size."},
-            {"name": "spark.driver.memoryOverhead", "required": False, "default": "4g",
-             "help": "Driver off-heap overhead."},
-            {"name": "spark.driver.maxResultSize", "required": False, "default": "8g",
-             "help": "Maximum collected result size on the driver."},
-            {"name": "spark.executor.memory", "required": False, "default": "48g",
-             "help": "Executor JVM heap size."},
-            {"name": "spark.executor.memoryOverhead", "required": False, "default": "8g",
-             "help": "Executor off-heap overhead."},
-            {"name": "spark.executor.cores", "required": False, "default": "8",
-             "help": "Cores per executor."},
-            {"name": "spark.sql.shuffle.partitions", "required": False, "default": "200",
-             "help": "Number of partitions for shuffles."},
-            {"name": "spark.default.parallelism", "required": False, "default": "200",
-             "help": "Default parallelism for RDDs."},
-            {"name": "spark.sql.autoBroadcastJoinThreshold", "required": False, "default": "200m",
-             "help": "Max broadcast table size."},
+            {
+                "name": "app_name",
+                "required": False,
+                "default": "Ovid2 ETL",
+                "help": "Spark application name shown in the Spark UI.",
+            },
+            {
+                "name": "master_url",
+                "required": False,
+                "help": "Optional master URL override (e.g. spark://host:7077 or local[*]).",
+            },
+            {
+                "name": "spark.driver.memory",
+                "required": False,
+                "default": "32g",
+                "help": "Driver JVM heap size.",
+            },
+            {
+                "name": "spark.driver.memoryOverhead",
+                "required": False,
+                "default": "4g",
+                "help": "Driver off-heap overhead.",
+            },
+            {
+                "name": "spark.driver.maxResultSize",
+                "required": False,
+                "default": "8g",
+                "help": "Maximum collected result size on the driver.",
+            },
+            {
+                "name": "spark.executor.memory",
+                "required": False,
+                "default": "48g",
+                "help": "Executor JVM heap size.",
+            },
+            {
+                "name": "spark.executor.memoryOverhead",
+                "required": False,
+                "default": "8g",
+                "help": "Executor off-heap overhead.",
+            },
+            {
+                "name": "spark.executor.cores",
+                "required": False,
+                "default": "8",
+                "help": "Cores per executor.",
+            },
+            {
+                "name": "spark.sql.shuffle.partitions",
+                "required": False,
+                "default": "200",
+                "help": "Number of partitions for shuffles.",
+            },
+            {
+                "name": "spark.default.parallelism",
+                "required": False,
+                "default": "200",
+                "help": "Default parallelism for RDDs.",
+            },
+            {
+                "name": "spark.sql.autoBroadcastJoinThreshold",
+                "required": False,
+                "default": "200m",
+                "help": "Max broadcast table size.",
+            },
         ],
         "secrets": [],
     },
     "databricks_spark": {
         "args": [
-            {"name": "workspace_url", "required": True,
-             "help": "Databricks workspace URL, e.g. https://<workspace>.cloud.databricks.com."},
-            {"name": "cluster_id", "required": False,
-             "help": "Databricks cluster id (leave blank when using serverless / a SQL warehouse)."},
-            {"name": "serverless", "required": False, "default": "false",
-             "help": "'true' to route through serverless compute."},
+            {
+                "name": "workspace_url",
+                "required": True,
+                "help": "Databricks workspace URL, e.g. https://<workspace>.cloud.databricks.com.",
+            },
+            {
+                "name": "cluster_id",
+                "required": False,
+                "help": "Databricks cluster id (leave blank when using serverless / a SQL warehouse).",
+            },
+            {
+                "name": "serverless",
+                "required": False,
+                "default": "false",
+                "help": "'true' to route through serverless compute.",
+            },
         ],
         "secrets": [
-            {"name": "token", "required": True,
-             "help": "Databricks personal access token."},
+            {"name": "token", "required": True, "help": "Databricks personal access token."},
         ],
     },
     "snowpark": {
         "args": [
-            {"name": "connection", "required": False,
-             "help": "Name of an existing Snowflake connection to reuse "
-                     "for account + credentials (recommended). When set, "
-                     "'account' and 'user' below are only used as an override; "
-                     "leave the connection form's password/private key path "
-                     "as the source of truth. When blank, fill in 'account' + "
-                     "'user' + a snowpark secret_ref instead."},
-            {"name": "account", "required": False,
-             "help": "Snowflake account identifier. Required when 'connection' "
-                     "is blank; ignored otherwise."},
-            {"name": "user", "required": False,
-             "help": "Login user. Required when 'connection' is blank; "
-                     "ignored otherwise."},
-            {"name": "warehouse", "required": False,
-             "help": "Default warehouse (optional). Overrides the connection's "
-                     "warehouse when both are set."},
-            {"name": "database", "required": False,
-             "help": "Default database (optional). Overrides the connection's "
-                     "default database when both are set."},
-            {"name": "schema", "required": False,
-             "help": "Default schema (optional). Overrides the connection's "
-                     "default schema when both are set."},
-            {"name": "role", "required": False,
-             "help": "Default role (optional). Overrides the connection's "
-                     "role when both are set."},
+            {
+                "name": "connection",
+                "required": False,
+                "help": "Name of an existing Snowflake connection to reuse "
+                "for account + credentials (recommended). When set, "
+                "'account' and 'user' below are only used as an override; "
+                "leave the connection form's password/private key path "
+                "as the source of truth. When blank, fill in 'account' + "
+                "'user' + a snowpark secret_ref instead.",
+            },
+            {
+                "name": "account",
+                "required": False,
+                "help": "Snowflake account identifier. Required when 'connection' "
+                "is blank; ignored otherwise.",
+            },
+            {
+                "name": "user",
+                "required": False,
+                "help": "Login user. Required when 'connection' is blank; ignored otherwise.",
+            },
+            {
+                "name": "warehouse",
+                "required": False,
+                "help": "Default warehouse (optional). Overrides the connection's "
+                "warehouse when both are set.",
+            },
+            {
+                "name": "database",
+                "required": False,
+                "help": "Default database (optional). Overrides the connection's "
+                "default database when both are set.",
+            },
+            {
+                "name": "schema",
+                "required": False,
+                "help": "Default schema (optional). Overrides the connection's "
+                "default schema when both are set.",
+            },
+            {
+                "name": "role",
+                "required": False,
+                "help": "Default role (optional). Overrides the connection's "
+                "role when both are set.",
+            },
         ],
         "secrets": [
-            {"name": "password", "required": False,
-             "help": "Password (only for password-auth accounts; leave blank "
-                     "when using key-pair or a 'connection')."},
-            {"name": "private_key", "required": False,
-             "help": "RSA private key content (PEM). Leave blank when using "
-                     "password auth or a 'connection'.",
-             "multiline": True},
+            {
+                "name": "password",
+                "required": False,
+                "help": "Password (only for password-auth accounts; leave blank "
+                "when using key-pair or a 'connection').",
+            },
+            {
+                "name": "private_key",
+                "required": False,
+                "help": "RSA private key content (PEM). Leave blank when using "
+                "password auth or a 'connection'.",
+                "multiline": True,
+            },
         ],
     },
 }
@@ -259,9 +337,7 @@ def load_engine_config(name: str) -> dict[str, Any]:
             break
     else:
         tried = ", ".join(str(d) for d in _search_paths())
-        raise FileNotFoundError(
-            f"Engine config '{name}.json' not found in any of: {tried}"
-        )
+        raise FileNotFoundError(f"Engine config '{name}.json' not found in any of: {tried}")
 
     if not isinstance(config, dict):
         raise ValueError(f"Engine config '{name}' must be a JSON object.")
@@ -278,9 +354,7 @@ def load_engine_config(name: str) -> dict[str, Any]:
 
     # Refuse inline secrets — the whole point of the split is that the
     # engine file itself never carries credential material.
-    secret_field_names = {
-        f["name"] for f in engine_field_spec(config["type"])["secrets"]
-    }
+    secret_field_names = {f["name"] for f in engine_field_spec(config["type"])["secrets"]}
     inline = sorted(set(config["args"]) & secret_field_names)
     if inline:
         raise ValueError(

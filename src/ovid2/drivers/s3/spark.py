@@ -34,6 +34,7 @@ prefix shape — ``single_file`` is ignored.
 
 from __future__ import annotations
 
+import contextlib
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
@@ -47,13 +48,14 @@ from ovid2.drivers.s3.metadata import (
 )
 
 if TYPE_CHECKING:
+    from mypy_boto3_s3.type_defs import CompletedPartTypeDef, ObjectIdentifierTypeDef
     from pyspark.sql import DataFrame, SparkSession
 
 #: Minimum part size the S3 API accepts for ``UploadPartCopy`` (5 MB).
 #: The header part uses ``UploadPart`` (any size) so this only limits
 #: whether we can multipart-copy the body parts individually or must
 #: fall back to concatenation via download+reupload. In practice
-#: Spark parts are 128–256 MB (matches ``spark.sql.files.maxPartitionBytes``)
+#: Spark parts are 128-256 MB (matches ``spark.sql.files.maxPartitionBytes``)
 #: so we never hit the fallback.
 _MIN_MULTIPART_COPY_BYTES: int = 5 * 1024 * 1024
 
@@ -94,17 +96,13 @@ class S3IO:
         self.prefix: str = str(config.get("prefix", "")).strip("/")
         self.region: str | None = _nonempty(config.get("region"))
         self.endpoint_url: str | None = _nonempty(config.get("endpoint_url"))
-        self.signature_version: str | None = _nonempty(
-            config.get("signature_version")
-        )
+        self.signature_version: str | None = _nonempty(config.get("signature_version"))
         self.format: str = str(config.get("format", "csv"))
         self.lowercase_columns: bool = bool(config.get("lowercase_columns", False))
         self.single_file: bool = bool(config.get("single_file", False))
 
         self._access_key_id: str | None = _nonempty(config.get("aws_access_key_id"))
-        self._secret_access_key: str | None = _nonempty(
-            config.get("aws_secret_access_key")
-        )
+        self._secret_access_key: str | None = _nonempty(config.get("aws_secret_access_key"))
         self._session_token: str | None = _nonempty(config.get("aws_session_token"))
         self.auth_mode: str = resolve_auth_mode(config)
         self._configured_sessions: set[int] = set()
@@ -116,7 +114,10 @@ class S3IO:
         return f"s3a://{self.bucket}/"
 
     def _resolve_read_path(
-        self, pipeline: str, batch_id: str, file_name: str,
+        self,
+        pipeline: str,
+        batch_id: str,
+        file_name: str,
     ) -> str:
         """Assemble the fully-qualified read path.
 
@@ -270,7 +271,11 @@ class S3IO:
         if self.format == "csv":
             if self.single_file:
                 self._write_csv_single_file(
-                    df, pipeline, batch_id, table_name, delimiter or CSV_DELIMITER,
+                    df,
+                    pipeline,
+                    batch_id,
+                    table_name,
+                    delimiter or CSV_DELIMITER,
                 )
             else:
                 (
@@ -330,7 +335,8 @@ class S3IO:
         # keeps zero rows on the plan; coalesce(1) so the header is
         # a single object rather than a directory of empty parts.
         (
-            df.limit(0).coalesce(1)
+            df.limit(0)
+            .coalesce(1)
             .write.format("csv")
             .option("header", True)
             .option("nullValue", None)
@@ -382,8 +388,7 @@ class S3IO:
         keys = [
             obj["Key"]
             for obj in resp.get("Contents", ())
-            if obj["Key"].split("/")[-1].startswith("part-")
-            and obj["Key"].endswith(".csv")
+            if obj["Key"].split("/")[-1].startswith("part-") and obj["Key"].endswith(".csv")
         ]
         if not keys:
             raise FileNotFoundError(
@@ -438,7 +443,9 @@ class S3IO:
             if continuation is not None:
                 list_kwargs["ContinuationToken"] = continuation
             resp = client.list_objects_v2(**list_kwargs)
-            objects = [{"Key": obj["Key"]} for obj in resp.get("Contents", ())]
+            objects: list[ObjectIdentifierTypeDef] = [
+                {"Key": obj["Key"]} for obj in resp.get("Contents", ())
+            ]
             for i in range(0, len(objects), 1000):
                 batch = objects[i : i + 1000]
                 if batch:
@@ -455,6 +462,7 @@ class S3IO:
 # Server-side stitch — module-level so tests can drive it without an
 # S3IO instance.
 # ---------------------------------------------------------------------------
+
 
 def finalize_csv_multipart(
     bucket: str,
@@ -540,9 +548,7 @@ def finalize_csv_multipart(
         continuation = resp.get("NextContinuationToken")
     body_entries.sort(key=lambda pair: pair[0])
     if not body_entries:
-        raise FileNotFoundError(
-            f"No body part files under s3://{bucket}/{body_prefix}."
-        )
+        raise FileNotFoundError(f"No body part files under s3://{bucket}/{body_prefix}.")
 
     # Read the header once — it always feeds part 1.
     header_obj = client.get_object(Bucket=bucket, Key=header_key)
@@ -551,7 +557,7 @@ def finalize_csv_multipart(
     # Kick off the multipart upload.
     create = client.create_multipart_upload(Bucket=bucket, Key=target_key)
     upload_id: str = create["UploadId"]
-    parts: list[dict[str, Any]] = []
+    parts: list[CompletedPartTypeDef] = []
     try:
         # -----------------------------------------------------------
         # Part 1: header + as many body objects as it takes to reach
@@ -559,12 +565,10 @@ def finalize_csv_multipart(
         # -----------------------------------------------------------
         buffer: bytearray = bytearray(header_bytes)
         consumed: int = 0
-        while consumed < len(body_entries) and (
-            len(buffer) < _MIN_MULTIPART_COPY_BYTES
-        ):
+        while consumed < len(body_entries) and (len(buffer) < _MIN_MULTIPART_COPY_BYTES):
             key, _size = body_entries[consumed]
-            obj = client.get_object(Bucket=bucket, Key=key)
-            buffer.extend(obj["Body"].read())
+            body_obj = client.get_object(Bucket=bucket, Key=key)
+            buffer.extend(body_obj["Body"].read())
             consumed += 1
 
         part_resp = client.upload_part(
@@ -593,10 +597,7 @@ def finalize_csv_multipart(
         # -----------------------------------------------------------
         remaining = body_entries[consumed:]
         if remaining:
-            fast = all(
-                size >= _MIN_MULTIPART_COPY_BYTES
-                for _key, size in remaining[:-1]
-            )
+            fast = all(size >= _MIN_MULTIPART_COPY_BYTES for _key, size in remaining[:-1])
             if fast:
                 copy_parts = _upload_part_copies_parallel(
                     client=client,
@@ -629,12 +630,12 @@ def finalize_csv_multipart(
     except Exception as exc:
         # Abort so we don't leak the multipart upload (each open MPU
         # costs storage until aborted or completed).
-        try:
+        with contextlib.suppress(Exception):
             client.abort_multipart_upload(
-                Bucket=bucket, Key=target_key, UploadId=upload_id,
+                Bucket=bucket,
+                Key=target_key,
+                UploadId=upload_id,
             )
-        except Exception:  # noqa: BLE001 — best effort
-            pass
         raise RuntimeError(
             f"S3 multipart finalize failed for s3://{bucket}/{target_key}: {exc}"
         ) from exc
@@ -649,7 +650,7 @@ def _upload_part_copies_parallel(
     part_number_start: int,
     max_workers: int,
     aws_kwargs: dict[str, Any],
-) -> list[dict[str, Any]]:
+) -> list[CompletedPartTypeDef]:
     """Fan out ``UploadPartCopy`` calls across a thread pool.
 
     Each worker uses its own ``boto3`` client because the default
@@ -660,7 +661,7 @@ def _upload_part_copies_parallel(
     """
     import boto3
 
-    def _run(pair: tuple[int, tuple[str, int]]) -> dict[str, Any]:
+    def _run(pair: tuple[int, tuple[str, int]]) -> CompletedPartTypeDef:
         part_number, (key, _size) = pair
         # Per-thread client — safe re-use of aws_kwargs (all values
         # are immutable strings).
@@ -679,7 +680,7 @@ def _upload_part_copies_parallel(
 
     del client  # main-thread client is not shared with workers
     numbered = list(enumerate(remaining, start=part_number_start))
-    results: list[dict[str, Any]] = []
+    results: list[CompletedPartTypeDef] = []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         for part in pool.map(_run, numbered):
             results.append(part)
@@ -694,7 +695,7 @@ def _upload_parts_streaming(
     upload_id: str,
     remaining: list[tuple[str, int]],
     part_number_start: int,
-) -> list[dict[str, Any]]:
+) -> list[CompletedPartTypeDef]:
     """Sequentially stream remaining body objects into ``UploadPart``.
 
     Used when any non-terminal remaining body object is smaller
@@ -702,7 +703,7 @@ def _upload_parts_streaming(
     objects into a shared buffer so each emitted part clears the
     floor; the last part may be any size.
     """
-    parts: list[dict[str, Any]] = []
+    parts: list[CompletedPartTypeDef] = []
     part_number = part_number_start
     stream_buffer = bytearray()
     for idx, (key, size) in enumerate(remaining):
@@ -716,10 +717,12 @@ def _upload_parts_streaming(
                 PartNumber=part_number,
                 CopySource={"Bucket": bucket, "Key": key},
             )
-            parts.append({
-                "PartNumber": part_number,
-                "ETag": resp["CopyPartResult"]["ETag"],
-            })
+            parts.append(
+                {
+                    "PartNumber": part_number,
+                    "ETag": resp["CopyPartResult"]["ETag"],
+                }
+            )
             part_number += 1
             continue
         obj = client.get_object(Bucket=bucket, Key=key)

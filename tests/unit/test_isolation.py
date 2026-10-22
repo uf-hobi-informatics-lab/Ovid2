@@ -169,7 +169,7 @@ def test_cleanup_stale_reaps_spark_work_and_logs(
 def _make_fake_docker(
     networks: dict[str, tuple[int, str]],
     removed: list[str],
-) -> "object":
+) -> object:
     """Return a fake ``subprocess.run`` that emulates the docker CLI.
 
     Args:
@@ -195,9 +195,7 @@ def _make_fake_docker(
             if name not in networks:
                 return _sp.CompletedProcess(cmd, 1, stdout="", stderr="no such network")
             count, created = networks[name]
-            return _sp.CompletedProcess(
-                cmd, 0, stdout=f"{count}|{created}\n", stderr=""
-            )
+            return _sp.CompletedProcess(cmd, 0, stdout=f"{count}|{created}\n", stderr="")
         # docker network rm <name>
         if cmd[:3] == ["docker", "network", "rm"]:
             removed.append(cmd[3])
@@ -220,14 +218,12 @@ def test_reap_orphaned_networks_removes_only_empty_and_aged(
     young_iso = _iso_ts(now - 1 * hour)  # 1h old → too young
 
     networks = {
-        "ovid2-net-20260101-000000-aaaaaa": (0, old_iso),   # remove
+        "ovid2-net-20260101-000000-aaaaaa": (0, old_iso),  # remove
         "ovid2-net-20260101-000000-bbbbbb": (26, old_iso),  # in use → keep
-        "ovid2-net-20260101-000000-cccccc": (0, young_iso), # too young → keep
+        "ovid2-net-20260101-000000-cccccc": (0, young_iso),  # too young → keep
     }
     removed: list[str] = []
-    monkeypatch.setattr(
-        iso.subprocess, "run", _make_fake_docker(networks, removed)
-    )
+    monkeypatch.setattr(iso.subprocess, "run", _make_fake_docker(networks, removed))
 
     iso._reap_orphaned_networks(max_age_hours=6, now=now)
 
@@ -245,9 +241,7 @@ def test_reap_orphaned_networks_removes_unparseable_age_when_empty(
         "ovid2-net-20260101-000000-dddddd": (0, "not-a-timestamp"),
     }
     removed: list[str] = []
-    monkeypatch.setattr(
-        iso.subprocess, "run", _make_fake_docker(networks, removed)
-    )
+    monkeypatch.setattr(iso.subprocess, "run", _make_fake_docker(networks, removed))
 
     iso._reap_orphaned_networks(max_age_hours=6, now=1_000_000.0)
 

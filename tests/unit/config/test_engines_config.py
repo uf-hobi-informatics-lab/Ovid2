@@ -90,9 +90,7 @@ def test_load_engine_config_happy_path(engines_root: Path) -> None:
 
 @pytest.mark.unit
 def test_load_engine_config_rejects_unknown_type(engines_root: Path) -> None:
-    (engines_root / "weird.json").write_text(
-        json.dumps({"type": "no_such_engine", "args": {}})
-    )
+    (engines_root / "weird.json").write_text(json.dumps({"type": "no_such_engine", "args": {}}))
     with pytest.raises(ValueError, match="Unknown engine type"):
         _engines.load_engine_config("weird")
 
@@ -117,10 +115,12 @@ def test_load_engine_config_rejects_non_object_args(engines_root: Path) -> None:
 def test_load_engine_config_refuses_inline_secret(engines_root: Path) -> None:
     """databricks_spark 'token' living in args must be rejected."""
     (engines_root / "leaky.json").write_text(
-        json.dumps({
-            "type": "databricks_spark",
-            "args": {"workspace_url": "https://x", "token": "SECRET"},
-        })
+        json.dumps(
+            {
+                "type": "databricks_spark",
+                "args": {"workspace_url": "https://x", "token": "SECRET"},
+            }
+        )
     )
     with pytest.raises(ValueError, match="inline in 'args'"):
         _engines.load_engine_config("leaky")

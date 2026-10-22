@@ -88,9 +88,7 @@ def test_light_and_dark_theme_tokens_are_symmetric() -> None:
 
     def extract_block(selector: str) -> set[str]:
         # Match ``selector { ... }`` non-greedily.
-        pattern = re.compile(
-            re.escape(selector) + r"\s*\{(.*?)\}", re.DOTALL
-        )
+        pattern = re.compile(re.escape(selector) + r"\s*\{(.*?)\}", re.DOTALL)
         match = pattern.search(text)
         assert match, f"could not find block for {selector!r}"
         body = match.group(1)
@@ -117,13 +115,10 @@ def test_css_has_image_safety_net_rule() -> None:
     could still let an image render at its intrinsic size.
     """
     text = _CSS.read_text(encoding="utf-8")
-    safety_pattern = re.compile(
-        r"img[^{]*\{[^}]*max-width\s*:\s*100%[^}]*\}", re.DOTALL
-    )
+    safety_pattern = re.compile(r"img[^{]*\{[^}]*max-width\s*:\s*100%[^}]*\}", re.DOTALL)
     safety_match = safety_pattern.search(text)
     assert safety_match, (
-        "ovid2.css must declare `img { max-width: 100%; height: auto; }` "
-        "as a global safety net."
+        "ovid2.css must declare `img { max-width: 100%; height: auto; }` as a global safety net."
     )
     topbar_pos = text.find(".topbar")
     assert topbar_pos != -1
@@ -145,9 +140,7 @@ def test_all_static_assets_are_packaged() -> None:
     from ovid2.web.templating import static_dir
 
     runtime_dir = static_dir()
-    assert runtime_dir.is_dir(), (
-        f"static_dir() reports {runtime_dir!s} which is not a directory"
-    )
+    assert runtime_dir.is_dir(), f"static_dir() reports {runtime_dir!s} which is not a directory"
 
     missing: list[str] = []
     for source_file in sorted(_STATIC.iterdir()):
@@ -159,8 +152,7 @@ def test_all_static_assets_are_packaged() -> None:
 
     assert not missing, (
         "The following static assets exist in the source tree but are "
-        "missing (or empty) at runtime — likely a packaging drift:\n  "
-        + "\n  ".join(missing)
+        "missing (or empty) at runtime — likely a packaging drift:\n  " + "\n  ".join(missing)
     )
 
 

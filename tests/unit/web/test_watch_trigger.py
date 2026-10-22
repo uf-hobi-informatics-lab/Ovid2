@@ -42,7 +42,9 @@ def watch_pipeline(isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.Monke
     pkg = root / "ovid2_pipelines" / "tp_watch"
     (pkg / "formatters").mkdir(parents=True)
     (pkg / "__init__.py").write_text("", encoding="utf-8")
-    (pkg / "pipeline_settings.py").write_text("mappers_type = 'pcornet_mappers'\n", encoding="utf-8")
+    (pkg / "pipeline_settings.py").write_text(
+        "mappers_type = 'pcornet_mappers'\n", encoding="utf-8"
+    )
     monkeypatch.syspath_prepend(str(root))
     for mod in list(sys.modules):
         if mod == "ovid2_pipelines" or mod.startswith("ovid2_pipelines."):

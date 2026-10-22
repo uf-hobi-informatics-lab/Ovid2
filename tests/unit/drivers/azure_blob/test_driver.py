@@ -31,9 +31,7 @@ class TestNativeRegistration:
     """The registry entry points at the native driver, not an adapter."""
 
     def test_dotted_path_is_native(self) -> None:
-        assert DRIVERS["azure_blob"] == (
-            "ovid2.drivers.azure_blob.driver.AzureBlobDriver"
-        )
+        assert DRIVERS["azure_blob"] == ("ovid2.drivers.azure_blob.driver.AzureBlobDriver")
 
     def test_type_name_matches_registry_key(self) -> None:
         assert AzureBlobDriver.type_name == "azure_blob"
@@ -126,12 +124,15 @@ class TestProbeAuth:
     """``probe_auth`` goes through :func:`probe_auth_from_config`."""
 
     def test_returns_skipped_when_sdk_absent(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         for mod in ("azure", "azure.storage", "azure.storage.blob"):
             monkeypatch.setitem(sys.modules, mod, None)
         driver = AzureBlobDriver(
-            args={"account_name": "acct"}, secrets={}, location={},
+            args={"account_name": "acct"},
+            secrets={},
+            location={},
         )
         result = driver.probe_auth()
         assert result.ok is False
@@ -154,14 +155,18 @@ class TestBuildIo:
 
     def test_refuses_missing_container(self) -> None:
         driver = AzureBlobDriver(
-            args={"account_name": "acct"}, secrets={}, location={},
+            args={"account_name": "acct"},
+            secrets={},
+            location={},
         )
         with pytest.raises(ValueError, match="'container'"):
             driver._build_io()
 
     def test_refuses_missing_account_name(self) -> None:
         driver = AzureBlobDriver(
-            args={}, secrets={}, location={"container": "c"},
+            args={},
+            secrets={},
+            location={"container": "c"},
         )
         with pytest.raises(ValueError, match="'account_name'"):
             driver._build_io()
@@ -180,10 +185,18 @@ class TestReadWriteDispatch:
         driver._io_cache = fake_io
         session = MagicMock(name="EngineSession")
         driver.read(
-            session, "demo", "20260101", "demographic.csv", delimiter="|",
+            session,
+            "demo",
+            "20260101",
+            "demographic.csv",
+            delimiter="|",
         )
         fake_io.read.assert_called_once_with(
-            session, "demo", "20260101", "demographic.csv", "|",
+            session,
+            "demo",
+            "20260101",
+            "demographic.csv",
+            "|",
         )
 
     def test_read_ignores_table_name_kwarg(self) -> None:
@@ -196,7 +209,10 @@ class TestReadWriteDispatch:
         driver._io_cache = fake_io
         session = MagicMock(name="EngineSession")
         driver.read(
-            session, "demo", "20260101", "demographic.csv",
+            session,
+            "demo",
+            "20260101",
+            "demographic.csv",
             table_name="ignored",
         )
         # table_name arrives as a kwarg but is dropped before delegation.
@@ -215,7 +231,12 @@ class TestReadWriteDispatch:
         df = MagicMock(name="DataFrame")
         driver.write(df, session, "demo", "20260101", "demographic")
         fake_io.write.assert_called_once_with(
-            df, session, "demo", "20260101", "demographic", None,
+            df,
+            session,
+            "demo",
+            "20260101",
+            "demographic",
+            None,
         )
 
 

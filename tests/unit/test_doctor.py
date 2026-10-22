@@ -15,7 +15,7 @@ def test_python_version_check_reports_ok() -> None:
     """The Python-version check should pass on a 3.11+ interpreter."""
     import sys
 
-    if sys.version_info < (3, 11):  # noqa: UP036 — deliberately probes both branches
+    if sys.version_info < (3, 11):
         pytest.skip("Test host runs Python <3.11; check correctly reports 'error'.")
     result = doctor._check_python_version()
     assert result.severity == "ok"
@@ -27,7 +27,7 @@ def test_python_version_check_flags_old_interpreters() -> None:
     """On an interpreter below 3.11 the check must report 'error'."""
     import sys
 
-    if sys.version_info >= (3, 11):  # noqa: UP036
+    if sys.version_info >= (3, 11):
         pytest.skip("Test host runs Python 3.11+; positive path covered elsewhere.")
     result = doctor._check_python_version()
     assert result.severity == "error"

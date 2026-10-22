@@ -116,16 +116,12 @@ LIVE_SSE_KEEPALIVE_S: int = int(os.environ.get("OVID2_WEB_LIVE_SSE_KEEPALIVE_S",
 #: Maximum lifetime of a single SSE stream connection (seconds). Even
 #: with keepalives we want an upper bound so a forgotten browser tab
 #: doesn't hold a worker forever. Client can reconnect.
-LIVE_SSE_MAX_SECONDS: int = int(
-    os.environ.get("OVID2_WEB_LIVE_SSE_MAX_SECONDS", str(60 * 60))
-)
+LIVE_SSE_MAX_SECONDS: int = int(os.environ.get("OVID2_WEB_LIVE_SSE_MAX_SECONDS", str(60 * 60)))
 
 #: Max reconnect attempts before the client falls back to polling
 #: ``/metrics/latest``. Exposed to the frontend via a small `<meta>`
 #: tag written by the run-detail template.
-LIVE_SSE_MAX_RECONNECT: int = int(
-    os.environ.get("OVID2_WEB_LIVE_SSE_MAX_RECONNECT", "5")
-)
+LIVE_SSE_MAX_RECONNECT: int = int(os.environ.get("OVID2_WEB_LIVE_SSE_MAX_RECONNECT", "5"))
 
 # ---------------------------------------------------------------------------
 # Worker (W3+)

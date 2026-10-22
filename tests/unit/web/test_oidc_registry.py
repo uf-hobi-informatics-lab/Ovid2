@@ -110,8 +110,7 @@ def test_missing_secret_provider_skipped_with_warning(
     assert [p.key for p in enabled] == ["google"]
     # It was skipped (a warning was logged, not a crash).
     assert any(
-        "microsoft" in rec.getMessage() and rec.levelno == logging.WARNING
-        for rec in caplog.records
+        "microsoft" in rec.getMessage() and rec.levelno == logging.WARNING for rec in caplog.records
     )
     # The secret value is never logged.
     assert "google-secret" not in caplog.text

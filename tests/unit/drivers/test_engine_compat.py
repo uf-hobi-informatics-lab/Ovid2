@@ -28,7 +28,6 @@ from ovid2.drivers.engine_compat import (
     assert_engine_supports_drivers,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures — mirror tests/unit/drivers/test_type_stamping.py so the
 # fixture shape is familiar across the module.
@@ -41,10 +40,12 @@ def config_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     xdg = tmp_path / "xdg"
     monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
     monkeypatch.setenv(
-        "OVID2_CONFIGS_DIR", str(xdg / "ovid2" / "configs"),
+        "OVID2_CONFIGS_DIR",
+        str(xdg / "ovid2" / "configs"),
     )
     monkeypatch.setenv(
-        "OVID2_CONNECTIONS_DIR", str(xdg / "ovid2" / "connections"),
+        "OVID2_CONNECTIONS_DIR",
+        str(xdg / "ovid2" / "connections"),
     )
     (xdg / "ovid2" / "configs").mkdir(parents=True)
     (xdg / "ovid2" / "connections").mkdir(parents=True)
@@ -53,13 +54,15 @@ def config_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def _conn(xdg: Path, name: str, payload: dict[str, Any]) -> None:
     (xdg / "ovid2" / "connections" / f"{name}.json").write_text(
-        json.dumps(payload), encoding="utf-8",
+        json.dumps(payload),
+        encoding="utf-8",
     )
 
 
 def _addr(xdg: Path, name: str, payload: dict[str, Any]) -> None:
     (xdg / "ovid2" / "configs" / f"{name}.json").write_text(
-        json.dumps(payload), encoding="utf-8",
+        json.dumps(payload),
+        encoding="utf-8",
     )
 
 
@@ -91,6 +94,7 @@ class _StubEngine:
 
     def get_stager(self) -> Any:
         from ovid2.core.engines.stager import stager_class_for_engine_family
+
         cls = stager_class_for_engine_family(self.family.value)
         assert cls is not None, f"no stager for family {self.family.value!r}"
         return cls(self)
@@ -109,6 +113,7 @@ class _StringFamilyEngine:
 
     def get_stager(self) -> Any:
         from ovid2.core.engines.stager import stager_class_for_engine_family
+
         cls = stager_class_for_engine_family(str(self.family))
         assert cls is not None, f"no stager for family {self.family!r}"
         return cls(self)
@@ -127,49 +132,70 @@ class TestDriverClassForAddress:
 
     def test_malformed_json_returns_none(self, config_env: Path) -> None:
         (config_env / "ovid2" / "configs" / "bad.json").write_text(
-            "{not json", encoding="utf-8",
+            "{not json",
+            encoding="utf-8",
         )
         assert _driver_class_for_address("bad") is None
 
     def test_w7_disc_resolves(self, config_env: Path, tmp_path: Path) -> None:
         host = tmp_path / "d"
         host.mkdir()
-        _conn(config_env, "d_conn", {
-            "type": "disc",
-            "args": {"host_path": str(host)},
-        })
+        _conn(
+            config_env,
+            "d_conn",
+            {
+                "type": "disc",
+                "args": {"host_path": str(host)},
+            },
+        )
         _addr(config_env, "a", {"connection": "d_conn", "location": {}})
         cls = _driver_class_for_address("a")
         assert cls is not None
         assert getattr(cls, "type_name", "") == "disc"
 
     def test_w7_snowflake_resolves(self, config_env: Path) -> None:
-        _conn(config_env, "sf", {
-            "type": "snowflake",
-            "args": {"account": "acct", "user": "u"},
-        })
-        _addr(config_env, "sf_addr", {
-            "connection": "sf",
-            "location": {"database": "DB"},
-        })
+        _conn(
+            config_env,
+            "sf",
+            {
+                "type": "snowflake",
+                "args": {"account": "acct", "user": "u"},
+            },
+        )
+        _addr(
+            config_env,
+            "sf_addr",
+            {
+                "connection": "sf",
+                "location": {"database": "DB"},
+            },
+        )
         cls = _driver_class_for_address("sf_addr")
         assert cls is not None
         assert getattr(cls, "type_name", "") == "snowflake"
 
     def test_legacy_s3_resolves(self, config_env: Path) -> None:
-        _addr(config_env, "s3_legacy", {
-            "src_name": "s3",
-            "src_args": {"bucket": "b"},
-        })
+        _addr(
+            config_env,
+            "s3_legacy",
+            {
+                "src_name": "s3",
+                "src_args": {"bucket": "b"},
+            },
+        )
         cls = _driver_class_for_address("s3_legacy")
         assert cls is not None
         assert getattr(cls, "type_name", "") == "s3"
 
     def test_unregistered_type_returns_none(self, config_env: Path) -> None:
-        _addr(config_env, "unk", {
-            "src_name": "nonexistent_type",
-            "src_args": {},
-        })
+        _addr(
+            config_env,
+            "unk",
+            {
+                "src_name": "nonexistent_type",
+                "src_args": {},
+            },
+        )
         assert _driver_class_for_address("unk") is None
 
     def test_empty_connection_field_returns_none(self, config_env: Path) -> None:
@@ -186,83 +212,129 @@ class TestAcceptedPairings:
     """Pairings that should proceed silently."""
 
     def test_pyspark_with_disc_disc(
-        self, config_env: Path, tmp_path: Path,
+        self,
+        config_env: Path,
+        tmp_path: Path,
     ) -> None:
         host = tmp_path / "d"
         host.mkdir()
-        _conn(config_env, "d", {
-            "type": "disc",
-            "args": {"host_path": str(host)},
-        })
+        _conn(
+            config_env,
+            "d",
+            {
+                "type": "disc",
+                "args": {"host_path": str(host)},
+            },
+        )
         _addr(config_env, "src", {"connection": "d", "location": {}})
         _addr(config_env, "dst", {"connection": "d", "location": {}})
         engine = _StubEngine("spark", "pyspark")
         # Must not raise.
-        assert_engine_supports_drivers(engine, ["src", "dst"]) is None
+        assert assert_engine_supports_drivers(engine, ["src", "dst"]) is None
 
     def test_pyspark_with_snowflake_s3(self, config_env: Path) -> None:
-        _conn(config_env, "sf", {
-            "type": "snowflake",
-            "args": {"account": "acct", "user": "u"},
-        })
-        _addr(config_env, "src", {
-            "connection": "sf",
-            "location": {"database": "DB"},
-        })
-        _addr(config_env, "dst", {
-            "src_name": "s3",
-            "src_args": {"bucket": "b"},
-        })
+        _conn(
+            config_env,
+            "sf",
+            {
+                "type": "snowflake",
+                "args": {"account": "acct", "user": "u"},
+            },
+        )
+        _addr(
+            config_env,
+            "src",
+            {
+                "connection": "sf",
+                "location": {"database": "DB"},
+            },
+        )
+        _addr(
+            config_env,
+            "dst",
+            {
+                "src_name": "s3",
+                "src_args": {"bucket": "b"},
+            },
+        )
         engine = _StubEngine("spark", "pyspark")
-        assert_engine_supports_drivers(engine, ["src", "dst"]) is None
+        assert assert_engine_supports_drivers(engine, ["src", "dst"]) is None
 
     def test_snowpark_with_snowflake_snowflake(
-        self, config_env: Path,
+        self,
+        config_env: Path,
     ) -> None:
         """Both endpoints Snowflake → snowpark accepted."""
-        _conn(config_env, "sf", {
-            "type": "snowflake",
-            "args": {"account": "acct", "user": "u"},
-        })
-        _addr(config_env, "src", {
-            "connection": "sf",
-            "location": {"database": "S"},
-        })
-        _addr(config_env, "dst", {
-            "connection": "sf",
-            "location": {"database": "T"},
-        })
+        _conn(
+            config_env,
+            "sf",
+            {
+                "type": "snowflake",
+                "args": {"account": "acct", "user": "u"},
+            },
+        )
+        _addr(
+            config_env,
+            "src",
+            {
+                "connection": "sf",
+                "location": {"database": "S"},
+            },
+        )
+        _addr(
+            config_env,
+            "dst",
+            {
+                "connection": "sf",
+                "location": {"database": "T"},
+            },
+        )
         engine = _StubEngine("snowpark", "snowpark")
-        assert_engine_supports_drivers(engine, ["src", "dst"]) is None
+        assert assert_engine_supports_drivers(engine, ["src", "dst"]) is None
 
     def test_databricks_spark_with_azure_blob(
-        self, config_env: Path,
+        self,
+        config_env: Path,
     ) -> None:
         """Databricks-Spark is a Spark family engine → accepted with any driver."""
-        _conn(config_env, "az", {
-            "type": "azure_blob",
-            "args": {"account_name": "acct"},
-        })
-        _addr(config_env, "src", {
-            "connection": "az",
-            "location": {"container": "c"},
-        })
+        _conn(
+            config_env,
+            "az",
+            {
+                "type": "azure_blob",
+                "args": {"account_name": "acct"},
+            },
+        )
+        _addr(
+            config_env,
+            "src",
+            {
+                "connection": "az",
+                "location": {"container": "c"},
+            },
+        )
         engine = _StubEngine("spark", "databricks_spark")
-        assert_engine_supports_drivers(engine, ["src"]) is None
+        assert assert_engine_supports_drivers(engine, ["src"]) is None
 
     def test_engine_with_bare_string_family_accepted(
-        self, config_env: Path, tmp_path: Path,
+        self,
+        config_env: Path,
+        tmp_path: Path,
     ) -> None:
         """The helper reads ``str`` and :class:`EngineFamily` uniformly."""
         host = tmp_path / "d"
         host.mkdir()
-        _conn(config_env, "d", {
-            "type": "disc",
-            "args": {"host_path": str(host)},
-        })
+        _conn(
+            config_env,
+            "d",
+            {
+                "type": "disc",
+                "args": {"host_path": str(host)},
+            },
+        )
         _addr(config_env, "src", {"connection": "d", "location": {}})
         engine = _StringFamilyEngine("spark", "pyspark")
-        assert_engine_supports_drivers(engine, ["src"]) is None
+        assert assert_engine_supports_drivers(engine, ["src"]) is None
 
 
 # ---------------------------------------------------------------------------
@@ -274,7 +346,8 @@ class TestRejectedPairings:
     """The failure modes that motivated this module."""
 
     def test_snowpark_with_s3_destination_accepted_since_phase_d(
-        self, config_env: Path,
+        self,
+        config_env: Path,
     ) -> None:
         """Phase D landed :class:`SnowparkS3Strategy`.
 
@@ -286,30 +359,48 @@ class TestRejectedPairings:
         cross-peripheral bridge through the client. See
         the adr-engine-storage-orthogonality design note.
         """
-        _conn(config_env, "sf", {
-            "type": "snowflake",
-            "args": {"account": "acct", "user": "u"},
-        })
-        _addr(config_env, "CHAR_ACME", {
-            "connection": "sf",
-            "location": {"database": "CHAR_ACME", "schema": "PUBLIC"},
-        })
-        _conn(config_env, "s3_conn", {
-            "type": "s3",
-            "args": {"region": "us-east-2"},
-        })
-        _addr(config_env, "S3-Testing", {
-            "connection": "s3_conn",
-            "location": {"bucket": "b"},
-        })
+        _conn(
+            config_env,
+            "sf",
+            {
+                "type": "snowflake",
+                "args": {"account": "acct", "user": "u"},
+            },
+        )
+        _addr(
+            config_env,
+            "CHAR_ACME",
+            {
+                "connection": "sf",
+                "location": {"database": "CHAR_ACME", "schema": "PUBLIC"},
+            },
+        )
+        _conn(
+            config_env,
+            "s3_conn",
+            {
+                "type": "s3",
+                "args": {"region": "us-east-2"},
+            },
+        )
+        _addr(
+            config_env,
+            "S3-Testing",
+            {
+                "connection": "s3_conn",
+                "location": {"bucket": "b"},
+            },
+        )
         engine = _StubEngine("snowpark", "snowpark")
         # No exception — the pair is compatible post-Phase-D.
         assert_engine_supports_drivers(
-            engine, ["CHAR_ACME", "S3-Testing"],
+            engine,
+            ["CHAR_ACME", "S3-Testing"],
         )
 
     def test_snowpark_with_postgres_rejected(
-        self, config_env: Path,
+        self,
+        config_env: Path,
     ) -> None:
         """Postgres is still not reachable under --engine snowpark.
 
@@ -319,26 +410,43 @@ class TestRejectedPairings:
         stager. Postgres is the natural next candidate for a
         Phase-F-style follow-up.
         """
-        _conn(config_env, "sf", {
-            "type": "snowflake",
-            "args": {"account": "acct", "user": "u"},
-        })
-        _addr(config_env, "sf_addr", {
-            "connection": "sf",
-            "location": {"database": "T", "schema": "PUBLIC"},
-        })
-        _conn(config_env, "pg_conn", {
-            "type": "postgres",
-            "args": {"host": "db.example.com", "database": "d", "user": "u"},
-        })
-        _addr(config_env, "pg_addr", {
-            "connection": "pg_conn",
-            "location": {"database": "d", "schema": "public"},
-        })
+        _conn(
+            config_env,
+            "sf",
+            {
+                "type": "snowflake",
+                "args": {"account": "acct", "user": "u"},
+            },
+        )
+        _addr(
+            config_env,
+            "sf_addr",
+            {
+                "connection": "sf",
+                "location": {"database": "T", "schema": "PUBLIC"},
+            },
+        )
+        _conn(
+            config_env,
+            "pg_conn",
+            {
+                "type": "postgres",
+                "args": {"host": "db.example.com", "database": "d", "user": "u"},
+            },
+        )
+        _addr(
+            config_env,
+            "pg_addr",
+            {
+                "connection": "pg_conn",
+                "location": {"database": "d", "schema": "public"},
+            },
+        )
         engine = _StubEngine("snowpark", "snowpark")
         with pytest.raises(RuntimeError) as excinfo:
             assert_engine_supports_drivers(
-                engine, ["sf_addr", "pg_addr"],
+                engine,
+                ["sf_addr", "pg_addr"],
             )
         msg = str(excinfo.value)
         assert "pg_addr" in msg
@@ -346,7 +454,9 @@ class TestRejectedPairings:
         assert "postgres" in msg
 
     def test_snowpark_with_disc_source_accepted_since_phase_c(
-        self, config_env: Path, tmp_path: Path,
+        self,
+        config_env: Path,
+        tmp_path: Path,
     ) -> None:
         """Phase C landed a ``SnowparkDiscStrategy`` (disc via ``@~`` stage).
 
@@ -358,25 +468,38 @@ class TestRejectedPairings:
         """
         host = tmp_path / "d"
         host.mkdir()
-        _conn(config_env, "d", {
-            "type": "disc",
-            "args": {"host_path": str(host)},
-        })
+        _conn(
+            config_env,
+            "d",
+            {
+                "type": "disc",
+                "args": {"host_path": str(host)},
+            },
+        )
         _addr(config_env, "src", {"connection": "d", "location": {}})
-        _conn(config_env, "sf", {
-            "type": "snowflake",
-            "args": {"account": "acct", "user": "u"},
-        })
-        _addr(config_env, "dst", {
-            "connection": "sf",
-            "location": {"database": "T"},
-        })
+        _conn(
+            config_env,
+            "sf",
+            {
+                "type": "snowflake",
+                "args": {"account": "acct", "user": "u"},
+            },
+        )
+        _addr(
+            config_env,
+            "dst",
+            {
+                "connection": "sf",
+                "location": {"database": "T"},
+            },
+        )
         engine = _StubEngine("snowpark", "snowpark")
         # No exception — the pair is compatible.
         assert_engine_supports_drivers(engine, ["src", "dst"])
 
     def test_snowpark_with_azure_blob_accepted_since_phase_d(
-        self, config_env: Path,
+        self,
+        config_env: Path,
     ) -> None:
         """Phase D landed :class:`SnowparkAzureBlobStrategy`.
 
@@ -385,19 +508,28 @@ class TestRejectedPairings:
         (storage integration vs SAS vs account key) is documented in
         the strategy module.
         """
-        _conn(config_env, "az", {
-            "type": "azure_blob",
-            "args": {"account_name": "acct"},
-        })
-        _addr(config_env, "src", {
-            "connection": "az",
-            "location": {"container": "c"},
-        })
+        _conn(
+            config_env,
+            "az",
+            {
+                "type": "azure_blob",
+                "args": {"account_name": "acct"},
+            },
+        )
+        _addr(
+            config_env,
+            "src",
+            {
+                "connection": "az",
+                "location": {"container": "c"},
+            },
+        )
         engine = _StubEngine("snowpark", "snowpark")
         assert_engine_supports_drivers(engine, ["src"])
 
     def test_snowpark_with_databricks_accepted_since_phase_e(
-        self, config_env: Path,
+        self,
+        config_env: Path,
     ) -> None:
         """Phase E landed :class:`SnowparkDatabricksStrategy`.
 
@@ -406,31 +538,49 @@ class TestRejectedPairings:
         (storage integration vs inline AWS creds on the bounce
         bucket) is documented in the strategy module.
         """
-        _conn(config_env, "db_conn", {
-            "type": "databricks",
-            "args": {"host": "example.databricks.com"},
-        })
-        _addr(config_env, "src", {
-            "connection": "db_conn",
-            "location": {"catalog": "main", "schema": "s"},
-        })
+        _conn(
+            config_env,
+            "db_conn",
+            {
+                "type": "databricks",
+                "args": {"host": "example.databricks.com"},
+            },
+        )
+        _addr(
+            config_env,
+            "src",
+            {
+                "connection": "db_conn",
+                "location": {"catalog": "main", "schema": "s"},
+            },
+        )
         engine = _StubEngine("snowpark", "snowpark")
         assert_engine_supports_drivers(engine, ["src"])
 
     def test_error_names_both_engine_and_driver(
-        self, config_env: Path, tmp_path: Path,
+        self,
+        config_env: Path,
+        tmp_path: Path,
     ) -> None:
         # Uses postgres as the still-rejected driver type post-Phase-E
         # (disc/s3/azure_blob/databricks are now compatible via their
         # respective SnowparkStagingStrategies).
-        _conn(config_env, "pg_conn", {
-            "type": "postgres",
-            "args": {"host": "db.example.com", "database": "d", "user": "u"},
-        })
-        _addr(config_env, "src", {
-            "connection": "pg_conn",
-            "location": {"database": "d", "schema": "public"},
-        })
+        _conn(
+            config_env,
+            "pg_conn",
+            {
+                "type": "postgres",
+                "args": {"host": "db.example.com", "database": "d", "user": "u"},
+            },
+        )
+        _addr(
+            config_env,
+            "src",
+            {
+                "connection": "pg_conn",
+                "location": {"database": "d", "schema": "public"},
+            },
+        )
         engine = _StubEngine("snowpark", "snowpark_prod")
         with pytest.raises(RuntimeError) as excinfo:
             assert_engine_supports_drivers(engine, ["src"])
@@ -452,19 +602,23 @@ class TestSkipPaths:
     def test_missing_address_is_skipped(self, config_env: Path) -> None:
         engine = _StubEngine("snowpark", "snowpark")
         # No config for 'nope' → helper returns silently.
-        assert_engine_supports_drivers(engine, ["nope"]) is None
+        assert assert_engine_supports_drivers(engine, ["nope"]) is None
 
     def test_unregistered_type_is_skipped(self, config_env: Path) -> None:
-        _addr(config_env, "unk", {
-            "src_name": "made_up_type",
-            "src_args": {},
-        })
+        _addr(
+            config_env,
+            "unk",
+            {
+                "src_name": "made_up_type",
+                "src_args": {},
+            },
+        )
         engine = _StubEngine("snowpark", "snowpark")
-        assert_engine_supports_drivers(engine, ["unk"]) is None
+        assert assert_engine_supports_drivers(engine, ["unk"]) is None
 
     def test_empty_address_list_is_ok(self) -> None:
         engine = _StubEngine("snowpark", "snowpark")
-        assert_engine_supports_drivers(engine, []) is None
+        assert assert_engine_supports_drivers(engine, []) is None
 
 
 # ---------------------------------------------------------------------------
@@ -479,6 +633,7 @@ class TestSkipPaths:
 class TestStagerCapabilityDiscovery:
     def test_snowpark_stager_supports_snowflake(self) -> None:
         from ovid2.core.engines.stager import SnowparkEngineStager
+
         assert SnowparkEngineStager.supports("snowflake") is True
 
     def test_snowpark_stager_supports_disc_since_phase_c(self) -> None:
@@ -493,6 +648,7 @@ class TestStagerCapabilityDiscovery:
         # Ensure the strategy is registered (triggered by driver import).
         import ovid2.drivers.snowflake  # noqa: F401
         from ovid2.core.engines.stager import SnowparkEngineStager
+
         assert SnowparkEngineStager.supports("disc") is True
 
     def test_snowpark_stager_supports_s3_and_azure_since_phase_d(self) -> None:
@@ -507,6 +663,7 @@ class TestStagerCapabilityDiscovery:
         # Ensure the strategies are registered.
         import ovid2.drivers.snowflake  # noqa: F401
         from ovid2.core.engines.stager import SnowparkEngineStager
+
         assert SnowparkEngineStager.supports("s3") is True
         assert SnowparkEngineStager.supports("azure_blob") is True
 
@@ -520,11 +677,13 @@ class TestStagerCapabilityDiscovery:
         """
         import ovid2.drivers.snowflake  # noqa: F401
         from ovid2.core.engines.stager import SnowparkEngineStager
+
         assert SnowparkEngineStager.supports("databricks") is True
 
     def test_snowpark_stager_rejects_postgres_today(self) -> None:
         """Post-Phase-F residual — postgres/mssql strategies not yet landed."""
         from ovid2.core.engines.stager import SnowparkEngineStager
+
         assert SnowparkEngineStager.supports("postgres") is False
         assert SnowparkEngineStager.supports("mssql") is False
 
@@ -539,11 +698,13 @@ class TestStagerCapabilityDiscovery:
         """
         import ovid2.drivers.snowflake  # noqa: F401
         from ovid2.core.engines.stager import SnowparkEngineStager
+
         assert SnowparkEngineStager.supports("gcs") is True
 
     def test_spark_stager_supports_every_registered_driver(self) -> None:
         from ovid2.core.engines.stager import SparkEngineStager
         from ovid2.drivers.registry import DRIVERS
+
         for driver_type in sorted(DRIVERS):
             assert SparkEngineStager.supports(driver_type) is True, driver_type
 
@@ -561,7 +722,9 @@ class TestAssertEngineTypeSupportsDrivers:
     """Type-name variant — no BaseEngine instance required."""
 
     def test_snowpark_accepted_with_disc_source_since_phase_c(
-        self, config_env: Path, tmp_path: Path,
+        self,
+        config_env: Path,
+        tmp_path: Path,
     ) -> None:
         """Phase C landed :class:`SnowparkDiscStrategy` (disc via ``@~``).
 
@@ -575,47 +738,73 @@ class TestAssertEngineTypeSupportsDrivers:
         an "--engine pyspark" recommendation in the error message;
         that recommendation no longer applies for disc endpoints.
         """
+        # Force the disc strategy to register.
+        import ovid2.drivers.snowflake  # noqa: F401
         from ovid2.drivers.engine_compat import (
             assert_engine_type_supports_drivers,
         )
-        # Force the disc strategy to register.
-        import ovid2.drivers.snowflake  # noqa: F401
 
         host = tmp_path / "in"
         host.mkdir()
-        _conn(config_env, "d_conn", {
-            "type": "disc", "args": {"host_path": str(host)},
-        })
-        _addr(config_env, "disc_input", {
-            "connection": "d_conn", "location": {},
-        })
-        _addr(config_env, "CHAR_ACME", {
-            "src_name": "snowflake",
-            "src_args": {"database": "CHAR_ACME", "schema": "PUBLIC"},
-        })
+        _conn(
+            config_env,
+            "d_conn",
+            {
+                "type": "disc",
+                "args": {"host_path": str(host)},
+            },
+        )
+        _addr(
+            config_env,
+            "disc_input",
+            {
+                "connection": "d_conn",
+                "location": {},
+            },
+        )
+        _addr(
+            config_env,
+            "CHAR_ACME",
+            {
+                "src_name": "snowflake",
+                "src_args": {"database": "CHAR_ACME", "schema": "PUBLIC"},
+            },
+        )
         # No exception — the pair is compatible post-Phase-C.
         assert_engine_type_supports_drivers(
-            "snowpark", ["disc_input", "CHAR_ACME"],
+            "snowpark",
+            ["disc_input", "CHAR_ACME"],
         )
 
     def test_snowpark_still_rejected_with_postgres_source(
-        self, config_env: Path,
+        self,
+        config_env: Path,
     ) -> None:
         """Post-Phase-E residual: postgres strategy not yet landed."""
         from ovid2.drivers.engine_compat import (
             assert_engine_type_supports_drivers,
         )
-        _conn(config_env, "pg_conn", {
-            "type": "postgres",
-            "args": {"host": "db.example.com", "database": "d", "user": "u"},
-        })
-        _addr(config_env, "pg_input", {
-            "connection": "pg_conn",
-            "location": {"database": "d", "schema": "public"},
-        })
+
+        _conn(
+            config_env,
+            "pg_conn",
+            {
+                "type": "postgres",
+                "args": {"host": "db.example.com", "database": "d", "user": "u"},
+            },
+        )
+        _addr(
+            config_env,
+            "pg_input",
+            {
+                "connection": "pg_conn",
+                "location": {"database": "d", "schema": "public"},
+            },
+        )
         with pytest.raises(RuntimeError) as exc_info:
             assert_engine_type_supports_drivers(
-                "snowpark", ["pg_input"],
+                "snowpark",
+                ["pg_input"],
             )
         message = str(exc_info.value)
         assert "snowpark" in message
@@ -623,95 +812,166 @@ class TestAssertEngineTypeSupportsDrivers:
         assert "--engine pyspark" in message
 
     def test_pyspark_accepted_with_disc_and_snowflake(
-        self, config_env: Path, tmp_path: Path,
+        self,
+        config_env: Path,
+        tmp_path: Path,
     ) -> None:
         """The compatible fix for the incident above."""
         from ovid2.drivers.engine_compat import (
             assert_engine_type_supports_drivers,
         )
+
         host = tmp_path / "in"
         host.mkdir()
-        _conn(config_env, "d_conn", {
-            "type": "disc", "args": {"host_path": str(host)},
-        })
-        _addr(config_env, "disc_input", {
-            "connection": "d_conn", "location": {},
-        })
-        _addr(config_env, "CHAR_ACME", {
-            "src_name": "snowflake",
-            "src_args": {"database": "CHAR_ACME", "schema": "PUBLIC"},
-        })
-        assert_engine_type_supports_drivers(
-            "pyspark", ["disc_input", "CHAR_ACME"],
-        ) is None
+        _conn(
+            config_env,
+            "d_conn",
+            {
+                "type": "disc",
+                "args": {"host_path": str(host)},
+            },
+        )
+        _addr(
+            config_env,
+            "disc_input",
+            {
+                "connection": "d_conn",
+                "location": {},
+            },
+        )
+        _addr(
+            config_env,
+            "CHAR_ACME",
+            {
+                "src_name": "snowflake",
+                "src_args": {"database": "CHAR_ACME", "schema": "PUBLIC"},
+            },
+        )
+        assert (
+            assert_engine_type_supports_drivers(
+                "pyspark",
+                ["disc_input", "CHAR_ACME"],
+            )
+            is None
+        )
 
     def test_snowpark_with_two_snowflake_endpoints_accepted(
-        self, config_env: Path,
+        self,
+        config_env: Path,
     ) -> None:
         """The one legitimate use of ``--engine snowpark``."""
         from ovid2.drivers.engine_compat import (
             assert_engine_type_supports_drivers,
         )
-        _addr(config_env, "sf1", {
-            "src_name": "snowflake",
-            "src_args": {"database": "DB1", "schema": "S"},
-        })
-        _addr(config_env, "sf2", {
-            "src_name": "snowflake",
-            "src_args": {"database": "DB2", "schema": "S"},
-        })
-        assert_engine_type_supports_drivers(
-            "snowpark", ["sf1", "sf2"],
-        ) is None
+
+        _addr(
+            config_env,
+            "sf1",
+            {
+                "src_name": "snowflake",
+                "src_args": {"database": "DB1", "schema": "S"},
+            },
+        )
+        _addr(
+            config_env,
+            "sf2",
+            {
+                "src_name": "snowflake",
+                "src_args": {"database": "DB2", "schema": "S"},
+            },
+        )
+        assert (
+            assert_engine_type_supports_drivers(
+                "snowpark",
+                ["sf1", "sf2"],
+            )
+            is None
+        )
 
     def test_unknown_engine_type_is_skipped(
-        self, config_env: Path, tmp_path: Path,
+        self,
+        config_env: Path,
+        tmp_path: Path,
     ) -> None:
         """A named-config engine (not a bare type) is skipped."""
         from ovid2.drivers.engine_compat import (
             assert_engine_type_supports_drivers,
         )
+
         host = tmp_path / "in"
         host.mkdir()
-        _conn(config_env, "d_conn", {
-            "type": "disc", "args": {"host_path": str(host)},
-        })
-        _addr(config_env, "disc_input", {
-            "connection": "d_conn", "location": {},
-        })
+        _conn(
+            config_env,
+            "d_conn",
+            {
+                "type": "disc",
+                "args": {"host_path": str(host)},
+            },
+        )
+        _addr(
+            config_env,
+            "disc_input",
+            {
+                "connection": "d_conn",
+                "location": {},
+            },
+        )
         # This engine name isn't in the web-safe map → skip. No raise.
-        assert_engine_type_supports_drivers(
-            "my-prod-pyspark", ["disc_input"],
-        ) is None
+        assert (
+            assert_engine_type_supports_drivers(
+                "my-prod-pyspark",
+                ["disc_input"],
+            )
+            is None
+        )
 
     def test_databricks_spark_accepted_as_spark_family(
-        self, config_env: Path, tmp_path: Path,
+        self,
+        config_env: Path,
+        tmp_path: Path,
     ) -> None:
         """``databricks_spark`` resolves to the spark family."""
         from ovid2.drivers.engine_compat import (
             assert_engine_type_supports_drivers,
         )
+
         host = tmp_path / "in"
         host.mkdir()
-        _conn(config_env, "d_conn", {
-            "type": "disc", "args": {"host_path": str(host)},
-        })
-        _addr(config_env, "disc_input", {
-            "connection": "d_conn", "location": {},
-        })
-        assert_engine_type_supports_drivers(
-            "databricks_spark", ["disc_input"],
-        ) is None
+        _conn(
+            config_env,
+            "d_conn",
+            {
+                "type": "disc",
+                "args": {"host_path": str(host)},
+            },
+        )
+        _addr(
+            config_env,
+            "disc_input",
+            {
+                "connection": "d_conn",
+                "location": {},
+            },
+        )
+        assert (
+            assert_engine_type_supports_drivers(
+                "databricks_spark",
+                ["disc_input"],
+            )
+            is None
+        )
 
     def test_empty_address_list_is_ok(self) -> None:
         from ovid2.drivers.engine_compat import (
             assert_engine_type_supports_drivers,
         )
-        assert_engine_type_supports_drivers("snowpark", []) is None
+
+        assert assert_engine_type_supports_drivers("snowpark", []) is None
 
     def test_unresolvable_address_is_skipped(self, config_env: Path) -> None:
         """An address whose driver can't be resolved never blocks a run."""
         from ovid2.drivers.engine_compat import (
             assert_engine_type_supports_drivers,
         )
-        assert_engine_type_supports_drivers("snowpark", ["nope"]) is None
+
+        assert assert_engine_type_supports_drivers("snowpark", ["nope"]) is None

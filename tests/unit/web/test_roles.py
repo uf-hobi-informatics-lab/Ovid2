@@ -12,23 +12,27 @@ def test_role_capabilities_containment():
     assert ROLE_CAPABILITIES[Role.GUEST] == frozenset([Capability.VIEW_PUBLIC])
 
     # VIEWER has GUEST capabilities + VIEW_RUNS + RUN_REPORTS + USE_LLM
-    expected_viewer = frozenset([
-        Capability.VIEW_PUBLIC,
-        Capability.VIEW_RUNS,
-        Capability.RUN_REPORTS,
-        Capability.USE_LLM,
-    ])
+    expected_viewer = frozenset(
+        [
+            Capability.VIEW_PUBLIC,
+            Capability.VIEW_RUNS,
+            Capability.RUN_REPORTS,
+            Capability.USE_LLM,
+        ]
+    )
     assert ROLE_CAPABILITIES[Role.VIEWER] == expected_viewer
 
     # PIPELINE_OPERATOR has VIEWER capabilities + VIEW_PIPELINE_DATA + SUBMIT_JOBS
-    expected_operator = frozenset([
-        Capability.VIEW_PUBLIC,
-        Capability.VIEW_RUNS,
-        Capability.RUN_REPORTS,
-        Capability.USE_LLM,
-        Capability.VIEW_PIPELINE_DATA,
-        Capability.SUBMIT_JOBS
-    ])
+    expected_operator = frozenset(
+        [
+            Capability.VIEW_PUBLIC,
+            Capability.VIEW_RUNS,
+            Capability.RUN_REPORTS,
+            Capability.USE_LLM,
+            Capability.VIEW_PIPELINE_DATA,
+            Capability.SUBMIT_JOBS,
+        ]
+    )
     assert ROLE_CAPABILITIES[Role.PIPELINE_OPERATOR] == expected_operator
 
     # SYSTEM_ADMIN has all capabilities

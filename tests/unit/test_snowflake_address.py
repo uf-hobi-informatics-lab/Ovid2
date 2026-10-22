@@ -232,7 +232,7 @@ class TestRead:
     def test_read_is_lazy_no_collect(self) -> None:
         """Contract: ``read`` must not touch the DataFrame beyond ``.load()``."""
         addr = SnowflakeAddress(_minimal_config(schema="PUBLIC"))
-        spark, reader = _make_spark_read_mock()
+        spark, _reader = _make_spark_read_mock()
         df = addr.read(spark=spark, pipeline="acme", batch_id="b", file_name="T")
         # No eager materialisation.
         assert not df.collect.called
@@ -241,7 +241,8 @@ class TestRead:
         assert not df.toPandas.called
 
     def test_read_uses_table_name_fallback_when_file_name_is_a_glob(
-        self, caplog: pytest.LogCaptureFixture,
+        self,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """Regression: ACME YAMLs ship disc globs like ``*datavant_person_tokens*``.
 
@@ -326,31 +327,37 @@ class TestSqlIdentifierRegex:
     every YAML.
     """
 
-    @pytest.mark.parametrize("candidate", [
-        "HASH_TOKEN",
-        "hash_token",
-        "MixedCase",
-        "_leading_underscore",
-        "T",
-        "table_1",
-        "table$1",  # Snowflake permits `$` in identifiers
-        "T" * 128,  # long-but-legal
-    ])
+    @pytest.mark.parametrize(
+        "candidate",
+        [
+            "HASH_TOKEN",
+            "hash_token",
+            "MixedCase",
+            "_leading_underscore",
+            "T",
+            "table_1",
+            "table$1",  # Snowflake permits `$` in identifiers
+            "T" * 128,  # long-but-legal
+        ],
+    )
     def test_accepts_valid_identifiers(self, candidate: str) -> None:
         assert _SQL_IDENTIFIER_RE.match(candidate) is not None
 
-    @pytest.mark.parametrize("candidate", [
-        "*datavant_person_tokens*",
-        "*external_meds.csv",
-        "*person_relationship.csv",
-        "external_meds.csv",   # dot: filesystem extension, not SQL
-        "1_starts_with_digit",
-        "has space",
-        "has-hyphen",
-        "path/like",
-        "quote'inside",
-        "",                    # empty
-    ])
+    @pytest.mark.parametrize(
+        "candidate",
+        [
+            "*datavant_person_tokens*",
+            "*external_meds.csv",
+            "*person_relationship.csv",
+            "external_meds.csv",  # dot: filesystem extension, not SQL
+            "1_starts_with_digit",
+            "has space",
+            "has-hyphen",
+            "path/like",
+            "quote'inside",
+            "",  # empty
+        ],
+    )
     def test_rejects_non_identifiers(self, candidate: str) -> None:
         assert _SQL_IDENTIFIER_RE.match(candidate) is None
 
@@ -416,25 +423,27 @@ class TestTransientError:
 
 @pytest.mark.unit
 class TestWriteSuccess:
-    def test_write_creates_schema_and_saves(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_write_creates_schema_and_saves(self, monkeypatch: pytest.MonkeyPatch) -> None:
         addr = SnowflakeAddress(_minimal_config(private_key=b"DER"))
         df = _make_df_mock()
 
         # Stub the DDL executor so we don't need a Snowflake driver.
         called: dict[str, Any] = {}
+
         def fake_create_schema(schema_name: str) -> None:
             called["schema"] = schema_name
+
         monkeypatch.setattr(addr, "_create_schema_if_not_exists", fake_create_schema)
         # Stub the CDM schema application: the real one needs a live Spark
         # session (``spark.createDataFrame(df.rdd, schema)``); the typing
         # logic itself is covered by ``TestApplyCdmSchema`` below. Here we
         # only assert the write fluent-chain around it.
         applied: dict[str, Any] = {}
+
         def fake_apply(dframe: Any, spark: Any, table: str) -> Any:
             applied["table"] = table
             return dframe
+
         monkeypatch.setattr(addr, "_apply_cdm_schema", fake_apply)
 
         addr.write(
@@ -455,8 +464,7 @@ class TestWriteSuccess:
         # Snowflake connector ignores it; typing comes from the DataFrame
         # schema instead (see ``_apply_cdm_schema``).
         assert not any(
-            args[0][0] == "createTableColumnTypes"
-            for args in df.write.option.call_args_list
+            args[0][0] == "createTableColumnTypes" for args in df.write.option.call_args_list
         )
         # dbtable is upper-cased.
         options_arg = df.write.options.call_args.kwargs
@@ -482,8 +490,7 @@ class TestWriteSuccess:
             )
         # No createTableColumnTypes option should have been set.
         assert not any(
-            args[0][0] == "createTableColumnTypes"
-            for args in df.write.option.call_args_list
+            args[0][0] == "createTableColumnTypes" for args in df.write.option.call_args_list
         )
         assert any("No CDM schema found" in r.getMessage() for r in caplog.records)
         df.write.save.assert_called_once()
@@ -491,9 +498,7 @@ class TestWriteSuccess:
 
 @pytest.mark.unit
 class TestWriteRetry:
-    def test_transient_error_retries_then_succeeds(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_transient_error_retries_then_succeeds(self, monkeypatch: pytest.MonkeyPatch) -> None:
         addr = SnowflakeAddress(_minimal_config(private_key=b"DER"))
         df = _make_df_mock()
 
@@ -519,9 +524,7 @@ class TestWriteRetry:
         )
         assert call_state["n"] == 2
 
-    def test_non_transient_error_raises_immediately(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_non_transient_error_raises_immediately(self, monkeypatch: pytest.MonkeyPatch) -> None:
         addr = SnowflakeAddress(_minimal_config(private_key=b"DER"))
         df = _make_df_mock()
         df.write.save.side_effect = RuntimeError("SQL compilation error: table X does not exist")
@@ -597,8 +600,11 @@ class TestApplyCdmSchema:
         # All-string source, mirroring the pipeline's produced DataFrame.
         rows = [("p1", "2020-01-01", "N", "L", "1")]
         cols = [
-            "PATID", "DEATH_DATE", "DEATH_DATE_IMPUTE",
-            "DEATH_SOURCE", "DEATH_MATCH_CONFIDENCE",
+            "PATID",
+            "DEATH_DATE",
+            "DEATH_DATE_IMPUTE",
+            "DEATH_SOURCE",
+            "DEATH_MATCH_CONFIDENCE",
         ]
         df = spark.createDataFrame(rows, cols)
 
@@ -615,10 +621,20 @@ class TestApplyCdmSchema:
         """CONDITION: CONDITIONID->256, PATID->64, CONDITION->18 (Text(18))."""
         addr = SnowflakeAddress(_minimal_config())
         cols = [
-            "CONDITIONID", "PATID", "ENCOUNTERID", "REPORT_DATE",
-            "RESOLVE_DATE", "ONSET_DATE", "CONDITION_STATUS", "CONDITION",
-            "CONDITION_TYPE", "CONDITION_SOURCE", "RAW_CONDITION_STATUS",
-            "RAW_CONDITION", "RAW_CONDITION_TYPE", "RAW_CONDITION_SOURCE",
+            "CONDITIONID",
+            "PATID",
+            "ENCOUNTERID",
+            "REPORT_DATE",
+            "RESOLVE_DATE",
+            "ONSET_DATE",
+            "CONDITION_STATUS",
+            "CONDITION",
+            "CONDITION_TYPE",
+            "CONDITION_SOURCE",
+            "RAW_CONDITION_STATUS",
+            "RAW_CONDITION",
+            "RAW_CONDITION_TYPE",
+            "RAW_CONDITION_SOURCE",
         ]
         df = spark.createDataFrame([tuple("x" for _ in cols)], cols)
 

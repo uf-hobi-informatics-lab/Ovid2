@@ -30,42 +30,25 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": "spark",
         "params_schema": {
             "type": "object",
-            "required": [
-                "order_by",
-                "output_column"
-            ],
+            "required": ["order_by", "output_column"],
             "additionalProperties": False,
             "properties": {
-                "partition_by": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
+                "partition_by": {"type": "array", "items": {"type": "string"}},
                 "order_by": {
                     "type": "array",
                     "minItems": 1,
                     "items": {
                         "type": "object",
-                        "required": [
-                            "col"
-                        ],
+                        "required": ["col"],
                         "properties": {
-                            "col": {
-                                "type": "string"
-                            },
-                            "desc": {
-                                "type": "boolean",
-                                "default": False
-                            }
-                        }
-                    }
+                            "col": {"type": "string"},
+                            "desc": {"type": "boolean", "default": False},
+                        },
+                    },
                 },
-                "output_column": {
-                    "type": "string"
-                }
-            }
-        }
+                "output_column": {"type": "string"},
+            },
+        },
     },
     {
         "name": "cast",
@@ -74,21 +57,17 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "types"
-            ],
+            "required": ["types"],
             "additionalProperties": False,
             "properties": {
                 "types": {
                     "type": "object",
                     "minProperties": 1,
-                    "additionalProperties": {
-                        "type": "string"
-                    },
-                    "description": "{column: sql_type}, e.g. {AGE: int, DOB: date}."
+                    "additionalProperties": {"type": "string"},
+                    "description": "{column: sql_type}, e.g. {AGE: int, DOB: date}.",
                 }
-            }
-        }
+            },
+        },
     },
     {
         "name": "clamp",
@@ -97,22 +76,14 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "column"
-            ],
+            "required": ["column"],
             "additionalProperties": False,
             "properties": {
-                "column": {
-                    "type": "string"
-                },
-                "min": {
-                    "type": "number"
-                },
-                "max": {
-                    "type": "number"
-                }
-            }
-        }
+                "column": {"type": "string"},
+                "min": {"type": "number"},
+                "max": {"type": "number"},
+            },
+        },
     },
     {
         "name": "coalesce_columns",
@@ -121,24 +92,13 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "target",
-                "columns"
-            ],
+            "required": ["target", "columns"],
             "additionalProperties": False,
             "properties": {
-                "target": {
-                    "type": "string"
-                },
-                "columns": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        }
+                "target": {"type": "string"},
+                "columns": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+            },
+        },
     },
     {
         "name": "dedup",
@@ -151,13 +111,11 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
             "properties": {
                 "subset": {
                     "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "description": "Columns that define uniqueness (omit for full-row)."
+                    "items": {"type": "string"},
+                    "description": "Columns that define uniqueness (omit for full-row).",
                 }
-            }
-        }
+            },
+        },
     },
     {
         "name": "default_value",
@@ -166,20 +124,13 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "column",
-                "value"
-            ],
+            "required": ["column", "value"],
             "additionalProperties": False,
             "properties": {
-                "column": {
-                    "type": "string"
-                },
-                "value": {
-                    "description": "Literal default (string / number / boolean)."
-                }
-            }
-        }
+                "column": {"type": "string"},
+                "value": {"description": "Literal default (string / number / boolean)."},
+            },
+        },
     },
     {
         "name": "dense_rank",
@@ -188,51 +139,32 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": "spark",
         "params_schema": {
             "type": "object",
-            "required": [
-                "order_by",
-                "output_column"
-            ],
+            "required": ["order_by", "output_column"],
             "additionalProperties": False,
             "properties": {
-                "partition_by": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
+                "partition_by": {"type": "array", "items": {"type": "string"}},
                 "order_by": {
                     "type": "array",
                     "minItems": 1,
                     "items": {
                         "type": "object",
-                        "required": [
-                            "col"
-                        ],
+                        "required": ["col"],
                         "properties": {
-                            "col": {
-                                "type": "string"
-                            },
-                            "desc": {
-                                "type": "boolean",
-                                "default": False
-                            }
-                        }
-                    }
+                            "col": {"type": "string"},
+                            "desc": {"type": "boolean", "default": False},
+                        },
+                    },
                 },
-                "output_column": {
-                    "type": "string"
-                }
-            }
-        }
+                "output_column": {"type": "string"},
+            },
+        },
     },
     {
         "name": "distinct",
         "summary": "Keep only distinct rows (full-row uniqueness).",
         "category": "correction",
         "requires_family": None,
-        "params_schema": {
-            "type": "object"
-        }
+        "params_schema": {"type": "object"},
     },
     {
         "name": "drop_columns",
@@ -241,20 +173,12 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "columns"
-            ],
+            "required": ["columns"],
             "additionalProperties": False,
             "properties": {
-                "columns": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        }
+                "columns": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+            },
+        },
     },
     {
         "name": "explode",
@@ -263,20 +187,16 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "column"
-            ],
+            "required": ["column"],
             "additionalProperties": False,
             "properties": {
-                "column": {
-                    "type": "string"
-                },
+                "column": {"type": "string"},
                 "alias": {
                     "type": "string",
-                    "description": "Name for the exploded value (defaults to the column name)."
-                }
-            }
-        }
+                    "description": "Name for the exploded value (defaults to the column name).",
+                },
+            },
+        },
     },
     {
         "name": "filter_expr",
@@ -285,17 +205,15 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "expr"
-            ],
+            "required": ["expr"],
             "additionalProperties": False,
             "properties": {
                 "expr": {
                     "type": "string",
-                    "description": "Boolean column predicate, e.g. 'AGE >= 0'."
+                    "description": "Boolean column predicate, e.g. 'AGE >= 0'.",
                 }
-            }
-        }
+            },
+        },
     },
     {
         "name": "head_by_group",
@@ -304,45 +222,25 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": "spark",
         "params_schema": {
             "type": "object",
-            "required": [
-                "partition_by",
-                "order_by",
-                "n"
-            ],
+            "required": ["partition_by", "order_by", "n"],
             "additionalProperties": False,
             "properties": {
-                "partition_by": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    }
-                },
+                "partition_by": {"type": "array", "minItems": 1, "items": {"type": "string"}},
                 "order_by": {
                     "type": "array",
                     "minItems": 1,
                     "items": {
                         "type": "object",
-                        "required": [
-                            "col"
-                        ],
+                        "required": ["col"],
                         "properties": {
-                            "col": {
-                                "type": "string"
-                            },
-                            "desc": {
-                                "type": "boolean",
-                                "default": False
-                            }
-                        }
-                    }
+                            "col": {"type": "string"},
+                            "desc": {"type": "boolean", "default": False},
+                        },
+                    },
                 },
-                "n": {
-                    "type": "integer",
-                    "minimum": 1
-                }
-            }
-        }
+                "n": {"type": "integer", "minimum": 1},
+            },
+        },
     },
     {
         "name": "limit",
@@ -351,17 +249,10 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "n"
-            ],
+            "required": ["n"],
             "additionalProperties": False,
-            "properties": {
-                "n": {
-                    "type": "integer",
-                    "minimum": 1
-                }
-            }
-        }
+            "properties": {"n": {"type": "integer", "minimum": 1}},
+        },
     },
     {
         "name": "normalize_whitespace",
@@ -370,21 +261,17 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "columns"
-            ],
+            "required": ["columns"],
             "additionalProperties": False,
             "properties": {
                 "columns": {
                     "type": "array",
                     "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    },
-                    "description": "Columns to normalise (rewritten in place)."
+                    "items": {"type": "string"},
+                    "description": "Columns to normalise (rewritten in place).",
                 }
-            }
-        }
+            },
+        },
     },
     {
         "name": "null_if",
@@ -393,29 +280,16 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "column"
-            ],
+            "required": ["column"],
             "additionalProperties": False,
             "properties": {
-                "column": {
-                    "type": "string"
-                },
-                "equals": {
-                    "type": "array",
-                    "items": {}
-                },
-                "pattern": {
-                    "type": "string"
-                },
-                "less_than": {
-                    "type": "number"
-                },
-                "greater_than": {
-                    "type": "number"
-                }
-            }
-        }
+                "column": {"type": "string"},
+                "equals": {"type": "array", "items": {}},
+                "pattern": {"type": "string"},
+                "less_than": {"type": "number"},
+                "greater_than": {"type": "number"},
+            },
+        },
     },
     {
         "name": "pad",
@@ -424,34 +298,15 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "column",
-                "width"
-            ],
+            "required": ["column", "width"],
             "additionalProperties": False,
             "properties": {
-                "column": {
-                    "type": "string"
-                },
-                "width": {
-                    "type": "integer",
-                    "minimum": 1
-                },
-                "char": {
-                    "type": "string",
-                    "default": "0",
-                    "maxLength": 1
-                },
-                "side": {
-                    "type": "string",
-                    "enum": [
-                        "left",
-                        "right"
-                    ],
-                    "default": "left"
-                }
-            }
-        }
+                "column": {"type": "string"},
+                "width": {"type": "integer", "minimum": 1},
+                "char": {"type": "string", "default": "0", "maxLength": 1},
+                "side": {"type": "string", "enum": ["left", "right"], "default": "left"},
+            },
+        },
     },
     {
         "name": "pivot",
@@ -460,42 +315,19 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "group_by",
-                "pivot_column",
-                "value_column"
-            ],
+            "required": ["group_by", "pivot_column", "value_column"],
             "additionalProperties": False,
             "properties": {
-                "group_by": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "pivot_column": {
-                    "type": "string"
-                },
-                "value_column": {
-                    "type": "string"
-                },
+                "group_by": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+                "pivot_column": {"type": "string"},
+                "value_column": {"type": "string"},
                 "agg": {
                     "type": "string",
-                    "enum": [
-                        "avg",
-                        "count",
-                        "first",
-                        "last",
-                        "max",
-                        "mean",
-                        "min",
-                        "sum"
-                    ],
-                    "default": "first"
-                }
-            }
-        }
+                    "enum": ["avg", "count", "first", "last", "max", "mean", "min", "sum"],
+                    "default": "first",
+                },
+            },
+        },
     },
     {
         "name": "random_sample",
@@ -504,27 +336,19 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "fraction"
-            ],
+            "required": ["fraction"],
             "additionalProperties": False,
             "properties": {
                 "fraction": {
                     "type": "number",
                     "exclusiveMinimum": 0,
                     "maximum": 1,
-                    "description": "Fraction of rows to keep, in (0, 1]."
+                    "description": "Fraction of rows to keep, in (0, 1].",
                 },
-                "seed": {
-                    "type": "integer",
-                    "description": "Optional RNG seed."
-                },
-                "with_replacement": {
-                    "type": "boolean",
-                    "default": False
-                }
-            }
-        }
+                "seed": {"type": "integer", "description": "Optional RNG seed."},
+                "with_replacement": {"type": "boolean", "default": False},
+            },
+        },
     },
     {
         "name": "rank",
@@ -533,42 +357,25 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": "spark",
         "params_schema": {
             "type": "object",
-            "required": [
-                "order_by",
-                "output_column"
-            ],
+            "required": ["order_by", "output_column"],
             "additionalProperties": False,
             "properties": {
-                "partition_by": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
+                "partition_by": {"type": "array", "items": {"type": "string"}},
                 "order_by": {
                     "type": "array",
                     "minItems": 1,
                     "items": {
                         "type": "object",
-                        "required": [
-                            "col"
-                        ],
+                        "required": ["col"],
                         "properties": {
-                            "col": {
-                                "type": "string"
-                            },
-                            "desc": {
-                                "type": "boolean",
-                                "default": False
-                            }
-                        }
-                    }
+                            "col": {"type": "string"},
+                            "desc": {"type": "boolean", "default": False},
+                        },
+                    },
                 },
-                "output_column": {
-                    "type": "string"
-                }
-            }
-        }
+                "output_column": {"type": "string"},
+            },
+        },
     },
     {
         "name": "reduce",
@@ -577,39 +384,21 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "group_by",
-                "aggs"
-            ],
+            "required": ["group_by", "aggs"],
             "additionalProperties": False,
             "properties": {
-                "group_by": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    }
-                },
+                "group_by": {"type": "array", "minItems": 1, "items": {"type": "string"}},
                 "aggs": {
                     "type": "object",
                     "minProperties": 1,
                     "additionalProperties": {
                         "type": "string",
-                        "enum": [
-                            "avg",
-                            "count",
-                            "first",
-                            "last",
-                            "max",
-                            "mean",
-                            "min",
-                            "sum"
-                        ]
+                        "enum": ["avg", "count", "first", "last", "max", "mean", "min", "sum"],
                     },
-                    "description": "{column: agg_func} \u2014 max/min/sum/avg/count/first/last."
-                }
-            }
-        }
+                    "description": "{column: agg_func} \u2014 max/min/sum/avg/count/first/last.",
+                },
+            },
+        },
     },
     {
         "name": "regex_replace",
@@ -618,31 +407,22 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "columns",
-                "pattern",
-                "replacement"
-            ],
+            "required": ["columns", "pattern", "replacement"],
             "additionalProperties": False,
             "properties": {
                 "columns": {
                     "type": "array",
                     "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    },
-                    "description": "Columns to apply the substitution to."
+                    "items": {"type": "string"},
+                    "description": "Columns to apply the substitution to.",
                 },
-                "pattern": {
-                    "type": "string",
-                    "description": "Regex to match."
-                },
+                "pattern": {"type": "string", "description": "Regex to match."},
                 "replacement": {
                     "type": "string",
-                    "description": "Replacement (may reference capture groups, e.g. $1)."
-                }
-            }
-        }
+                    "description": "Replacement (may reference capture groups, e.g. $1).",
+                },
+            },
+        },
     },
     {
         "name": "rename_columns",
@@ -651,21 +431,17 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "map"
-            ],
+            "required": ["map"],
             "additionalProperties": False,
             "properties": {
                 "map": {
                     "type": "object",
                     "minProperties": 1,
-                    "additionalProperties": {
-                        "type": "string"
-                    },
-                    "description": "{old_name: new_name} rename map."
+                    "additionalProperties": {"type": "string"},
+                    "description": "{old_name: new_name} rename map.",
                 }
-            }
-        }
+            },
+        },
     },
     {
         "name": "select_columns",
@@ -674,20 +450,12 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "columns"
-            ],
+            "required": ["columns"],
             "additionalProperties": False,
             "properties": {
-                "columns": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        }
+                "columns": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+            },
+        },
     },
     {
         "name": "standardize_null",
@@ -696,27 +464,17 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "columns"
-            ],
+            "required": ["columns"],
             "additionalProperties": False,
             "properties": {
-                "columns": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    }
-                },
+                "columns": {"type": "array", "minItems": 1, "items": {"type": "string"}},
                 "sentinels": {
                     "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "description": "Override the default sentinel list."
-                }
-            }
-        }
+                    "items": {"type": "string"},
+                    "description": "Override the default sentinel list.",
+                },
+            },
+        },
     },
     {
         "name": "stratified_sample",
@@ -725,31 +483,19 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": "spark",
         "params_schema": {
             "type": "object",
-            "required": [
-                "key",
-                "fractions"
-            ],
+            "required": ["key", "fractions"],
             "additionalProperties": False,
             "properties": {
-                "key": {
-                    "type": "string",
-                    "description": "Column to stratify on."
-                },
+                "key": {"type": "string", "description": "Column to stratify on."},
                 "fractions": {
                     "type": "object",
                     "minProperties": 1,
-                    "additionalProperties": {
-                        "type": "number",
-                        "minimum": 0,
-                        "maximum": 1
-                    },
-                    "description": "{key_value: fraction} map."
+                    "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1},
+                    "description": "{key_value: fraction} map.",
                 },
-                "seed": {
-                    "type": "integer"
-                }
-            }
-        }
+                "seed": {"type": "integer"},
+            },
+        },
     },
     {
         "name": "strip_non_alpha",
@@ -758,20 +504,12 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "columns"
-            ],
+            "required": ["columns"],
             "additionalProperties": False,
             "properties": {
-                "columns": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        }
+                "columns": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+            },
+        },
     },
     {
         "name": "strip_non_numeric",
@@ -780,20 +518,12 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "columns"
-            ],
+            "required": ["columns"],
             "additionalProperties": False,
             "properties": {
-                "columns": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        }
+                "columns": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+            },
+        },
     },
     {
         "name": "to_lower",
@@ -802,21 +532,17 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "columns"
-            ],
+            "required": ["columns"],
             "additionalProperties": False,
             "properties": {
                 "columns": {
                     "type": "array",
                     "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    },
-                    "description": "Columns to case-normalise (rewritten in place)."
+                    "items": {"type": "string"},
+                    "description": "Columns to case-normalise (rewritten in place).",
                 }
-            }
-        }
+            },
+        },
     },
     {
         "name": "to_title",
@@ -825,21 +551,17 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "columns"
-            ],
+            "required": ["columns"],
             "additionalProperties": False,
             "properties": {
                 "columns": {
                     "type": "array",
                     "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    },
-                    "description": "Columns to case-normalise (rewritten in place)."
+                    "items": {"type": "string"},
+                    "description": "Columns to case-normalise (rewritten in place).",
                 }
-            }
-        }
+            },
+        },
     },
     {
         "name": "to_upper",
@@ -848,21 +570,17 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "columns"
-            ],
+            "required": ["columns"],
             "additionalProperties": False,
             "properties": {
                 "columns": {
                     "type": "array",
                     "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    },
-                    "description": "Columns to case-normalise (rewritten in place)."
+                    "items": {"type": "string"},
+                    "description": "Columns to case-normalise (rewritten in place).",
                 }
-            }
-        }
+            },
+        },
     },
     {
         "name": "trim",
@@ -871,21 +589,17 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "columns"
-            ],
+            "required": ["columns"],
             "additionalProperties": False,
             "properties": {
                 "columns": {
                     "type": "array",
                     "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    },
-                    "description": "Columns to trim (rewritten in place)."
+                    "items": {"type": "string"},
+                    "description": "Columns to trim (rewritten in place).",
                 }
-            }
-        }
+            },
+        },
     },
     {
         "name": "unpivot",
@@ -894,42 +608,21 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "requires_family": None,
         "params_schema": {
             "type": "object",
-            "required": [
-                "id_columns",
-                "value_columns",
-                "name_to",
-                "value_to"
-            ],
+            "required": ["id_columns", "value_columns", "name_to", "value_to"],
             "additionalProperties": False,
             "properties": {
-                "id_columns": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "value_columns": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "name_to": {
-                    "type": "string"
-                },
-                "value_to": {
-                    "type": "string"
-                }
-            }
-        }
-    }
+                "id_columns": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+                "value_columns": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+                "name_to": {"type": "string"},
+                "value_to": {"type": "string"},
+            },
+        },
+    },
 ]
 
 
 #: Valid category values, for UI grouping and filter validation.
-CATEGORIES: tuple[str, ...] = ('correction', 'formatting', 'reshape', 'sampling')
+CATEGORIES: tuple[str, ...] = ("correction", "formatting", "reshape", "sampling")
 
 
 def list_catalogue(category: str | None = None) -> list[dict[str, Any]]:

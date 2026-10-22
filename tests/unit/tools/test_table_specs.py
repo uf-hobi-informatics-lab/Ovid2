@@ -50,7 +50,6 @@ class TestAllSentinel:
         assert is_all_sentinel(["DEMOGRAPHIC", "ENCOUNTER"]) is False
 
 
-
 class TestSingleFieldForm:
     """A bare ``LOGICAL`` token defaults ``file_name`` to ``table_name``."""
 
@@ -131,7 +130,8 @@ class TestGlobInLogicalWarnsButRuns:
     """
 
     def test_glob_metachar_in_logical_logs_warning(
-        self, caplog: pytest.LogCaptureFixture,
+        self,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         with caplog.at_level(logging.WARNING, logger="ovid2.tools.table_specs"):
             got = parse_table_spec("*bad*")
@@ -139,14 +139,16 @@ class TestGlobInLogicalWarnsButRuns:
         assert any("glob metacharacters" in r.message for r in caplog.records)
 
     def test_square_bracket_treated_as_glob(
-        self, caplog: pytest.LogCaptureFixture,
+        self,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         with caplog.at_level(logging.WARNING, logger="ovid2.tools.table_specs"):
             parse_table_spec("A[1]")
         assert any("glob metacharacters" in r.message for r in caplog.records)
 
     def test_glob_in_source_side_is_fine(
-        self, caplog: pytest.LogCaptureFixture,
+        self,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """A glob on the SOURCE side is the whole point — no warning."""
         with caplog.at_level(logging.WARNING, logger="ovid2.tools.table_specs"):
@@ -158,16 +160,22 @@ class TestBatchParse:
     """``parse_table_specs`` preserves order and mixes forms."""
 
     def test_mixed_forms_preserve_order(self) -> None:
-        got = parse_table_specs([
-            "DEMOGRAPHIC",
-            "HASH_TOKEN=*datavant_person_tokens*",
-            "ENCOUNTER",
-        ])
+        got = parse_table_specs(
+            [
+                "DEMOGRAPHIC",
+                "HASH_TOKEN=*datavant_person_tokens*",
+                "ENCOUNTER",
+            ]
+        )
         assert [s.table_name for s in got] == [
-            "DEMOGRAPHIC", "HASH_TOKEN", "ENCOUNTER",
+            "DEMOGRAPHIC",
+            "HASH_TOKEN",
+            "ENCOUNTER",
         ]
         assert [s.file_name for s in got] == [
-            "DEMOGRAPHIC", "*datavant_person_tokens*", "ENCOUNTER",
+            "DEMOGRAPHIC",
+            "*datavant_person_tokens*",
+            "ENCOUNTER",
         ]
 
     def test_first_bad_entry_raises(self) -> None:

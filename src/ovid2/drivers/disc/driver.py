@@ -77,7 +77,8 @@ class DiscDriver(Driver):
         return _location_fields()
 
     def container_requirements_for(
-        self, location: dict[str, Any] | None = None,
+        self,
+        location: dict[str, Any] | None = None,
     ) -> tuple[ContainerRequirement, ...]:
         """Return the auto-mount(s) this disc address contributes.
 
@@ -133,17 +134,13 @@ class DiscDriver(Driver):
         normalised = self._widened()
         root = os.path.realpath(str(normalised["host_path"] or ""))
         if not root or not os.path.isdir(root):
-            raise NotImplementedError(
-                f"disc host_path {root!r} is not a listable directory."
-            )
+            raise NotImplementedError(f"disc host_path {root!r} is not a listable directory.")
         sub = (prefix or "").strip().lstrip("/")
         target = os.path.realpath(os.path.join(root, sub)) if sub else root
         # Confinement: target must be the root or beneath it.
         root_prefix = root.rstrip("/") + "/"
         if target != root and not target.startswith(root_prefix):
-            raise ValueError(
-                f"prefix {prefix!r} escapes the storage-account root."
-            )
+            raise ValueError(f"prefix {prefix!r} escapes the storage-account root.")
         if not os.path.isdir(target):
             raise ValueError(f"prefix {prefix!r} is not a directory.")
 
@@ -154,9 +151,7 @@ class DiscDriver(Driver):
                     continue
                 # Path returned to the caller is relative to the root so
                 # it round-trips as the next ``prefix``.
-                rel = os.path.relpath(
-                    os.path.join(target, entry.name), root
-                )
+                rel = os.path.relpath(os.path.join(target, entry.name), root)
                 try:
                     is_dir = entry.is_dir()
                 except OSError:

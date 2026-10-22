@@ -74,17 +74,23 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         description=__doc__,
     )
     parser.add_argument(
-        "--from", dest="from_address", required=True,
+        "--from",
+        dest="from_address",
+        required=True,
         help="Name of the source address config.",
     )
     parser.add_argument(
-        "--to", dest="to_address", required=True,
+        "--to",
+        dest="to_address",
+        required=True,
         help="Name of the destination address config.",
     )
     parser.add_argument("--pipeline", required=True, help="Pipeline name.")
     parser.add_argument("--batch_id", required=True, help="Batch identifier.")
     parser.add_argument(
-        "--tables", nargs="+", required=True,
+        "--tables",
+        nargs="+",
+        required=True,
         help=(
             "Table specs to move. Each entry is either 'LOGICAL' "
             "(source basename equals logical name) or "
@@ -96,7 +102,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         ),
     )
     parser.add_argument(
-        "--engine", default="pyspark",
+        "--engine",
+        default="pyspark",
         help="Compute engine (default: pyspark).",
     )
     parser.add_argument(
@@ -164,10 +171,12 @@ def main(args: argparse.Namespace) -> int:
     # every other driver defaults to ``{"spark"}``. See
     # :mod:`ovid2.drivers.engine_compat` for the full rationale.
     from ovid2.core.loaders import load_engine
+
     try:
         engine = load_engine(args.engine)
         assert_engine_supports_drivers(
-            engine, [args.from_address, args.to_address],
+            engine,
+            [args.from_address, args.to_address],
         )
     except (ValueError, RuntimeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -177,9 +186,7 @@ def main(args: argparse.Namespace) -> int:
         # Validate operator-supplied mounts up-front so a bad spec
         # fails before we spin up a Spark cluster.
         try:
-            explicit_mounts = parse_extra_mounts(
-                getattr(args, "extra_mounts", None)
-            )
+            explicit_mounts = parse_extra_mounts(getattr(args, "extra_mounts", None))
         except ExtraMountError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
@@ -205,7 +212,7 @@ def main(args: argparse.Namespace) -> int:
     return _run_container_mode(args)
 
 
-def _driver_mount_to_tool_mount(m: object) -> "object | None":
+def _driver_mount_to_tool_mount(m: object) -> object | None:
     """Convert a :class:`drivers.container.ExtraMount` → :class:`tools.extra_mounts.ExtraMount`.
 
     The two dataclasses live in separate modules with different
@@ -233,7 +240,8 @@ def _driver_mount_to_tool_mount(m: object) -> "object | None":
     except ExtraMountError as exc:
         logger.warning(
             "Driver auto-mount %r rejected by tools.extra_mounts: %s",
-            spec, exc,
+            spec,
+            exc,
         )
         return None
 
@@ -328,7 +336,7 @@ def _run_container_mode(args: argparse.Namespace) -> int:
             to_address=args.to_address,
             strict=bool(getattr(args, "strict_types", False)),
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         # Under --strict-types this is a hard failure; log + bail
         # with a clean exit code.
         print(
@@ -343,10 +351,12 @@ def _run_container_mode(args: argparse.Namespace) -> int:
 
     try:
         src_driver = driver_from_address(
-            args.from_address, pipeline=args.pipeline,
+            args.from_address,
+            pipeline=args.pipeline,
         )
         dst_driver = driver_from_address(
-            args.to_address, pipeline=args.pipeline,
+            args.to_address,
+            pipeline=args.pipeline,
         )
     except (FileNotFoundError, ValueError, KeyError) as exc:
         print(
@@ -399,10 +409,7 @@ def _run_container_mode(args: argparse.Namespace) -> int:
                     f"({src_driver.type_name}) cannot expand `--tables "
                     f"all`; pass an explicit table list."
                 )
-            resolved = [
-                TableSpec(table_name=name, file_name=name)
-                for name in expanded
-            ]
+            resolved = [TableSpec(table_name=name, file_name=name) for name in expanded]
             print(
                 f"[ovid2 tools move] expanded --tables all → "
                 f"{len(resolved)} table(s): {', '.join(t.table_name for t in resolved)}"
@@ -425,11 +432,18 @@ def _run_container_mode(args: argparse.Namespace) -> int:
             )
             try:
                 df = stager.materialise(
-                    src_driver, args.pipeline, args.batch_id, file_name,
+                    src_driver,
+                    args.pipeline,
+                    args.batch_id,
+                    file_name,
                     table_name=table_name,
                 )
                 stager.persist(
-                    df, dst_driver, args.pipeline, args.batch_id, table_name,
+                    df,
+                    dst_driver,
+                    args.pipeline,
+                    args.batch_id,
+                    table_name,
                 )
                 bus.emit(
                     table_completed(
@@ -440,7 +454,7 @@ def _run_container_mode(args: argparse.Namespace) -> int:
                     ),
                 )
                 print(f"[ovid2 tools move] {table_name}: OK")
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 failures += 1
                 logger.exception("move failed for %s", table_name)
                 bus.emit(
@@ -467,6 +481,4 @@ def _run_container_mode(args: argparse.Namespace) -> int:
 
 
 if __name__ == "__main__":  # pragma: no cover
-    raise SystemExit(
-        "ovid2.tools.move is a CLI subcommand; invoke via 'ovid2 tools move …'."
-    )
+    raise SystemExit("ovid2.tools.move is a CLI subcommand; invoke via 'ovid2 tools move …'.")

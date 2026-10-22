@@ -28,9 +28,11 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, cast
 
 from ovid2.config import addresses as _addresses
 from ovid2.run_kinds import get_kind
@@ -60,8 +62,7 @@ STATUS_FAILED = "failed"
 STATUS_CANCELLED = "cancelled"
 
 _VALID_STATUSES: frozenset[str] = frozenset(
-    {STATUS_DRAFT, STATUS_QUEUED, STATUS_RUNNING, STATUS_DONE, STATUS_FAILED,
-     STATUS_CANCELLED}
+    {STATUS_DRAFT, STATUS_QUEUED, STATUS_RUNNING, STATUS_DONE, STATUS_FAILED, STATUS_CANCELLED}
 )
 
 
@@ -113,14 +114,14 @@ def _row_to_job_detail(row: dict[str, object]) -> JobDetail:
         status=str(row["status"]),
         cancel_requested=bool(row["cancel_requested"]),
         instance_id=(str(row["instance_id"]) if row.get("instance_id") else None),
-        pid=(int(row["pid"]) if row.get("pid") else None),
+        pid=(int(cast(int | str, row["pid"])) if row.get("pid") else None),
         started_at=(str(row["started_at"]) if row.get("started_at") else None),
         ended_at=(str(row["ended_at"]) if row.get("ended_at") else None),
         error=(str(row["error"]) if row.get("error") else None),
     )
 
 
-def _fetchrow(conn, job_id: str) -> dict[str, object] | None:
+def _fetchrow(conn: sqlite3.Connection, job_id: str) -> dict[str, object] | None:
     """Return one ``web_jobs`` row as a plain dict."""
     row = conn.execute("SELECT * FROM web_jobs WHERE job_id = ?", (job_id,)).fetchone()
     return dict(row) if row is not None else None
@@ -181,8 +182,7 @@ def launch_draft(job_id: str, *, actor: str = "web") -> JobDetail:
         if row is None:
             raise SubmitError(f"Job '{job_id}' not found.")
         cur = conn.execute(
-            "UPDATE web_jobs SET status = ?, submitted_at = ? "
-            "WHERE job_id = ? AND status = ?",
+            "UPDATE web_jobs SET status = ?, submitted_at = ? WHERE job_id = ? AND status = ?",
             (STATUS_QUEUED, _now_iso(), job_id, STATUS_DRAFT),
         )
         if cur.rowcount != 1:
@@ -197,8 +197,9 @@ def launch_draft(job_id: str, *, actor: str = "web") -> JobDetail:
         target=f"{row['pipeline']}:{row['batch_id']}",
         detail_json=json.dumps({"job_id": job_id, "instance_id": row.get("instance_id")}),
     )
-    logger.info("Launched draft %s (pipeline=%s batch=%s)", job_id,
-                row["pipeline"], row["batch_id"])
+    logger.info(
+        "Launched draft %s (pipeline=%s batch=%s)", job_id, row["pipeline"], row["batch_id"]
+    )
     return _row_to_job_detail(row)
 
 
@@ -229,9 +230,7 @@ def discard_draft(job_id: str, *, actor: str = "web") -> None:
     )
 
 
-def _insert_job(
-    request: JobSubmitRequest, *, actor: str, status: str
-) -> JobSubmitResponse:
+def _insert_job(request: JobSubmitRequest, *, actor: str, status: str) -> JobSubmitResponse:
     """Shared validate-and-insert path for :func:`submit` / :func:`create_draft`."""
     _resolve_connection_endpoints(request, actor=actor)
     _validate_submit(request)
@@ -241,7 +240,7 @@ def _insert_job(
     submitted_at = _now_iso()
 
     kind = normalize_kind(request.kind)
-    extra_args = {
+    extra_args: dict[str, Any] = {
         "kind": kind,
         "cdm": request.cdm,
         "engine": request.engine,
@@ -357,9 +356,7 @@ def _resolve_connection_endpoints(request: JobSubmitRequest, *, actor: str) -> N
             )
         loc: dict[str, object] = {"path": folder} if folder else {}
         try:
-            return addresses_svc.resolve_or_create_address(
-                connection.strip(), loc, actor=actor
-            )
+            return addresses_svc.resolve_or_create_address(connection.strip(), loc, actor=actor)
         except addresses_svc.AddressError as exc:
             raise SubmitError(str(exc)) from exc
 
@@ -383,13 +380,10 @@ def _validate_submit(request: JobSubmitRequest) -> None:
     # name/label for address path scoping — so we must not require an
     # installed package for them. Package-consuming kinds (etl /
     # analysis) keep the gate.
-    if (
-        kind not in PACKAGE_FREE_KINDS
-        and request.pipeline not in set(pipelines_meta_svc.discover_pipelines())
+    if kind not in PACKAGE_FREE_KINDS and request.pipeline not in set(
+        pipelines_meta_svc.discover_pipelines()
     ):
-        raise SubmitError(
-            f"Pipeline '{request.pipeline}' is not installed under ovid2_pipelines."
-        )
+        raise SubmitError(f"Pipeline '{request.pipeline}' is not installed under ovid2_pipelines.")
     known = set(_addresses.list_available_addresses())
     if known:
         # Only enforce when *some* configs exist — a fresh install has
@@ -399,16 +393,16 @@ def _validate_submit(request: JobSubmitRequest) -> None:
             ("output_address", request.output_address),
         ):
             if value not in known:
-                raise SubmitError(
-                    f"{label} '{value}' is not on the config search path."
-                )
+                raise SubmitError(f"{label} '{value}' is not on the config search path.")
     if request.workers < 1 or request.workers > 200:
         raise SubmitError("workers must be between 1 and 200.")
 
     # Kind-specific checks, driven by the run-kind registry.
     spec = get_kind(kind)
-    if spec and spec.tables_mode == "explicit" and (
-        not request.tables or request.tables == ["all"]
+    if (
+        spec
+        and spec.tables_mode == "explicit"
+        and (not request.tables or request.tables == ["all"])
     ):
         # ``ovid2 tools copy --tables`` / ``ovid2 tools move --tables``
         # both use ``nargs='+'`` and do not recognise the ``all``
@@ -417,10 +411,7 @@ def _validate_submit(request: JobSubmitRequest) -> None:
         # is exempt: the executor enumerates the tables at run time.
         from ovid2.web.services._table_expand import source_supports_expand_all
 
-        if not (
-            request.tables == ["all"]
-            and source_supports_expand_all(request.input_address)
-        ):
+        if not (request.tables == ["all"] and source_supports_expand_all(request.input_address)):
             raise SubmitError(
                 f"{kind} jobs require an explicit `tables` list; "
                 f"`['all']` is not supported by `ovid2 {spec.cli_subcommand}` "
@@ -462,10 +453,7 @@ def _validate_submit(request: JobSubmitRequest) -> None:
     # (move). Refuse the flag elsewhere so a mis-authored payload can't
     # quietly enable it.
     if (not spec or not spec.allows_strict_types) and request.strict_types:
-        raise SubmitError(
-            f"strict_types is only accepted on kind='move'; got "
-            f"kind='{kind}'."
-        )
+        raise SubmitError(f"strict_types is only accepted on kind='move'; got kind='{kind}'.")
 
     # Engine/driver family compatibility. Refuses submissions that
     # would have crashed inside the container at ``engine.get_session()``
@@ -561,11 +549,14 @@ def rerun(job_id: str, *, actor: str = "web") -> JobSubmitResponse:
         target=f"{row['pipeline']}:{row['batch_id']}",
         detail_json=json.dumps({"parent_job_id": job_id, "new_job_id": new_job_id}),
     )
-    logger.info("Rerun %s -> %s (pipeline=%s batch=%s)", job_id, new_job_id,
-                row["pipeline"], row["batch_id"])
-    return JobSubmitResponse(
-        job_id=new_job_id, instance_id=instance_id, status=STATUS_QUEUED
+    logger.info(
+        "Rerun %s -> %s (pipeline=%s batch=%s)",
+        job_id,
+        new_job_id,
+        row["pipeline"],
+        row["batch_id"],
     )
+    return JobSubmitResponse(job_id=new_job_id, instance_id=instance_id, status=STATUS_QUEUED)
 
 
 def _reset_tracker(batch_id: str) -> None:
@@ -612,9 +603,7 @@ def cancel(job_id: str, *, actor: str = "web") -> JobDetail:
         if status in {STATUS_DONE, STATUS_FAILED, STATUS_CANCELLED}:
             raise SubmitError(f"Job '{job_id}' is already {status}.")
         if status == STATUS_DRAFT:
-            raise SubmitError(
-                f"Job '{job_id}' is a draft; discard it instead of cancelling."
-            )
+            raise SubmitError(f"Job '{job_id}' is a draft; discard it instead of cancelling.")
         if status == STATUS_QUEUED:
             conn.execute(
                 "UPDATE web_jobs SET status = ?, cancel_requested = 1, ended_at = ? "
@@ -713,8 +702,7 @@ def resume_in_flight() -> int:
                 continue
             new_status = STATUS_CANCELLED if row["cancel_requested"] else STATUS_FAILED
             conn.execute(
-                "UPDATE web_jobs SET status = ?, ended_at = ?, error = ? "
-                "WHERE job_id = ?",
+                "UPDATE web_jobs SET status = ?, ended_at = ?, error = ? WHERE job_id = ?",
                 (
                     new_status,
                     _now_iso(),
@@ -792,8 +780,7 @@ def queue_position(job_id: str) -> dict[str, int] | None:
             "SELECT COUNT(*) FROM web_jobs WHERE status = ?", (STATUS_RUNNING,)
         ).fetchone()[0]
         ahead = conn.execute(
-            "SELECT COUNT(*) FROM web_jobs WHERE status = ? AND job_id != ? "
-            "AND submitted_at < ?",
+            "SELECT COUNT(*) FROM web_jobs WHERE status = ? AND job_id != ? AND submitted_at < ?",
             (STATUS_QUEUED, job_id, row["submitted_at"]),
         ).fetchone()[0]
     return {"running": int(running), "ahead": int(ahead)}
@@ -813,8 +800,7 @@ def statuses_for_instances(instance_ids: list[str]) -> dict[str, str]:
     placeholders = ",".join("?" for _ in ids)
     with web_db.connect() as conn:
         rows = conn.execute(
-            "SELECT instance_id, status FROM web_jobs WHERE instance_id IN ("
-            + placeholders + ")",
+            "SELECT instance_id, status FROM web_jobs WHERE instance_id IN (" + placeholders + ")",
             tuple(ids),
         ).fetchall()
     return {str(r["instance_id"]): str(r["status"]) for r in rows}

@@ -9,7 +9,6 @@ entry for Phase C.
 from __future__ import annotations
 
 import atexit
-import os
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -20,7 +19,6 @@ from ovid2.core.engines.stager import (
     SnowparkEngineStager,
     SnowparkStagingStrategy,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -57,11 +55,11 @@ class _FakeReaderChain:
         self.csv_path: str | None = None
         self.returned_df: Any = MagicMock(name="fake_snowpark_df")
 
-    def option(self, key: str, value: Any) -> "_FakeReaderChain":
+    def option(self, key: str, value: Any) -> _FakeReaderChain:
         self.options[key] = value
         return self
 
-    def schema(self, schema_obj: Any) -> "_FakeReaderChain":
+    def schema(self, schema_obj: Any) -> _FakeReaderChain:
         self.schema_arg = schema_obj
         return self
 
@@ -79,9 +77,7 @@ class _FakeSession:
         self.sql_calls: list[str] = []
         self._reader = _FakeReaderChain()
         self._get_rows = (
-            [_make_get_row("data_0_0_0.csv.gz", "DOWNLOADED")]
-            if get_rows is None
-            else get_rows
+            [_make_get_row("data_0_0_0.csv.gz", "DOWNLOADED")] if get_rows is None else get_rows
         )
         self.tables_returned: dict[str, Any] = {}
         # session.file.put(...)
@@ -91,7 +87,11 @@ class _FakeSession:
         self.read = self._reader
 
     def _record_put(
-        self, source: str, target: str, *, overwrite: bool = False,
+        self,
+        source: str,
+        target: str,
+        *,
+        overwrite: bool = False,
         auto_compress: bool = True,
     ) -> list[Any]:
         self.puts.append(
@@ -121,7 +121,7 @@ class _FakeSession:
 
     # SnowparkEngineSession-like access shape
     @property
-    def native(self) -> "Any":
+    def native(self) -> Any:
         return self
 
 
@@ -130,7 +130,9 @@ def _make_get_row(name: str, status: str) -> Any:
     row = MagicMock()
     row.file = name
     row.status = status
-    row.__getitem__ = lambda self, k: {"file": name, "status": status}[k] if isinstance(k, str) else (name, 0, status, "")[k]
+    row.__getitem__ = lambda self, k: (
+        {"file": name, "status": status}[k] if isinstance(k, str) else (name, 0, status, "")[k]
+    )
     return row
 
 
@@ -207,13 +209,10 @@ class TestImportSafety:
                 del sys.modules[mod]
 
         # Clear any pyspark cache so we can detect a fresh import.
-        pyspark_before = {
-            m for m in sys.modules if m.startswith("pyspark")
-        }
+        pyspark_before = {m for m in sys.modules if m.startswith("pyspark")}
         import ovid2.drivers.snowflake.staging.disc  # noqa: F401
-        pyspark_after = {
-            m for m in sys.modules if m.startswith("pyspark")
-        }
+
+        pyspark_after = {m for m in sys.modules if m.startswith("pyspark")}
         # No new pyspark modules pulled in by the strategy import.
         assert pyspark_after == pyspark_before
 
@@ -236,21 +235,28 @@ class TestMaterialise:
         (root / "TEST" / "20260806").mkdir(parents=True)
         csv_path = root / "TEST" / "20260806" / "sample.csv"
         csv_path.write_text(
-            "id,name,value\n" "1,foo,10\n" "2,bar,20\n",
+            "id,name,value\n1,foo,10\n2,bar,20\n",
             encoding="utf-8",
         )
         return root, csv_path
 
     def test_puts_file_and_returns_reader_result(
-        self, strategy, disc_source_tree,
+        self,
+        strategy,
+        disc_source_tree,
     ) -> None:
         root, csv_path = disc_source_tree
         driver = _FakeDiscDriver(str(root))
         session = _FakeSession()
 
         result = strategy.materialise(
-            session, driver, "test", "20260806", "sample.csv",
-            delimiter=None, table_name=None,
+            session,
+            driver,
+            "test",
+            "20260806",
+            "sample.csv",
+            delimiter=None,
+            table_name=None,
         )
 
         # Result is the .table() lookup for the transient table.
@@ -262,15 +268,22 @@ class TestMaterialise:
         assert kwargs == {"overwrite": True, "auto_compress": True}
 
     def test_read_uses_stage_and_copy_into(
-        self, strategy, disc_source_tree,
+        self,
+        strategy,
+        disc_source_tree,
     ) -> None:
-        root, csv_path = disc_source_tree
+        root, _csv_path = disc_source_tree
         driver = _FakeDiscDriver(str(root))
         session = _FakeSession()
 
         strategy.materialise(
-            session, driver, "test", "20260806", "sample.csv",
-            delimiter=None, table_name=None,
+            session,
+            driver,
+            "test",
+            "20260806",
+            "sample.csv",
+            delimiter=None,
+            table_name=None,
         )
 
         # A CREATE TRANSIENT TABLE + COPY INTO pair was issued.
@@ -288,17 +301,16 @@ class TestMaterialise:
         copy_stmts = [q for q in session.sql_calls if q.startswith("COPY INTO ")]
         assert len(copy_stmts) == 1
         copy = copy_stmts[0]
-        assert (
-            "@~/ovid_ingest/20260806-120000-abc123/test/20260806/sample.csv"
-            in copy
-        )
+        assert "@~/ovid_ingest/20260806-120000-abc123/test/20260806/sample.csv" in copy
         # Detected delimiter (comma).
         assert "FIELD_DELIMITER = ','" in copy
         assert "SKIP_HEADER = 1" in copy
         assert "TRIM_SPACE = TRUE" in copy
 
     def test_lowercase_header_columns_are_uppercased_in_ddl(
-        self, strategy, tmp_path,
+        self,
+        strategy,
+        tmp_path,
     ) -> None:
         """A lowercase CSV header stages as uppercase quoted columns.
 
@@ -314,22 +326,23 @@ class TestMaterialise:
         (root / "test" / "20260806").mkdir(parents=True)
         csv_path = root / "test" / "20260806" / "concept_relationship.csv"
         csv_path.write_text(
-            "concept_id_1\tconcept_id_2\trelationship_id\n"
-            "1\t2\tMaps to\n",
+            "concept_id_1\tconcept_id_2\trelationship_id\n1\t2\tMaps to\n",
             encoding="utf-8",
         )
         driver = _FakeDiscDriver(str(root))
         session = _FakeSession()
 
         strategy.materialise(
-            session, driver, "test", "20260806", "concept_relationship.csv",
-            delimiter="\t", table_name=None,
+            session,
+            driver,
+            "test",
+            "20260806",
+            "concept_relationship.csv",
+            delimiter="\t",
+            table_name=None,
         )
 
-        create_stmts = [
-            q for q in session.sql_calls
-            if "CREATE OR REPLACE TRANSIENT TABLE" in q
-        ]
+        create_stmts = [q for q in session.sql_calls if "CREATE OR REPLACE TRANSIENT TABLE" in q]
         assert len(create_stmts) == 1
         ddl = create_stmts[0]
         assert '"CONCEPT_ID_1" VARCHAR' in ddl
@@ -339,7 +352,9 @@ class TestMaterialise:
         assert '"concept_id_1"' not in ddl
 
     def test_explicit_delimiter_wins(
-        self, strategy, tmp_path,
+        self,
+        strategy,
+        tmp_path,
     ) -> None:
         root = tmp_path / "src"
         (root / "TEST" / "20260806").mkdir(parents=True)
@@ -350,15 +365,23 @@ class TestMaterialise:
         session = _FakeSession()
 
         strategy.materialise(
-            session, driver, "test", "20260806", "tabbed.csv",
-            delimiter="\t", table_name=None,
+            session,
+            driver,
+            "test",
+            "20260806",
+            "tabbed.csv",
+            delimiter="\t",
+            table_name=None,
         )
-        copy = [q for q in session.sql_calls if q.startswith("COPY INTO ")][0]
+        copy = next(q for q in session.sql_calls if q.startswith("COPY INTO "))
         # Tab char lands literally in the SQL — Snowflake accepts it.
         assert "FIELD_DELIMITER = '\t'" in copy
 
     def test_transient_table_registered_for_cleanup(
-        self, strategy, disc_source_tree, monkeypatch,
+        self,
+        strategy,
+        disc_source_tree,
+        monkeypatch,
     ) -> None:
         """The transient table is scheduled for DROP on atexit."""
         root, _ = disc_source_tree
@@ -368,8 +391,13 @@ class TestMaterialise:
         monkeypatch.setattr(atexit, "register", lambda fn: registered_fns.append(fn))
 
         strategy.materialise(
-            session, driver, "test", "20260806", "sample.csv",
-            delimiter=None, table_name=None,
+            session,
+            driver,
+            "test",
+            "20260806",
+            "sample.csv",
+            delimiter=None,
+            table_name=None,
         )
         assert len(registered_fns) == 1
         # Now invoke cleanup and verify a DROP TABLE was issued.
@@ -383,8 +411,13 @@ class TestMaterialise:
         session = _FakeSession()
         with pytest.raises(ValueError, match="only supports fmt='csv'"):
             strategy.materialise(
-                session, driver, "test", "20260806", "sample.parquet",
-                delimiter=None, table_name=None,
+                session,
+                driver,
+                "test",
+                "20260806",
+                "sample.parquet",
+                delimiter=None,
+                table_name=None,
             )
 
     def test_missing_file_raises(self, strategy, tmp_path) -> None:
@@ -393,12 +426,19 @@ class TestMaterialise:
         session = _FakeSession()
         with pytest.raises(FileNotFoundError):
             strategy.materialise(
-                session, driver, "test", "20260806", "nonexistent.csv",
-                delimiter=None, table_name=None,
+                session,
+                driver,
+                "test",
+                "20260806",
+                "nonexistent.csv",
+                delimiter=None,
+                table_name=None,
             )
 
     def test_directory_read_not_supported(
-        self, strategy, tmp_path,
+        self,
+        strategy,
+        tmp_path,
     ) -> None:
         # Create a directory that matches a glob.
         (tmp_path / "TEST" / "20260806" / "adir").mkdir(parents=True)
@@ -406,8 +446,13 @@ class TestMaterialise:
         session = _FakeSession()
         with pytest.raises(ValueError, match="directory reads"):
             strategy.materialise(
-                session, driver, "test", "20260806", "adir",
-                delimiter=None, table_name=None,
+                session,
+                driver,
+                "test",
+                "20260806",
+                "adir",
+                delimiter=None,
+                table_name=None,
             )
 
     def test_empty_file_raises(self, strategy, tmp_path) -> None:
@@ -418,8 +463,13 @@ class TestMaterialise:
         session = _FakeSession()
         with pytest.raises(ValueError, match="is empty"):
             strategy.materialise(
-                session, driver, "test", "20260806", "empty.csv",
-                delimiter=None, table_name=None,
+                session,
+                driver,
+                "test",
+                "20260806",
+                "empty.csv",
+                delimiter=None,
+                table_name=None,
             )
 
 
@@ -446,8 +496,13 @@ class TestPersist:
         df = MagicMock(name="snowpark_df")
 
         def _record_copy(
-            location, *, file_format_type, format_type_options,
-            header, overwrite, single,
+            location,
+            *,
+            file_format_type,
+            format_type_options,
+            header,
+            overwrite,
+            single,
         ):
             capture["location"] = location
             capture["file_format_type"] = file_format_type
@@ -460,7 +515,11 @@ class TestPersist:
         return df
 
     def _stage_downloaded_file(
-        self, target_root: Path, pipeline: str, batch_id: str, name: str,
+        self,
+        target_root: Path,
+        pipeline: str,
+        batch_id: str,
+        name: str,
         content: str = "id,val\n1,x\n",
     ) -> Path:
         """Emulate the file the GET step would produce on disk."""
@@ -471,7 +530,9 @@ class TestPersist:
         return p
 
     def test_calls_copy_into_location_and_renames(
-        self, strategy, disc_target_root,
+        self,
+        strategy,
+        disc_target_root,
     ) -> None:
         driver = _FakeDiscDriver(str(disc_target_root), single_file=True)
         capture: dict[str, Any] = {}
@@ -479,14 +540,22 @@ class TestPersist:
 
         # Pre-plant the file the GET step will download.
         self._stage_downloaded_file(
-            disc_target_root, "test", "20260806", "data_0_0_0.csv",
+            disc_target_root,
+            "test",
+            "20260806",
+            "data_0_0_0.csv",
         )
         session = _FakeSession(
             get_rows=[_make_get_row("data_0_0_0.csv", "DOWNLOADED")],
         )
 
         strategy.persist(
-            session, df, driver, "test", "20260806", "sample",
+            session,
+            df,
+            driver,
+            "test",
+            "20260806",
+            "sample",
             delimiter=None,
         )
 
@@ -511,36 +580,54 @@ class TestPersist:
         assert expected.read_text(encoding="utf-8") == "id,val\n1,x\n"
 
     def test_explicit_delimiter_wins(
-        self, strategy, disc_target_root,
+        self,
+        strategy,
+        disc_target_root,
     ) -> None:
         driver = _FakeDiscDriver(str(disc_target_root), single_file=True)
         capture: dict[str, Any] = {}
         df = self._make_df_stub(capture)
         self._stage_downloaded_file(
-            disc_target_root, "test", "20260806", "data_0_0_0.csv",
+            disc_target_root,
+            "test",
+            "20260806",
+            "data_0_0_0.csv",
         )
         session = _FakeSession(
             get_rows=[_make_get_row("data_0_0_0.csv", "DOWNLOADED")],
         )
 
         strategy.persist(
-            session, df, driver, "test", "20260806", "sample",
+            session,
+            df,
+            driver,
+            "test",
+            "20260806",
+            "sample",
             delimiter="|",
         )
         assert capture["format_type_options"]["FIELD_DELIMITER"] == "|"
 
     def test_single_file_false_uses_snowflake_multi_shape(
-        self, strategy, disc_target_root,
+        self,
+        strategy,
+        disc_target_root,
     ) -> None:
         driver = _FakeDiscDriver(str(disc_target_root), single_file=False)
         capture: dict[str, Any] = {}
         df = self._make_df_stub(capture)
         # Multi-file simulated download.
         self._stage_downloaded_file(
-            disc_target_root, "test", "20260806", "data_0_0_0.csv",
+            disc_target_root,
+            "test",
+            "20260806",
+            "data_0_0_0.csv",
         )
         self._stage_downloaded_file(
-            disc_target_root, "test", "20260806", "data_0_0_1.csv",
+            disc_target_root,
+            "test",
+            "20260806",
+            "data_0_0_1.csv",
             content="id,val\n2,y\n",
         )
         session = _FakeSession(
@@ -551,7 +638,12 @@ class TestPersist:
         )
 
         strategy.persist(
-            session, df, driver, "test", "20260806", "sample",
+            session,
+            df,
+            driver,
+            "test",
+            "20260806",
+            "sample",
             delimiter=None,
         )
         assert capture["single"] is False
@@ -561,31 +653,47 @@ class TestPersist:
         assert (out_dir / "sample.part-00001.csv").exists()
 
     def test_get_returning_zero_rows_raises(
-        self, strategy, disc_target_root,
+        self,
+        strategy,
+        disc_target_root,
     ) -> None:
         driver = _FakeDiscDriver(str(disc_target_root))
         df = self._make_df_stub({})
         session = _FakeSession(get_rows=[])
         with pytest.raises(RuntimeError, match="zero rows"):
             strategy.persist(
-                session, df, driver, "test", "20260806", "sample",
+                session,
+                df,
+                driver,
+                "test",
+                "20260806",
+                "sample",
                 delimiter=None,
             )
 
     def test_non_csv_target_raises(
-        self, strategy, disc_target_root,
+        self,
+        strategy,
+        disc_target_root,
     ) -> None:
         driver = _FakeDiscDriver(str(disc_target_root), fmt="parquet")
         df = MagicMock()
         session = _FakeSession()
         with pytest.raises(ValueError, match="only supports fmt='csv'"):
             strategy.persist(
-                session, df, driver, "test", "20260806", "sample",
+                session,
+                df,
+                driver,
+                "test",
+                "20260806",
+                "sample",
                 delimiter=None,
             )
 
     def test_output_directory_created(
-        self, strategy, disc_target_root,
+        self,
+        strategy,
+        disc_target_root,
     ) -> None:
         # Delete pre-created subdirs so we can prove persist creates them.
         driver = _FakeDiscDriver(str(disc_target_root))
@@ -604,14 +712,22 @@ class TestPersist:
         def _sql_that_stages(query: str) -> Any:
             if query.startswith("GET"):
                 self._stage_downloaded_file(
-                    disc_target_root, "test", "20260806", "data_0_0_0.csv",
+                    disc_target_root,
+                    "test",
+                    "20260806",
+                    "data_0_0_0.csv",
                 )
             return original_sql(query)
 
         session.sql = _sql_that_stages
 
         strategy.persist(
-            session, df, driver, "test", "20260806", "sample",
+            session,
+            df,
+            driver,
+            "test",
+            "20260806",
+            "sample",
             delimiter=None,
         )
 
@@ -632,12 +748,16 @@ class TestCleanup:
         return SnowparkDiscStrategy()
 
     def test_atexit_registered_on_first_materialise(
-        self, strategy, tmp_path, monkeypatch,
+        self,
+        strategy,
+        tmp_path,
+        monkeypatch,
     ) -> None:
         root = tmp_path / "src"
         (root / "TEST" / "20260806").mkdir(parents=True)
         (root / "TEST" / "20260806" / "sample.csv").write_text(
-            "id\n1\n", encoding="utf-8",
+            "id\n1\n",
+            encoding="utf-8",
         )
         driver = _FakeDiscDriver(str(root))
         session = _FakeSession()
@@ -646,20 +766,33 @@ class TestCleanup:
         monkeypatch.setattr(atexit, "register", lambda fn: registered.append(fn))
 
         strategy.materialise(
-            session, driver, "test", "20260806", "sample.csv",
-            delimiter=None, table_name=None,
+            session,
+            driver,
+            "test",
+            "20260806",
+            "sample.csv",
+            delimiter=None,
+            table_name=None,
         )
         assert len(registered) == 1
 
         # Second call must not register another hook (same instance).
         strategy.materialise(
-            session, driver, "test", "20260806", "sample.csv",
-            delimiter=None, table_name=None,
+            session,
+            driver,
+            "test",
+            "20260806",
+            "sample.csv",
+            delimiter=None,
+            table_name=None,
         )
         assert len(registered) == 1
 
     def test_snowpark_staging_keep_skips_cleanup(
-        self, strategy, tmp_path, monkeypatch,
+        self,
+        strategy,
+        tmp_path,
+        monkeypatch,
     ) -> None:
         # Toggle the env var and force settings to re-evaluate.
         monkeypatch.setenv("OVID2_SNOWPARK_STAGING_KEEP", "1")
@@ -672,7 +805,8 @@ class TestCleanup:
         root = tmp_path / "src"
         (root / "TEST" / "20260806").mkdir(parents=True)
         (root / "TEST" / "20260806" / "sample.csv").write_text(
-            "id\n1\n", encoding="utf-8",
+            "id\n1\n",
+            encoding="utf-8",
         )
         driver = _FakeDiscDriver(str(root))
         session = _FakeSession()
@@ -681,8 +815,13 @@ class TestCleanup:
         monkeypatch.setattr(atexit, "register", lambda fn: registered.append(fn))
 
         strategy.materialise(
-            session, driver, "test", "20260806", "sample.csv",
-            delimiter=None, table_name=None,
+            session,
+            driver,
+            "test",
+            "20260806",
+            "sample.csv",
+            delimiter=None,
+            table_name=None,
         )
         assert registered == []
 
@@ -691,12 +830,16 @@ class TestCleanup:
         importlib.reload(_settings)
 
     def test_cleanup_removes_both_prefixes(
-        self, strategy, tmp_path, monkeypatch,
+        self,
+        strategy,
+        tmp_path,
+        monkeypatch,
     ) -> None:
         root = tmp_path / "src"
         (root / "TEST" / "20260806").mkdir(parents=True)
         (root / "TEST" / "20260806" / "sample.csv").write_text(
-            "id\n1\n", encoding="utf-8",
+            "id\n1\n",
+            encoding="utf-8",
         )
         driver = _FakeDiscDriver(str(root))
         session = _FakeSession()
@@ -705,8 +848,13 @@ class TestCleanup:
         monkeypatch.setattr(atexit, "register", lambda fn: registered_fns.append(fn))
 
         strategy.materialise(
-            session, driver, "test", "20260806", "sample.csv",
-            delimiter=None, table_name=None,
+            session,
+            driver,
+            "test",
+            "20260806",
+            "sample.csv",
+            delimiter=None,
+            table_name=None,
         )
         # Invoke the registered cleanup manually and check it issued
         # both REMOVE calls.
@@ -715,20 +863,20 @@ class TestCleanup:
 
         remove_calls = [q for q in session.sql_calls if q.startswith("REMOVE")]
         assert len(remove_calls) == 2
-        assert any(
-            "@~/ovid_ingest/20260806-120000-abc123/" in q for q in remove_calls
-        )
-        assert any(
-            "@~/ovid_egest/20260806-120000-abc123/" in q for q in remove_calls
-        )
+        assert any("@~/ovid_ingest/20260806-120000-abc123/" in q for q in remove_calls)
+        assert any("@~/ovid_egest/20260806-120000-abc123/" in q for q in remove_calls)
 
     def test_cleanup_swallows_exceptions(
-        self, strategy, tmp_path, monkeypatch,
+        self,
+        strategy,
+        tmp_path,
+        monkeypatch,
     ) -> None:
         root = tmp_path / "src"
         (root / "TEST" / "20260806").mkdir(parents=True)
         (root / "TEST" / "20260806" / "sample.csv").write_text(
-            "id\n1\n", encoding="utf-8",
+            "id\n1\n",
+            encoding="utf-8",
         )
         driver = _FakeDiscDriver(str(root))
 
@@ -745,8 +893,13 @@ class TestCleanup:
         monkeypatch.setattr(atexit, "register", lambda fn: registered_fns.append(fn))
 
         strategy.materialise(
-            session, driver, "test", "20260806", "sample.csv",
-            delimiter=None, table_name=None,
+            session,
+            driver,
+            "test",
+            "20260806",
+            "sample.csv",
+            delimiter=None,
+            table_name=None,
         )
         # Cleanup must not propagate the exception.
         registered_fns[0]()
@@ -804,7 +957,10 @@ class TestStagePaths:
         from ovid2.drivers.snowflake.staging.disc import _egest_stage_dir
 
         d = _egest_stage_dir(
-            "20260806-120000-abc123", "test", "20260806", "sample",
+            "20260806-120000-abc123",
+            "test",
+            "20260806",
+            "sample",
         )
         assert d == "ovid_egest/20260806-120000-abc123/test/20260806/sample"
 
@@ -822,7 +978,9 @@ class TestStagePaths:
         importlib.reload(_disc_strategy_mod)
 
         d = _disc_strategy_mod._ingest_stage_dir(
-            "20260806-120000-abc123", "test", "20260806",
+            "20260806-120000-abc123",
+            "test",
+            "20260806",
         )
         assert d.startswith("custom_in/")
 
@@ -850,6 +1008,7 @@ class TestSortedDownloadedFiles:
 
     def test_decompresses_gz(self, tmp_path) -> None:
         import gzip
+
         from ovid2.drivers.snowflake.staging.disc import _sorted_downloaded_files
 
         gz_path = tmp_path / "a.csv.gz"
@@ -891,7 +1050,8 @@ class TestFinaliseSingleFile:
         assert not src.exists()
 
     def test_multiple_files_concatenated_with_header_dedup(
-        self, tmp_path,
+        self,
+        tmp_path,
     ) -> None:
         from ovid2.drivers.snowflake.staging.disc import _finalise_single_file
 
@@ -984,7 +1144,8 @@ class TestEnsureWritableStagingSchemaRejectsSystemDb:
             return result
 
     def test_snowflake_current_db_raises_without_create_attempt(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         from ovid2.drivers.snowflake.staging.disc import (
             _ensure_writable_staging_schema,
@@ -1024,7 +1185,8 @@ class TestEnsureWritableStagingSchemaRejectsSystemDb:
         )
 
     def test_dotted_override_used_verbatim_even_on_snowflake_session(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         from ovid2.drivers.snowflake.staging.disc import (
             _ensure_writable_staging_schema,

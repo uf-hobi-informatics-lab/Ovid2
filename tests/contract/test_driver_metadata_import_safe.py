@@ -83,10 +83,7 @@ def test_driver_metadata_modules_have_no_heavy_imports() -> None:
         "Driver metadata modules must be import-safe (no top-level "
         "imports of pyspark / boto3 / azure-* / snowflake-* / databricks-* "
         "/ google-cloud-*). Offending imports:\n"
-        + "\n".join(
-            f"  {p.relative_to(REPO_ROOT)}:{n}: {ln}"
-            for p, n, ln in offenders
-        )
+        + "\n".join(f"  {p.relative_to(REPO_ROOT)}:{n}: {ln}" for p, n, ln in offenders)
     )
 
 

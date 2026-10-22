@@ -218,6 +218,7 @@ def _entry_uninstall(_args: argparse.Namespace) -> int:
 
 def _make_systemctl_entry(action: str):  # type: ignore[no-untyped-def]
     """Build the entry function for a systemctl wrapper action."""
+
     def _entry(_args: argparse.Namespace) -> int:
         return _systemctl(action)
 

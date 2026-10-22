@@ -39,7 +39,7 @@ def _discover_pipeline_packages() -> list[tuple[str, Path]]:
         pipeline_name = info.name.rsplit(".", 1)[-1]
         try:
             pkg = importlib.import_module(info.name)
-        except Exception:
+        except Exception:  # noqa: S112 — import health is covered by other contract tests
             continue
         for base in getattr(pkg, "__path__", []):
             results.append((pipeline_name, Path(base)))

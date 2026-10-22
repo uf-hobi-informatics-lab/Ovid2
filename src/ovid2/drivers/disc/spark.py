@@ -51,7 +51,10 @@ _DELIMITER_CANDIDATES: tuple[str, ...] = (",", "\t", "|", "~", ";")
 
 
 def resolve_read_path(
-    root_path: str, pipeline: str, batch_id: str, file_pattern: str,
+    root_path: str,
+    pipeline: str,
+    batch_id: str,
+    file_pattern: str,
 ) -> str:
     """Resolve a pipeline-scoped read path (case-insensitive, glob-aware).
 
@@ -273,7 +276,7 @@ def _cast_null_columns(df: DataFrame) -> DataFrame:
     from pyspark.sql.types import NullType
 
     return df.select(
-        [
+        *[
             sf.lit(None).cast("string").alias(field.name)
             if isinstance(field.dataType, NullType)
             else field.name
@@ -373,7 +376,8 @@ def _write_header(df: DataFrame, work_directory: str, delimiter: str) -> None:
     """
     header_stage = os.path.join(work_directory, "_header_stage")
     (
-        df.limit(0).coalesce(1)
+        df.limit(0)
+        .coalesce(1)
         .write.format("csv")
         .option("header", True)
         .option("nullValue", None)
@@ -384,9 +388,7 @@ def _write_header(df: DataFrame, work_directory: str, delimiter: str) -> None:
     )
     parts = sorted(glob.glob(os.path.join(header_stage, "part-*.csv")))
     if not parts:
-        raise FileNotFoundError(
-            f"Spark produced no header part-file under {header_stage}."
-        )
+        raise FileNotFoundError(f"Spark produced no header part-file under {header_stage}.")
     header_dst = os.path.join(work_directory, "_header.csv")
     # Move the first part; there is only one because of coalesce(1)/limit(0).
     Path(work_directory).mkdir(parents=True, exist_ok=True)
@@ -409,20 +411,17 @@ def _merge_csv_part_files(work_directory: str, output_file_path: str) -> None:
     header = os.path.join(work_directory, "_header.csv")
     if not os.path.isfile(header):
         raise FileNotFoundError(
-            f"Missing header stage under {work_directory} — the "
-            f"single-file merge cannot start."
+            f"Missing header stage under {work_directory} — the single-file merge cannot start."
         )
     part_files = sorted(glob.glob(os.path.join(work_directory, "part-*.csv")))
     if not part_files:
-        raise FileNotFoundError(
-            f"No part files produced by Spark in {work_directory}."
-        )
+        raise FileNotFoundError(f"No part files produced by Spark in {work_directory}.")
 
     inputs = [header, *part_files]
     cat = shutil.which("cat")
     if cat is not None:
         with open(output_file_path, "wb") as out_fh:
-            subprocess.run(  # noqa: S603 — inputs are internal, shell=False
+            subprocess.run(
                 [cat, *inputs],
                 check=True,
                 stdout=out_fh,

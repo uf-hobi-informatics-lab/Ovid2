@@ -52,13 +52,16 @@ def _configure_settings(tmp_path: Path, roots: list[str], enabled: bool = True) 
     os.environ["XDG_CONFIG_HOME"] = str(tmp_path / "config")
     os.environ["OVID2_SETTINGS_FILE"] = str(cfg_dir / "settings.json")
     from ovid2.web.services import settings_svc
+
     settings_svc.invalidate_cache()
 
 
 class TestListDir:
     def test_lists_a_directory(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-        monkeypatch.setenv("OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json"))
+        monkeypatch.setenv(
+            "OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json")
+        )
         target = tmp_path / "target"
         target.mkdir()
         _configure_settings(tmp_path, [str(target)])
@@ -77,7 +80,9 @@ class TestListDir:
 
     def test_rejects_relative_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-        monkeypatch.setenv("OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json"))
+        monkeypatch.setenv(
+            "OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json")
+        )
         _configure_settings(tmp_path, ["/"])
 
         from ovid2.web.services import fs_svc
@@ -89,7 +94,9 @@ class TestListDir:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-        monkeypatch.setenv("OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json"))
+        monkeypatch.setenv(
+            "OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json")
+        )
         allowed = tmp_path / "allowed"
         allowed.mkdir()
         _configure_settings(tmp_path, [str(allowed)])
@@ -106,7 +113,9 @@ class TestListDir:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-        monkeypatch.setenv("OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json"))
+        monkeypatch.setenv(
+            "OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json")
+        )
         allowed = tmp_path / "allowed"
         allowed.mkdir()
         (allowed / "sub").mkdir()
@@ -124,7 +133,9 @@ class TestListDir:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-        monkeypatch.setenv("OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json"))
+        monkeypatch.setenv(
+            "OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json")
+        )
         _configure_settings(tmp_path, [str(tmp_path)])
 
         from ovid2.web.services import fs_svc
@@ -132,11 +143,11 @@ class TestListDir:
         with pytest.raises(fs_svc.FsNotFoundError):
             fs_svc.list_dir(str(tmp_path / "nope"))
 
-    def test_disabled_raises(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_disabled_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-        monkeypatch.setenv("OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json"))
+        monkeypatch.setenv(
+            "OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json")
+        )
         _configure_settings(tmp_path, ["/"], enabled=False)
 
         from ovid2.web.services import fs_svc
@@ -148,7 +159,9 @@ class TestListDir:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-        monkeypatch.setenv("OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json"))
+        monkeypatch.setenv(
+            "OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json")
+        )
         target = tmp_path / "target"
         target.mkdir()
         _configure_settings(tmp_path, [str(target)])
@@ -170,7 +183,9 @@ class TestListDir:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-        monkeypatch.setenv("OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json"))
+        monkeypatch.setenv(
+            "OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json")
+        )
         allowed = tmp_path / "allowed"
         allowed.mkdir()
         _configure_settings(tmp_path, [str(allowed)])
@@ -183,11 +198,11 @@ class TestListDir:
 
 
 class TestListRoots:
-    def test_returns_curated_roots(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_curated_roots(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-        monkeypatch.setenv("OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json"))
+        monkeypatch.setenv(
+            "OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json")
+        )
         home = tmp_path / "home"
         home.mkdir()
         monkeypatch.setenv("HOME", str(home))
@@ -203,11 +218,11 @@ class TestListRoots:
         assert "/processing" in paths
         assert "/" in paths  # last-resort catch-all
 
-    def test_deduplicated(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_deduplicated(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-        monkeypatch.setenv("OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json"))
+        monkeypatch.setenv(
+            "OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json")
+        )
         _configure_settings(tmp_path, ["/", "/"])
         from ovid2.web.services import fs_svc
 
@@ -215,11 +230,11 @@ class TestListRoots:
         paths = [r.path for r in result.roots]
         assert paths.count("/") == 1
 
-    def test_disabled_returns_empty(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_disabled_returns_empty(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-        monkeypatch.setenv("OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json"))
+        monkeypatch.setenv(
+            "OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json")
+        )
         _configure_settings(tmp_path, ["/"], enabled=False)
         from ovid2.web.services import fs_svc
 
@@ -231,7 +246,9 @@ class TestListRoots:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-        monkeypatch.setenv("OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json"))
+        monkeypatch.setenv(
+            "OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json")
+        )
         monkeypatch.setenv(
             "OVID2_CONNECTIONS_DIR", str(tmp_path / "config" / "ovid2" / "connections")
         )

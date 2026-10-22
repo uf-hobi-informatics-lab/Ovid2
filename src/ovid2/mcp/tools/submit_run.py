@@ -53,11 +53,22 @@ class SubmitRunArgs(BaseModel):
         description="Transformations to run, or ['all']. Ignored for kind=copy or kind=move.",
     )
     engine: str = Field("pyspark", description="Compute engine (default: pyspark).")
-    workers: int = Field(25, ge=1, le=200, description="Spark worker count. Ignored for kind=copy or kind=move.")
-    sf_database: str | None = Field(None, description="Snowflake DATABASE override. Ignored for kind=copy or kind=move.")
-    sf_account: str | None = Field(None, description="Snowflake ACCOUNT override. Ignored for kind=copy or kind=move.")
-    sf_schema: str | None = Field(None, description="Snowflake SCHEMA override. Ignored for kind=copy or kind=move.")
-    stderr_log: bool = Field(False, description="Mirror events to stderr as plain-text. Ignored for kind=copy or kind=move.")
+    workers: int = Field(
+        25, ge=1, le=200, description="Spark worker count. Ignored for kind=copy or kind=move."
+    )
+    sf_database: str | None = Field(
+        None, description="Snowflake DATABASE override. Ignored for kind=copy or kind=move."
+    )
+    sf_account: str | None = Field(
+        None, description="Snowflake ACCOUNT override. Ignored for kind=copy or kind=move."
+    )
+    sf_schema: str | None = Field(
+        None, description="Snowflake SCHEMA override. Ignored for kind=copy or kind=move."
+    )
+    stderr_log: bool = Field(
+        False,
+        description="Mirror events to stderr as plain-text. Ignored for kind=copy or kind=move.",
+    )
     extra_mounts: list[str] = Field(
         default_factory=list,
         description=(

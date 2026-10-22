@@ -42,9 +42,7 @@ def test_shipped_specs_load_and_reference_known_ops() -> None:
     for path in yaml_files:
         spec = load_from_yaml(path)
         for step in spec.steps:
-            assert step.op in TRANSFORMS, (
-                f"Spec '{path.name}' references unknown op '{step.op}'."
-            )
+            assert step.op in TRANSFORMS, f"Spec '{path.name}' references unknown op '{step.op}'."
 
 
 @pytest.mark.contract

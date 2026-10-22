@@ -183,9 +183,7 @@ def test_has_formatter_detects_custom_module(tmp_path: Path) -> None:
     sys.path.insert(0, str(tmp_path))
     # Bust any prior namespace-cache so importlib sees the new location.
     for cached in [k for k in list(sys.modules) if k.startswith("ovid2_pipelines")]:
-        if cached == "ovid2_pipelines" or cached.startswith(
-            f"ovid2_pipelines.{pipeline_name}"
-        ):
+        if cached == "ovid2_pipelines" or cached.startswith(f"ovid2_pipelines.{pipeline_name}"):
             del sys.modules[cached]
     importlib.invalidate_caches()
 
@@ -196,8 +194,6 @@ def test_has_formatter_detects_custom_module(tmp_path: Path) -> None:
     finally:
         sys.path.remove(str(tmp_path))
         for cached in [k for k in list(sys.modules) if k.startswith("ovid2_pipelines")]:
-            if cached == "ovid2_pipelines" or cached.startswith(
-                f"ovid2_pipelines.{pipeline_name}"
-            ):
+            if cached == "ovid2_pipelines" or cached.startswith(f"ovid2_pipelines.{pipeline_name}"):
                 del sys.modules[cached]
         importlib.invalidate_caches()

@@ -62,6 +62,8 @@ def scaffold_pipeline(
     """
     from ovid2.tools.new_pipeline import (
         NewPipelineError,
+    )
+    from ovid2.tools.new_pipeline import (
         scaffold_pipeline as _scaffold,
     )
     from ovid2.tools.templates import get_template
@@ -72,15 +74,11 @@ def scaffold_pipeline(
     if request.template:
         template = get_template(request.template)
         if template is None:
-            raise ScaffoldError(
-                f"Unknown pipeline template '{request.template}'."
-            )
+            raise ScaffoldError(f"Unknown pipeline template '{request.template}'.")
         source_pipeline = template.source_pipeline
         cdm = template.cdm
     elif not (source_pipeline and cdm):
-        raise ScaffoldError(
-            "Supply either `template` or both `source_pipeline` and `cdm`."
-        )
+        raise ScaffoldError("Supply either `template` or both `source_pipeline` and `cdm`.")
 
     try:
         dest = _scaffold(request.name, source_pipeline=source_pipeline, cdm=cdm)
@@ -93,8 +91,7 @@ def scaffold_pipeline(
         action="pipeline.scaffold",
         target=request.name,
         detail_json=(
-            f'{{"source_pipeline": "{source_pipeline}", "cdm": "{cdm}", '
-            f'"path": "{dest}"}}'
+            f'{{"source_pipeline": "{source_pipeline}", "cdm": "{cdm}", "path": "{dest}"}}'
         ),
     )
     logger.info(
@@ -112,6 +109,4 @@ def scaffold_pipeline(
 
 
 if __name__ == "__main__":  # pragma: no cover
-    raise SystemExit(
-        "This module is imported by the ovid2 web routes; it is not a script."
-    )
+    raise SystemExit("This module is imported by the ovid2 web routes; it is not a script.")
