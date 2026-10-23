@@ -15,12 +15,14 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse, Response, StreamingResponse
 
+from ovid2.web.auth.csrf import require_json_content_type
 from ovid2.web.auth.deps import AuthContext, require_capability
 from ovid2.web.auth.roles import Capability, Role
 from ovid2.web.models import (
     AddressDetail,
     AddressSummary,
     AddressWrite,
+    AppearancePrefs,
     ApprovalDecision,
     ApprovalListResponse,
     ApprovalSummary,
@@ -121,6 +123,7 @@ from ovid2.web.services import (
     pipeline_plan_svc,
     pipelines_meta_svc,
     pipelines_svc,
+    prefs_svc,
     runs_svc,
     secrets_svc,
     settings_svc,
@@ -1914,6 +1917,55 @@ def api_llm_chat_stream(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ---------------------------------------------------------------------------
+# Current user's own preferences (cosmetic, per user)
+# ---------------------------------------------------------------------------
+
+
+def _prefs_owner(ctx: AuthContext) -> str:
+    """Return the prefs key for ``ctx``; refuse machine principals.
+
+    The assistant (``llm:``) and the MCP service token (``mcp:``) have no
+    appearance of their own and may not edit a human's.
+    """
+    if ctx.user_id.startswith(("llm:", "mcp:")):
+        raise HTTPException(
+            status_code=403, detail="Appearance preferences belong to a signed-in person."
+        )
+    return ctx.user_id
+
+
+@router.get(
+    "/me/appearance",
+    response_model=AppearancePrefs,
+    summary="Get the current user's appearance (theme, colours, fonts, saved looks)",
+)
+def api_get_my_appearance(
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_PUBLIC)),
+) -> AppearancePrefs:
+    """Return the caller's stored appearance (defaults when never saved)."""
+    return AppearancePrefs(**prefs_svc.get_appearance(_prefs_owner(ctx)))
+
+
+@router.put(
+    "/me/appearance",
+    response_model=AppearancePrefs,
+    summary="Replace the current user's appearance (cosmetic, not audited)",
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_put_my_appearance(
+    payload: AppearancePrefs,
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_PUBLIC)),
+) -> AppearancePrefs:
+    """Validate and store the caller's appearance; returns what was stored."""
+    owner = _prefs_owner(ctx)
+    try:
+        doc = prefs_svc.save_appearance(owner, payload.model_dump())
+    except prefs_svc.PrefsError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return AppearancePrefs(**doc)
 
 
 # ---------------------------------------------------------------------------

@@ -185,7 +185,10 @@
     return out.join("");
   }
 
-  /* ---------------- UI actions (browser-only, cosmetic) ---------------- */
+  /* ---------------- UI actions (cosmetic, applied by the browser) ------
+   * Applied here after re-validation; persisted to the user's server-side
+   * profile by the theme.js store (its write* accessors PUT
+   * /api/v1/me/appearance), so applyUiAction itself never fetches. */
 
   var UI_ACTIONS = ["set_appearance", "save_appearance", "apply_saved_appearance"];
   var HEX = /^#[0-9a-fA-F]{6}$/;
@@ -284,18 +287,9 @@
     } catch (e) { return null; }
   }
 
-  // Fold quick colours into appearance vars so a saved theme reproduces
-  // exactly what is on screen (appearance overrides win, as when painted).
-  function foldedOverrides() {
-    var t = themeLib(), a = appLib();
-    var map = {}, c = t.readCustom(), ap = a.readAppearance();
-    if (c.accent) map["--accent"] = c.accent;
-    if (c.bg) map["--bg"] = c.bg;
-    if (c.surface) { map["--bg-elev"] = c.surface; map["--card-bg"] = c.surface; }
-    if (c.fg) map["--fg"] = c.fg;
-    Object.keys(ap).forEach(function (k) { map[k] = ap[k]; });
-    return map;
-  }
+  // Quick colours folded into appearance vars (shared with the panel's
+  // Save so both produce identical saved themes).
+  function foldedOverrides() { return appLib().foldedOverrides(); }
 
   function describeUi(name, args) {
     if (name === "save_appearance") return "Saved the current look as \u201c" + args.name + "\u201d";

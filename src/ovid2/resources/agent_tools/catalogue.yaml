@@ -15,9 +15,10 @@
 #                    without a proposal click and opens the draft's run page.
 #                    A draft never executes; the human gate is the ▶ there.
 #                    Description must start with DRAFT (contract-enforced).
-#   ui_action: true -> (cosmetic, browser-only) no method/path. The browser
-#                    validates + applies the change to its own UI and shows
-#                    Undo. Description must start with UI: (contract-enforced).
+#   ui_action: true -> (cosmetic) no method/path. The browser validates +
+#                    applies the change to its own UI, saves it to the user's
+#                    own appearance profile, and shows Undo. Description must
+#                    start with UI: (contract-enforced).
 #
 # Deliberately excluded (PHI / privilege): secrets, settings, install,
 # users, approvals, LLM connections, storage browse, pipeline file
@@ -179,7 +180,12 @@ tools:
       kind, input/output, tables, packages, schedule, enabled flag). Names
       here (e.g. DC_CHECKS) are configs, NOT pipeline packages - read one
       with get_pipeline_config. A config may keep its input or output open
-      (empty address); the run must then supply it.
+      (empty address); the run must then supply it. Each entry carries
+      engine (config name) and engine_type (pyspark / databricks_spark /
+      snowpark) plus a free-text description. Call this FIRST for any
+      "copy / move A to B [using <engine>]" request and pick the config
+      whose kind matches (copy or move) and whose engine_type equals the
+      requested engine (e.g. "using snowpark" -> engine_type snowpark).
     method: GET
     path: /api/v1/pipelines
     capability: view_pipeline_data
@@ -380,17 +386,21 @@ tools:
 
   - name: create_job_draft
     description: >-
-      DRAFT a fully specified job and open it on the Jobs page, ready to run.
-      This is the PREFERRED way to act on "run X on A into B": nothing
-      executes - the user reviews the run page and presses the Run button.
-      kind is one of etl, analysis, dq_checks, health, copy, move. To run a
-      saved config, copy its kind, pipeline, packages/checks, engine,
-      workers and tables (read it with get_pipeline_config) and set
-      input_address / output_address to address NAMES exactly as returned by
-      list_addresses (e.g. CHAR_DEMO). Only when no saved address fits, use
-      *_connection plus *_location as a plain path like DATABASE/SCHEMA (never
-      JSON). batch_id is a short label for this run (e.g. today's date
-      YYYYMMDD).
+      DRAFT a fully specified job and open it on the Jobs page, ready to run
+      (nothing executes until the user presses Run). Use for "run X on A
+      into B". kind is one of etl, analysis, dq_checks, health, copy, move.
+      If a saved config fits (same kind and engine_type in
+      list_pipeline_configs) use draft_pipeline_config instead; otherwise
+      copy a config's kind, pipeline, packages/checks, engine, workers and
+      tables (get_pipeline_config). Set input_address / output_address to
+      address NAMES exactly as returned by list_addresses (e.g. CHAR_DEMO).
+      Else use *_connection + *_location as a plain DATABASE/SCHEMA path. batch_id is a short
+      label (e.g. today's date YYYYMMDD). For copy / move, omit tables or
+      pass ["all"] - the server lists the source; do NOT guess table names
+      from a CDM. Pass explicit names only for a subset. engine: a
+      list_engines name or bare type (pyspark, databricks_spark, snowpark);
+      omit for pyspark. A user-named engine ("using snowpark") must be
+      kept - never silently drop it.
     method: POST
     path: /api/v1/job-drafts
     capability: submit_jobs
@@ -409,9 +419,9 @@ tools:
         input_location: {type: string, description: "Plain path, e.g. CHAR_DEMO/PUBLIC. Never JSON."}
         output_connection: {type: string, description: "Only if no saved address fits."}
         output_location: {type: string, description: "Plain path, e.g. SANDBOX/PUBLIC. Never JSON."}
-        tables: {type: array, items: {type: string}}
+        tables: {type: array, items: {type: string}, description: "copy/move: omit or [\"all\"] to copy every source table (server expands it); explicit names only for a subset."}
         transformations: {type: array, items: {type: string}}
-        engine: {type: string}
+        engine: {type: string, description: "Engine name from list_engines; omit for pyspark."}
         workers: {type: integer, minimum: 1, maximum: 200}
         packages: {type: array, items: {type: string}}
         parts: {type: array, items: {type: string}}
@@ -460,7 +470,12 @@ tools:
       Use this for "run <config> on A into B": pass input_address /
       output_address as saved address NAMES from list_addresses (they fill
       the config's open input/output for this run), plus optional batch_id
-      (e.g. today's date YYYYMMDD) or tables.
+      (e.g. today's date YYYYMMDD) or tables. PREFERRED for "copy / move A
+      to B using <engine>": choose the copy / move config whose engine_type
+      matches the requested engine, then map A and B to address names
+      (a phrase like "<db> <schema>" matches an address whose location is
+      <DB>/<SCHEMA>, a bare "<db>" one whose location is just <DB>; read
+      list_addresses, never invent names). The config supplies the engine.
     method: POST
     path: /api/v1/pipelines/{name}/draft
     capability: submit_jobs
@@ -522,13 +537,15 @@ tools:
   # ------------------------------------------------------------ UI actions
   # ui_action: true -> no method / path; never reaches the API. The executor
   # emits a ui_action event, the user's browser re-validates the arguments
-  # against its own allow-list (llm_panel.js), applies the change to THAT
-  # browser only (localStorage) and shows an Undo button. Cosmetic and
+  # against its own allow-list (llm_panel.js), applies the change, saves it
+  # to that user's own server-side appearance profile (the Appearance
+  # panel's store, PUT /api/v1/me/appearance) and shows an Undo button.
+  # The assistant's own token can never call that route. Cosmetic and
   # reversible by construction. Description must start with "UI:"; the set
   # of names is pinned by the contract test.
   - name: set_appearance
     description: >-
-      UI: change how the Ovid2 web page looks for this user, in their browser only.
+      UI: change how the Ovid2 web pages look for this user (saved to their own profile).
       Applies immediately and the user can undo it. Use only when the user asks to
       change the theme, colours, fonts or text sizes. Setting `theme` switches the
       base theme and clears earlier colour/font overrides first; `colors` and
@@ -590,7 +607,7 @@ tools:
   - name: save_appearance
     description: >-
       UI: save the user's current look (base theme plus all overrides) as a named
-      saved theme in their browser, overwriting a saved theme with the same name.
+      saved theme in their profile, overwriting a saved theme with the same name.
       The user can undo it. Call set_appearance first if the look should change.
     ui_action: true
     capability: use_llm
@@ -604,7 +621,7 @@ tools:
   - name: apply_saved_appearance
     description: >-
       UI: switch to one of the user's saved themes by name (names are listed in the
-      system prompt). Applies immediately in their browser; the user can undo it.
+      system prompt). Applies immediately on their pages; the user can undo it.
     ui_action: true
     capability: use_llm
     params:

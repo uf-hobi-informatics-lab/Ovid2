@@ -12,13 +12,22 @@ file, or starting a JVM (trust-model requirement:
 ``tests/contract/test_web_no_plaintext_secret_reads.py``). It maps an
 address name to its driver *type* purely from on-disk config, then reads
 the type's :meth:`Driver.supports_expand_all` class flag.
+
+It also performs the *concrete* draft/submit-time expansion
+(:func:`expand_source_tables`) by delegating to the
+``ovid2 tools list-source-tables`` executor broker, so a reviewed draft
+lists the real tables (largest first) instead of the opaque ``all``.
 """
 
 from __future__ import annotations
 
 import json
+import logging
+from dataclasses import dataclass, field
 
 from ovid2.config import addresses as _addresses
+
+logger = logging.getLogger(__name__)
 
 
 def _driver_type_for_address(address_name: str) -> str | None:
@@ -92,4 +101,94 @@ def source_supports_expand_all(address_name: str) -> bool:
         return False
 
 
-__all__ = ["source_supports_expand_all"]
+@dataclass(frozen=True)
+class SourceTablesExpansion:
+    """Outcome of a draft/submit-time ``all`` expansion.
+
+    Attributes:
+        code: ``ok`` (``tables`` is the concrete roster) |
+            ``unsupported`` (the driver type cannot enumerate tables) |
+            ``unavailable`` (it can, but not from the web host — the copy
+            executor re-expands ``all`` at run time) | ``error`` (a real
+            listing failure: missing batch folder, bad schema, …).
+        tables: Concrete ``--tables`` specs, largest first when sizes
+            are known (``LOGICAL`` or ``LOGICAL=SOURCE``).
+        sizes: ``{source_key: bytes}`` for the tables whose size is known.
+        message: Human/LLM-readable reason when ``code != 'ok'``.
+    """
+
+    code: str
+    tables: list[str] = field(default_factory=list)
+    sizes: dict[str, int] = field(default_factory=dict)
+    message: str = ""
+
+
+def expand_source_tables(
+    address_name: str,
+    *,
+    pipeline: str,
+    batch_id: str,
+) -> SourceTablesExpansion:
+    """Expand a copy/move ``all`` request to the source's concrete tables.
+
+    Delegates to the executor broker (``ovid2 tools list-source-tables``)
+    so the web process never resolves a credential. The broker lists the
+    source (Snowflake ``SHOW TABLES``, disc ``scandir``, object-store
+    listing, Access catalogue) and returns the roster ordered largest
+    first.
+
+    Args:
+        address_name: Saved source-address name.
+        pipeline: Pipeline name (folder sources resolve the batch dir).
+        batch_id: Batch identifier.
+
+    Returns:
+        A :class:`SourceTablesExpansion`. Never raises: broker failures
+        map to ``unavailable`` (static support) or ``error``.
+    """
+    if not source_supports_expand_all(address_name):
+        return SourceTablesExpansion(
+            code="unsupported",
+            message=(
+                f"source '{address_name}' cannot list its own tables "
+                f"(driver type '{_driver_type_for_address(address_name) or 'unknown'}')."
+            ),
+        )
+    from ovid2.web.services._broker import BrokerError, run_tool_json
+    from ovid2.web.services.storage_browse_svc import _browse_deadline_seconds
+
+    try:
+        result = run_tool_json(
+            [
+                "list-source-tables",
+                address_name,
+                "--pipeline",
+                pipeline,
+                "--batch_id",
+                batch_id,
+            ],
+            timeout=_browse_deadline_seconds(),
+        )
+    except BrokerError as exc:
+        logger.warning("list-source-tables for '%s' failed: %s", address_name, exc)
+        return SourceTablesExpansion(code="unavailable", message=str(exc))
+
+    code = str(result.get("code") or ("ok" if result.get("ok") else "error"))
+    tables = [str(t) for t in (result.get("tables") or []) if str(t).strip()]
+    if code == "ok" and not tables:
+        code = "error"
+    raw_sizes = result.get("sizes") or {}
+    sizes = (
+        {str(k): int(v) for k, v in raw_sizes.items() if isinstance(v, int)}
+        if isinstance(raw_sizes, dict)
+        else {}
+    )
+    return SourceTablesExpansion(
+        code=code,
+        tables=tables if code == "ok" else [],
+        sizes=sizes,
+        message=str(result.get("message") or ""),
+    )
+
+
+__all__ = ["SourceTablesExpansion", "expand_source_tables", "source_supports_expand_all"]

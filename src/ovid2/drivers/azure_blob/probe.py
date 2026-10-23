@@ -350,12 +350,96 @@ def list_dir_from_config(
                     continue
                 seen_files.add(name)
                 rel = full[len(base) + 1 :] if base else full
-                entries.append(StorageEntry(name=name, kind="file", path=rel))
+                size = getattr(item, "size", None)
+                entries.append(
+                    StorageEntry(
+                        name=name,
+                        kind="file",
+                        path=rel,
+                        size_bytes=int(size) if size is not None else None,
+                    )
+                )
     except Exception as exc:
         raise ValueError(f"Azure list failed: {exc}") from exc
 
     entries.sort(key=lambda e: (0 if e.kind == "dir" else 1, e.name.lower()))
     return entries
+
+
+def list_tables_from_config(
+    args: dict[str, Any],
+    secrets: dict[str, Any],
+    location: dict[str, Any],
+    sub_prefix: str,
+) -> list[Any]:
+    """List the immediate children of ``sub_prefix`` with *summed* sizes.
+
+    Unlike :func:`list_dir_from_config` this walks every blob under the
+    prefix (no delimiter) and aggregates by the first path segment, so a
+    Spark-written ``<table>.csv/part-*`` directory reports the total
+    size of its parts. Used for ``all`` expansion and largest-first
+    copy scheduling — metadata only, no blob bodies are read.
+
+    Args:
+        args: Connection args.
+        secrets: Credential material.
+        location: Address location (``container``, ``path``).
+        sub_prefix: Prefix under ``location.path`` (``pipeline/batch``).
+
+    Returns:
+        One :class:`~ovid2.drivers.base.StorageEntry` per child, with
+        ``size_bytes`` set. An empty list when nothing is under the
+        prefix.
+
+    Raises:
+        NotImplementedError: SDK absent / no container.
+        ValueError: When the Azure API call fails.
+    """
+    from ovid2.drivers.base import StorageEntry
+
+    try:
+        import azure.storage.blob  # noqa: F401
+    except ImportError as exc:
+        raise NotImplementedError("azure-storage-blob is not installed on this host.") from exc
+
+    container = location.get("container") or args.get("container_default")
+    if not container:
+        raise NotImplementedError(
+            "No container set on the storage account (location.container "
+            "or connection container_default)."
+        )
+    mode = resolve_connection_auth_mode(dict(secrets))
+    account = str(args.get("account_name") or "")
+    suffix = str(args.get("endpoint_suffix") or "core.windows.net")
+    url = f"https://{account}.blob.{suffix}" if account else ""
+    base = str(location.get("path") or "").strip().strip("/")
+    sub = (sub_prefix or "").strip().strip("/")
+    parts = [p for p in (base, sub) if p]
+    effective = ("/".join(parts) + "/") if parts else ""
+
+    totals: dict[str, int] = {}
+    is_dir: dict[str, bool] = {}
+    try:
+        client = _build_client(mode, dict(args), dict(secrets), url)
+        container_client = client.get_container_client(str(container))
+        for blob in container_client.list_blobs(name_starts_with=effective or None):
+            rest = str(getattr(blob, "name", ""))[len(effective) :]
+            if not rest:
+                continue
+            head, sep, _tail = rest.partition("/")
+            totals[head] = totals.get(head, 0) + int(getattr(blob, "size", 0) or 0)
+            is_dir[head] = is_dir.get(head, False) or bool(sep)
+    except Exception as exc:
+        raise ValueError(f"Azure list failed: {exc}") from exc
+    return [
+        StorageEntry(
+            name=name,
+            kind="dir" if is_dir[name] else "file",
+            path=f"{sub}/{name}" if sub else name,
+            size_bytes=totals[name],
+        )
+        for name in sorted(totals, key=str.lower)
+    ]
 
 
 __all__ = [
@@ -364,5 +448,6 @@ __all__ = [
     "_build_client",
     "_fast_fail_kwargs",
     "list_dir_from_config",
+    "list_tables_from_config",
     "probe_auth_from_config",
 ]

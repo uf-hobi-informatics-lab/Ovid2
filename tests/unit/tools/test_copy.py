@@ -1037,3 +1037,143 @@ class TestConcurrentCopy:
 
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])
+
+
+class TestLargestFirstAndFolderExpansion:
+    """2026-10-23: largest-first scheduling + folder-source ``all`` expansion."""
+
+    def _run(
+        self,
+        tmp_path: Path,
+        src: Any,
+        args: argparse.Namespace,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> tuple[int, Any]:
+        monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "1")  # deterministic order
+        monkeypatch.delenv("OVID2_COPY_ORDER", raising=False)
+        with (
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.WORK_DIR", tmp_path),
+            mock.patch("ovid2.drivers.registry.driver_from_address") as m_df,
+            mock.patch("ovid2.core.loaders.load_engine") as m_engine,
+            mock.patch("ovid2.display.bus.JsonlEventBus"),
+        ):
+            m_inst.return_value.instance_id = "20261023-000000-abcdef"
+            dst = mock.MagicMock()
+            dst.type_name = "disc"
+            m_df.side_effect = [src, dst]
+            from ovid2.core.engines.stager import SparkEngineStager
+
+            m_engine.return_value.get_stager.return_value = SparkEngineStager(
+                m_engine.return_value,
+            )
+            rc = copy_module._run_container_mode(args)
+        return rc, dst
+
+    def test_tables_start_largest_first(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        args = _mk_args(tables=["demographic", "harvest", "lab_result_cm", "obs_clin"])
+        args._resolved_tables = None
+        src = mock.MagicMock()
+        src.type_name = "snowflake"
+        src.table_sizes.return_value = {"demographic": 10, "lab_result_cm": 900, "obs_clin": 400}
+        rc, _dst = self._run(tmp_path, src, args, monkeypatch)
+        assert rc == 0
+        read_order = [c.args[3] for c in src.read.call_args_list]
+        assert read_order == ["lab_result_cm", "obs_clin", "demographic", "harvest"]
+
+    def test_as_given_env_keeps_order(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        args = _mk_args(tables=["a", "b"])
+        args._resolved_tables = None
+        src = mock.MagicMock()
+        src.type_name = "snowflake"
+        src.table_sizes.return_value = {"b": 99}
+        monkeypatch.setenv("OVID2_COPY_ORDER", "as_given")
+        with mock.patch.dict("os.environ", {"OVID2_COPY_ORDER": "as_given"}):
+            monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "1")
+            with (
+                mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+                mock.patch("ovid2.config.settings.WORK_DIR", tmp_path),
+                mock.patch("ovid2.drivers.registry.driver_from_address") as m_df,
+                mock.patch("ovid2.core.loaders.load_engine") as m_engine,
+                mock.patch("ovid2.display.bus.JsonlEventBus"),
+            ):
+                m_inst.return_value.instance_id = "20261023-000000-abcdef"
+                m_df.side_effect = [src, mock.MagicMock()]
+                from ovid2.core.engines.stager import SparkEngineStager
+
+                m_engine.return_value.get_stager.return_value = SparkEngineStager(
+                    m_engine.return_value,
+                )
+                copy_module._run_container_mode(args)
+        assert [c.args[3] for c in src.read.call_args_list] == ["a", "b"]
+        src.table_sizes.assert_not_called()
+
+    def test_folder_all_expansion_splits_logical_and_source(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Folder sources return ``stem=file`` specs → write stem, read file."""
+        args = _mk_args(tables=["all"])
+        args._resolved_tables = None
+        src = mock.MagicMock()
+        src.type_name = "disc"
+        src.expand_all_tables.return_value = ["demographic=demographic.csv", "vital=vital.csv"]
+        src.table_sizes.return_value = {"vital.csv": 50, "demographic.csv": 5}
+        rc, dst = self._run(tmp_path, src, args, monkeypatch)
+        assert rc == 0
+        src.expand_all_tables.assert_called_once_with(pipeline="demo", batch_id="20260610")
+        assert [c.args[3] for c in src.read.call_args_list] == ["vital.csv", "demographic.csv"]
+        assert [c.args[4] for c in dst.write.call_args_list] == ["vital", "demographic"]
+
+
+class TestSnowparkSkipsSparkCluster:
+    """A non-Spark engine (Snowpark) runs one driver container, no cluster."""
+
+    def _run(self, engine_obj: Any, spark_mode: str = "cluster") -> tuple[Any, Any]:
+        args = _mk_args(engine="snowpark")
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=False),
+            mock.patch("ovid2.core.isolation.cleanup_stale_instances"),
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.SPARK_MODE", spark_mode),
+            mock.patch("ovid2.core.loaders.load_engine", return_value=engine_obj),
+            mock.patch("ovid2.drivers.engine_compat.assert_engine_supports_drivers"),
+            mock.patch(
+                "ovid2.drivers.collector.collect_for_addresses", return_value=_empty_merged()
+            ),
+            mock.patch("ovid2.core.docker.submit_with_cluster", return_value=0) as m_swc,
+            mock.patch("ovid2.core.docker.submit_to_docker", return_value=0) as m_std,
+        ):
+            m_inst.return_value.instance_id = "20261023-000000-abcdef"
+            assert copy_module.main(args) == 0
+        return m_swc, m_std
+
+    def test_snowpark_engine_never_starts_cluster(self) -> None:
+        m_swc, m_std = self._run(mock.Mock(session_is_spark=False))
+        m_swc.assert_not_called()
+        m_std.assert_called_once()
+        assert m_std.call_args.args[0].no_spark_cluster is True
+
+    def test_spark_engine_still_uses_cluster(self) -> None:
+        m_swc, m_std = self._run(mock.Mock(session_is_spark=True))
+        m_swc.assert_called_once()
+        m_std.assert_not_called()
+
+    def test_docker_argv_has_no_cluster_network_for_snowpark(self) -> None:
+        """The generated ``docker run`` argv must not join a Spark network."""
+        from ovid2.core.docker import build_docker_command
+
+        args = _mk_args(engine="snowpark")
+        args.command = "tools copy"
+        args.input_address = args.from_address
+        args.output_address = args.to_address
+        args.no_spark_cluster = True
+        inst = _instance()
+        with mock.patch("ovid2.core.docker.SPARK_MODE", "cluster"):
+            cmd = build_docker_command(args, inst)
+        assert "--network" not in cmd
+        assert not any("spark://" in tok for tok in cmd)
+        assert cmd[-cmd[::-1].index("--engine") :][0] == "snowpark"

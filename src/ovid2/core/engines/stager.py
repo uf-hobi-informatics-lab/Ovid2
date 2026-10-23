@@ -380,8 +380,7 @@ class _NativeSnowparkStrategy(SnowparkStagingStrategy):
         # ``spark.read.format("snowflake")``) and go directly to
         # :meth:`Session.table` with the fully-qualified name.
         location = getattr(driver, "location", None) or {}
-        database = str(location.get("database") or "").strip()
-        schema = str(location.get("schema") or "").strip()
+        database, schema = _snowflake_location_db_schema(location)
         # Identifier resolution — mirror SnowflakeAddress._resolve_dbtable
         # so ``ovid2 etl`` YAMLs authored for disc still work under
         # Snowpark: prefer ``file_name`` when it's a valid SQL id,
@@ -429,8 +428,7 @@ class _NativeSnowparkStrategy(SnowparkStagingStrategy):
         # We accept both a native ``SnowflakeDriver`` (with a
         # ``.location`` dict) and the legacy address bridge.
         location = getattr(driver, "location", None) or {}
-        database = str(location.get("database") or "").strip()
-        schema = str(location.get("schema") or "").strip()
+        database, schema = _snowflake_location_db_schema(location)
 
         if not database or not schema:
             # Fall back to the pipeline-standard schema layout
@@ -439,7 +437,7 @@ class _NativeSnowparkStrategy(SnowparkStagingStrategy):
             # the existing OVID_* materialisation contract.
             from ovid2.drivers.snowflake.spark import SnowflakeAddress
 
-            legacy = SnowflakeAddress(dict(location))
+            legacy = SnowflakeAddress({**dict(location), "database": database})
             legacy._validate_database()
             database = legacy.database
             schema = legacy._schema_name(pipeline, batch_id)
@@ -496,6 +494,25 @@ class _NativeSnowparkStrategy(SnowparkStagingStrategy):
                 [database, schema, table_name.upper()],
                 mode="overwrite",
             )
+
+
+def _snowflake_location_db_schema(location: Any) -> tuple[str, str]:
+    """Return ``(database, schema)`` for a Snowflake driver location.
+
+    Explicit ``database`` / ``schema`` keys win; otherwise a ``path`` of
+    the form ``DATABASE[/SCHEMA]`` (the generic web-UI address shape) is
+    split. Either element is ``""`` when absent — unlike the read-side
+    ``SnowflakeDriver._database_schema`` there is no ``PUBLIC`` default,
+    so a schema-less write target keeps the ``OVID_{pipeline}_{batch}``
+    layout.
+    """
+    from ovid2.config.addresses import split_snowflake_path
+
+    loc = dict(location or {})
+    path_db, path_schema = split_snowflake_path(loc.get("path"))
+    database = str(loc.get("database") or path_db or "").strip()
+    schema = str(loc.get("schema") or path_schema or "").strip()
+    return database, schema
 
 
 def _all_string_table(native: Any, fqtn: str) -> Any:

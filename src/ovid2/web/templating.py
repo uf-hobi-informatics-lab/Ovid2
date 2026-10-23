@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi.templating import Jinja2Templates
@@ -244,6 +244,34 @@ def _auth_enabled() -> bool:
         return False
 
 
+def user_appearance(request: object) -> dict[str, Any]:
+    """Return the current person's stored appearance for the pre-paint script.
+
+    Registered as a Jinja global and rendered (``|tojson``) into
+    ``_appearance_prepaint.html`` on every full page so the first paint
+    already carries the user's theme on any browser. Unresolved visitors
+    (the login page) and machine principals (``llm:`` / ``mcp:``) get the
+    defaults. Any storage failure degrades to the defaults rather than
+    breaking the page chrome.
+
+    Args:
+        request: The Starlette request from the template context.
+
+    Returns:
+        The appearance document (``theme``, ``colors``, ``appearance``,
+        ``saved_themes``).
+    """
+    from ovid2.web.services import prefs_svc
+
+    ctx = _current_ctx(request)
+    if ctx is None or ctx.user_id.startswith(("llm:", "mcp:")):
+        return prefs_svc.default_appearance()
+    try:
+        return prefs_svc.get_appearance(ctx.user_id)
+    except Exception:
+        return prefs_svc.default_appearance()
+
+
 def _register_globals() -> None:
     """Register template globals that must be imported lazily.
 
@@ -261,6 +289,7 @@ def _register_globals() -> None:
     templates.env.globals["has_cap"] = has_cap
     templates.env.globals["current_user_ctx"] = current_user_ctx
     templates.env.globals["auth_enabled"] = _auth_enabled
+    templates.env.globals["user_appearance"] = user_appearance
 
 
 _register_globals()

@@ -126,6 +126,28 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     browse.set_defaults(_entry=_browse_storage_entry, _tool="browse-storage")
 
+    # ``ovid2 tools list-source-tables <address> --pipeline P --batch_id B``
+    # — expand a copy/move ``all`` request to concrete table specs (largest
+    # first) in the executor trust domain. The web tier calls this at
+    # draft/submit time so the reviewed draft shows the real roster.
+    list_src = tool_subparsers.add_parser(
+        "list-source-tables",
+        help="Expand a copy/move source to its concrete tables, print JSON.",
+        description=(
+            "Resolves the named source address (secrets included), calls "
+            "the driver's expand_all_tables + table_sizes capabilities, "
+            "and prints one JSON object on the last line of stdout: "
+            '{"ok", "supported", "type", "tables": [spec...], '
+            '"sizes": {file_name: bytes}, "message"}. Tables are ordered '
+            "largest first when sizes are known. Metadata only — no data "
+            "is read."
+        ),
+    )
+    list_src.add_argument("address", help="Source address config name.")
+    list_src.add_argument("--pipeline", required=True, help="Pipeline name.")
+    list_src.add_argument("--batch_id", required=True, help="Batch identifier.")
+    list_src.set_defaults(_entry=_list_source_tables_entry, _tool="list-source-tables")
+
     # ``ovid2 tools test-llm <name>`` / ``ovid2 tools llm-chat`` — LLM
     # executor commands (L1). The web tier uses the faster
     # ``python -m ovid2.llm`` entry; these are the operator-facing twins.
@@ -396,7 +418,8 @@ def _browse_storage_entry(args: argparse.Namespace) -> int:
     endpoint. JSON schema::
 
         {"ok": bool, "supported": bool, "type": str, "prefix": str,
-         "message": str|None, "entries": [{"name","kind","path"}, ...]}
+         "message": str|None,
+         "entries": [{"name","kind","path"[,"size_bytes"]}, ...]}
     """
     import json as _json
 
@@ -432,10 +455,7 @@ def _browse_storage_entry(args: argparse.Namespace) -> int:
                     "type": type_name,
                     "prefix": prefix or "",
                     "message": None,
-                    "entries": [
-                        {"name": e.name, "kind": e.kind, "path": e.path}
-                        for e in (raw_entries or [])
-                    ],
+                    "entries": [e.to_dict() for e in (raw_entries or [])],
                 }
             except NotImplementedError as exc:
                 result = {
@@ -466,6 +486,90 @@ def _browse_storage_entry(args: argparse.Namespace) -> int:
             "message": f"Listing failed: {exc}",
             "entries": [],
         }
+
+    sys.stdout.write(_json.dumps(result) + "\n")
+    sys.stdout.flush()
+    return 0 if result.get("ok") else 1
+
+
+def _list_source_tables_entry(args: argparse.Namespace) -> int:
+    """Expand a copy/move source to concrete ``--tables`` specs, emit JSON.
+
+    Executor-domain counterpart of the web tier's draft-time ``all``
+    expansion (:mod:`ovid2.web.services._table_expand`). JSON schema::
+
+        {"ok": bool, "code": "ok"|"unsupported"|"unavailable"|"error",
+         "supported": bool, "type": str, "tables": [str, ...],
+         "sizes": {str: int}, "message": str|None}
+
+    ``supported=False`` means the driver type cannot enumerate tables;
+    ``ok=False`` with ``supported=True`` means it can but listing failed
+    (missing folder, bad schema) — ``message`` says why.
+    """
+    import json as _json
+
+    from ovid2.drivers.registry import driver_from_address
+    from ovid2.tools.table_order import sort_by_size
+    from ovid2.tools.table_specs import TableSpecError, parse_table_specs
+
+    # ``code``: ``ok`` | ``unsupported`` (driver type cannot enumerate) |
+    # ``unavailable`` (it can, but not from this host — e.g. SDK / jars
+    # missing; the copy executor re-expands ``all`` at run time) |
+    # ``error`` (a concrete listing failure — missing folder, bad schema).
+    result: dict[str, object] = {
+        "ok": False,
+        "code": "unsupported",
+        "supported": False,
+        "type": "",
+        "tables": [],
+        "sizes": {},
+        "message": None,
+    }
+    try:
+        driver = driver_from_address(args.address, pipeline=args.pipeline)
+        result["type"] = driver.type_name
+        if not type(driver).supports_expand_all():
+            result["message"] = (
+                f"'{driver.type_name}' sources cannot list their tables; "
+                "pass an explicit tables list."
+            )
+        else:
+            result["supported"] = True
+            result["code"] = "error"
+            expanded = driver.expand_all_tables(pipeline=args.pipeline, batch_id=args.batch_id)
+            if expanded is None:
+                result["code"] = "unavailable"
+                result["message"] = "table enumeration is unavailable for this source."
+            elif not expanded:
+                result["message"] = "the source contains no tables."
+            else:
+                specs = parse_table_specs(expanded)
+                try:
+                    sizes = driver.table_sizes(
+                        [s.file_name for s in specs],
+                        pipeline=args.pipeline,
+                        batch_id=args.batch_id,
+                    )
+                except Exception as exc:  # sizes are advisory
+                    logger.warning("table_sizes failed for %s: %s", args.address, exc)
+                    sizes = {}
+                ordered = sort_by_size(specs, sizes) if sizes else specs
+                result["tables"] = [
+                    s.table_name if s.table_name == s.file_name else f"{s.table_name}={s.file_name}"
+                    for s in ordered
+                ]
+                result["sizes"] = sizes
+                result["ok"] = True
+                result["code"] = "ok"
+    except NotImplementedError as exc:
+        result["code"] = "unavailable"
+        result["message"] = f"listing is unavailable on this host: {exc}"
+    except (FileNotFoundError, PermissionError, ValueError, KeyError, TableSpecError) as exc:
+        result["code"] = "error"
+        result["message"] = str(exc)
+    except Exception as exc:
+        result["code"] = "error"
+        result["message"] = f"Listing failed: {exc}"
 
     sys.stdout.write(_json.dumps(result) + "\n")
     sys.stdout.flush()

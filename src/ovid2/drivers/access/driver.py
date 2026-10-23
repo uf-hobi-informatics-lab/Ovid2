@@ -277,6 +277,9 @@ class AccessDriver(Driver):
     def expand_all_tables(
         self,
         location: dict[str, Any] | None = None,
+        *,
+        pipeline: str | None = None,
+        batch_id: str | None = None,
     ) -> list[str] | None:
         """Expand an ``all`` copy/move request to the file's user tables.
 
@@ -285,7 +288,8 @@ class AccessDriver(Driver):
         ``all`` for an Access source: it means "every user table in the
         file, after the location's ``exclude_tables`` deny-list". Uses
         the Spark-free enumerator so the web tier can validate the
-        request before spinning up a cluster.
+        request before spinning up a cluster. ``pipeline`` / ``batch_id``
+        are ignored (the file *is* the source).
 
         Returns:
             The concrete list of table names, or ``None`` when
@@ -293,6 +297,7 @@ class AccessDriver(Driver):
             caller keeps rejecting ``all`` rather than silently copying
             nothing.
         """
+        del pipeline, batch_id
         loc = dict(location or self.location or {})
         # The web tier (Spark-free reader) reads the *host* path; the
         # container Spark fallback reads the *container*-visible path.

@@ -163,7 +163,7 @@ def test_theme_js_served(web_client: object) -> None:
     response = web_client.get("/static/theme.js")  # type: ignore[attr-defined]
     assert response.status_code == 200
     body = response.text
-    assert "ovid2Theme" in body
+    assert "OVID2_APPEARANCE" in body
     assert "data-theme" in body
 
 
@@ -183,7 +183,7 @@ def test_base_template_has_prepaint_script(web_client: object) -> None:
     response = web_client.get("/")  # type: ignore[attr-defined]
     body = response.text
     # Inline script sets data-theme before stylesheet loads.
-    prepaint_pos = body.find("ovid2Theme")
+    prepaint_pos = body.find("window.OVID2_APPEARANCE")
     css_pos = body.find("/static/ovid2.css")
     assert prepaint_pos != -1
     assert css_pos != -1

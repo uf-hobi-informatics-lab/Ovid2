@@ -16,11 +16,11 @@
  *   2. The APPEARANCE EDITOR rendered inside the panel: pick one of the
  *      six base themes, then restyle five component groups
  *      independently (colour + font size + font weight + font family),
- *      with LIVE preview. Overrides persist to localStorage
- *      (ovid2Appearance, a flat map of CSS-var name -> value) and are
- *      re-applied before first paint by the snippet in base.html. Named
- *      themes (base theme + all overrides) can be saved, applied, and
- *      deleted (ovid2SavedThemes).
+ *      with LIVE preview. Overrides (a flat map of CSS-var name -> value)
+ *      and named saved themes (base theme + all overrides) are stored
+ *      per user ON THE SERVER through the store in theme.js
+ *      (/api/v1/me/appearance) and re-applied before first paint on
+ *      every page, on any browser the user signs in from.
  *
  * The assistant (llm_panel.js) drives the same stores through
  * window.Ovid2Appearance (set_appearance / save_appearance /
@@ -37,8 +37,6 @@
   "use strict";
 
   var PANEL_KEY = "ovid2RightPanelOpen";
-  var APPEARANCE_KEY = "ovid2Appearance";
-  var SAVED_KEY = "ovid2SavedThemes";
 
   var html = document.documentElement;
 
@@ -150,70 +148,21 @@
 
   /* ---- Appearance override store --------------------------------- */
 
-  function readAppearance() {
-    try {
-      var raw = localStorage.getItem(APPEARANCE_KEY);
-      if (!raw) { return {}; }
-      var obj = JSON.parse(raw);
-      return (obj && typeof obj === "object") ? obj : {};
-    } catch (e) {
-      return {};
-    }
-  }
+  // The store itself lives in theme.js (server-backed, in memory); these
+  // are thin wrappers so the editor and the assistant share one copy.
+  function readAppearance() { return lib.readAppearance ? lib.readAppearance() : {}; }
+  function writeAppearance(map) { if (lib.writeAppearance) { lib.writeAppearance(map || {}); } }
 
-  function writeAppearance(map) {
-    try {
-      if (map && Object.keys(map).length) {
-        localStorage.setItem(APPEARANCE_KEY, JSON.stringify(map));
-      } else {
-        localStorage.removeItem(APPEARANCE_KEY);
-      }
-    } catch (e) { /* session-only */ }
-  }
-
-  // Apply a flat map of CSS-var name -> value inline on <html>. Clears
-  // every var this feature knows about first so removing an override
-  // truly reverts. Also re-derives accent-hover/subtle/fg when accent
-  // is overridden (mirrors theme.js applyCustomOverrides).
+  // Store ``map`` as the appearance overrides and repaint everything.
+  // Kept as the editor's live-preview entry point.
   function applyAppearance(map) {
-    var style = html.style;
-    // Superset of every token any group can touch.
-    ALLOWED_VARS.forEach(function (p) { style.removeProperty(p); });
-    if (!map) { return; }
-    Object.keys(map).forEach(function (k) {
-      if (/^--[a-z0-9-]+$/.test(k) && typeof map[k] === "string" && map[k]) {
-        style.setProperty(k, map[k]);
-      }
-    });
-    // Derive accent companions so buttons/links stay coherent.
-    if (map["--accent"] && lib.shade) {
-      style.setProperty("--accent-hover", lib.shade(map["--accent"], 0.18));
-      style.setProperty("--accent-subtle", lib.rgbaFromHex(map["--accent"], 0.14));
-      style.setProperty("--accent-fg", lib.readableInk(map["--accent"]));
-    }
+    writeAppearance(map);
+    repaint();
   }
 
-  // Repaint every inline override from the two stores, in the same order
-  // as the pre-paint snippet in base.html: quick custom colours first
-  // (theme.js), then per-component appearance overrides on top. Needed
-  // because applyAppearance() and applyCustomOverrides() each clear the
-  // shared colour vars before writing their own.
-  function repaint() {
-    applyAppearance({});
-    if (lib.applyCustomOverrides) { lib.applyCustomOverrides(lib.readCustom ? lib.readCustom() : {}); }
-    var map = readAppearance();
-    var style = html.style;
-    Object.keys(map).forEach(function (k) {
-      if (ALLOWED_VARS.indexOf(k) !== -1 && typeof map[k] === "string" && map[k]) {
-        style.setProperty(k, map[k]);
-      }
-    });
-    if (map["--accent"] && lib.shade) {
-      style.setProperty("--accent-hover", lib.shade(map["--accent"], 0.18));
-      style.setProperty("--accent-subtle", lib.rgbaFromHex(map["--accent"], 0.14));
-      style.setProperty("--accent-fg", lib.readableInk(map["--accent"]));
-    }
-  }
+  // Repaint every inline override from the store in one fixed order:
+  // quick colours, then per-component overrides (theme.js paint()).
+  function repaint() { if (lib.repaint) { lib.repaint(); } }
 
   /* ---- Editor UI ------------------------------------------------- */
 
@@ -252,14 +201,13 @@
       row.appendChild(strip);
       row.appendChild(el("span", "theme-row-label", theme.label));
       row.addEventListener("click", function () {
-        if (lib.applyTheme) { lib.applyTheme(theme.slug); }
-        // Selecting a base theme discards per-component overrides so the
-        // Components editor below reflects THIS theme's own token values
-        // rather than the previous theme's customisations. Clearing the
-        // stored map and stripping the inline vars lets the freshly
-        // applied theme's stylesheet cascade take over cleanly.
+        // Selecting a base theme discards earlier colour/font overrides
+        // (quick colours and per-component) so the Components editor
+        // below reflects THIS theme's own token values. Same rule as the
+        // assistant's set_appearance.
+        if (lib.writeCustom) { lib.writeCustom({}); }
         writeAppearance({});
-        applyAppearance({});
+        if (lib.applyTheme) { lib.applyTheme(theme.slug); }
         markActiveTheme(container);
         // Re-seed colour inputs so they reflect the new theme's tokens.
         seedAllInputs(container);
@@ -272,7 +220,7 @@
   }
 
   function markActiveTheme(container) {
-    var slug = lib.currentTheme ? lib.currentTheme() : "light";
+    var slug = lib.currentTheme ? lib.currentTheme() : "clinical";
     var rows = container.querySelectorAll("[data-theme-slug]");
     for (var i = 0; i < rows.length; i++) {
       rows[i].classList.toggle("active",
@@ -357,7 +305,6 @@
     ["ff", "fs", "fw"].forEach(function (k) {
       if (group[k]) { delete map[group[k]]; }
     });
-    writeAppearance(map);
     applyAppearance(map);
     seedAllInputs(container);
     updateContrast(container);
@@ -432,7 +379,6 @@
         map[token] = unit ? (val + unit) : val;
       }
     }
-    writeAppearance(map);
     applyAppearance(map);
     updateContrast(container);
   }
@@ -449,19 +395,23 @@
 
   /* ---- Saved themes ---------------------------------------------- */
 
-  function readSaved() {
-    try {
-      var raw = localStorage.getItem(SAVED_KEY);
-      var arr = raw ? JSON.parse(raw) : [];
-      return Array.isArray(arr) ? arr : [];
-    } catch (e) {
-      return [];
-    }
-  }
+  function readSaved() { return lib.readSaved ? lib.readSaved() : []; }
+  function writeSaved(arr) { if (lib.writeSaved) { lib.writeSaved(arr || []); } }
 
-  function writeSaved(arr) {
-    try { localStorage.setItem(SAVED_KEY, JSON.stringify(arr)); }
-    catch (e) { /* session-only */ }
+  // Fold quick colours into the per-component map so a saved theme
+  // reproduces exactly what is on screen (component overrides win, as
+  // when painted). Used by the panel's Save and the assistant's
+  // save_appearance alike.
+  function foldedOverrides() {
+    var map = {};
+    var c = lib.readCustom ? lib.readCustom() : {};
+    var ap = readAppearance();
+    if (c.accent) { map["--accent"] = c.accent; }
+    if (c.bg) { map["--bg"] = c.bg; }
+    if (c.surface) { map["--bg-elev"] = c.surface; map["--card-bg"] = c.surface; }
+    if (c.fg) { map["--fg"] = c.fg; }
+    Object.keys(ap).forEach(function (k) { map[k] = ap[k]; });
+    return map;
   }
 
   function buildSavedSection(container) {
@@ -492,9 +442,10 @@
         var apply = el("button", null, "Apply");
         apply.type = "button";
         apply.addEventListener("click", function () {
-          if (entry.theme && lib.applyTheme) { lib.applyTheme(entry.theme); }
+          if (lib.writeCustom) { lib.writeCustom({}); }
           writeAppearance(entry.overrides || {});
-          applyAppearance(entry.overrides || {});
+          if (entry.theme && lib.applyTheme) { lib.applyTheme(entry.theme); }
+          else { repaint(); }
           seedAllInputs(container);
           updateContrast(container);
         });
@@ -518,8 +469,8 @@
       var arr = readSaved();
       var entry = {
         name: nm,
-        theme: lib.currentTheme ? lib.currentTheme() : "light",
-        overrides: readAppearance()
+        theme: lib.currentTheme ? lib.currentTheme() : "clinical",
+        overrides: foldedOverrides()
       };
       // Overwrite a same-named theme rather than duplicating.
       var existing = -1;
@@ -542,10 +493,8 @@
     var resetAll = el("button", "button small", "Reset all");
     resetAll.type = "button";
     resetAll.addEventListener("click", function () {
-      writeAppearance({});
-      applyAppearance({});
       if (lib.writeCustom) { lib.writeCustom({}); }
-      if (lib.applyCustomOverrides) { lib.applyCustomOverrides({}); }
+      applyAppearance({});
       seedAllInputs(container);
       updateContrast(container);
     });
@@ -685,6 +634,7 @@
     writeSaved: writeSaved,
     refresh: refreshEditor,
     repaint: repaint,
+    foldedOverrides: foldedOverrides,
     ALLOWED_VARS: ALLOWED_VARS.slice()
   };
 })();

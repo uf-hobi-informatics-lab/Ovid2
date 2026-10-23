@@ -212,4 +212,4 @@ def test_theme_controls_are_announced(web_client: object) -> None:
     js = web_client.get("/static/appearance.js").text  # type: ignore[attr-defined]
     assert "aria-expanded" in js
     theme = web_client.get("/static/theme.js").text  # type: ignore[attr-defined]
-    assert "ovid2Theme" in theme
+    assert "OVID2_APPEARANCE" in theme

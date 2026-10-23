@@ -39,6 +39,11 @@ def registered_pipeline(isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.
         json.dumps({"src_name": "disc", "src_args": {"path": "/tmp/out"}}),
         encoding="utf-8",
     )
+    # A source type that cannot list its own tables (legacy postgres).
+    (configs / "in_pg.json").write_text(
+        json.dumps({"src_name": "postgres", "src_args": {"host": "db.example.org"}}),
+        encoding="utf-8",
+    )
     yield "tp_jobs"
     for mod in list(sys.modules):
         if mod == "ovid2_pipelines" or mod.startswith("ovid2_pipelines."):
@@ -357,7 +362,7 @@ def test_submit_copy_rejects_all_tables(registered_pipeline: str) -> None:
                 kind="copy",
                 pipeline=registered_pipeline,
                 batch_id="B_COPY",
-                input_address="in_test",
+                input_address="in_pg",
                 output_address="out_test",
                 tables=["all"],
                 transformations=[],
@@ -728,7 +733,7 @@ def test_submit_move_rejects_all_tables(registered_pipeline: str) -> None:
                 kind="move",
                 pipeline=registered_pipeline,
                 batch_id="B_MOVE",
-                input_address="in_test",
+                input_address="in_pg",
                 output_address="out_test",
                 tables=["all"],
                 transformations=[],
@@ -1127,3 +1132,98 @@ def test_list_jobs_accepts_draft_filter(registered_pipeline: str) -> None:
     jobs_svc.create_draft(_make_request(registered_pipeline))
     jobs_svc.submit(_make_request(registered_pipeline))
     assert jobs_svc.list_jobs(status="draft").total == 1
+
+
+# ---------------------------------------------------------------------------
+# 2026-10-23: draft/submit-time ``tables=['all']`` expansion for copy/move.
+# ---------------------------------------------------------------------------
+
+
+def _copy_all_request(pipeline: str, kind: str = "copy") -> JobSubmitRequest:
+    return JobSubmitRequest(
+        kind=kind,
+        pipeline=pipeline,
+        batch_id="20260916",
+        input_address="in_test",
+        output_address="out_test",
+        tables=["all"],
+        transformations=[],
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("kind", ["copy", "move"])
+def test_draft_expands_all_to_concrete_largest_first(
+    registered_pipeline: str, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    """The stored draft lists the broker's roster, not the opaque ``all``."""
+    calls: list[list[str]] = []
+
+    def _fake_broker(tool_args: list[str], **_kw: object) -> dict[str, object]:
+        calls.append(tool_args)
+        return {
+            "ok": True,
+            "code": "ok",
+            "tables": ["LAB_RESULT_CM", "DEMOGRAPHIC"],
+            "sizes": {"LAB_RESULT_CM": 900, "DEMOGRAPHIC": 10},
+        }
+
+    monkeypatch.setattr("ovid2.web.services._broker.run_tool_json", _fake_broker)
+    response = jobs_svc.create_draft(_copy_all_request(registered_pipeline, kind))
+    detail = jobs_svc.get_job(response.job_id)
+    assert detail is not None
+    assert detail.tables == ["LAB_RESULT_CM", "DEMOGRAPHIC"]
+    assert calls == [
+        [
+            "list-source-tables",
+            "in_test",
+            "--pipeline",
+            registered_pipeline,
+            "--batch_id",
+            "20260916",
+        ]
+    ]
+
+
+@pytest.mark.unit
+def test_submit_all_listing_error_is_actionable(
+    registered_pipeline: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "ovid2.web.services._broker.run_tool_json",
+        lambda *_a, **_k: {"ok": False, "code": "error", "message": "no batch folder for x"},
+    )
+    with pytest.raises(jobs_svc.SubmitError, match=r"could not expand.*no batch folder"):
+        jobs_svc.submit(_copy_all_request(registered_pipeline))
+
+
+@pytest.mark.unit
+def test_submit_all_unavailable_keeps_sentinel_for_runtime(
+    registered_pipeline: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Expandable type but listing unavailable on the web host → keep ``all``."""
+    from ovid2.web.services._broker import BrokerError
+
+    def _boom(*_a: object, **_k: object) -> dict[str, object]:
+        raise BrokerError("timed out")
+
+    monkeypatch.setattr("ovid2.web.services._broker.run_tool_json", _boom)
+    response = jobs_svc.submit(_copy_all_request(registered_pipeline))
+    detail = jobs_svc.get_job(response.job_id)
+    assert detail is not None
+    assert detail.tables == ["all"]
+
+
+@pytest.mark.unit
+def test_explicit_tables_skip_broker(
+    registered_pipeline: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _never(*_a: object, **_k: object) -> dict[str, object]:
+        raise AssertionError("broker must not run for an explicit list")
+
+    monkeypatch.setattr("ovid2.web.services._broker.run_tool_json", _never)
+    request = _copy_all_request(registered_pipeline)
+    request.tables = ["demographic"]
+    response = jobs_svc.submit(request)
+    detail = jobs_svc.get_job(response.job_id)
+    assert detail is not None and detail.tables == ["demographic"]

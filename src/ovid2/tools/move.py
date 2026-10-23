@@ -182,6 +182,12 @@ def main(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
+    # Non-Spark engines (Snowpark) compute inside the warehouse — the
+    # host side then runs a single driver container, no Spark cluster.
+    from ovid2.core.docker import engine_needs_spark_cluster
+
+    args._spark_cluster = engine_needs_spark_cluster(engine)
+
     if not is_inside_docker():
         # Validate operator-supplied mounts up-front so a bad spec
         # fails before we spin up a Spark cluster.
@@ -253,7 +259,7 @@ def _run_host_mode(args: argparse.Namespace) -> int:
     contract is identical.
     """
     from ovid2.config.settings import SPARK_MODE
-    from ovid2.core.docker import submit_to_docker, submit_with_cluster
+    from ovid2.core.docker import submit_one_shot
     from ovid2.core.isolation import OvidInstance, cleanup_stale_instances
 
     cleanup_stale_instances()
@@ -275,9 +281,12 @@ def _run_host_mode(args: argparse.Namespace) -> int:
     if not hasattr(args, "workers"):
         args.workers = 25
 
-    if SPARK_MODE == "cluster":
-        return submit_with_cluster(args, instance)
-    return submit_to_docker(args, instance)
+    return submit_one_shot(
+        args,
+        instance,
+        spark_cluster=bool(getattr(args, "_spark_cluster", True)),
+        spark_mode=SPARK_MODE,
+    )
 
 
 def _run_container_mode(args: argparse.Namespace) -> int:
@@ -388,7 +397,6 @@ def _run_container_mode(args: argparse.Namespace) -> int:
     # against the source driver, which enumerates every user table in
     # the source (e.g. the tables inside an Access ``.accdb`` file).
     from ovid2.tools.table_specs import (
-        TableSpec,
         is_all_sentinel,
         parse_table_specs,
     )
@@ -402,20 +410,35 @@ def _run_container_mode(args: argparse.Namespace) -> int:
             # back to the Spark JDBC path, which needs an active session.
             # ``get_session`` is idempotent (the engine caches it).
             engine.get_session()
-            expanded = src_driver.expand_all_tables()
+            expanded = src_driver.expand_all_tables(
+                pipeline=args.pipeline,
+                batch_id=args.batch_id,
+            )
             if expanded is None:
                 raise ValueError(
                     f"source '{args.from_address}' "
                     f"({src_driver.type_name}) cannot expand `--tables "
                     f"all`; pass an explicit table list."
                 )
-            resolved = [TableSpec(table_name=name, file_name=name) for name in expanded]
+            resolved = parse_table_specs(expanded)
             print(
                 f"[ovid2 tools move] expanded --tables all → "
                 f"{len(resolved)} table(s): {', '.join(t.table_name for t in resolved)}"
             )
         else:
             resolved = parse_table_specs(args.tables)
+
+    # Largest-first order (parity with ``tools copy``). ``move`` runs
+    # tables serially, so this does not shorten the run; it makes the
+    # big tables fail fast and keeps the two tools' rosters consistent.
+    from ovid2.tools.table_order import order_largest_first
+
+    resolved, _sizes = order_largest_first(
+        resolved,
+        src_driver,
+        pipeline=args.pipeline,
+        batch_id=args.batch_id,
+    )
 
     failures = 0
     try:

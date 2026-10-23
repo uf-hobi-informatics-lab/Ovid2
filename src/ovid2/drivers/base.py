@@ -187,15 +187,24 @@ class StorageEntry:
             to descend into this entry (for ``dir`` kinds) or to
             reference it (for ``file`` / ``table`` kinds). Backend-
             specific but always round-trippable by the same driver.
+        size_bytes: Storage size of a ``file`` / ``table`` leaf when the
+            backend reports it for free in its listing metadata (file
+            ``stat``, blob / object size, Snowflake ``SHOW TABLES``
+            ``bytes``). ``None`` when unknown — never computed by
+            scanning data.
     """
 
     name: str
     kind: str  # ``dir`` | ``file`` | ``table``
     path: str
+    size_bytes: int | None = None
 
-    def to_dict(self) -> dict[str, str]:
-        """Return a JSON-serialisable dict."""
-        return {"name": self.name, "kind": self.kind, "path": self.path}
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serialisable dict (``size_bytes`` only when known)."""
+        payload: dict[str, Any] = {"name": self.name, "kind": self.kind, "path": self.path}
+        if self.size_bytes is not None:
+            payload["size_bytes"] = self.size_bytes
+        return payload
 
 
 # ---------------------------------------------------------------------------
@@ -452,31 +461,78 @@ class Driver(ABC):
     def expand_all_tables(
         self,
         location: dict[str, Any] | None = None,
+        *,
+        pipeline: str | None = None,
+        batch_id: str | None = None,
     ) -> list[str] | None:
         """Return the concrete table list this source expands ``all`` to.
 
         ``copy`` / ``move`` take an *explicit* ``--tables`` list because
         the underlying CLI has no ``all`` sentinel. A driver whose source
-        is a self-describing container (e.g. an Access ``.accdb`` file
-        holding many user tables) can override this to enumerate every
-        table so the web tier may safely accept ``all`` and expand it.
+        can enumerate its own tables (an Access ``.accdb`` file, a
+        Snowflake schema, a disc / object-store batch folder) overrides
+        this so ``all`` can be expanded — by the web tier at draft time
+        (via the ``ovid2 tools list-source-tables`` executor broker) or
+        by the copy executor at run time.
 
         Args:
             location: The per-address location payload (falls back to
                 ``self.location``). Lets a driver honour per-address
                 allow/deny filters when expanding.
+            pipeline: Pipeline name — folder-shaped sources
+                (disc / s3 / azure_blob) resolve
+                ``{root}/{pipeline}/{batch_id}/`` the same way
+                :meth:`read` does. Ignored by container-shaped sources.
+            batch_id: Batch identifier (see ``pipeline``).
 
         Returns:
-            The concrete list of logical table names to copy, or
-            ``None`` when this driver cannot expand ``all`` (the
-            default). ``None`` means the web tier keeps rejecting an
-            ``all`` / empty tables list for this source.
+            The concrete list of ``--tables`` specs to copy. Each entry
+            is a bare logical name or a ``LOGICAL=SOURCE`` split
+            (see :mod:`ovid2.tools.table_specs`) — folder sources return
+            ``demographic=demographic.csv`` so the destination stem
+            drops the extension. ``None`` when this driver cannot expand
+            ``all`` (the default).
+
+        Raises:
+            FileNotFoundError / ValueError: When the source location
+                cannot be listed (missing folder, bad schema). Callers
+                surface the message rather than silently copying
+                nothing.
 
         Implementations must load heavy SDKs lazily inside the method
         body so the module import stays web-safe.
         """
-        del location
+        del location, pipeline, batch_id
         return None
+
+    def table_sizes(
+        self,
+        file_names: list[str],
+        *,
+        pipeline: str,
+        batch_id: str,
+    ) -> dict[str, int]:
+        """Return ``{file_name: size_bytes}`` for the tables about to be copied.
+
+        Metadata-only (file ``stat``, blob / object listing, Snowflake
+        ``SHOW TABLES``) — never a data scan, never a Spark action. Used
+        by ``ovid2 tools copy`` to schedule the largest tables first so
+        the longest single table starts at t=0 rather than last
+        (longest-processing-time-first; see
+        :func:`ovid2.tools.copy.order_largest_first`).
+
+        Args:
+            file_names: Source-side lookup keys (``TableSpec.file_name``).
+            pipeline: Pipeline name (folder sources resolve the batch dir).
+            batch_id: Batch identifier.
+
+        Returns:
+            A mapping for the names whose size is known. Missing keys
+            mean "unknown" — the caller keeps their original order. The
+            default returns ``{}`` (no size information).
+        """
+        del file_names, pipeline, batch_id
+        return {}
 
     # ------------------------------------------------------------------
     # Legacy bridge

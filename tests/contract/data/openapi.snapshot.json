@@ -151,6 +151,49 @@
         "title": "AddressWrite",
         "type": "object"
       },
+      "AppearancePrefs": {
+        "description": "The current user's Appearance-panel state (``/api/v1/me/appearance``).\n\nStored server-side per user so the look follows them to any browser.\nShapes are bounded here; values are pattern-checked by\n:mod:`ovid2.web.services.prefs_svc` against the same allow-lists the\nbrowser and the assistant use.",
+        "properties": {
+          "appearance": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 40,
+            "title": "Appearance",
+            "type": "object"
+          },
+          "colors": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 8,
+            "title": "Colors",
+            "type": "object"
+          },
+          "saved_themes": {
+            "items": {
+              "$ref": "#/components/schemas/SavedAppearance"
+            },
+            "maxItems": 30,
+            "title": "Saved Themes",
+            "type": "array"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
+          }
+        },
+        "title": "AppearancePrefs",
+        "type": "object"
+      },
       "ApprovalDecision": {
         "description": "Payload for approving or denying a pending request.",
         "properties": {
@@ -2853,6 +2896,11 @@
             ],
             "title": "Created At"
           },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
           "enabled": {
             "default": true,
             "title": "Enabled",
@@ -3026,9 +3074,31 @@
             ],
             "title": "Cdm"
           },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
           "enabled": {
             "title": "Enabled",
             "type": "boolean"
+          },
+          "engine": {
+            "default": "pyspark",
+            "title": "Engine",
+            "type": "string"
+          },
+          "engine_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Engine type the `engine` name resolves to (pyspark, databricks_spark, snowpark); null when unresolvable.",
+            "title": "Engine Type"
           },
           "input_address": {
             "title": "Input Address",
@@ -3531,6 +3601,13 @@
             ],
             "description": "CDM name \u2014 required when `kind=etl`, ignored otherwise.",
             "title": "Cdm"
+          },
+          "description": {
+            "default": "",
+            "description": "Free-text purpose of the config, shown in listings and read by the assistant when matching a request to a saved config.",
+            "maxLength": 500,
+            "title": "Description",
+            "type": "string"
           },
           "enabled": {
             "default": true,
@@ -4086,6 +4163,36 @@
           "instance_id"
         ],
         "title": "RunTimeline",
+        "type": "object"
+      },
+      "SavedAppearance": {
+        "description": "One named saved theme: a base theme plus its CSS-var overrides.",
+        "properties": {
+          "name": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "overrides": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 40,
+            "title": "Overrides",
+            "type": "object"
+          },
+          "theme": {
+            "maxLength": 40,
+            "title": "Theme",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "theme"
+        ],
+        "title": "SavedAppearance",
         "type": "object"
       },
       "ScaffoldPipelineRequest": {
@@ -7650,6 +7757,68 @@
           }
         },
         "summary": "Probe an LLM connection in an executor subprocess",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/me/appearance": {
+      "get": {
+        "description": "Return the caller's stored appearance (defaults when never saved).",
+        "operationId": "api_get_my_appearance_api_v1_me_appearance_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppearancePrefs"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get the current user's appearance (theme, colours, fonts, saved looks)",
+        "tags": [
+          "v1"
+        ]
+      },
+      "put": {
+        "description": "Validate and store the caller's appearance; returns what was stored.",
+        "operationId": "api_put_my_appearance_api_v1_me_appearance_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppearancePrefs"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppearancePrefs"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Replace the current user's appearance (cosmetic, not audited)",
         "tags": [
           "v1"
         ]

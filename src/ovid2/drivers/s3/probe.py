@@ -101,7 +101,7 @@ def probe_auth_from_config(
         )
 
 
-__all__ = ["list_dir_from_config", "probe_auth_from_config"]
+__all__ = ["list_dir_from_config", "list_tables_from_config", "probe_auth_from_config"]
 
 
 def list_dir_from_config(
@@ -152,25 +152,8 @@ def list_dir_from_config(
     parts = [p for p in (base, sub) if p]
     effective = ("/".join(parts) + "/") if parts else ""
 
-    session_kwargs: dict[str, Any] = {}
-    for key, secret_key in (
-        ("aws_access_key_id", "aws_access_key_id"),
-        ("aws_secret_access_key", "aws_secret_access_key"),
-        ("aws_session_token", "aws_session_token"),
-    ):
-        val = secrets.get(secret_key)
-        if val:
-            session_kwargs[key] = val
-    if args.get("region"):
-        session_kwargs["region_name"] = args["region"]
-
-    client_kwargs: dict[str, Any] = {}
-    if args.get("endpoint_url"):
-        client_kwargs["endpoint_url"] = args["endpoint_url"]
-
     try:
-        session = boto3.session.Session(**session_kwargs)
-        client = session.client("s3", **client_kwargs)
+        client = _build_s3_client(boto3, args, secrets)
         paginator = client.get_paginator("list_objects_v2")
         entries: list[StorageEntry] = []
         seen_dirs: set[str] = set()
@@ -193,9 +176,102 @@ def list_dir_from_config(
                     continue
                 seen_files.add(name)
                 rel = full[len(base) + 1 :] if base else full
-                entries.append(StorageEntry(name=name, kind="file", path=rel))
+                size = obj.get("Size")
+                entries.append(
+                    StorageEntry(
+                        name=name,
+                        kind="file",
+                        path=rel,
+                        size_bytes=int(size) if size is not None else None,
+                    )
+                )
     except Exception as exc:
         raise ValueError(f"S3 list failed: {exc}") from exc
 
     entries.sort(key=lambda e: (0 if e.kind == "dir" else 1, e.name.lower()))
     return entries
+
+
+def _build_s3_client(boto3: Any, args: dict[str, Any], secrets: dict[str, Any]) -> Any:
+    """Return a boto3 S3 client from connection ``args`` + ``secrets``."""
+    session_kwargs: dict[str, Any] = {}
+    for key in ("aws_access_key_id", "aws_secret_access_key", "aws_session_token"):
+        val = secrets.get(key)
+        if val:
+            session_kwargs[key] = val
+    if args.get("region"):
+        session_kwargs["region_name"] = args["region"]
+    client_kwargs: dict[str, Any] = {}
+    if args.get("endpoint_url"):
+        client_kwargs["endpoint_url"] = args["endpoint_url"]
+    session = boto3.session.Session(**session_kwargs)
+    return session.client("s3", **client_kwargs)
+
+
+def list_tables_from_config(
+    args: dict[str, Any],
+    secrets: dict[str, Any],
+    location: dict[str, Any],
+    sub_prefix: str,
+) -> list[Any]:
+    """List the immediate children of ``sub_prefix`` with *summed* object sizes.
+
+    Walks every key under the prefix (no delimiter) and aggregates by
+    the first path segment, so a Spark-written ``<table>.csv/part-*``
+    prefix reports the total of its parts. Metadata only.
+
+    Args:
+        args: Connection args.
+        secrets: AWS credential material.
+        location: Address location (``bucket``, ``path``).
+        sub_prefix: Prefix under ``location.path`` (``pipeline/batch``).
+
+    Returns:
+        One :class:`~ovid2.drivers.base.StorageEntry` per child, with
+        ``size_bytes`` set.
+
+    Raises:
+        NotImplementedError: boto3 absent / no bucket.
+        ValueError: When the S3 API call fails.
+    """
+    from ovid2.drivers.base import StorageEntry
+
+    try:
+        import boto3
+    except ImportError as exc:
+        raise NotImplementedError("boto3 is not installed on this host.") from exc
+
+    bucket = location.get("bucket") or args.get("bucket_default")
+    if not bucket:
+        raise NotImplementedError(
+            "No bucket set on the storage account (location.bucket or connection bucket_default)."
+        )
+    base = str(location.get("path") or "").strip().strip("/")
+    sub = (sub_prefix or "").strip().strip("/")
+    parts = [p for p in (base, sub) if p]
+    effective = ("/".join(parts) + "/") if parts else ""
+
+    totals: dict[str, int] = {}
+    is_dir: dict[str, bool] = {}
+    try:
+        client = _build_s3_client(boto3, args, secrets)
+        paginator = client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=bucket, Prefix=effective):
+            for obj in page.get("Contents", []) or []:
+                rest = str(obj.get("Key", ""))[len(effective) :]
+                if not rest:
+                    continue
+                head, sep, _tail = rest.partition("/")
+                totals[head] = totals.get(head, 0) + int(obj.get("Size", 0) or 0)
+                is_dir[head] = is_dir.get(head, False) or bool(sep)
+    except Exception as exc:
+        raise ValueError(f"S3 list failed: {exc}") from exc
+    return [
+        StorageEntry(
+            name=name,
+            kind="dir" if is_dir[name] else "file",
+            path=f"{sub}/{name}" if sub else name,
+            size_bytes=totals[name],
+        )
+        for name in sorted(totals, key=str.lower)
+    ]

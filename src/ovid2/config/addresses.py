@@ -273,6 +273,21 @@ def _resolve_connection_shape(
     return src_name, src_args
 
 
+def split_snowflake_path(path: Any) -> tuple[str, str]:
+    """Split a Snowflake ``path`` location into ``(database, schema)``.
+
+    Args:
+        path: ``DATABASE``, ``DATABASE/SCHEMA`` or ``None``.
+
+    Returns:
+        ``(database, schema)``; either element is ``""`` when absent.
+    """
+    parts = [p.strip() for p in str(path or "").split("/") if p.strip()]
+    database = parts[0] if parts else ""
+    schema = parts[1] if len(parts) > 1 else ""
+    return database, schema
+
+
 def _resolve_snowflake_config(
     src_args: dict[str, Any],
     sf_overrides: dict[str, str] | None,
@@ -282,6 +297,18 @@ def _resolve_snowflake_config(
     from ovid2.config.settings import DEFAULT_SF_ACCOUNT
 
     merged: dict[str, Any] = dict(src_args)
+
+    # Tier 2: the address's own location. A ``path`` of the form
+    # ``DATABASE[/SCHEMA]`` (the generic web-UI location shape) names the
+    # database just as an explicit ``database`` key does, so it must win
+    # over the pipeline default below — otherwise ``{"path": "SANDBOX"}``
+    # under ``pipeline=acme`` would silently redirect to ``CHAR_ACME``.
+    # Explicit ``database`` / ``schema`` keys still take precedence.
+    path_db, path_schema = split_snowflake_path(merged.get("path"))
+    if not merged.get("database") and path_db:
+        merged["database"] = path_db
+    if not merged.get("schema") and path_schema:
+        merged["schema"] = path_schema
 
     # Tier 3: pipeline default.
     if not merged.get("database") and pipeline:

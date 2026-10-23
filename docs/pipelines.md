@@ -196,35 +196,96 @@ selected **output** storage account. Verified end-to-end by
 guarantees are pinned by `tests/unit/cdm/test_generic_edc_label.py` and
 `tests/unit/config/test_runtime_address_selection.py`.
 
-## `copy` / `move` tables: explicit lists, and `all` for self-describing sources
+## `copy` / `move` tables: explicit lists, or `all`
 
 `copy` and `move` bypass the format→map→fix chain and stream named tables
-from a source address to a destination address. Their `--tables` list is
-normally **explicit** — `ovid2 tools copy|move` use `nargs='+'` and have no
-built-in `all` sentinel — so the Run modal shows a required tables field and
-the web tier rejects an empty/`all` list with *"copy / move need an explicit
-list of tables"*.
+from a source address to a destination address. `ovid2 tools copy|move`
+take `--tables` with `nargs='+'`; each entry is `LOGICAL` or
+`LOGICAL=SOURCE` (see `ovid2.tools.table_specs`).
 
-**Exception — sources that can enumerate their own tables.** A Microsoft
-Access `.accdb` / `.mdb` file is a self-describing container: one file holds
-many user tables. For such a source you may pass `all` (or leave the Run
-modal's tables field blank); the executor enumerates every user table in the
-file at run time and copies each as a separate destination table. Which
-sources support this is decided by the driver, not hardcoded:
+**`all` — copy everything in the source.** Every storage type that can list
+its own tables accepts `all`:
 
-- `Driver.supports_expand_all()` — a static, secret-free capability flag the
-  web tier consults to decide whether to *accept* `all` for a source.
-- `Driver.expand_all_tables(location)` — the executor-side expansion, which
-  honours the address's optional `tables` allow-list / `exclude_tables`
-  deny-list.
+| Source driver | What `all` means | Size source (for ordering) |
+| --- | --- | --- |
+| `snowflake` | every table + view in the address's `database.schema` (`SHOW TABLES` / `SHOW VIEWS`) | `SHOW TABLES` `bytes` |
+| `disc` | every data file / Spark `<t>.csv/` dir in the batch folder (same layout precedence as reads: `{root}/{pipeline}/{batch}`, `{root}/{batch}`, `{root}`) | file `stat` |
+| `s3`, `azure_blob` | every object / `<t>.csv/` prefix under `{path}/{pipeline}/{batch}/` | object / blob listing |
+| `access` | every user table in the `.accdb` / `.mdb`, minus `exclude_tables` | — |
 
-The `access` driver overrides both. `all` for an Access source therefore
-means "every user table in the file, minus `exclude_tables`". Example:
+Junk entries (`_SUCCESS`, `.crc`, hidden files, `k=v` partitions, plain
+sub-folders) are skipped; folder sources emit `stem=file` specs
+(`demographic=demographic.csv`) so destination names are extension-free.
+Other types (postgres, mssql, gcs, databricks) still need an explicit list.
+
+**Where `all` is expanded.** When a copy/move job or draft is submitted
+with `tables: ["all"]` (web `/submit`, `POST /api/v1/runs`,
+`POST /api/v1/job-drafts`, MCP / Agent Ovid), the API expands it
+*before storing the job*, via the executor broker
+`ovid2 tools list-source-tables <address> --pipeline P --batch_id B` — the
+web process never holds a credential. The stored job, and the draft a
+human reviews, therefore lists the concrete tables. If the source type can
+enumerate but not from the web host (e.g. Access jars only in the image),
+`all` is kept and the executor expands it at run time. A listing failure
+(missing batch folder, unknown schema) is a 400 that says why.
+
+**Largest table first.** `ovid2 tools copy` copies tables in parallel
+(`$OVID2_COPY_TABLE_CONCURRENCY`, default 8). Before starting, it asks the
+source driver for per-table sizes (`Driver.table_sizes`, metadata only — no
+data scan) and starts the largest tables first. Total run time is then
+close to the time of the single largest table, rather than that table's
+time plus however late the list order happened to start it. Tables with
+unknown size keep their relative order after the sized ones. Set
+`OVID2_COPY_ORDER=as_given` to keep the order you passed. `move` uses the
+same order (it is serial, so this does not shorten the run).
+
+The driver contract:
+
+- `Driver.supports_expand_all()` — static, secret-free; the web tier uses
+  it to decide whether to accept `all`.
+- `Driver.expand_all_tables(location, *, pipeline, batch_id)` — returns
+  table specs, `None` when unsupported.
+- `Driver.table_sizes(file_names, *, pipeline, batch_id)` — `{name: bytes}`
+  for the names whose size is known.
 
 ```
-ovid2 tools copy --from drugdb_accdb --to warehouse_sandbox \
-    --pipeline drugdb --batch_id 20260915 --tables all
+ovid2 tools copy --from CHAR_DEMO --to SANDBOX \
+    --pipeline demo --batch_id 20260916 --tables all
 ```
+
+### Snowflake → Snowflake copy on Snowpark (`COPY_SNOWPARK`)
+
+A copy/move whose engine resolves to type `snowpark` never leaves Snowflake:
+each table is `session.table(<src>)` → `save_as_table(<dst>)`, executed
+server-side. The host runs **one driver container, no Spark cluster**
+(`ovid2.core.docker.submit_one_shot` / `engine_needs_spark_cluster`).
+
+Setup (once per host):
+
+1. An engine JSON of type `snowpark` that points at the Snowflake
+   connection — e.g. `$XDG_CONFIG_HOME/ovid2/engines/snowpark.json`:
+   `{"type": "snowpark", "args": {"connection": "<connection>"}}`.
+2. A saved copy config with that engine and open input/output, e.g.
+   `COPY_SNOWPARK`: `kind: copy`, `engine: snowpark`, `tables: []`
+   (open = "all" at run time), plus a `description`.
+
+Address resolution: Snowflake addresses may store their location as
+`{"path": "DB"}` / `{"path": "DB/SCHEMA"}` (what the web UI saves) or as
+explicit `database` / `schema` keys. Both forms are equivalent, and a
+`path` database is **never** overridden by the pipeline label's
+`DEFAULT_PIPELINE_DB_NAME`. A destination with a schema writes there
+verbatim; a database-only destination writes to
+`DB.OVID_<pipeline>_<batch_id>`.
+
+**Assistant routing.** `GET /api/v1/pipelines` entries carry `engine`,
+`engine_type` (the engine *type* the name resolves to) and `description`.
+The agent catalogue tells the assistant to answer "copy / move A to B using
+<engine>" by listing saved configs, picking the one whose `kind` and
+`engine_type` match, mapping A / B to address names, and calling
+`draft_pipeline_config`. So *"copy demo public to sandbox using snowpark"*
+drafts `COPY_SNOWPARK` with `<conn>__char_demo_public` → `<conn>__sandbox`.
+An open-tables config drafted without `tables` is sent as `["all"]` and
+expanded to the source roster before the draft is stored.
 
 ### Browsing Access tables in the web tier
 

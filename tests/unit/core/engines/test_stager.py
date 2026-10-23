@@ -949,3 +949,58 @@ class TestAbstract:
     def test_cannot_instantiate_base_class(self) -> None:
         with pytest.raises(TypeError):
             EngineStager(_FakeEngine())  # type: ignore[abstract]
+
+
+# ---------------------------------------------------------------------------
+# Native Snowpark strategy: ``path``-form Snowflake locations
+# ---------------------------------------------------------------------------
+
+
+class TestNativeSnowparkPathLocation:
+    """``{"path": "DB[/SCHEMA]"}`` addresses work the same as explicit keys.
+
+    Regression: the web UI saves Snowflake addresses as
+    ``{"path": "CHAR_DEMO/PUBLIC"}``; the native strategy only read
+    ``location.database`` and failed with "driver has no 'database'"
+    on every Snowpark copy from such an address.
+    """
+
+    def test_materialise_reads_database_and_schema_from_path(self) -> None:
+        engine = _FakeEngine()
+        stager = SnowparkEngineStager(engine)
+        driver = _FakeDriverWithLocation("snowflake", {"path": "CHAR_DEMO/PUBLIC"})
+        stager.materialise(driver, "demo", "b1", "DEMOGRAPHIC", None, table_name="DEMOGRAPHIC")
+        assert engine._session.table_calls == ["CHAR_DEMO.PUBLIC.DEMOGRAPHIC"]
+
+    def test_explicit_keys_win_over_path(self) -> None:
+        engine = _FakeEngine()
+        stager = SnowparkEngineStager(engine)
+        driver = _FakeDriverWithLocation(
+            "snowflake", {"path": "IGNORED/X", "database": "D", "schema": "S"}
+        )
+        stager.materialise(driver, "demo", "b1", "T", None, table_name="T")
+        assert engine._session.table_calls == ["D.S.T"]
+
+    def test_persist_path_with_schema_targets_it_verbatim(self) -> None:
+        engine = _FakeEngine()
+        stager = SnowparkEngineStager(engine)
+        driver = _FakeDriverWithLocation("snowflake", {"path": "SANDBOX/PUBLIC"})
+        df = _FakeSnowparkDataFrame()
+        stager.persist(df, driver, "demo", "b1", "demographic", None)
+        assert df.write.save_as_table_calls == [
+            (["SANDBOX", "PUBLIC", "DEMOGRAPHIC"], {"mode": "overwrite"}),
+        ]
+
+    def test_persist_database_only_path_uses_ovid_schema(self) -> None:
+        """``{"path": "SANDBOX"}`` → ``SANDBOX.OVID_<pipeline>_<batch>``."""
+        engine = _FakeEngine()
+        stager = SnowparkEngineStager(engine)
+        driver = _FakeDriverWithLocation("snowflake", {"path": "SANDBOX"})
+        df = _FakeSnowparkDataFrame()
+        stager.persist(df, driver, "COPY_SNOWPARK", "20261023", "demographic", None)
+        assert "CREATE SCHEMA IF NOT EXISTS SANDBOX.OVID_COPY_SNOWPARK_20261023" in (
+            engine._session.sql_calls
+        )
+        assert df.write.save_as_table_calls == [
+            (["SANDBOX", "OVID_COPY_SNOWPARK_20261023", "DEMOGRAPHIC"], {"mode": "overwrite"}),
+        ]

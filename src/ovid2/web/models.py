@@ -1166,6 +1166,7 @@ class PipelineConfigDetail(BaseModel):
         ),
     )
     engine: str = "pyspark"
+    description: str = ""
     workers: int = 25
     sf_database: str | None = None
     sf_account: str | None = None
@@ -1190,6 +1191,15 @@ class PipelineConfigSummary(BaseModel):
     input_address: str
     output_address: str
     tables: list[str] = Field(default_factory=list)
+    engine: str = "pyspark"
+    engine_type: str | None = Field(
+        None,
+        description=(
+            "Engine type the `engine` name resolves to (pyspark, "
+            "databricks_spark, snowpark); null when unresolvable."
+        ),
+    )
+    description: str = ""
     trigger_type: str
     enabled: bool
     last_fired_at: str | None = None
@@ -1233,6 +1243,14 @@ class PipelineWrite(BaseModel):
         ),
     )
     engine: str = "pyspark"
+    description: str = Field(
+        "",
+        max_length=500,
+        description=(
+            "Free-text purpose of the config, shown in listings and read "
+            "by the assistant when matching a request to a saved config."
+        ),
+    )
     workers: int = Field(25, ge=1, le=200)
     sf_database: str | None = None
     sf_account: str | None = None
@@ -1763,11 +1781,35 @@ class LlmChatMessage(BaseModel):
     content: str = Field(..., max_length=32000)
 
 
+class SavedAppearance(BaseModel):
+    """One named saved theme: a base theme plus its CSS-var overrides."""
+
+    name: str = Field(..., min_length=1, max_length=60)
+    theme: str = Field(..., max_length=40)
+    overrides: dict[str, str] = Field(default_factory=dict, max_length=40)
+
+
+class AppearancePrefs(BaseModel):
+    """The current user's Appearance-panel state (``/api/v1/me/appearance``).
+
+    Stored server-side per user so the look follows them to any browser.
+    Shapes are bounded here; values are pattern-checked by
+    :mod:`ovid2.web.services.prefs_svc` against the same allow-lists the
+    browser and the assistant use.
+    """
+
+    theme: str | None = Field(None, max_length=40)
+    colors: dict[str, str] = Field(default_factory=dict, max_length=8)
+    appearance: dict[str, str] = Field(default_factory=dict, max_length=40)
+    saved_themes: list[SavedAppearance] = Field(default_factory=list, max_length=30)
+
+
 class LlmUiContext(BaseModel):
     """The browser's current look, sent so UI-action tools can reason about it.
 
-    Purely cosmetic, user-owned browser state (localStorage). Bounded and
-    pattern-checked here, re-sanitised by the executor, and never audited.
+    Purely cosmetic, user-owned state (persisted per user via
+    ``/api/v1/me/appearance``). Bounded and pattern-checked here,
+    re-sanitised by the executor, and never audited.
     """
 
     theme: str | None = Field(None, max_length=40, pattern=r"^[a-z0-9-]{1,40}$")

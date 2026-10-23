@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import io
 import json
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from ovid2.config import llms as llms_config
 from ovid2.llm import cli as llm_cli
-from ovid2.llm.protocol import Decision, Provider, ProviderError
+from ovid2.llm.protocol import Decision, LlmEvent, ProbeResult, Provider, ProviderError
 from ovid2.llm.providers import PROVIDER_TYPE_MAP, load_provider_class
 from ovid2.llm.providers.openai_compatible import (
     OpenAiCompatibleProvider,
@@ -292,3 +294,41 @@ def test_cli_probe_jev_not_implemented(llm_xdg: Path) -> None:
     out = io.StringIO()
     assert llm_cli.probe("jev", out=out) == 1
     assert json.loads(out.getvalue())["code"] == "not_implemented"
+
+
+def test_today_prompt_states_date_and_batch_format() -> None:
+    """The model gets today's date so it never invents a stale batch_id."""
+    from datetime import date
+
+    from ovid2.llm.router import today_prompt
+
+    text = today_prompt(date(2026, 10, 23))
+    assert "2026-10-23" in text and "Friday" in text and "20261023" in text
+
+
+def test_general_system_prompt_includes_today(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``route_chat`` puts the date sentence into the general system prompt."""
+    import ovid2.llm.router as router_mod
+
+    monkeypatch.setattr(router_mod, "today_prompt", lambda today=None: " TODAY_MARKER.")
+    seen: list[Any] = []
+
+    class _P(Provider):
+        provider_name = "p"
+        roles = ("general",)
+
+        def probe(self) -> ProbeResult:
+            return ProbeResult(True, "ok", "ok")
+
+        def chat_stream(self, messages: Any, tools: Any = None) -> Iterator[LlmEvent]:
+            seen.append(messages)
+            yield {"type": "delta", "text": "hi"}
+
+    list(
+        router_mod.route_chat(
+            [{"role": "user", "content": "x"}],
+            RouteConfig(general="g"),
+            lambda name: _P(name, {"model": "m"}, {}),
+        )
+    )
+    assert "TODAY_MARKER" in seen[0][0]["content"]

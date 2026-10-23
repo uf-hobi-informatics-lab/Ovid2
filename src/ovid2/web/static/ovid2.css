@@ -2596,6 +2596,23 @@ html.cmdk-open { overflow: hidden; }
   color: var(--warn);
 }
 
+/* Shown by theme.js only when saving the appearance to the server fails. */
+.appearance-save-status {
+  position: fixed;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  z-index: 1000;
+  max-width: min(36rem, 92vw);
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--warn);
+  border-radius: 6px;
+  background: var(--bg-elev);
+  color: var(--fg);
+  font-size: var(--fs-xs);
+}
+.appearance-save-status[hidden] { display: none; }
+
 
 /* ------------------------------------------------------------------ *
  * 5. Buttons and interactive controls

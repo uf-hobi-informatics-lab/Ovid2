@@ -31,6 +31,7 @@ import logging
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
 from ovid2.llm.api_client import ReadOnlyApiClient
@@ -51,6 +52,22 @@ BASE_SYSTEM_PROMPT = (
     '{"type":"kpi-row","items":[{"label":str,"value":str}]}, '
     '{"type":"status-list","items":[{"label":str,"status":"ok|warn|error","detail":str}]}.'
 )
+
+
+def today_prompt(today: date | None = None) -> str:
+    """Return the system-prompt sentence stating today's date.
+
+    Models have no clock; without this they invent a ``batch_id`` such
+    as a past ``YYYYMMDD`` when told "use today's date".
+
+    Args:
+        today: Override for tests; defaults to the host's local date.
+    """
+    d = today or date.today()
+    return (
+        f" Today's date is {d.isoformat()} ({d.strftime('%A')}); when a run needs a "
+        f"batch_id and the user gives none, use {d.strftime('%Y%m%d')}."
+    )
 
 
 @dataclass(frozen=True)
@@ -236,8 +253,10 @@ def route_chat(
         if route.tools
         else None
     )
-    prompt = BASE_SYSTEM_PROMPT + (
-        TOOL_PROMPT if ctx and ctx.tools else " You have no access to live Ovid2 data or tools."
+    prompt = (
+        BASE_SYSTEM_PROMPT
+        + today_prompt()
+        + (TOOL_PROMPT if ctx and ctx.tools else " You have no access to live Ovid2 data or tools.")
     )
     if ctx and any(t.ui_action for t in ctx.tools):
         prompt += ui_context_prompt(ui_context)

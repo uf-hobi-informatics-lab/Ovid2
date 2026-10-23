@@ -1,0 +1,56 @@
+{#
+  Pre-paint appearance (included in <head> of every full page, BEFORE the
+  stylesheet link).
+
+  The signed-in user's appearance is stored server-side
+  (``web_user_prefs`` via ``/api/v1/me/appearance``) and rendered here as
+  ``window.OVID2_APPEARANCE`` so the very first paint already has the
+  right theme + overrides on any browser / laptop. Nothing is read from
+  browser storage. ``theme.js`` takes over after load (same object) and
+  re-derives the accent hover / subtle / ink shades.
+
+  ``user_appearance(request)`` returns defaults for anonymous visitors
+  (login page) and machine principals. ``|tojson`` escapes < > & so the
+  value cannot break out of the script element.
+#}
+<script>
+  window.OVID2_APPEARANCE = {{ user_appearance(request) | tojson }};
+  (function () {
+    var root = document.documentElement;
+    var p = window.OVID2_APPEARANCE || {};
+    var KNOWN = ["clinical", "matrix", "super-mario-world",
+                 "tatooine", "financial", "lego",
+                 /* legacy light/dark aliases (map to clinical/matrix) */
+                 "light", "dark"];
+    /* Retired slugs remapped to their replacements (mirrors
+     * LEGACY_ALIASES in theme.js). */
+    var ALIASES = { dune: "tatooine", industry: "lego" };
+    var slug = p.theme;
+    if (slug && ALIASES[slug]) { slug = ALIASES[slug]; }
+    if (!slug || KNOWN.indexOf(slug) === -1) {
+      var prefersDark = false;
+      try {
+        prefersDark = window.matchMedia
+          && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      } catch (e) { prefersDark = false; }
+      slug = prefersDark ? "matrix" : "clinical";
+    }
+    root.setAttribute("data-theme", slug);
+    var hex = /^#[0-9a-fA-F]{6}$/;
+    var c = p.colors || {};
+    if (hex.test(c.accent || "")) { root.style.setProperty("--accent", c.accent); }
+    if (hex.test(c.bg || "")) { root.style.setProperty("--bg", c.bg); }
+    if (hex.test(c.surface || "")) {
+      root.style.setProperty("--bg-elev", c.surface);
+      root.style.setProperty("--card-bg", c.surface);
+    }
+    if (hex.test(c.fg || "")) { root.style.setProperty("--fg", c.fg); }
+    var a = p.appearance || {};
+    var allow = /^--[a-z0-9-]+$/;
+    Object.keys(a).forEach(function (k) {
+      if (allow.test(k) && typeof a[k] === "string") {
+        root.style.setProperty(k, a[k]);
+      }
+    });
+  })();
+</script>

@@ -233,6 +233,7 @@ def discard_draft(job_id: str, *, actor: str = "web") -> None:
 def _insert_job(request: JobSubmitRequest, *, actor: str, status: str) -> JobSubmitResponse:
     """Shared validate-and-insert path for :func:`submit` / :func:`create_draft`."""
     _resolve_connection_endpoints(request, actor=actor)
+    _expand_all_tables(request)
     _validate_submit(request)
     web_db.ensure_schema()
     job_id = _new_job_id()
@@ -368,6 +369,64 @@ def _resolve_connection_endpoints(request: JobSubmitRequest, *, actor: str) -> N
     )
 
 
+def _expand_all_tables(request: JobSubmitRequest) -> None:
+    """Replace a copy/move ``tables=['all']`` with the source's concrete roster.
+
+    Runs at submit / draft time so the stored job (and the run page a
+    human reviews before pressing ▶) lists exactly what will be copied,
+    largest table first. Enumeration is delegated to the
+    ``ovid2 tools list-source-tables`` executor broker — the web process
+    never resolves a credential.
+
+    Outcomes:
+
+    - ``ok`` → ``request.tables`` becomes the explicit list.
+    - ``unavailable`` (the driver type can enumerate, but not from this
+      host — e.g. Access jars only in the image) → ``['all']`` is kept
+      and the copy executor expands it at run time.
+    - ``unsupported`` / ``error`` → left as ``['all']`` so
+      :func:`_validate_submit` rejects it with the broker's reason.
+
+    Non-explicit kinds and explicit lists are untouched.
+
+    Raises:
+        SubmitError: When the source can be listed but the listing
+            failed (missing batch folder, bad schema, empty source).
+    """
+    kind = normalize_kind(request.kind)
+    spec = get_kind(kind)
+    if not spec or spec.tables_mode != "explicit" or request.tables != ["all"]:
+        return
+    if not request.input_address.strip():
+        return
+    from ovid2.web.services._table_expand import expand_source_tables
+
+    outcome = expand_source_tables(
+        request.input_address,
+        pipeline=request.pipeline,
+        batch_id=request.batch_id,
+    )
+    if outcome.code == "ok":
+        logger.info(
+            "Expanded %s tables=['all'] for %s → %d table(s)",
+            kind,
+            request.input_address,
+            len(outcome.tables),
+        )
+        request.tables = list(outcome.tables)
+        return
+    if outcome.code == "error":
+        raise SubmitError(
+            f"{kind} jobs require an explicit `tables` list; could not expand "
+            f"`['all']` for source '{request.input_address}' "
+            f"(pipeline={request.pipeline!r}, batch_id={request.batch_id!r}): "
+            f"{outcome.message or 'listing failed'}. Check the address / batch, "
+            f"or pass the table names explicitly."
+        )
+    # ``unavailable`` keeps ``['all']`` for run-time expansion;
+    # ``unsupported`` keeps it so ``_validate_submit`` rejects it.
+
+
 def _validate_submit(request: JobSubmitRequest) -> None:
     """Best-effort pre-flight checks. Raises :class:`SubmitError` on failure."""
     if not request.pipeline.strip():
@@ -405,17 +464,19 @@ def _validate_submit(request: JobSubmitRequest) -> None:
         and (not request.tables or request.tables == ["all"])
     ):
         # ``ovid2 tools copy --tables`` / ``ovid2 tools move --tables``
-        # both use ``nargs='+'`` and do not recognise the ``all``
-        # sentinel *by default*. A source whose driver type can expand
-        # ``all`` (e.g. Access — a self-describing container of tables)
-        # is exempt: the executor enumerates the tables at run time.
+        # both use ``nargs='+'``. ``['all']`` reaching here means
+        # :func:`_expand_all_tables` could not resolve a concrete roster.
+        # It is still accepted when the source's driver type can expand
+        # ``all`` (the executor enumerates at run time); otherwise reject
+        # with guidance an LLM caller can act on.
         from ovid2.web.services._table_expand import source_supports_expand_all
 
         if not (request.tables == ["all"] and source_supports_expand_all(request.input_address)):
             raise SubmitError(
                 f"{kind} jobs require an explicit `tables` list; "
                 f"`['all']` is not supported by `ovid2 {spec.cli_subcommand}` "
-                f"for this source."
+                f"for this source (its storage type cannot list its own "
+                f"tables). Pass the source table names explicitly."
             )
     if (
         spec

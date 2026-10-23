@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from ovid2.drivers._table_listing import PrefixTableListingMixin
 from ovid2.drivers.azure_blob.metadata import (
     build_address_config,
     resolve_address_auth_mode,
@@ -39,6 +40,7 @@ from ovid2.drivers.azure_blob.metadata import (
 )
 from ovid2.drivers.azure_blob.probe import (
     list_dir_from_config,
+    list_tables_from_config,
     probe_auth_from_config,
 )
 from ovid2.drivers.base import (
@@ -54,7 +56,7 @@ if TYPE_CHECKING:
     from ovid2.drivers.azure_blob.spark import AzureBlobIO
 
 
-class AzureBlobDriver(Driver):
+class AzureBlobDriver(PrefixTableListingMixin, Driver):
     """Native driver for the ``azure_blob`` peripheral.
 
     Constructor keeps the uniform ``(args, secrets, location)`` shape
@@ -98,6 +100,12 @@ class AzureBlobDriver(Driver):
         """
         return list_dir_from_config(
             dict(self.args), dict(self.secrets), dict(self.location), prefix
+        )
+
+    def _list_tables(self, sub_prefix: str) -> list[StorageEntry]:
+        """Size-aggregated listing under ``sub_prefix`` (see :class:`PrefixTableListingMixin`)."""
+        return list_tables_from_config(
+            dict(self.args), dict(self.secrets), dict(self.location), sub_prefix
         )
 
     # ------------------------------------------------------------------

@@ -15,8 +15,8 @@ checks keep it honest:
 5. The executor-side runtime can only ever issue GET.
 6. UI actions (``ui_action: true``) have no route at all, are limited to
    a pinned set of cosmetic browser actions, and their argument
-   allow-lists agree with the browser's (theme.js / base.html /
-   appearance.js / llm_panel.js).
+   allow-lists agree with the browser's (theme.js /
+   _appearance_prepaint.html / appearance.js / llm_panel.js).
 """
 
 from __future__ import annotations
@@ -274,9 +274,9 @@ def test_set_appearance_theme_enum_matches_browser() -> None:
     theme_js = (_STATIC / "theme.js").read_text(encoding="utf-8")
     js_slugs = re.findall(r'\{ slug: "([a-z0-9-]+)"', theme_js)
     assert enum == js_slugs, "set_appearance theme enum must equal THEMES in theme.js"
-    base = (_TEMPLATES / "base.html").read_text(encoding="utf-8")
-    known = _js_list(base, "KNOWN")
-    assert set(enum) <= set(known), "base.html pre-paint KNOWN must list every theme"
+    prepaint = (_TEMPLATES / "_appearance_prepaint.html").read_text(encoding="utf-8")
+    known = _js_list(prepaint, "KNOWN")
+    assert set(enum) <= set(known), "pre-paint KNOWN must list every theme"
 
 
 @pytest.mark.contract

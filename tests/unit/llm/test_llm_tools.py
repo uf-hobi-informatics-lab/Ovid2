@@ -610,3 +610,78 @@ def test_router_adds_ui_context_only_with_ui_tools() -> None:
     route2 = RouteConfig(general="g", tools=("list_jobs",))
     list(route_chat([{"role": "user", "content": "hi"}], route2, lambda _n: prov2, _FakeApi(), ctx))
     assert "theme=lego" not in prov2.seen[0][0][0]["content"]
+
+
+# ---------------------------------------------------------------------------
+# Copy-with-engine routing ("copy A to B using snowpark")
+# ---------------------------------------------------------------------------
+
+
+def test_copy_routing_guidance_is_in_catalogue_and_prompt() -> None:
+    """The model is told to match copy/move requests on kind + engine_type."""
+    from ovid2.llm.tool_loop import TOOL_PROMPT
+
+    listing = get_tool("list_pipeline_configs")
+    draft_cfg = get_tool("draft_pipeline_config")
+    draft_job = get_tool("create_job_draft")
+    assert listing is not None and draft_cfg is not None and draft_job is not None
+    assert "engine_type" in listing.description and "snowpark" in listing.description
+    assert "engine_type" in draft_cfg.description and "copy" in draft_cfg.description
+    assert "never silently drop" in draft_job.description
+    assert "engine_type" in TOOL_PROMPT
+
+
+def test_snowpark_copy_request_drafts_the_matching_config() -> None:
+    """list configs -> list addresses -> draft_pipeline_config(COPY_SNOWPARK)."""
+    configs = json.dumps(
+        [
+            {"name": "COPY", "kind": "copy", "engine": "local_engine", "engine_type": "pyspark"},
+            {
+                "name": "COPY_SNOWPARK",
+                "kind": "copy",
+                "engine": "snowpark",
+                "engine_type": "snowpark",
+            },
+        ]
+    )
+    draft_args = {
+        "name": "COPY_SNOWPARK",
+        "batch_id": "20261023",
+        "input_address": "demo-sf__char_demo_public",
+        "output_address": "demo-sf__sandbox",
+    }
+    prov = _Scripted(
+        [
+            [_call("list_pipeline_configs", {})],
+            [_call("list_addresses", {}, cid="c2")],
+            [_call("draft_pipeline_config", draft_args, cid="c3")],
+        ]
+    )
+    api = _FakeApi(payload=configs)
+    names = (
+        "list_pipeline_configs",
+        "list_addresses",
+        "draft_pipeline_config",
+        "create_job_draft",
+    )
+    events = list(
+        run_tool_loop(
+            prov,
+            [{"role": "user", "content": "copy demo public to sandbox using snowpark"}],
+            ToolContext(names, api),
+        )
+    )
+    assert [c[1] for c in api.calls] == ["/api/v1/pipelines", "/api/v1/addresses"]
+    drafts = [e for e in events if e["type"] == "open_draft"]
+    assert drafts and drafts[0]["path"] == "/api/v1/pipelines/COPY_SNOWPARK/draft"
+    assert drafts[0]["body"] == {k: v for k, v in draft_args.items() if k != "name"}
+
+
+def test_unknown_copy_tool_name_suggests_draft_tools() -> None:
+    """A hallucinated ``copy_tables`` is pointed at the draft tools first."""
+    from ovid2.llm.tool_loop import suggest_tools
+
+    wanted = ("create_job_draft", "draft_pipeline_config", "list_jobs")
+    tools = [t for t in load_catalogue() if t.name in wanted]
+    out = suggest_tools("copy_tables", tools)
+    assert set(out[:2]) == {"create_job_draft", "draft_pipeline_config"}

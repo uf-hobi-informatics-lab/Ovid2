@@ -440,22 +440,64 @@ def _list_schemas(cursor: Any, database: str) -> list[StorageEntry]:
     return entries
 
 
+def _show_rows(cursor: Any, statement: str) -> list[dict[str, Any]]:
+    """Run a ``SHOW`` statement and return rows as lower-cased column dicts."""
+    cursor.execute(statement)
+    rows = cursor.fetchall()
+    columns = [str(d[0]).lower() for d in (cursor.description or [])]
+    return [dict(zip(columns, row, strict=False)) for row in rows]
+
+
 def _list_tables(cursor: Any, database: str, schema: str) -> list[StorageEntry]:
-    """Return the tables + views in ``database.schema`` as ``table`` entries."""
+    """Return the tables + views in ``database.schema`` as ``table`` entries.
+
+    ``SHOW TABLES`` carries a ``bytes`` column (compressed storage size)
+    for free — it is surfaced as ``size_bytes`` so the copy scheduler can
+    start the largest tables first. Views have no size (``None``).
+    """
     qualified = f"{_quote_identifier(database)}.{_quote_identifier(schema)}"
-    names: set[str] = set()
+    sizes: dict[str, int | None] = {}
     for keyword in ("TABLES", "VIEWS"):
         stmt = f"SHOW {keyword} IN SCHEMA {qualified}"
         try:
-            for name in _show_names(cursor, stmt, "name"):
-                names.add(name)
+            for row in _show_rows(cursor, stmt):
+                name = row.get("name")
+                if not name:
+                    continue
+                raw = row.get("bytes")
+                try:
+                    size = int(raw) if raw is not None else None
+                except (TypeError, ValueError):
+                    size = None
+                sizes.setdefault(str(name), size)
         except Exception as exc:
             logger.debug("SHOW %s failed for %s: %s", keyword, qualified, exc)
             continue
     return [
-        StorageEntry(name=name, kind="table", path=f"{database}/{schema}/{name}")
-        for name in sorted(names)
+        StorageEntry(
+            name=name,
+            kind="table",
+            path=f"{database}/{schema}/{name}",
+            size_bytes=sizes[name],
+        )
+        for name in sorted(sizes)
     ]
+
+
+def list_schema_tables_from_config(
+    args: dict[str, Any],
+    secrets: dict[str, Any],
+    database: str,
+    schema: str,
+) -> list[StorageEntry]:
+    """Return every table / view in ``database.schema`` with sizes.
+
+    Convenience wrapper over :func:`list_dir_from_config` used by
+    :meth:`SnowflakeDriver.expand_all_tables` / ``table_sizes``.
+    """
+    if not database:
+        raise ValueError("Snowflake address has no database; cannot list tables.")
+    return list_dir_from_config(args, secrets, f"{database}/{schema or 'PUBLIC'}")
 
 
 __all__ = [
@@ -465,5 +507,6 @@ __all__ = [
     "_resolve_credentials_dir",
     "build_connect_kwargs",
     "list_dir_from_config",
+    "list_schema_tables_from_config",
     "probe_auth_from_config",
 ]

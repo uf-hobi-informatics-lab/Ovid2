@@ -316,6 +316,29 @@ def list_available_engines() -> list[str]:
 # ---------------------------------------------------------------------------
 
 
+def resolve_engine_type(name: str | None) -> str | None:
+    """Return the engine *type* a run's ``engine`` field resolves to.
+
+    Mirrors :func:`ovid2.core.loaders.load_engine`'s lookup order
+    (a named JSON config first, then a bare type name) without
+    instantiating anything — safe for the web tier.
+
+    Args:
+        name: Engine config name or bare type (``None`` / ``""`` →
+            ``pyspark``, the run default).
+
+    Returns:
+        The engine type (e.g. ``"snowpark"``), or ``None`` when the
+        name is neither a readable config nor a known type.
+    """
+    engine_name = (name or "").strip() or "pyspark"
+    try:
+        return str(load_engine_config(engine_name)["type"])
+    except (FileNotFoundError, ValueError, OSError, KeyError):
+        pass
+    return engine_name if engine_name in _KNOWN_TYPES else None
+
+
 def load_engine_config(name: str) -> dict[str, Any]:
     """Load a JSON engine config by name.
 

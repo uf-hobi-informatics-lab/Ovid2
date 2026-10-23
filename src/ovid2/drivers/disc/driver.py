@@ -156,15 +156,146 @@ class DiscDriver(Driver):
                     is_dir = entry.is_dir()
                 except OSError:
                     is_dir = False
+                size: int | None = None
+                if not is_dir:
+                    try:
+                        size = entry.stat().st_size
+                    except OSError:
+                        size = None
                 entries.append(
                     StorageEntry(
                         name=entry.name,
                         kind="dir" if is_dir else "file",
                         path=rel,
+                        size_bytes=size,
                     )
                 )
         entries.sort(key=lambda e: (0 if e.kind == "dir" else 1, e.name.lower()))
         return entries
+
+    # ------------------------------------------------------------------
+    # ``all`` expansion + size hints (control plane, stdlib only)
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def supports_expand_all(cls) -> bool:
+        """A disc batch folder is enumerable, so ``all`` is expandable."""
+        return True
+
+    def _data_root(self, location: dict[str, Any] | None = None) -> str:
+        """Return the address root visible to *this* process.
+
+        Inside the container the ``container_path`` mount exists; on the
+        host (the web tier's executor broker) only ``host_path`` does.
+        The per-address ``location.path`` is appended in both cases.
+        """
+        loc = dict(location if location is not None else self.location)
+        normalised = self._widened()
+        sub = str(loc.get("path") or "")
+        for base in (normalised["container_path"], normalised["host_path"]):
+            if not base:
+                continue
+            candidate = os.path.join(base, sub) if sub else base
+            if os.path.isdir(candidate):
+                return candidate
+        base = normalised["container_path"] or normalised["host_path"]
+        return os.path.join(base, sub) if sub else base
+
+    def _batch_dir(
+        self,
+        pipeline: str,
+        batch_id: str,
+        location: dict[str, Any] | None = None,
+    ) -> str | None:
+        """Return the directory ``read()`` resolves files under, or ``None``.
+
+        Mirrors the layout precedence of
+        :func:`ovid2.drivers.disc.spark.resolve_read_path`:
+        ``{root}/{pipeline}/{batch}`` (case variants), then
+        ``{root}/{batch}``, then the root itself.
+        """
+        root = self._data_root(location)
+        candidates: list[str] = []
+        for name in (pipeline, pipeline.lower(), pipeline.upper()):
+            candidates.append(os.path.join(root, name, batch_id))
+        candidates.extend([os.path.join(root, batch_id), root])
+        for path in candidates:
+            if os.path.isdir(path):
+                return path
+        return None
+
+    @staticmethod
+    def _list_batch_dir(path: str) -> list[StorageEntry]:
+        """List ``path`` one level deep with sizes (dirs = sum of their files)."""
+        entries: list[StorageEntry] = []
+        with os.scandir(path) as scanner:
+            for entry in scanner:
+                size: int | None
+                try:
+                    is_dir = entry.is_dir()
+                    if is_dir:
+                        size = 0
+                        with os.scandir(entry.path) as inner:
+                            for child in inner:
+                                if child.is_file():
+                                    size += child.stat().st_size
+                    else:
+                        size = entry.stat().st_size
+                except OSError:
+                    is_dir, size = False, None
+                entries.append(
+                    StorageEntry(
+                        name=entry.name,
+                        kind="dir" if is_dir else "file",
+                        path=entry.path,
+                        size_bytes=size,
+                    )
+                )
+        entries.sort(key=lambda e: e.name.lower())
+        return entries
+
+    def expand_all_tables(
+        self,
+        location: dict[str, Any] | None = None,
+        *,
+        pipeline: str | None = None,
+        batch_id: str | None = None,
+    ) -> list[str] | None:
+        """Expand ``all`` to every data file in the batch folder.
+
+        Returns ``LOGICAL=SOURCE`` specs (``demographic=demographic.csv``)
+        so destination stems drop the extension. ``None`` when no
+        pipeline / batch is known (nothing to resolve against).
+
+        Raises:
+            FileNotFoundError: When no batch folder exists under the root.
+        """
+        if not pipeline or not batch_id:
+            return None
+        from ovid2.drivers._table_listing import entries_to_table_specs
+
+        path = self._batch_dir(pipeline, batch_id, location)
+        if path is None:
+            raise FileNotFoundError(
+                f"no batch folder for pipeline={pipeline!r} batch_id={batch_id!r} "
+                f"under {self._data_root(location)!r}"
+            )
+        return entries_to_table_specs(self._list_batch_dir(path))
+
+    def table_sizes(
+        self,
+        file_names: list[str],
+        *,
+        pipeline: str,
+        batch_id: str,
+    ) -> dict[str, int]:
+        """Return on-disk sizes for ``file_names`` (globs allowed) via ``stat``."""
+        from ovid2.drivers._table_listing import sizes_for
+
+        path = self._batch_dir(pipeline, batch_id)
+        if path is None:
+            return {}
+        return sizes_for(self._list_batch_dir(path), file_names)
 
     # ------------------------------------------------------------------
     # Legacy bridge

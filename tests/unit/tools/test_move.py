@@ -868,3 +868,33 @@ class TestTableSpecWiring:
 
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])
+
+
+class TestSnowparkSkipsSparkCluster:
+    """``tools move`` with a non-Spark engine runs one container, no cluster."""
+
+    def test_snowpark_engine_never_starts_cluster(self) -> None:
+        from ovid2.drivers.container import MergedRequirements
+
+        args = _mk_args(engine="snowpark")
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=False),
+            mock.patch("ovid2.core.isolation.cleanup_stale_instances"),
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.SPARK_MODE", "cluster"),
+            mock.patch(
+                "ovid2.core.loaders.load_engine",
+                return_value=mock.Mock(session_is_spark=False),
+            ),
+            mock.patch("ovid2.drivers.engine_compat.assert_engine_supports_drivers"),
+            mock.patch(
+                "ovid2.drivers.collector.collect_for_addresses",
+                return_value=MergedRequirements(),
+            ),
+            mock.patch("ovid2.core.docker.submit_with_cluster", return_value=0) as m_swc,
+            mock.patch("ovid2.core.docker.submit_to_docker", return_value=0) as m_std,
+        ):
+            m_inst.return_value.instance_id = "20261023-000000-abcdef"
+            assert move_module.main(args) == 0
+        m_swc.assert_not_called()
+        m_std.assert_called_once()

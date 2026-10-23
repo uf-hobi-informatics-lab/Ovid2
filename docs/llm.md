@@ -134,10 +134,13 @@ model ─ tool call ─┬─ GET tool  → executor calls /api/v1/... with a pe
   Tatooine theme with a red accent"*, *"make the text bigger and use a
   serif font"*, *"save this as desert"* or *"go back to desert"*.
 
-  These tools never call the API. They change only how the page looks
-  in **your** browser, using the same localStorage keys as the
-  Appearance panel, so the change survives a reload. Your browser
-  re-checks every value against its own allow-list:
+  The assistant never calls the API for these tools. Your browser
+  applies the change to how the pages look for **you**, using the same
+  store as the Appearance panel. That store saves the change to your
+  own appearance profile on the server (`/api/v1/me/appearance`), so
+  it survives reloads and follows you to other browsers. Your browser
+  re-checks every value against its own allow-list (and the server
+  checks again):
   - known theme names only;
   - the Appearance panel's CSS variables only;
   - hex colours, `px`/`rem`/`em` sizes, `100`–`900` weights and plain

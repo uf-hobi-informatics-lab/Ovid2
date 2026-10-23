@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Any
 
 from ovid2.config import addresses as _addresses
+from ovid2.config.engines import resolve_engine_type
 from ovid2.run_kinds import get_kind
 from ovid2.web import db as web_db
 from ovid2.web.models import (
@@ -393,6 +394,7 @@ def _row_to_detail(name: str, path: Path, doc: dict[str, Any]) -> PipelineConfig
         transformations=transformations,
         packages=list(doc.get("packages") or []),
         engine=str(doc.get("engine", "pyspark")),
+        description=str(doc.get("description") or ""),
         workers=int(doc.get("workers", 25)),
         sf_database=doc.get("sf_database") or None,
         sf_account=doc.get("sf_account") or None,
@@ -446,6 +448,9 @@ def list_pipelines() -> list[PipelineConfigSummary]:
                 input_address=str(doc.get("input_address", "")),
                 output_address=str(doc.get("output_address", "")),
                 tables=tables,
+                engine=str(doc.get("engine") or "pyspark"),
+                engine_type=resolve_engine_type(str(doc.get("engine") or "")),
+                description=str(doc.get("description") or ""),
                 trigger_type=str(trigger.get("type", "manual")),
                 enabled=bool(state.get("enabled", doc.get("enabled", True))),
                 last_fired_at=(str(state["last_fired_at"]) if state.get("last_fired_at") else None),
@@ -676,6 +681,11 @@ def write_pipeline(
         "transformations": list(payload.transformations),
         "packages": list(payload.packages),
         "engine": payload.engine,
+        "description": (
+            payload.description
+            if "description" in payload.model_fields_set
+            else str((existing_raw or {}).get("description") or "")
+        ),
         "workers": int(payload.workers),
         "sf_database": payload.sf_database,
         "sf_account": payload.sf_account,
@@ -767,6 +777,7 @@ def set_enabled(name: str, enabled: bool, *, actor: str = "web") -> PipelineConf
         transformations=list(detail.transformations),
         packages=list(detail.packages),
         engine=detail.engine,
+        description=detail.description,
         workers=detail.workers,
         sf_database=detail.sf_database,
         sf_account=detail.sf_account,
@@ -820,6 +831,14 @@ def _to_submit_request(
     resolved_input = input_address if input_address is not None else detail.input_address
     resolved_output = output_address if output_address is not None else detail.output_address
     resolved_tables = tables if tables is not None else list(detail.tables)
+    # A copy / move config kept *open* on tables (empty stored list) with
+    # no per-run override means "everything in the source": hand the
+    # ``all`` sentinel to ``jobs_svc`` so it expands the source's roster
+    # at draft / submit time (or rejects it with an actionable message
+    # when the source cannot be listed). Without this the assistant's
+    # ``draft_pipeline_config`` of an open copy config always 400'd.
+    if not resolved_tables:
+        resolved_tables = ["all"]
     return JobSubmitRequest(
         kind=detail.kind,
         cdm=detail.cdm,

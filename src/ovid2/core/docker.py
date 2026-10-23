@@ -267,7 +267,7 @@ def build_docker_command(args: Any, instance: OvidInstance) -> list[str]:
     for key, value in SPARK_CONFIG.items():
         spark_conf_args.extend(["--conf", f"{key}={value}"])
 
-    if SPARK_MODE == "cluster":
+    if SPARK_MODE == "cluster" and not getattr(args, "no_spark_cluster", False):
         master_url = instance.spark_master_url()
         network_args = ["--network", instance.network_name]
     else:
@@ -711,6 +711,58 @@ def stop_driver_container(instance_id: str, *, timeout: int = 35) -> None:
             f"[ovid2] driver container stop for {name} reported: {exc}",
             file=sys.stderr,
         )
+
+
+def engine_needs_spark_cluster(engine: Any) -> bool:
+    """Return ``True`` when ``engine`` computes on a Spark cluster.
+
+    Non-Spark engines (Snowpark: compute runs inside Snowflake) only
+    need a single driver container — starting a per-invocation Spark
+    master + workers for them is pure overhead. Unknown / ``None``
+    engines default to ``True`` (the historical behaviour).
+    """
+    if engine is None:
+        return True
+    return bool(getattr(engine, "session_is_spark", True))
+
+
+def submit_one_shot(
+    args: Any,
+    instance: OvidInstance,
+    *,
+    spark_cluster: bool,
+    spark_mode: str | None = None,
+) -> int:
+    """Dispatch a one-shot tool (copy / move) to Docker.
+
+    Uses :func:`submit_with_cluster` when ``SPARK_MODE == "cluster"``
+    and ``spark_cluster`` is ``True``; otherwise runs a single driver
+    container via :func:`submit_to_docker`. When the cluster is skipped
+    because the engine is not Spark-family, ``args.no_spark_cluster``
+    is set so :func:`build_docker_command` emits neither the instance
+    network nor the cluster master URL.
+
+    Args:
+        args: Parsed CLI arguments (host-mode shape).
+        instance: The per-invocation isolation context.
+        spark_cluster: Whether the selected engine needs a Spark cluster
+            (see :func:`engine_needs_spark_cluster`).
+        spark_mode: Override for ``settings.SPARK_MODE`` (callers pass
+            the value they read so tests can patch it in one place).
+
+    Returns:
+        The subprocess return code.
+    """
+    mode = SPARK_MODE if spark_mode is None else spark_mode
+    if mode == "cluster" and spark_cluster:
+        return submit_with_cluster(args, instance)
+    if not spark_cluster:
+        args.no_spark_cluster = True
+        print(  # noqa: T201 — host-side CLI is permitted to print
+            f"[ovid2] Engine '{getattr(args, 'engine', '?')}' is not Spark-family; "
+            f"running a single driver container (no Spark cluster, id={instance.instance_id})."
+        )
+    return submit_to_docker(args, instance)
 
 
 def submit_to_docker(args: Any, instance: OvidInstance) -> int:

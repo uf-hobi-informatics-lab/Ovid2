@@ -205,6 +205,12 @@ def main(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
+    # Non-Spark engines (Snowpark) compute inside the warehouse — the
+    # host side then runs a single driver container, no Spark cluster.
+    from ovid2.core.docker import engine_needs_spark_cluster
+
+    args._spark_cluster = engine_needs_spark_cluster(engine)
+
     # Validate --extra-mount specs up-front so a bad path fails before
     # we spin up a 25-worker Spark cluster. The parsed list is stashed
     # on ``args`` so downstream (docker.py / compose.py) don't have to
@@ -288,7 +294,7 @@ def _run_host_mode(args: argparse.Namespace) -> int:
     between cluster and local Spark.
     """
     from ovid2.config.settings import SPARK_MODE
-    from ovid2.core.docker import submit_to_docker, submit_with_cluster
+    from ovid2.core.docker import submit_one_shot
     from ovid2.core.isolation import OvidInstance, cleanup_stale_instances
 
     cleanup_stale_instances()
@@ -324,9 +330,12 @@ def _run_host_mode(args: argparse.Namespace) -> int:
     if not hasattr(args, "workers"):
         args.workers = 25
 
-    if SPARK_MODE == "cluster":
-        return submit_with_cluster(args, instance)
-    return submit_to_docker(args, instance)
+    return submit_one_shot(
+        args,
+        instance,
+        spark_cluster=bool(getattr(args, "_spark_cluster", True)),
+        spark_mode=SPARK_MODE,
+    )
 
 
 def _run_container_mode(args: argparse.Namespace) -> int:
@@ -368,7 +377,6 @@ def _run_container_mode(args: argparse.Namespace) -> int:
     # against the source driver, which enumerates every user table in
     # the source (e.g. the tables inside an Access ``.accdb`` file).
     from ovid2.tools.table_specs import (
-        TableSpec,
         is_all_sentinel,
         parse_table_specs,
     )
@@ -383,20 +391,49 @@ def _run_container_mode(args: argparse.Namespace) -> int:
             # ``get_session`` is idempotent (the engine caches it) so
             # this does not double-start the cluster.
             engine.get_session()
-            expanded = input_driver.expand_all_tables()
+            expanded = input_driver.expand_all_tables(
+                pipeline=args.pipeline,
+                batch_id=args.batch_id,
+            )
             if expanded is None:
                 raise ValueError(
                     f"source '{args.from_address}' "
                     f"({input_driver.type_name}) cannot expand `--tables "
                     f"all`; pass an explicit table list."
                 )
-            resolved = [TableSpec(table_name=name, file_name=name) for name in expanded]
+            # Folder sources return ``LOGICAL=SOURCE`` specs
+            # (``demographic=demographic.csv``); container sources return
+            # bare names. ``parse_table_specs`` handles both.
+            resolved = parse_table_specs(expanded)
             print(
                 f"[ovid2 tools copy] expanded --tables all → "
                 f"{len(resolved)} table(s): {', '.join(t.table_name for t in resolved)}"
             )
         else:
             resolved = parse_table_specs(args.tables)
+
+    # Largest-first (LPT) scheduling: start the biggest tables at t=0 so
+    # the run is bounded by the largest table rather than by whichever
+    # large table the list order happened to put last. Metadata-only
+    # size lookup; any failure keeps the given order.
+    from ovid2.tools.table_order import format_size, order_largest_first
+
+    resolved, sizes = order_largest_first(
+        resolved,
+        input_driver,
+        pipeline=args.pipeline,
+        batch_id=args.batch_id,
+    )
+    if sizes:
+        print(
+            "[ovid2 tools copy] largest-first order: "
+            + ", ".join(
+                f"{t.table_name} ({format_size(sizes[t.file_name])})"
+                if t.file_name in sizes
+                else f"{t.table_name} (?)"
+                for t in resolved
+            )
+        )
 
     failures = 0
     try:
