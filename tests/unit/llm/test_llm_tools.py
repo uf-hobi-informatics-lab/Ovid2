@@ -492,6 +492,23 @@ def test_set_appearance_is_a_ui_action() -> None:
         build_request(tool, {"theme": "matrix"})
 
 
+def test_set_appearance_accepts_every_shipped_theme() -> None:
+    from ovid2.agent_tools import validate_args
+
+    tool = get_tool("set_appearance")
+    assert tool is not None
+    for slug in (
+        "clinical",
+        "matrix",
+        "super-mario-world",
+        "tatooine",
+        "financial",
+        "lego",
+        "spaceship",
+    ):
+        validate_args(tool, {"theme": slug})
+
+
 @pytest.mark.parametrize(
     "args",
     [

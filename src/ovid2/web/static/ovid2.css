@@ -44,6 +44,7 @@
  *  12. Responsive breakpoints.
  *  13. Utilities.
  *  14. Print + reduced-motion.
+ *  15. Theme personality layers (per-theme effects, scoped by slug).
  */
 
 
@@ -121,13 +122,48 @@
   src: url("/static/fonts/vt323.woff2") format("woff2");
 }
 
-/* Inter — crisp neutral dashboard sans, tabular figures (Clinical). */
+/* IBM Plex Sans — calibrated-instrument UI sans (Clinical). Variable. */
 @font-face {
-  font-family: "Inter";
+  font-family: "IBM Plex Sans";
   font-style: normal;
-  font-weight: 100 900;
+  font-weight: 100 700;
   font-display: swap;
-  src: url("/static/fonts/inter.woff2") format("woff2");
+  src: url("/static/fonts/ibm-plex-sans.woff2") format("woff2");
+}
+
+/* IBM Plex Sans Condensed — dense terminal UI face (Financial). No
+ * variable build upstream: regular + semibold statics. */
+@font-face {
+  font-family: "IBM Plex Sans Condensed";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/ibm-plex-sans-condensed-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans Condensed";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/static/fonts/ibm-plex-sans-condensed-600.woff2") format("woff2");
+}
+
+/* IBM Plex Mono — ids, code and tabular numbers (Clinical, Financial).
+ * No variable build upstream, so two static weights (regular + semibold;
+ * bold requests resolve to semibold). */
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/ibm-plex-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/static/fonts/ibm-plex-mono-600.woff2") format("woff2");
 }
 
 /* Exo 2 — techno-geometric body face (Star Wars / Tatooine). */
@@ -155,6 +191,44 @@
   font-weight: 200 900;
   font-display: swap;
   src: url("/static/fonts/nunito.woff2") format("woff2");
+}
+
+/* Share Tech Mono — legible terminal body face (Matrix). Single weight. */
+@font-face {
+  font-family: "Share Tech Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/share-tech-mono.woff2") format("woff2");
+}
+
+/* Michroma — wide geometric sci-fi display face (Tatooine). Single
+ * weight. */
+@font-face {
+  font-family: "Michroma";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/michroma.woff2") format("woff2");
+}
+
+/* Press Start 2P — 8-bit pixel display face (Super Mario World). Used
+ * only at small sizes for titles / KPIs. Single weight. */
+@font-face {
+  font-family: "Press Start 2P";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/press-start-2p.woff2") format("woff2");
+}
+
+/* JetBrains Mono — terminal UI face (Spaceship). SIL OFL 1.1. */
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("/static/fonts/jetbrains-mono.woff2") format("woff2");
 }
 
 
@@ -298,8 +372,8 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
 /* ------------------------------------------------------------------ *
  * 2.  Shipped themes
  *
- * Six curated named themes ship by default: Clinical, Matrix,
- * Super Mario World, Star Wars / Tatooine, Financial, LEGO.
+ * Seven curated named themes ship by default: Clinical, Matrix,
+ * Super Mario World, Star Wars / Tatooine, Financial, LEGO, Spaceship.
  *
  * The ``light`` and ``dark`` selectors are kept as ALIASES on the
  * Clinical (light baseline) and Matrix (dark baseline) blocks. Two
@@ -316,63 +390,63 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
  * ------------------------------------------------------------------ */
 
 /* --- Clinical (light baseline + default). Alias: light.
- *     Clean modern medical-dashboard look: cool off-white canvas,
- *     crisp teal-blue accent, soft low-contrast borders. ----------- */
+ *     Hospital-grade calm: a quiet, precise clinical instrument — cool
+ *     off-white canvas, calibrated teal accent, hairline borders. ---- */
 :root,
 [data-theme="clinical"],
 [data-theme="light"] {
-  /* Semantic colours. Vivid but calm medical palette: deeper ink for
-     tighter body contrast, a brighter cyan-teal accent. */
-  --fg: #0f1b26;
-  --fg-muted: #4a5b6d;
-  --fg-subtle: #8595a6;
-  --bg: #eef4f9;
+  /* Semantic colours. Calm medical palette: deep ink, a calibrated
+     teal accent, status hues all >= 4.5:1 on white. */
+  --fg: #0e1a24;
+  --fg-muted: #475869;
+  --fg-subtle: #5e7082;
+  --bg: #f4f7fa;
   --bg-elev: #ffffff;
   --card-bg: #ffffff;
-  --border: #dbe4ee;
-  --border-strong: #c2d0dd;
-  --accent: #0891b2;
-  --accent-hover: #0e7490;
+  --border: #dde5ec;
+  --border-strong: #c3d0dc;
+  --accent: #08759a;
+  --accent-hover: #06627f;
   --accent-fg: #ffffff;
-  --accent-subtle: rgba(8, 145, 178, 0.11);
-  --ok: #059669;
-  --warn: #d97706;
-  --err: #dc2626;
-  --info: #0891b2;
+  --accent-subtle: rgba(8, 117, 154, 0.10);
+  --ok: #0f7a55;
+  --warn: #a8530b;
+  --err: #c2263b;
+  --info: #08759a;
 
   /* Chrome. */
-  --topbar-bg: rgba(255, 255, 255, 0.9);
-  --topbar-fg: #0f1b26;
-  --topbar-border: #dbe4ee;
+  --topbar-bg: rgba(255, 255, 255, 0.92);
+  --topbar-fg: #0e1a24;
+  --topbar-border: #dde5ec;
   --drawer-bg: #ffffff;
-  --drawer-fg: #3c4b5b;
-  --drawer-fg-muted: #8595a6;
-  --drawer-hover-bg: #eef4f8;
-  --drawer-active-bg: #dcf1f6;
-  --drawer-active-fg: #0891b2;
-  --drawer-active-border: #0891b2;
-  --drawer-border: #e9eef4;
-  --scrim-bg: rgba(16, 32, 48, 0.42);
+  --drawer-fg: #33465a;
+  --drawer-fg-muted: #5e7082;
+  --drawer-hover-bg: #eef3f7;
+  --drawer-active-bg: #e3f2f7;
+  --drawer-active-fg: #086a8a;
+  --drawer-active-border: #08759a;
+  --drawer-border: #e8eef3;
+  --scrim-bg: rgba(14, 26, 36, 0.42);
 
   /* Blocks. */
-  --code-bg: #0f1b26;
-  --code-fg: #e9eef4;
-  --log-bg: rgba(16, 32, 48, 0.04);
+  --code-bg: #0e1a24;
+  --code-fg: #e6ecf2;
+  --log-bg: rgba(14, 26, 36, 0.04);
 
   /* Row overlays. */
-  --overlay-err:  rgba(220, 38, 38, 0.06);
-  --overlay-warn: rgba(217, 119, 6, 0.06);
-  --overlay-ok:   rgba(5, 150, 105, 0.06);
-  --flash-ok-bg:  rgba(5, 150, 105, 0.10);
-  --flash-err-bg: rgba(220, 38, 38, 0.10);
+  --overlay-err: rgba(194, 38, 59, 0.07);
+  --overlay-warn: rgba(168, 83, 11, 0.07);
+  --overlay-ok: rgba(15, 122, 85, 0.07);
+  --flash-ok-bg: rgba(15, 122, 85, 0.10);
+  --flash-err-bg: rgba(194, 38, 59, 0.10);
 
   /* Elevation. */
-  --shadow-1: 0 1px 2px rgba(16, 32, 48, 0.05),
-              0 1px 3px rgba(16, 32, 48, 0.04);
-  --shadow-2: 0 6px 16px rgba(16, 32, 48, 0.07),
-              0 2px 5px  rgba(16, 32, 48, 0.05);
-  --shadow-3: 0 14px 32px rgba(16, 32, 48, 0.12),
-              0 5px 14px  rgba(16, 32, 48, 0.07);
+  --shadow-1: 0 1px 2px rgba(14, 26, 36, 0.05),
+              0 1px 3px rgba(14, 26, 36, 0.04);
+  --shadow-2: 0 6px 16px rgba(14, 26, 36, 0.07),
+              0 2px 5px  rgba(14, 26, 36, 0.05);
+  --shadow-3: 0 14px 32px rgba(14, 26, 36, 0.12),
+              0 5px 14px  rgba(14, 26, 36, 0.07);
 
   /* Typography. */
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
@@ -399,59 +473,65 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Clinical typography — crisp neutral dashboard sans (Inter) for both
- * the brand wordmark and the body. Scoped to clinical/light only (NOT
- * the :root default) so the other shipped themes keep their own faces.
- * The appearance editor can still override --body-ff inline. */
+/* Clinical typography + geometry — IBM Plex Sans for the wordmark and
+ * body, IBM Plex Mono for ids / code, tabular figures, slightly softer
+ * radii. Scoped to clinical/light only (NOT the :root default) so the
+ * other shipped themes keep their own faces. The appearance editor can
+ * still override --body-ff inline. */
 [data-theme="clinical"],
 [data-theme="light"] {
-  --font-display: "Inter", "Space Grotesk", var(--mono);
-  --body-ff: "Inter", var(--font-body-default);
+  --font-display: "IBM Plex Sans", "Space Grotesk", var(--font-body-default);
+  --body-ff: "IBM Plex Sans", var(--font-body-default);
+  --body-fs: 13.5px;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --radius-md: 8px;
+  --radius-lg: 12px;
 }
 
-/* --- Matrix (dark baseline). Black terminal + phosphor green.
- *     Alias: dark. ------------------------------------------------- */
+/* --- Matrix (dark baseline). Alias: dark.
+ *     Digital rain: a phosphor-green CRT inside the Matrix — pure black
+ *     void, green glyphs, white-hot leading characters. -------------- */
 [data-theme="matrix"],
 [data-theme="dark"] {
-  --fg: #b6ffc4;
-  --fg-muted: #45d95f;
-  --fg-subtle: #2f9c44;
-  --bg: #000000;
-  --bg-elev: #030a04;
-  --card-bg: #050f07;
-  --border: #0f3d1c;
-  --border-strong: #1a5e2c;
+  --fg: #a8ffb8;
+  --fg-muted: #4fd96e;
+  --fg-subtle: #2e9e4b;
+  --bg: #000300;
+  --bg-elev: #010702;
+  --card-bg: #020b04;
+  --border: #0d3a19;
+  --border-strong: #17602b;
   --accent: #00ff41;
   --accent-hover: #57ff85;
-  --accent-fg: #001005;
-  --accent-subtle: rgba(0, 255, 65, 0.16);
+  --accent-fg: #001a07;
+  --accent-subtle: rgba(0, 255, 65, 0.14);
   --ok: #00ff41;
-  --warn: #c6ff33;
-  --err: #ff4d4d;
+  --warn: #d4ff3a;
+  --err: #ff5555;
   --info: #00ff41;
 
-  --topbar-bg: rgba(0, 8, 2, 0.94);
-  --topbar-fg: #b6ffc4;
-  --topbar-border: #0f3d1c;
-  --drawer-bg: #020602;
+  --topbar-bg: rgba(0, 6, 1, 0.95);
+  --topbar-fg: #a8ffb8;
+  --topbar-border: #0d3a19;
+  --drawer-bg: #010502;
   --drawer-fg: #7dff98;
-  --drawer-fg-muted: #2f9c44;
-  --drawer-hover-bg: #08200e;
+  --drawer-fg-muted: #2e9e4b;
+  --drawer-hover-bg: #06180b;
   --drawer-active-bg: #0d3a1b;
-  --drawer-active-fg: #57ff85;
+  --drawer-active-fg: #e6ffe9;
   --drawer-active-border: #00ff41;
   --drawer-border: #0a2c13;
   --scrim-bg: rgba(0, 0, 0, 0.74);
 
   --code-bg: #000300;
-  --code-fg: #00ff41;
-  --log-bg: rgba(0, 255, 65, 0.06);
+  --code-fg: #7dff98;
+  --log-bg: rgba(0, 255, 65, 0.05);
 
-  --overlay-err:  rgba(255, 77, 77, 0.12);
-  --overlay-warn: rgba(198, 255, 51, 0.12);
-  --overlay-ok:   rgba(0, 255, 65, 0.12);
-  --flash-ok-bg:  rgba(0, 255, 65, 0.18);
-  --flash-err-bg: rgba(255, 77, 77, 0.18);
+  --overlay-err: rgba(255, 85, 85, 0.12);
+  --overlay-warn: rgba(212, 255, 58, 0.12);
+  --overlay-ok: rgba(0, 255, 65, 0.12);
+  --flash-ok-bg: rgba(0, 255, 65, 0.16);
+  --flash-err-bg: rgba(255, 85, 85, 0.18);
 
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.6),
               0 1px 3px rgba(0, 0, 0, 0.5);
@@ -482,233 +562,86 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Matrix typography — DEC-VT320 terminal face (VT323) for the wordmark,
- * prompt and body, so the whole shell reads like a CRT console. Scoped
- * to matrix/dark only (NOT the dark baseline block itself) to preserve
- * the light/dark token-symmetry contract. VT323 renders small, so the
- * body/nav sizes are bumped a notch for legibility. */
+/* Matrix typography + geometry — Share Tech Mono (a legible terminal
+ * face) for body / nav / code; VT323 is kept as a large-size accent
+ * face for page titles and KPI numbers only (§15.matrix). Square
+ * corners. --mx-hot is the white-green "leading glyph" emphasis.
+ * Scoped to matrix/dark here (NOT the dark baseline block itself) to
+ * preserve the light/dark token-symmetry contract. */
 [data-theme="matrix"],
 [data-theme="dark"] {
-  --font-display: "VT323", ui-monospace, "SF Mono", Menlo, monospace;
-  --body-ff: "VT323", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --mono: "VT323", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --body-fs: 15px;
-  --nav-ff: "VT323", ui-monospace, monospace;
-  --nav-fs: 1.05rem;
+  --font-display: "VT323", "Share Tech Mono", ui-monospace, monospace;
+  --body-ff: "Share Tech Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --mono: "Share Tech Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --body-fs: 14px;
+  --nav-ff: "Share Tech Mono", ui-monospace, monospace;
+  --nav-fs: 0.9rem;
+  --btn-ff: "Share Tech Mono", ui-monospace, monospace;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-pill: 0;
   --matrix-green: #00ff41;
   --matrix-glow: rgba(0, 255, 65, 0.35);
+  --mx-hot: #e6ffe9;
+}
+@supports (color: color-mix(in srgb, red 50%, transparent)) {
+  [data-theme="matrix"],
+  [data-theme="dark"] {
+    --matrix-glow: color-mix(in srgb, var(--accent) 35%, transparent);
+  }
 }
 
-/* --- Super Mario World. Bright sky blue + brick red / coin gold. -- */
+/* --- Super Mario World. 16-bit sky and bricks: a SNES platformer menu
+ *     — bright sky ground, cream dialogue-box cards with thick dark
+ *     outlines, brick-red chrome, coin-gold highlights. Light. ------- */
 [data-theme="super-mario-world"] {
-  --fg: #1b1b2f;
-  --fg-muted: #45508a;
-  --fg-subtle: #7b86b8;
-  --bg: #6bb6ff;
-  --bg-elev: #eaf4ff;
-  --card-bg: #ffffff;
-  --border: #b8d8ff;
-  --border-strong: #8fbdf5;
-  --accent: #e52521;
-  --accent-hover: #c31c19;
+  --fg: #231a12;
+  --fg-muted: #5a4632;
+  --fg-subtle: #7a6450;
+  --bg: #5c94fc;
+  --bg-elev: #fff8e1;
+  --card-bg: #fffdf4;
+  --border: #231a12;
+  --border-strong: #231a12;
+  --accent: #d8000f;
+  --accent-hover: #a8000c;
   --accent-fg: #ffffff;
-  --accent-subtle: rgba(229, 37, 33, 0.12);
-  --ok: #43b047;
-  --warn: #fbd000;
-  --err: #e52521;
-  --info: #049cd8;
+  --accent-subtle: rgba(216, 0, 15, 0.10);
+  --ok: #007a1f;
+  --warn: #8a6200;
+  --err: #c4000d;
+  --info: #0058f8;
 
-  --topbar-bg: rgba(4, 156, 216, 0.95);
+  --topbar-bg: #d8000f;
   --topbar-fg: #ffffff;
-  --topbar-border: #0384b8;
-  --drawer-bg: #ffffff;
-  --drawer-fg: #1b1b2f;
-  --drawer-fg-muted: #7b86b8;
-  --drawer-hover-bg: #fff4cc;
-  --drawer-active-bg: #ffe08a;
-  --drawer-active-fg: #b3401a;
-  --drawer-active-border: #e52521;
-  --drawer-border: #ffe08a;
-  --scrim-bg: rgba(27, 27, 47, 0.45);
+  --topbar-border: #231a12;
+  --drawer-bg: #fffdf4;
+  --drawer-fg: #231a12;
+  --drawer-fg-muted: #7a6450;
+  --drawer-hover-bg: #fff1c2;
+  --drawer-active-bg: #f8c800;
+  --drawer-active-fg: #231a12;
+  --drawer-active-border: #231a12;
+  --drawer-border: #231a12;
+  --scrim-bg: rgba(35, 26, 18, 0.45);
 
-  --code-bg: #1b1b2f;
-  --code-fg: #fbd000;
-  --log-bg: rgba(4, 156, 216, 0.06);
+  --code-bg: #231a12;
+  --code-fg: #f8c800;
+  --log-bg: rgba(35, 26, 18, 0.05);
 
-  --overlay-err:  rgba(229, 37, 33, 0.08);
-  --overlay-warn: rgba(251, 208, 0, 0.14);
-  --overlay-ok:   rgba(67, 176, 71, 0.08);
-  --flash-ok-bg:  rgba(67, 176, 71, 0.14);
-  --flash-err-bg: rgba(229, 37, 33, 0.12);
+  --overlay-err: rgba(196, 0, 13, 0.08);
+  --overlay-warn: rgba(248, 200, 0, 0.18);
+  --overlay-ok: rgba(0, 122, 31, 0.09);
+  --flash-ok-bg: rgba(0, 122, 31, 0.14);
+  --flash-err-bg: rgba(196, 0, 13, 0.12);
 
-  --shadow-1: 0 1px 2px rgba(27, 27, 47, 0.10),
-              0 1px 3px rgba(27, 27, 47, 0.08);
-  --shadow-2: 0 4px 12px rgba(27, 27, 47, 0.14),
-              0 2px 4px  rgba(27, 27, 47, 0.08);
-  --shadow-3: 0 10px 28px rgba(27, 27, 47, 0.22),
-              0 4px 12px  rgba(27, 27, 47, 0.12);
-
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
-  --fs-xs: 0.75rem;
-  --fs-sm: 0.85rem;
-  --fs-md: 0.95rem;
-  --fs-lg: 1.15rem;
-  --fs-xl: 1.5rem;
-
-  /* Cartoonish rounded display + body face (Fredoka), heavier nav/brand
-     weights and chunkier radii for a playful, game-menu feel. */
-  --font-display: "Fredoka", "Baloo 2", var(--font-body-default);
-  --body-ff: "Fredoka", var(--font-body-default);
-  --body-fw: 500;
-  --nav-ff: "Fredoka", var(--font-body-default);
-  --nav-fw: 600;
-  --btn-ff: "Fredoka", var(--font-body-default);
-  --btn-fw: 600;
-
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
-  --radius-pill: 999px;
-
-  --topbar-h: 56px;
-  --drawer-w: 240px;
-  --drawer-rail-w: 64px;
-  --page-max: 1400px;
-
-  --dur-fast: 120ms;
-  --dur-med: 200ms;
-  --ease: cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* --- Star Wars / Tatooine. Deep space-night ink, dusty desert panels,
- *     twin-sun amber accent. Orbitron display + Exo 2 body. ---------- */
-[data-theme="tatooine"] {
-  --fg: #f3e2c2;
-  --fg-muted: #b79a6d;
-  --fg-subtle: #8a7350;
-  --bg: #14100b;
-  --bg-elev: #1e1710;
-  --card-bg: #221a11;
-  --border: #3a2c1a;
-  --border-strong: #55401f;
-  --accent: #f2a935;
-  --accent-hover: #ffc25a;
-  --accent-fg: #1a1104;
-  --accent-subtle: rgba(242, 169, 53, 0.15);
-  --ok: #c9a24b;
-  --warn: #e8862a;
-  --err: #e5533b;
-  --info: #6fb2c4;
-
-  --topbar-bg: rgba(20, 16, 11, 0.94);
-  --topbar-fg: #f3e2c2;
-  --topbar-border: #3a2c1a;
-  --drawer-bg: #1a140d;
-  --drawer-fg: #d9c19a;
-  --drawer-fg-muted: #8a7350;
-  --drawer-hover-bg: #261d12;
-  --drawer-active-bg: #3a2a13;
-  --drawer-active-fg: #ffc25a;
-  --drawer-active-border: #f2a935;
-  --drawer-border: #2c2114;
-  --scrim-bg: rgba(0, 0, 0, 0.62);
-
-  --code-bg: #0d0a06;
-  --code-fg: #f2a935;
-  --log-bg: rgba(242, 169, 53, 0.05);
-
-  --overlay-err:  rgba(229, 83, 59, 0.12);
-  --overlay-warn: rgba(232, 134, 42, 0.12);
-  --overlay-ok:   rgba(201, 162, 75, 0.12);
-  --flash-ok-bg:  rgba(201, 162, 75, 0.16);
-  --flash-err-bg: rgba(229, 83, 59, 0.16);
-
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5),
-              0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.6),
-              0 2px 4px  rgba(0, 0, 0, 0.45);
-  --shadow-3: 0 10px 28px rgba(0, 0, 0, 0.7),
-              0 4px 12px  rgba(0, 0, 0, 0.5);
-
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
-  --fs-xs: 0.75rem;
-  --fs-sm: 0.85rem;
-  --fs-md: 0.95rem;
-  --fs-lg: 1.15rem;
-  --fs-xl: 1.5rem;
-
-  /* Retro-future sci-fi display (Orbitron) + techno-geometric body
-     (Exo 2), with a touch of letter-spacing on the brand. */
-  --font-display: "Orbitron", "Exo 2", var(--font-body-default);
-  --body-ff: "Exo 2", var(--font-body-default);
-  --nav-ff: "Exo 2", var(--font-body-default);
-  --nav-fw: 600;
-  --btn-ff: "Orbitron", "Exo 2", var(--font-body-default);
-  --btn-fw: 600;
-
-  --radius-sm: 3px;
-  --radius-md: 5px;
-  --radius-lg: 8px;
-  --radius-pill: 999px;
-
-  --topbar-h: 56px;
-  --drawer-w: 240px;
-  --drawer-rail-w: 64px;
-  --page-max: 1400px;
-
-  --dur-fast: 120ms;
-  --dur-med: 200ms;
-  --ease: cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* --- Financial. Dark trading-desk charcoal, gain-green accent. ---- */
-[data-theme="financial"] {
-  --fg: #e8edf2;
-  --fg-muted: #9fb0c0;
-  --fg-subtle: #6b7c8c;
-  --bg: #0d141b;
-  --bg-elev: #131d27;
-  --card-bg: #131d27;
-  --border: #21303d;
-  --border-strong: #2f4353;
-  --accent: #16b877;
-  --accent-hover: #1ad089;
-  --accent-fg: #04140d;
-  --accent-subtle: rgba(22, 184, 119, 0.14);
-  --ok: #16b877;
-  --warn: #e0a53b;
-  --err: #e8524a;
-  --info: #3d97d6;
-
-  --topbar-bg: rgba(13, 20, 27, 0.94);
-  --topbar-fg: #e8edf2;
-  --topbar-border: #21303d;
-  --drawer-bg: #0f1821;
-  --drawer-fg: #c2ced9;
-  --drawer-fg-muted: #6b7c8c;
-  --drawer-hover-bg: #17232e;
-  --drawer-active-bg: #123128;
-  --drawer-active-fg: #1ad089;
-  --drawer-active-border: #16b877;
-  --drawer-border: #182530;
-  --scrim-bg: rgba(0, 0, 0, 0.6);
-
-  --code-bg: #080f15;
-  --code-fg: #e8edf2;
-  --log-bg: rgba(255, 255, 255, 0.04);
-
-  --overlay-err:  rgba(232, 82, 74, 0.12);
-  --overlay-warn: rgba(224, 165, 59, 0.12);
-  --overlay-ok:   rgba(22, 184, 119, 0.12);
-  --flash-ok-bg:  rgba(22, 184, 119, 0.18);
-  --flash-err-bg: rgba(232, 82, 74, 0.18);
-
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45),
-              0 1px 3px rgba(0, 0, 0, 0.35);
-  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.55),
-              0 2px 4px  rgba(0, 0, 0, 0.4);
-  --shadow-3: 0 10px 28px rgba(0, 0, 0, 0.65),
-              0 4px 12px  rgba(0, 0, 0, 0.45);
+  --shadow-1: 0 1px 2px rgba(35, 26, 18, 0.12),
+              0 1px 3px rgba(35, 26, 18, 0.10);
+  --shadow-2: 4px 4px 0 rgba(35, 26, 18, 0.9),
+              0 2px 4px  rgba(35, 26, 18, 0.10);
+  --shadow-3: 6px 6px 0 rgba(35, 26, 18, 0.9),
+              0 4px 12px  rgba(35, 26, 18, 0.15);
 
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   --fs-xs: 0.75rem;
@@ -732,55 +665,75 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* --- LEGO. Bright primary toy-brick palette on a clean light surface,
- *     chunky rounded studs. Baloo 2 display + Nunito body. ---------- */
-[data-theme="lego"] {
-  --fg: #14202e;
-  --fg-muted: #45566a;
-  --fg-subtle: #7c8da0;
-  --bg: #eef3f7;
-  --bg-elev: #ffffff;
-  --card-bg: #ffffff;
-  --border: #d6e0ea;
-  --border-strong: #b9c8d8;
-  --accent: #d01012;
-  --accent-hover: #b00d0f;
-  --accent-fg: #ffffff;
-  --accent-subtle: rgba(208, 16, 18, 0.12);
-  --ok: #237841;
-  --warn: #f5c518;
-  --err: #d01012;
-  --info: #0055bf;
+/* Super Mario World typography + geometry — Fredoka (rounded) body,
+ * Press Start 2P (8-bit pixel face, OFL) for titles / KPIs at small
+ * sizes in §15.super-mario-world; tight pixel-ish radii. */
+[data-theme="super-mario-world"] {
+  --font-display: "Fredoka", "Baloo 2", var(--font-body-default);
+  --body-ff: "Fredoka", var(--font-body-default);
+  --body-fw: 500;
+  --nav-ff: "Fredoka", var(--font-body-default);
+  --nav-fw: 600;
+  --btn-ff: "Fredoka", var(--font-body-default);
+  --btn-fw: 600;
+  --pixel-ff: "Press Start 2P", "Fredoka", monospace;
+  --smw-gold: #f8c800;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-pill: 6px;
+}
 
-  --topbar-bg: rgba(0, 85, 191, 0.96);
-  --topbar-fg: #ffffff;
-  --topbar-border: #0047a0;
-  --drawer-bg: #ffffff;
-  --drawer-fg: #14202e;
-  --drawer-fg-muted: #7c8da0;
-  --drawer-hover-bg: #fff3c4;
-  --drawer-active-bg: #ffe066;
-  --drawer-active-fg: #a80d0f;
-  --drawer-active-border: #d01012;
-  --drawer-border: #ffe066;
-  --scrim-bg: rgba(20, 32, 46, 0.45);
+/* --- Star Wars / Tatooine. Twin suns over the dunes: a desert planet
+ *     at dusk — warm night ink, sun-bleached sand text, sunset-orange
+ *     accent with a golden second sun, weathered cut-corner panels. -- */
+[data-theme="tatooine"] {
+  --fg: #f6e6c8;
+  --fg-muted: #c8a77a;
+  --fg-subtle: #9c8058;
+  --bg: #170f0a;
+  --bg-elev: #1d130c;
+  --card-bg: #22170f;
+  --border: #3d2a1a;
+  --border-strong: #5c3f22;
+  --accent: #ff8a3d;
+  --accent-hover: #ffa264;
+  --accent-fg: #1a0d04;
+  --accent-subtle: rgba(255, 138, 61, 0.13);
+  --ok: #d9b44a;
+  --warn: #ffc857;
+  --err: #ff5f4a;
+  --info: #ffc857;
 
-  --code-bg: #14202e;
-  --code-fg: #f5c518;
-  --log-bg: rgba(0, 85, 191, 0.06);
+  --topbar-bg: rgba(20, 13, 8, 0.95);
+  --topbar-fg: #f6e6c8;
+  --topbar-border: #3d2a1a;
+  --drawer-bg: #140d08;
+  --drawer-fg: #c8a77a;
+  --drawer-fg-muted: #9c8058;
+  --drawer-hover-bg: #261a10;
+  --drawer-active-bg: #3a2412;
+  --drawer-active-fg: #ffc857;
+  --drawer-active-border: #ff8a3d;
+  --drawer-border: #2c1e12;
+  --scrim-bg: rgba(0, 0, 0, 0.66);
 
-  --overlay-err:  rgba(208, 16, 18, 0.08);
-  --overlay-warn: rgba(245, 197, 24, 0.16);
-  --overlay-ok:   rgba(35, 120, 65, 0.09);
-  --flash-ok-bg:  rgba(35, 120, 65, 0.14);
-  --flash-err-bg: rgba(208, 16, 18, 0.12);
+  --code-bg: #0f0a06;
+  --code-fg: #f6e6c8;
+  --log-bg: rgba(255, 138, 61, 0.05);
 
-  --shadow-1: 0 1px 2px rgba(20, 32, 46, 0.10),
-              0 1px 3px rgba(20, 32, 46, 0.08);
-  --shadow-2: 0 4px 12px rgba(20, 32, 46, 0.14),
-              0 2px 4px  rgba(20, 32, 46, 0.08);
-  --shadow-3: 0 10px 28px rgba(20, 32, 46, 0.22),
-              0 4px 12px  rgba(20, 32, 46, 0.12);
+  --overlay-err: rgba(255, 95, 74, 0.12);
+  --overlay-warn: rgba(255, 200, 87, 0.12);
+  --overlay-ok: rgba(217, 180, 74, 0.12);
+  --flash-ok-bg: rgba(217, 180, 74, 0.16);
+  --flash-err-bg: rgba(255, 95, 74, 0.16);
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5),
+              0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.6),
+              0 2px 4px  rgba(0, 0, 0, 0.45);
+  --shadow-3: 0 10px 28px rgba(0, 0, 0, 0.7),
+              0 4px 12px  rgba(0, 0, 0, 0.5);
 
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   --fs-xs: 0.75rem;
@@ -789,19 +742,9 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
   --fs-lg: 1.15rem;
   --fs-xl: 1.5rem;
 
-  /* Chunky moulded-brick display (Baloo 2) + rounded body (Nunito),
-     with fat radii so cards read like plastic bricks. */
-  --font-display: "Baloo 2", "Fredoka", var(--font-body-default);
-  --body-ff: "Nunito", var(--font-body-default);
-  --body-fw: 500;
-  --nav-ff: "Baloo 2", "Nunito", var(--font-body-default);
-  --nav-fw: 700;
-  --btn-ff: "Baloo 2", "Nunito", var(--font-body-default);
-  --btn-fw: 700;
-
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
   --radius-pill: 999px;
 
   --topbar-h: 56px;
@@ -812,6 +755,323 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
   --dur-fast: 120ms;
   --dur-med: 200ms;
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Tatooine typography + geometry — Michroma (wide geometric sci-fi,
+ * uppercase) for display, Exo 2 body. Orbitron is left to Spaceship so
+ * the two sci-fi themes stay distinct. Corners are cut (clip-path in
+ * §15.tatooine), not rounded, so every radius is 0. */
+[data-theme="tatooine"] {
+  --font-display: "Michroma", "Exo 2", var(--font-body-default);
+  --body-ff: "Exo 2", var(--font-body-default);
+  --nav-ff: "Exo 2", var(--font-body-default);
+  --nav-fw: 600;
+  --btn-ff: "Michroma", "Exo 2", var(--font-body-default);
+  --btn-fw: 400;
+  --tt-sun2: #ffc857;
+  --tt-sun-glow: 0 0 14px rgba(255, 138, 61, 0.35);
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-pill: 0;
+}
+@supports (color: color-mix(in srgb, red 50%, transparent)) {
+  [data-theme="tatooine"] {
+    --tt-sun-glow: 0 0 14px color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+}
+
+/* --- Financial. Trading terminal: a dense market-data desk — pitch
+ *     black, amber command text, green/red tickers, condensed type and
+ *     mono numbers, function-key navigation. Generic terminal idiom
+ *     only (no vendor UI). Dark. ------------------------------------ */
+[data-theme="financial"] {
+  --fg: #e6edf3;
+  --fg-muted: #a3b1bf;
+  --fg-subtle: #7a8896;
+  --bg: #07090c;
+  --bg-elev: #0a0d12;
+  --card-bg: #0e1218;
+  --border: #1e2630;
+  --border-strong: #2c3744;
+  --accent: #ffb000;
+  --accent-hover: #ffc640;
+  --accent-fg: #140c00;
+  --accent-subtle: rgba(255, 176, 0, 0.12);
+  --ok: #26c165;
+  --warn: #ffb000;
+  --err: #ff4d4f;
+  --info: #4ea1ff;
+
+  --topbar-bg: #000000;
+  --topbar-fg: #e6edf3;
+  --topbar-border: #2c3744;
+  --drawer-bg: #05070a;
+  --drawer-fg: #a3b1bf;
+  --drawer-fg-muted: #7a8896;
+  --drawer-hover-bg: #111720;
+  --drawer-active-bg: #1a1404;
+  --drawer-active-fg: #ffb000;
+  --drawer-active-border: #ffb000;
+  --drawer-border: #1e2630;
+  --scrim-bg: rgba(0, 0, 0, 0.7);
+
+  --code-bg: #000000;
+  --code-fg: #ffb000;
+  --log-bg: rgba(255, 176, 0, 0.04);
+
+  --overlay-err: rgba(255, 77, 79, 0.12);
+  --overlay-warn: rgba(255, 176, 0, 0.12);
+  --overlay-ok: rgba(38, 193, 101, 0.12);
+  --flash-ok-bg: rgba(38, 193, 101, 0.16);
+  --flash-err-bg: rgba(255, 77, 79, 0.16);
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.6),
+              0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.7),
+              0 2px 4px  rgba(0, 0, 0, 0.5);
+  --shadow-3: 0 10px 28px rgba(0, 0, 0, 0.8),
+              0 4px 12px  rgba(0, 0, 0, 0.6);
+
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.85rem;
+  --fs-md: 0.95rem;
+  --fs-lg: 1.15rem;
+  --fs-xl: 1.5rem;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  --topbar-h: 56px;
+  --drawer-w: 240px;
+  --drawer-rail-w: 64px;
+  --page-max: 1400px;
+
+  --dur-fast: 120ms;
+  --dur-med: 200ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Financial typography + geometry — IBM Plex Sans Condensed UI, IBM
+ * Plex Mono tabular numbers (§15.financial), tight 2px corners and a
+ * denser body / table size. */
+[data-theme="financial"] {
+  --font-display: "IBM Plex Sans Condensed", "IBM Plex Sans", var(--font-body-default);
+  --body-ff: "IBM Plex Sans Condensed", "IBM Plex Sans", var(--font-body-default);
+  --nav-ff: "IBM Plex Sans Condensed", "IBM Plex Sans", var(--font-body-default);
+  --btn-ff: "IBM Plex Sans Condensed", "IBM Plex Sans", var(--font-body-default);
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --body-fs: 12.5px;
+  --table-fs: 0.8rem;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-pill: 2px;
+}
+
+/* --- LEGO. Toy bricks: a box of plastic bricks — warm white base, the
+ *     four primary brick colours, studs on top of cards, glossy rounded
+ *     bricks with a hard bottom edge. Inspired-by only (no logo,
+ *     minifigures or imitation of the proprietary typeface). Light. - */
+[data-theme="lego"] {
+  --fg: #1a1a1a;
+  --fg-muted: #4a4a4a;
+  --fg-subtle: #686868;
+  --bg: #f6f5f0;
+  --bg-elev: #fbfaf6;
+  --card-bg: #ffffff;
+  --border: #e2e0d8;
+  --border-strong: #c9c6bb;
+  --accent: #c8102e;
+  --accent-hover: #a50d26;
+  --accent-fg: #ffffff;
+  --accent-subtle: rgba(200, 16, 46, 0.10);
+  --ok: #00792b;
+  --warn: #8a6d00;
+  --err: #c8102e;
+  --info: #006cb7;
+
+  --topbar-bg: #006cb7;
+  --topbar-fg: #ffffff;
+  --topbar-border: #005a99;
+  --drawer-bg: #ffffff;
+  --drawer-fg: #1a1a1a;
+  --drawer-fg-muted: #686868;
+  --drawer-hover-bg: #fff4c2;
+  --drawer-active-bg: #ffcf00;
+  --drawer-active-fg: #1a1a1a;
+  --drawer-active-border: #c8102e;
+  --drawer-border: #e2e0d8;
+  --scrim-bg: rgba(26, 26, 26, 0.45);
+
+  --code-bg: #1a1a1a;
+  --code-fg: #ffcf00;
+  --log-bg: rgba(0, 108, 183, 0.05);
+
+  --overlay-err: rgba(200, 16, 46, 0.08);
+  --overlay-warn: rgba(255, 207, 0, 0.18);
+  --overlay-ok: rgba(0, 121, 43, 0.09);
+  --flash-ok-bg: rgba(0, 121, 43, 0.14);
+  --flash-err-bg: rgba(200, 16, 46, 0.12);
+
+  --shadow-1: 0 1px 2px rgba(26, 26, 26, 0.10),
+              0 1px 3px rgba(26, 26, 26, 0.08);
+  --shadow-2: 0 4px 12px rgba(26, 26, 26, 0.14),
+              0 2px 4px  rgba(26, 26, 26, 0.08);
+  --shadow-3: 0 10px 28px rgba(26, 26, 26, 0.22),
+              0 4px 12px  rgba(26, 26, 26, 0.12);
+
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.85rem;
+  --fs-md: 0.95rem;
+  --fs-lg: 1.15rem;
+  --fs-xl: 1.5rem;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  --topbar-h: 56px;
+  --drawer-w: 240px;
+  --drawer-rail-w: 64px;
+  --page-max: 1400px;
+
+  --dur-fast: 120ms;
+  --dur-med: 200ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* LEGO typography + geometry — chunky moulded-brick display (Baloo 2,
+ * 800) + rounded body (Nunito); brick-like radii. --lg-* are the four
+ * primary brick colours used by the §15.lego studs and plate badges;
+ * --lg-edge is the hard brick bottom edge, derived from --accent. */
+[data-theme="lego"] {
+  --font-display: "Baloo 2", "Fredoka", var(--font-body-default);
+  --body-ff: "Nunito", var(--font-body-default);
+  --body-fw: 500;
+  --nav-ff: "Baloo 2", "Nunito", var(--font-body-default);
+  --nav-fw: 700;
+  --btn-ff: "Baloo 2", "Nunito", var(--font-body-default);
+  --btn-fw: 700;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 6px;
+  --lg-red: #c8102e;
+  --lg-blue: #006cb7;
+  --lg-yellow: #ffcf00;
+  --lg-green: #00852b;
+  --lg-edge: #8f0b20;
+}
+@supports (color: color-mix(in srgb, red 50%, transparent)) {
+  [data-theme="lego"] {
+    --lg-edge: color-mix(in srgb, var(--accent) 72%, #000000);
+  }
+}
+
+/* --- Spaceship. Sci-fi operator console: black-teal void, phosphor
+ *     teal accent, square boxed panels, scanlines + glow. Dark. ------- */
+[data-theme="spaceship"] {
+  --fg: #d4f3ec;
+  --fg-muted: #8bb3ad;
+  --fg-subtle: #5f8a84;
+  --bg: #04080a;
+  --bg-elev: #071116;
+  --card-bg: #08141a;
+  --border: #173a40;
+  --border-strong: #25606a;
+  --accent: #2ee6c8;
+  --accent-hover: #6ff2dc;
+  --accent-fg: #03070a;
+  --accent-subtle: rgba(46, 230, 200, 0.12);
+  --ok: #3fdc7a;
+  --warn: #ffb547;
+  --err: #ff5c6c;
+  --info: #2ee6c8;
+
+  --topbar-bg: rgba(3, 7, 10, 0.96);
+  --topbar-fg: #d4f3ec;
+  --topbar-border: #25606a;
+  --drawer-bg: #03070a;
+  --drawer-fg: #8bb3ad;
+  --drawer-fg-muted: #5f8a84;
+  --drawer-hover-bg: #0a1a20;
+  --drawer-active-bg: #0b2a2c;
+  --drawer-active-fg: #2ee6c8;
+  --drawer-active-border: #2ee6c8;
+  --drawer-border: #173a40;
+  --scrim-bg: rgba(0, 0, 0, 0.74);
+
+  --code-bg: #020406;
+  --code-fg: #bfe6de;
+  --log-bg: rgba(46, 230, 200, 0.05);
+
+  --overlay-err:  rgba(255, 92, 108, 0.12);
+  --overlay-warn: rgba(255, 181, 71, 0.12);
+  --overlay-ok:   rgba(63, 220, 122, 0.12);
+  --flash-ok-bg:  rgba(63, 220, 122, 0.16);
+  --flash-err-bg: rgba(255, 92, 108, 0.16);
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.6),
+              0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.7),
+              0 2px 4px  rgba(0, 0, 0, 0.5);
+  --shadow-3: 0 10px 28px rgba(0, 0, 0, 0.8),
+              0 4px 12px  rgba(0, 0, 0, 0.6);
+
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.85rem;
+  --fs-md: 0.95rem;
+  --fs-lg: 1.15rem;
+  --fs-xl: 1.5rem;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  --topbar-h: 56px;
+  --drawer-w: 240px;
+  --drawer-rail-w: 64px;
+  --page-max: 1400px;
+
+  --dur-fast: 120ms;
+  --dur-med: 200ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Spaceship typography + geometry personality (mirrors the Matrix
+ * second block). JetBrains Mono UI, Orbitron display, square corners
+ * = the "boxed" look. The --sx-* helpers feed the §15 effect layer;
+ * the glow follows --accent so a user accent override still glows. */
+[data-theme="spaceship"] {
+  --font-display: "Orbitron", "JetBrains Mono", ui-monospace, monospace;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --body-ff: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --body-fs: 13px;
+  --nav-ff: "JetBrains Mono", ui-monospace, monospace;
+  --nav-fs: 0.8rem;
+  --btn-ff: "JetBrains Mono", ui-monospace, monospace;
+  --radius-sm: 0;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-pill: 2px;
+  --matrix-green: #3fdc7a;
+  --matrix-glow: rgba(63, 220, 122, 0.35);
+  --sx-glow: 0 0 12px var(--accent-subtle);
+  --sx-grid: rgba(46, 230, 200, 0.035);
+}
+@supports (color: color-mix(in srgb, red 50%, transparent)) {
+  [data-theme="spaceship"] {
+    --sx-glow: 0 0 12px color-mix(in srgb, var(--accent) 55%, transparent);
+    --sx-grid: color-mix(in srgb, var(--accent) 3.5%, transparent);
+  }
 }
 
 
@@ -4895,3 +5155,676 @@ body.modal-open { overflow: hidden; }
    items in the builder are horizontal. */
 .job-builder label.kind-chip,
 .job-builder label.check-item { flex-direction: row; align-items: center; font-size: var(--fs-sm); }
+
+
+/* ==================================================================
+ * 15. Theme personality layers
+ *
+ * Component-level effects that tokens alone cannot express (glow,
+ * corner brackets, textures, pseudo-element decorations). Every rule
+ * is scoped to html[data-theme="<slug>"] so the shared component rules
+ * — and every other theme — are untouched. Remove a sub-section and its
+ * theme still works (tokens only), just without the effects. Effects
+ * that use the accent read var(--accent) so user overrides follow.
+ * Every animation has a prefers-reduced-motion off-switch at the end.
+ * ================================================================== */
+
+/* ------------------------------------------------------------------ *
+ * 15.spaceship  Sci-fi operator console
+ * ------------------------------------------------------------------ */
+
+/* Atmosphere: grid background + CRT scanlines (never blocks clicks). */
+html[data-theme="spaceship"] body {
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(var(--sx-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--sx-grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+html[data-theme="spaceship"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(0deg,
+    rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 3px);
+}
+
+/* Brand wordmark glow. */
+html[data-theme="spaceship"] .brand-text {
+  color: var(--accent);
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  text-shadow: var(--sx-glow);
+}
+
+/* Nav: "/ GROUP" headers, numbered items, glowing active. Icons stay
+ * (the 900–1199px icon rail and collapsed drawer need them). */
+html[data-theme="spaceship"] .side-group { letter-spacing: 0.2em; }
+html[data-theme="spaceship"] .side-group::before { content: "/ "; }
+html[data-theme="spaceship"] .drawer-nav { counter-reset: sx-nav; }
+html[data-theme="spaceship"] .nav-item {
+  counter-increment: sx-nav;
+  border-left-width: 2px;
+  text-transform: lowercase;
+}
+html[data-theme="spaceship"] .nav-item .nav-label::before {
+  content: counter(sx-nav, decimal-leading-zero) "  ";
+  white-space: pre;
+  color: var(--fg-subtle);
+  font-size: 0.66rem;
+}
+html[data-theme="spaceship"] .nav-item.active { text-shadow: var(--sx-glow); }
+html[data-theme="spaceship"] .nav-item.active .nav-label::before { color: var(--accent); }
+html[data-theme="spaceship"] .nav-item.active::after { content: "\25C2"; margin-left: auto; }
+/* Icon-rail states: labels are hidden and icons centred, so drop the
+ * active marker (it would push the icon off-centre). */
+@media (min-width: 900px) {
+  html[data-theme="spaceship"].drawer-open .drawer .nav-item.active::after { display: none; }
+}
+@media (max-width: 1199.98px) and (min-width: 900px) {
+  html[data-theme="spaceship"].drawer-collapsed .drawer .nav-item.active::after { display: none; }
+}
+
+/* Boxed panels with targeting-bracket corners. */
+html[data-theme="spaceship"] .card {
+  position: relative;
+  box-shadow: none;
+}
+html[data-theme="spaceship"] .card::before,
+html[data-theme="spaceship"] .card::after {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 0 solid var(--accent);
+  pointer-events: none;
+}
+html[data-theme="spaceship"] .card::before { top: -1px; left: -1px; border-width: 1px 0 0 1px; }
+html[data-theme="spaceship"] .card::after  { bottom: -1px; right: -1px; border-width: 0 1px 1px 0; }
+html[data-theme="spaceship"] .card h2 {
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+html[data-theme="spaceship"] .card h2::before { content: "// "; color: var(--accent); }
+
+/* Headline numbers: Orbitron + glow. */
+html[data-theme="spaceship"] .kpi-value,
+html[data-theme="spaceship"] .console-kpi-value,
+html[data-theme="spaceship"] .health-kpi-n,
+html[data-theme="spaceship"] .llm-kpi-value,
+html[data-theme="spaceship"] .widget-number {
+  font-family: var(--font-display);
+  color: var(--accent);
+  text-shadow: var(--sx-glow);
+  letter-spacing: 0.04em;
+}
+html[data-theme="spaceship"] .kpi-label,
+html[data-theme="spaceship"] .console-kpi-label,
+html[data-theme="spaceship"] .widget-label {
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+/* Page title. */
+html[data-theme="spaceship"] .page-header {
+  padding-bottom: 0.9rem;
+  border-bottom: 1px dashed var(--border-strong);
+}
+html[data-theme="spaceship"] .page-header h1 {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+
+/* Badges -> square [TAGS]. */
+html[data-theme="spaceship"] .badge {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 800;
+}
+html[data-theme="spaceship"] .badge::before { display: none; }
+html[data-theme="spaceship"] .badge.status-processing,
+html[data-theme="spaceship"] .badge.status-running {
+  background: var(--accent-subtle);
+  text-shadow: var(--sx-glow);
+}
+
+/* Buttons. */
+html[data-theme="spaceship"] .button,
+html[data-theme="spaceship"] a.button,
+html[data-theme="spaceship"] button.button {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  background: transparent;
+}
+html[data-theme="spaceship"] .button.primary,
+html[data-theme="spaceship"] a.button.primary,
+html[data-theme="spaceship"] button.button.primary {
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+html[data-theme="spaceship"] .button.primary:hover,
+html[data-theme="spaceship"] a.button.primary:hover,
+html[data-theme="spaceship"] button.button.primary:hover {
+  background: var(--accent);
+  color: var(--accent-fg);
+  box-shadow: var(--sx-glow);
+}
+
+/* Inputs: dark well, glowing focus. */
+html[data-theme="spaceship"] input,
+html[data-theme="spaceship"] select,
+html[data-theme="spaceship"] textarea { background: #020507; }
+html[data-theme="spaceship"] input:focus,
+html[data-theme="spaceship"] select:focus,
+html[data-theme="spaceship"] textarea:focus { box-shadow: var(--sx-glow); }
+
+/* Tables: tracked headers, dashed rows, accent rail on hover. */
+html[data-theme="spaceship"] table.runs-table th,
+html[data-theme="spaceship"] table.data-table th,
+html[data-theme="spaceship"] table.check-table th { letter-spacing: 0.18em; }
+html[data-theme="spaceship"] table.runs-table td,
+html[data-theme="spaceship"] table.data-table td { border-bottom-style: dashed; }
+html[data-theme="spaceship"] table.runs-table tbody tr:hover td:first-child,
+html[data-theme="spaceship"] table.data-table tbody tr:hover td:first-child {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* "Cooking now" -> LIVE strip. */
+html[data-theme="spaceship"] .cooking-now {
+  border: 1px solid var(--accent);
+  background: var(--accent-subtle);
+}
+html[data-theme="spaceship"] .cooking-now .cooking-now-label {
+  background: var(--accent);
+  color: var(--accent-fg);
+  padding: 0 0.45rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  animation: sx-pulse 1.6s ease-in-out infinite;
+}
+
+/* Jobs list: selected run glows. */
+html[data-theme="spaceship"] .run-list-item.is-selected > .run-list-link {
+  background: var(--accent-subtle);
+  box-shadow: inset 2px 0 0 var(--accent);
+  text-shadow: var(--sx-glow);
+}
+
+/* Terminal pane (its own ::before scanlines stay) + live widgets. */
+html[data-theme="spaceship"] .terminal-pane {
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
+  background: var(--code-bg);
+}
+html[data-theme="spaceship"] .term-cursor { box-shadow: 0 0 10px var(--matrix-glow); }
+html[data-theme="spaceship"] .arc-fg {
+  fill: var(--accent);
+  filter: drop-shadow(0 0 4px var(--accent));
+}
+html[data-theme="spaceship"] .gantt-completed { fill: var(--ok); }
+html[data-theme="spaceship"] .gantt-running {
+  fill: var(--accent);
+  filter: drop-shadow(0 0 4px var(--accent));
+}
+html[data-theme="spaceship"] .throughput-line {
+  stroke: var(--accent);
+  filter: drop-shadow(0 0 3px var(--accent));
+}
+
+/* Right rail, assistant panel, command palette. */
+html[data-theme="spaceship"] .tools-rail .rail-button.active {
+  color: var(--accent);
+  box-shadow: var(--sx-glow);
+}
+html[data-theme="spaceship"] .llm-panel,
+html[data-theme="spaceship"] .cmdk-box { border: 1px solid var(--border-strong); }
+
+/* Footer -> tmux-style statusline. */
+html[data-theme="spaceship"] .site-footer {
+  text-align: left;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-top-color: var(--border-strong);
+  background: var(--drawer-bg);
+}
+html[data-theme="spaceship"] .site-footer::before {
+  content: "NORMAL";
+  display: inline-block;
+  margin-right: 0.8rem;
+  padding: 0 0.6rem;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 800;
+}
+
+@keyframes sx-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+
+/* ------------------------------------------------------------------ *
+ * 15.clinical  Hospital-grade calm (light default — restraint is the
+ *              point: no glow, no texture). Covers the legacy "light"
+ *              alias too.
+ * ------------------------------------------------------------------ */
+html:is([data-theme="clinical"], [data-theme="light"]) body { font-feature-settings: "tnum" 1; }
+html:is([data-theme="clinical"], [data-theme="light"]) .page-header h1 {
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+html:is([data-theme="clinical"], [data-theme="light"]) .page-header h1::after {
+  /* calibrated accent tick */
+  content: "";
+  display: block;
+  width: 32px;
+  height: 2px;
+  margin-top: 0.4rem;
+  background: var(--accent);
+}
+html:is([data-theme="clinical"], [data-theme="light"]) .badge {
+  border-color: transparent;
+  background: var(--accent-subtle);
+}
+html:is([data-theme="clinical"], [data-theme="light"]) .badge.severity-ok,
+html:is([data-theme="clinical"], [data-theme="light"]) .badge.status-processed {
+  background: var(--overlay-ok);
+}
+html:is([data-theme="clinical"], [data-theme="light"]) .badge.severity-error,
+html:is([data-theme="clinical"], [data-theme="light"]) .badge.status-error,
+html:is([data-theme="clinical"], [data-theme="light"]) .badge.status-failed {
+  background: var(--overlay-err);
+}
+/* Opaque tint of the badge's own ink, so badges inside tinted rows do
+ * not stack translucent layers below AA. */
+@supports (color: color-mix(in srgb, currentColor 8%, white)) {
+  html:is([data-theme="clinical"], [data-theme="light"]) .badge,
+  html:is([data-theme="clinical"], [data-theme="light"]) .badge.severity-ok,
+  html:is([data-theme="clinical"], [data-theme="light"]) .badge.status-processed,
+  html:is([data-theme="clinical"], [data-theme="light"]) .badge.severity-error,
+  html:is([data-theme="clinical"], [data-theme="light"]) .badge.status-error,
+  html:is([data-theme="clinical"], [data-theme="light"]) .badge.status-failed {
+    background: color-mix(in srgb, currentColor 8%, var(--card-bg));
+  }
+}
+/* The console landing page is a fixed dark surface; the light-theme
+ * --ok green is tuned for white and is too dark there. */
+html:is([data-theme="clinical"], [data-theme="light"]) .console-line-prompt { color: #34d399; }
+html:is([data-theme="clinical"], [data-theme="light"]) .kpi-value,
+html:is([data-theme="clinical"], [data-theme="light"]) table td {
+  font-variant-numeric: tabular-nums;
+}
+html:is([data-theme="clinical"], [data-theme="light"]) .card {
+  transition: box-shadow var(--dur-fast) var(--ease);
+}
+html:is([data-theme="clinical"], [data-theme="light"]) .card:hover { box-shadow: var(--shadow-2); }
+
+/* ------------------------------------------------------------------ *
+ * 15.matrix  Digital rain (dark default — covers the "dark" alias).
+ *            VT323 only at large sizes; inverse-video active nav.
+ * ------------------------------------------------------------------ */
+html:is([data-theme="matrix"], [data-theme="dark"]) body {
+  /* faint static rain columns */
+  background-image: repeating-linear-gradient(90deg,
+    rgba(0, 255, 65, 0.035) 0 1px, transparent 1px 22px);
+}
+html:is([data-theme="matrix"], [data-theme="dark"]) body::after {
+  /* CRT scanlines — never blocks clicks */
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(0deg,
+    rgba(0, 0, 0, 0.25) 0 1px, transparent 1px 3px);
+}
+html:is([data-theme="matrix"], [data-theme="dark"]) .page-header h1,
+html:is([data-theme="matrix"], [data-theme="dark"]) .kpi-value,
+html:is([data-theme="matrix"], [data-theme="dark"]) .widget-number {
+  font-family: "VT323", monospace;
+  font-size: 2.2rem;
+  font-weight: 400;
+  line-height: 1.05;
+  color: var(--mx-hot);
+  text-shadow: 0 0 8px var(--accent), 0 0 18px var(--matrix-glow);
+}
+html:is([data-theme="matrix"], [data-theme="dark"]) .nav-item.active {
+  /* inverse video */
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-left-color: var(--mx-hot);
+}
+html:is([data-theme="matrix"], [data-theme="dark"]) .card { border-style: dashed; box-shadow: none; }
+html:is([data-theme="matrix"], [data-theme="dark"]) .badge { background: transparent; gap: 0.15rem; }
+html:is([data-theme="matrix"], [data-theme="dark"]) .badge::before {
+  /* [TAG] brackets instead of the dot */
+  content: "[";
+  width: auto;
+  height: auto;
+  background: none;
+  border-radius: 0;
+  opacity: 1;
+}
+html:is([data-theme="matrix"], [data-theme="dark"]) .badge::after { content: "]"; }
+html:is([data-theme="matrix"], [data-theme="dark"]) .term-cursor,
+html:is([data-theme="matrix"], [data-theme="dark"]) .brand-text { text-shadow: 0 0 10px var(--accent); }
+
+/* Login page only: slow CSS-gradient digital rain behind the card
+ * (no canvas, no script). Off under reduced motion (§15.z). */
+html:is([data-theme="matrix"], [data-theme="dark"]) body.login-body {
+  background-image:
+    repeating-linear-gradient(180deg,
+      transparent 0 14px, rgba(0, 255, 65, 0.10) 14px 16px, transparent 16px 40px),
+    repeating-linear-gradient(90deg,
+      rgba(0, 255, 65, 0.035) 0 1px, transparent 1px 22px);
+  background-size: 22px 240px, auto;
+  animation: mx-rain 9s linear infinite;
+}
+@keyframes mx-rain {
+  from { background-position: 0 0, 0 0; }
+  to   { background-position: 0 240px, 0 0; }
+}
+
+/* ------------------------------------------------------------------ *
+ * 15.super-mario-world  16-bit sky and bricks. Inspired-by only: colour,
+ *            outline and shadow vocabulary — no sprites, logos, blocks
+ *            or imitation of the proprietary logo face.
+ * ------------------------------------------------------------------ */
+html[data-theme="super-mario-world"] .card {
+  border: 3px solid var(--fg);
+  box-shadow: 4px 4px 0 var(--fg);                      /* hard pixel shadow */
+}
+html[data-theme="super-mario-world"] .page-header h1,
+html[data-theme="super-mario-world"] .card h2,
+html[data-theme="super-mario-world"] .kpi-label {
+  font-family: var(--pixel-ff);
+  font-weight: 400;
+  text-transform: uppercase;
+  line-height: 1.7;
+}
+html[data-theme="super-mario-world"] .page-header h1 { font-size: 1rem; }
+html[data-theme="super-mario-world"] .card h2 { font-size: 0.72rem; }
+html[data-theme="super-mario-world"] .kpi-label { font-size: 0.62rem; }
+html[data-theme="super-mario-world"] .kpi-value {
+  font-family: var(--pixel-ff);
+  font-weight: 400;
+  font-size: 1.2rem;
+  color: var(--accent);
+  text-shadow: 2px 2px 0 var(--smw-gold);
+}
+html[data-theme="super-mario-world"] .button.primary,
+html[data-theme="super-mario-world"] a.button.primary,
+html[data-theme="super-mario-world"] button.button.primary {
+  /* coin-block button */
+  background: var(--smw-gold);
+  color: var(--fg);
+  border: 3px solid var(--fg);
+  box-shadow: 0 4px 0 var(--fg);
+}
+html[data-theme="super-mario-world"] .button.primary:hover,
+html[data-theme="super-mario-world"] a.button.primary:hover,
+html[data-theme="super-mario-world"] button.button.primary:hover {
+  background: #ffd83a;
+  border-color: var(--fg);
+}
+html[data-theme="super-mario-world"] .button.primary:active,
+html[data-theme="super-mario-world"] a.button.primary:active,
+html[data-theme="super-mario-world"] button.button.primary:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--fg);
+}
+html[data-theme="super-mario-world"] .topbar { backdrop-filter: none; -webkit-backdrop-filter: none; }
+html[data-theme="super-mario-world"] .topbar::after {
+  /* brick strip under the top bar (decorative, click-through) */
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -8px;
+  height: 8px;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 30px, #5a2a0a 30px 32px),
+    linear-gradient(#b84a14 0 3px, #5a2a0a 3px 4px, #b84a14 4px);
+}
+html[data-theme="super-mario-world"] .badge { border-width: 2px; background: var(--card-bg); }
+/* Text placed directly on the sky must stay dark --fg (5.8:1); muted
+ * ink on the sky would only reach ~3:1. */
+/* Main content sitting directly on the sky: muted ink is darkened to
+ * --fg; it is restored inside every cream surface. Forms and bare
+ * tables become cream dialogue boxes of their own. */
+html[data-theme="super-mario-world"] .main { --fg-muted: var(--fg); --fg-subtle: var(--fg); }
+html[data-theme="super-mario-world"] .main :is(.card, .table-wrap, form.edit-form, table, .run-list,
+    .builder-section, .builder-graph, .modal-panel, .storage-card,
+    .pipeline-card, .health-check-card, .cooking-now, .flash) {
+  --fg-muted: #5a4632;
+  --fg-subtle: #7a6450;
+}
+html[data-theme="super-mario-world"] :is(.page, .main) > :is(.table-wrap, table, form.edit-form) {
+  background: var(--card-bg);
+  border: 3px solid var(--fg);
+  box-shadow: 4px 4px 0 var(--fg);
+  border-radius: var(--radius-md);
+}
+html[data-theme="super-mario-world"] :is(.page, .main) > form.edit-form { padding: 0.5rem 1.25rem 1rem; }
+html[data-theme="super-mario-world"] :is(.page, .main) > .table-wrap { padding: 0.25rem 0.5rem; }
+html[data-theme="super-mario-world"] :is(.page > p, .page > .note, .page-header, .submit-head, .run-detail-placeholder, .main > p) a {
+  color: var(--fg);
+  text-decoration: underline;
+}
+html[data-theme="super-mario-world"] .site-footer { color: var(--fg); }
+html[data-theme="super-mario-world"] .console-line-prompt { color: #43b047; }
+
+/* ------------------------------------------------------------------ *
+ * 15.tatooine  Twin suns over the dunes. Inspired-by only: palette and
+ *              moisture-farm machinery shapes — no logos, characters
+ *              or imitation of the franchise lettering.
+ * ------------------------------------------------------------------ */
+html[data-theme="tatooine"] body {
+  /* dusk horizon + sand grain (inline data: SVG — no network request) */
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='.05'/></svg>"),
+    linear-gradient(180deg, #170f0a 0%, #170f0a 55%, #2a1710 100%) fixed;
+  background-color: var(--bg);
+}
+html[data-theme="tatooine"] .card,
+html[data-theme="tatooine"] .button,
+html[data-theme="tatooine"] a.button,
+html[data-theme="tatooine"] button.button {
+  /* cut-corner panels */
+  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px),
+                     calc(100% - 12px) 100%, 0 100%, 0 12px);
+}
+html[data-theme="tatooine"] .button,
+html[data-theme="tatooine"] a.button,
+html[data-theme="tatooine"] button.button {
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px),
+                     calc(100% - 8px) 100%, 0 100%, 0 8px);
+}
+/* clip-path would shave the focus ring on the diagonals: drop it while
+ * the control is keyboard-focused so the ring stays fully visible. */
+html[data-theme="tatooine"] .button:focus-visible,
+html[data-theme="tatooine"] a.button:focus-visible,
+html[data-theme="tatooine"] button.button:focus-visible { clip-path: none; }
+html[data-theme="tatooine"] .card {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+html[data-theme="tatooine"] .page-header h1,
+html[data-theme="tatooine"] .card h2,
+html[data-theme="tatooine"] .kpi-value,
+html[data-theme="tatooine"] .button,
+html[data-theme="tatooine"] a.button,
+html[data-theme="tatooine"] button.button {
+  font-family: var(--font-display);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+html[data-theme="tatooine"] .card h2 { font-size: 0.85rem; }
+html[data-theme="tatooine"] .button,
+html[data-theme="tatooine"] a.button,
+html[data-theme="tatooine"] button.button { font-size: 0.72rem; }
+html[data-theme="tatooine"] .kpi-value {
+  color: var(--accent);
+  text-shadow: var(--tt-sun-glow);
+}
+html[data-theme="tatooine"] .page-header h1::before {
+  /* twin suns */
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 1.1rem;
+  vertical-align: middle;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 14px -4px 0 -2px var(--tt-sun2);
+}
+html[data-theme="tatooine"] .badge.status-processing,
+html[data-theme="tatooine"] .badge.status-running { color: var(--tt-sun2); border-color: var(--tt-sun2); }
+
+/* ------------------------------------------------------------------ *
+ * 15.financial  Trading terminal — F-key nav, amber headers, full-grid
+ *               dense tables, solid ticker-chip badges.
+ * ------------------------------------------------------------------ */
+html[data-theme="financial"] .drawer-nav { counter-reset: fx-key; }
+html[data-theme="financial"] .nav-item { counter-increment: fx-key; }
+html[data-theme="financial"] .nav-item .nav-label::before {
+  /* F1..Fn function keys */
+  content: "F" counter(fx-key) " ";
+  display: inline-block;
+  min-width: 2.4em;
+  font-family: var(--mono);
+  color: var(--accent);
+  font-size: 0.7rem;
+}
+html[data-theme="financial"] .page-header h1 {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+html[data-theme="financial"] .kpi-value,
+html[data-theme="financial"] td.num,
+html[data-theme="financial"] .mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+html[data-theme="financial"] .kpi-value { color: var(--accent); }
+html[data-theme="financial"] table.runs-table td,
+html[data-theme="financial"] table.data-table td {
+  /* full-grid dense cells */
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border);
+}
+html[data-theme="financial"] table.runs-table th,
+html[data-theme="financial"] table.data-table th {
+  border: 1px solid var(--border);
+  color: var(--accent);
+}
+html[data-theme="financial"] .badge {
+  /* solid ticker chips: dark ink on a solid fill (>= 6:1) */
+  border-radius: 2px;
+  border: 0;
+}
+html[data-theme="financial"] .badge::before { display: none; }
+html[data-theme="financial"] .badge,
+html[data-theme="financial"] .badge.status-pending,
+html[data-theme="financial"] .badge.status-cancelled,
+html[data-theme="financial"] .badge.status-draft { background: #3a4654; color: var(--fg); }
+html[data-theme="financial"] .badge.severity-ok,
+html[data-theme="financial"] .badge.status-processed,
+html[data-theme="financial"] .badge.status-completed,
+html[data-theme="financial"] .badge.status-done,
+html[data-theme="financial"] .badge.status-ok,
+html[data-theme="financial"] .badge.status-passed { background: var(--ok); color: #07090c; }
+html[data-theme="financial"] .badge.severity-error,
+html[data-theme="financial"] .badge.status-error,
+html[data-theme="financial"] .badge.status-failed { background: var(--err); color: #07090c; }
+html[data-theme="financial"] .badge.severity-warning,
+html[data-theme="financial"] .badge.status-new,
+html[data-theme="financial"] .badge.status-exception,
+html[data-theme="financial"] .badge.status-processing,
+html[data-theme="financial"] .badge.status-running,
+html[data-theme="financial"] .badge.status-queued { background: var(--accent); color: var(--accent-fg); }
+html[data-theme="financial"] .card { box-shadow: none; padding: 0.75rem 0.9rem; }
+
+/* ------------------------------------------------------------------ *
+ * 15.lego  Toy bricks — studded cards in rotating brick colours, hard
+ *          brick-bottom edges, snap-down buttons, 1x2 plate badges.
+ * ------------------------------------------------------------------ */
+html[data-theme="lego"] .card {
+  --stud: var(--lg-red);
+  position: relative;
+  margin-top: 8px;
+  border: 2px solid var(--stud);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.18);              /* hard brick bottom */
+}
+html[data-theme="lego"] .card:nth-of-type(4n+2) { --stud: var(--lg-blue); }
+html[data-theme="lego"] .card:nth-of-type(4n+3) { --stud: var(--lg-yellow); }
+html[data-theme="lego"] .card:nth-of-type(4n+4) { --stud: var(--lg-green); }
+html[data-theme="lego"] .card::before {
+  /* row of studs (decorative, click-through) */
+  content: "";
+  position: absolute;
+  top: -9px;
+  left: 14px;
+  right: 14px;
+  height: 8px;
+  pointer-events: none;
+  background: radial-gradient(circle at 9px 6px, var(--stud) 6px, transparent 6.5px) repeat-x;
+  background-size: 24px 8px;
+}
+html[data-theme="lego"] .button.primary,
+html[data-theme="lego"] a.button.primary,
+html[data-theme="lego"] button.button.primary {
+  border-radius: 8px;
+  box-shadow: 0 4px 0 var(--lg-edge);
+}
+html[data-theme="lego"] .button.primary:active,
+html[data-theme="lego"] a.button.primary:active,
+html[data-theme="lego"] button.button.primary:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--lg-edge);
+}
+html[data-theme="lego"] .console-line-prompt { color: #4ade80; }  /* dark console surface */
+html[data-theme="lego"] .page-header h1,
+html[data-theme="lego"] .kpi-value { font-family: var(--font-display); font-weight: 800; }
+html[data-theme="lego"] .badge { border: 0; color: #ffffff; background: #5a5a5a; }   /* 1x2 plate chips */
+html[data-theme="lego"] .badge::before { display: none; }
+html[data-theme="lego"] .badge.severity-ok,
+html[data-theme="lego"] .badge.status-processed,
+html[data-theme="lego"] .badge.status-completed,
+html[data-theme="lego"] .badge.status-done,
+html[data-theme="lego"] .badge.status-ok,
+html[data-theme="lego"] .badge.status-passed { background: var(--lg-green); color: #ffffff; }
+html[data-theme="lego"] .badge.severity-error,
+html[data-theme="lego"] .badge.status-error,
+html[data-theme="lego"] .badge.status-failed { background: var(--lg-red); color: #ffffff; }
+html[data-theme="lego"] .badge.status-processing,
+html[data-theme="lego"] .badge.status-running { background: var(--lg-blue); color: #ffffff; }
+/* Never white on yellow: queued / new / warning plates use dark ink. */
+html[data-theme="lego"] .badge.severity-warning,
+html[data-theme="lego"] .badge.status-exception,
+html[data-theme="lego"] .badge.status-queued,
+html[data-theme="lego"] .badge.status-new { background: var(--lg-yellow); color: #1a1a1a; }
+
+/* ------------------------------------------------------------------ *
+ * 15.z  Reduced motion — every personality-layer animation off.
+ * ------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme="spaceship"] .cooking-now .cooking-now-label { animation: none; }
+  html:is([data-theme="clinical"], [data-theme="light"]) .card { transition: none; }
+  html:is([data-theme="matrix"], [data-theme="dark"]) body.login-body { animation: none; }
+  html[data-theme="super-mario-world"] .button.primary:active,
+  html[data-theme="super-mario-world"] a.button.primary:active,
+  html[data-theme="super-mario-world"] button.button.primary:active { transform: none; }
+  html[data-theme="lego"] .button.primary:active,
+  html[data-theme="lego"] a.button.primary:active,
+  html[data-theme="lego"] button.button.primary:active { transform: none; }
+}

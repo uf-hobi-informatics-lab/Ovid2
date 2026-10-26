@@ -547,8 +547,8 @@ tools:
       properties:
         theme:
           type: string
-          description: "Base theme: clinical (light, teal), matrix (black/green), super-mario-world (bright, playful), tatooine (dark, sandy amber), financial (dark, green), lego (light, red)."
-          enum: [clinical, matrix, super-mario-world, tatooine, financial, lego]
+          description: "Base theme: clinical (light, calm hospital teal, IBM Plex), matrix (black CRT, phosphor-green digital rain), super-mario-world (16-bit sky blue, cream boxes, brick red + coin gold), tatooine (dark desert dusk, sunset orange + twin suns, cut-corner panels), financial (dark trading terminal, amber + green/red tickers, dense), lego (light toy bricks, primary red/blue/yellow/green, studded cards), spaceship (dark, sci-fi terminal, teal glow)."
+          enum: [clinical, matrix, super-mario-world, tatooine, financial, lego, spaceship]
         colors:
           type: object
           description: "Quick colour overrides as #rrggbb. surface = cards and raised panels."

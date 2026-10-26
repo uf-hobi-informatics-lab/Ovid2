@@ -179,6 +179,16 @@ def test_api_round_trip_auth_off_shared_profile(client: TestClient) -> None:
 
 
 @pytest.mark.unit
+def test_api_accepts_spaceship_theme(client: TestClient) -> None:
+    """The Spaceship slug is in the catalogue enum, so the API accepts it."""
+    r = client.put("/api/v1/me/appearance", json={"theme": "spaceship"})
+    assert r.status_code == 200, r.text
+    assert r.json()["theme"] == "spaceship"
+    assert client.get("/api/v1/me/appearance").json()["theme"] == "spaceship"
+    assert _prepaint(client.get("/runs").text)["theme"] == "spaceship"
+
+
+@pytest.mark.unit
 def test_api_rejects_bad_values(client: TestClient) -> None:
     r = client.put("/api/v1/me/appearance", json={"appearance": {"--evil": "#000000"}})
     assert r.status_code == 422

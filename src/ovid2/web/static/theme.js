@@ -7,7 +7,7 @@
  * / appearance overrides, which the SERVER renders into the page as
  * ``window.OVID2_APPEARANCE``. That prevents a flash of the wrong
  * theme on navigation. This deferred script is the
- * shared THEME LIBRARY: it owns the six base-theme definitions, the
+ * shared THEME LIBRARY: it owns the seven base-theme definitions, the
  * WCAG colour maths, and the ``applyTheme`` / ``applyCustomOverrides``
  * primitives. The interactive UI (the right-rail Appearance panel that
  * lets a user pick a theme, restyle component groups, and save named
@@ -43,20 +43,22 @@
 
   // slug -> full theme metadata. swatch colours mirror the palette
   // token values authored in ovid2.css so the switcher preview matches
-  // what a click actually applies. The six shipped themes.
+  // what a click actually applies. The seven shipped themes.
   var THEMES = [
     { slug: "clinical", label: "Clinical", mode: "light",
-      swatch: { bg: "#eef4f9", surface: "#ffffff", accent: "#0891b2", fg: "#0f1b26" } },
+      swatch: { bg: "#f4f7fa", surface: "#ffffff", accent: "#08759a", fg: "#0e1a24" } },
     { slug: "matrix", label: "Matrix", mode: "dark",
-      swatch: { bg: "#000000", surface: "#050f07", accent: "#00ff41", fg: "#b6ffc4" } },
+      swatch: { bg: "#000300", surface: "#020b04", accent: "#00ff41", fg: "#a8ffb8" } },
     { slug: "super-mario-world", label: "Super Mario World", mode: "light",
-      swatch: { bg: "#6bb6ff", surface: "#ffffff", accent: "#e52521", fg: "#1b1b2f" } },
+      swatch: { bg: "#5c94fc", surface: "#fffdf4", accent: "#d8000f", fg: "#231a12" } },
     { slug: "tatooine", label: "Star Wars / Tatooine", mode: "dark",
-      swatch: { bg: "#14100b", surface: "#221a11", accent: "#f2a935", fg: "#f3e2c2" } },
+      swatch: { bg: "#170f0a", surface: "#22170f", accent: "#ff8a3d", fg: "#f6e6c8" } },
     { slug: "financial", label: "Financial", mode: "dark",
-      swatch: { bg: "#0d141b", surface: "#131d27", accent: "#16b877", fg: "#e8edf2" } },
+      swatch: { bg: "#07090c", surface: "#0e1218", accent: "#ffb000", fg: "#e6edf3" } },
     { slug: "lego", label: "LEGO", mode: "light",
-      swatch: { bg: "#eef3f7", surface: "#ffffff", accent: "#d01012", fg: "#14202e" } }
+      swatch: { bg: "#f6f5f0", surface: "#ffffff", accent: "#c8102e", fg: "#1a1a1a" } },
+    { slug: "spaceship", label: "Spaceship", mode: "dark",
+      swatch: { bg: "#04080a", surface: "#08141a", accent: "#2ee6c8", fg: "#d4f3ec" } }
   ];
 
   // Legacy slugs that predate the shipped-theme rename. Mapped to their
