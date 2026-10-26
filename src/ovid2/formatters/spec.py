@@ -20,7 +20,7 @@ import logging
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 _SCHEMA_CACHE: dict[str, Any] = {}
 _DEPRECATION_LOGGER = logging.getLogger("ovid2.formatters.deprecations")
@@ -106,7 +106,7 @@ def _schema() -> dict[str, Any]:
         ref = resources.files("ovid2.resources.schemas") / "formatter_spec.v1.json"
         with ref.open("r", encoding="utf-8") as fh:
             _SCHEMA_CACHE["formatter"] = json.load(fh)
-    return _SCHEMA_CACHE["formatter"]
+    return cast("dict[str, Any]", _SCHEMA_CACHE["formatter"])
 
 
 def _validate_raw(raw: dict[str, Any], *, origin: str) -> None:
@@ -181,7 +181,9 @@ def _build(raw: dict[str, Any], *, pipeline: str, source_path: Path | None) -> F
     )
 
 
-def load_from_dict(raw: dict[str, Any], *, pipeline: str, origin: str = "<memory>") -> FormatterSpec:
+def load_from_dict(
+    raw: dict[str, Any], *, pipeline: str, origin: str = "<memory>"
+) -> FormatterSpec:
     """Validate and materialise a spec from an in-memory dict."""
     _validate_raw(raw, origin=origin)
     return _build(raw, pipeline=pipeline, source_path=None)

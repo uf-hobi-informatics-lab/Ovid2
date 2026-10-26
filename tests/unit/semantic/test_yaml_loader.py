@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 
 from ovid2.semantic.handle import VocabularyHandle
 from ovid2.semantic.registry import ColumnBinding
 from ovid2.semantic.vocabularies import _yaml_loader as loader
-
 
 # ---------------------------------------------------------------------------
 # build_vocabulary
@@ -37,6 +35,7 @@ class TestBuildVocabulary:
     def test_source_path_expands_omop_cdm_dir(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # settings.OMOP_CDM_DIR is read via the loader's local import.
         from ovid2.config import settings
+
         monkeypatch.setattr(settings, "OMOP_CDM_DIR", Path("/data/omop"))
         payload = {
             "v": 1,
@@ -95,6 +94,7 @@ class TestBuildVocabulary:
         # deterministic: call it with the same payload and expect a
         # resolved SharedViewSpec.
         import ovid2.semantic  # noqa: F401 — ensure CDMs are loaded.
+
         payload = {
             "v": 1,
             "kind": "vocabulary",
@@ -131,6 +131,7 @@ class TestBuildVocabulary:
 
     def test_shared_view_unknown_view(self) -> None:
         import ovid2.semantic  # noqa: F401
+
         payload = {
             "v": 1,
             "kind": "vocabulary",
@@ -151,9 +152,7 @@ class TestBuildVocabulary:
 
     def test_wrong_kind_raises(self) -> None:
         with pytest.raises(ValueError, match="kind must be 'vocabulary'"):
-            loader.build_vocabulary(
-                {"v": 1, "kind": "metric", "name": "x", "code_column": "c"}
-            )
+            loader.build_vocabulary({"v": 1, "kind": "metric", "name": "x", "code_column": "c"})
 
     def test_tags_are_tuple(self) -> None:
         payload = {
@@ -248,7 +247,9 @@ class TestIterAndRegister:
         loader.register_all()
         loader.register_all()
 
-    def test_iter_vocabulary_docs_skips_non_yaml_files(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_iter_vocabulary_docs_skips_non_yaml_files(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # Point the loader at a synthetic directory containing one YAML
         # and one non-YAML file; only the YAML is returned.
         (tmp_path / "good.yaml").write_text(
@@ -260,7 +261,10 @@ class TestIterAndRegister:
         assert [stem for stem, _ in docs] == ["good"]
 
     def test_iter_binding_docs_warns_on_mismatched_cdm(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         (tmp_path / "pcornet_7_0.yaml").write_text(
             "v: 1\ncdm: something_else\nbindings:\n- {table: t, column: X, vocabulary: v}\n"
@@ -274,7 +278,10 @@ class TestIterAndRegister:
         assert any("does not match" in rec.message for rec in caplog.records)
 
     def test_malformed_yaml_is_skipped(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         (tmp_path / "broken.yaml").write_text(": : : not yaml\n")
         (tmp_path / "ok.yaml").write_text(

@@ -20,9 +20,7 @@ def temp_pipelines_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path
     """Point the scaffolder at a throwaway pipelines directory."""
     root = tmp_path / "pipelines_out"
     root.mkdir()
-    monkeypatch.setattr(
-        "ovid2.tools.new_pipeline._pipelines_root", lambda: root
-    )
+    monkeypatch.setattr("ovid2.tools.new_pipeline._pipelines_root", lambda: root)
     return root
 
 
@@ -98,9 +96,7 @@ def test_pipeline_new_page_lists_templates(web_client) -> None:  # type: ignore[
 
 
 @pytest.mark.unit
-def test_pipeline_new_post_scaffolds_and_redirects(
-    web_client, temp_pipelines_root: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_pipeline_new_post_scaffolds_and_redirects(web_client, temp_pipelines_root: Path) -> None:  # type: ignore[no-untyped-def]
     r = web_client.post(
         "/pipeline-packages/new",
         data={"name": "formhosp", "template": "pcornet_etl"},
@@ -113,9 +109,7 @@ def test_pipeline_new_post_scaffolds_and_redirects(
 
 
 @pytest.mark.unit
-def test_pipeline_new_post_error_preserves_name(
-    web_client, temp_pipelines_root: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_pipeline_new_post_error_preserves_name(web_client, temp_pipelines_root: Path) -> None:  # type: ignore[no-untyped-def]
     """A scaffold failure re-renders the form (400) with the name kept.
 
     Omitting the template is a validation error; the operator's typed

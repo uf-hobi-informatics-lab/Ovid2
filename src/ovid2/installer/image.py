@@ -68,7 +68,9 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     action = parser.add_subparsers(dest="action", metavar="ACTION", required=True)
 
     build = action.add_parser("build", help="Build the image locally.")
-    build.add_argument("--tag", default=DOCKER_IMAGE, help="Image tag (default: $OVID2_DOCKER_IMAGE).")
+    build.add_argument(
+        "--tag", default=DOCKER_IMAGE, help="Image tag (default: $OVID2_DOCKER_IMAGE)."
+    )
     build.add_argument(
         "--context",
         default=".",
@@ -89,7 +91,9 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 def _entry_build(args: argparse.Namespace) -> int:
     """Handle ``ovid2 image build``."""
     context = Path(args.context).resolve()
-    dockerfile = Path(args.dockerfile).resolve() if args.dockerfile else context / "docker" / "Dockerfile"
+    dockerfile = (
+        Path(args.dockerfile).resolve() if args.dockerfile else context / "docker" / "Dockerfile"
+    )
     if not dockerfile.is_file():
         print(f"[ovid2 image] Dockerfile not found: {dockerfile}")
         return 1

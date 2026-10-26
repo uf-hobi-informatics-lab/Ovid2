@@ -1,0 +1,5 @@
+# Mechanical reformatting commits — ignored by git blame.
+# Enable locally: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# style: ruff --fix + ruff format across the tree
+f9e3ea791aa72b52fce8c6b41b9552c8f918e39b

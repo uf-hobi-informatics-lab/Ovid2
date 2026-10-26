@@ -126,11 +126,7 @@ def _enumerate(connection_name: str, prefix: str) -> list[str]:
         return []
     if not getattr(result, "supported", False):
         return []
-    names = [
-        e.name
-        for e in (result.entries or [])
-        if getattr(e, "kind", "") == "table" and e.name
-    ]
+    names = [e.name for e in (result.entries or []) if getattr(e, "kind", "") == "table" and e.name]
     return names
 
 
@@ -151,9 +147,7 @@ def tables_for_address(address_name: str) -> tuple[list[str], bool]:
     return _enumerate(connection_name, prefix), True
 
 
-def tables_for_connection(
-    connection_name: str, location: str
-) -> tuple[list[str], bool]:
+def tables_for_connection(connection_name: str, location: str) -> tuple[list[str], bool]:
     """Return ``(tables, supported)`` for an inline storage account + file.
 
     ``location`` is the browsed path of the ``.accdb`` / ``.mdb`` file
@@ -169,6 +163,4 @@ def tables_for_connection(
 
 
 if __name__ == "__main__":  # pragma: no cover
-    raise SystemExit(
-        "This module is imported by the ovid2 web routes; it is not a script."
-    )
+    raise SystemExit("This module is imported by the ovid2 web routes; it is not a script.")

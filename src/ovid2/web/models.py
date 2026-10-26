@@ -122,7 +122,10 @@ class RunEventPage(BaseModel):
 class RunStageSummary(BaseModel):
     """Aggregate counters for one pipeline stage within a run."""
 
-    stage: str = Field(..., description="``read``, ``format``, ``deduplicate``, ``map``, ``fix``, ``write``, or ``other``.")
+    stage: str = Field(
+        ...,
+        description="``read``, ``format``, ``deduplicate``, ``map``, ``fix``, ``write``, or ``other``.",
+    )
     started: int = 0
     completed: int = 0
     failed: int = 0
@@ -224,21 +227,17 @@ class ScaffoldPipelineRequest(BaseModel):
     """Payload for scaffolding a new pipeline package from a template."""
 
     name: str = Field(..., description="Name for the new pipeline package.")
-    template: str | None = Field(
-        None, description="Pipeline template id (from the catalogue)."
-    )
+    template: str | None = Field(None, description="Pipeline template id (from the catalogue).")
     source_pipeline: str | None = Field(
         None,
         description=(
-            "Explicit source pipeline to clone. Used with `cdm` as an "
-            "alternative to `template`."
+            "Explicit source pipeline to clone. Used with `cdm` as an alternative to `template`."
         ),
     )
     cdm: str | None = Field(
         None,
         description=(
-            "Target CDM name. Required with `source_pipeline`; taken "
-            "from the template otherwise."
+            "Target CDM name. Required with `source_pipeline`; taken from the template otherwise."
         ),
     )
 
@@ -266,9 +265,7 @@ class StorageBrowseResponse(BaseModel):
     storage: str = Field(..., description="Storage-account (connection) name.")
     type: str = Field(..., description="Driver type (disc / s3 / ...).")
     prefix: str = Field("", description="The listed prefix ('' = root).")
-    supported: bool = Field(
-        True, description="False when this storage type cannot be browsed."
-    )
+    supported: bool = Field(True, description="False when this storage type cannot be browsed.")
     message: str | None = Field(
         None, description="Human-facing note when not supported / on error."
     )
@@ -301,10 +298,7 @@ class TablePlanEntry(BaseModel):
     )
     source: str = Field(
         "",
-        description=(
-            "Which probe matched: 'yaml' | 'python' | 'custom' | '' "
-            "(no formatter)."
-        ),
+        description=("Which probe matched: 'yaml' | 'python' | 'custom' | '' (no formatter)."),
     )
 
 
@@ -312,9 +306,7 @@ class FixerPlanEntry(BaseModel):
     """One fixer in a table's fix chain, surfaced read-only on submit."""
 
     fix: str = Field(..., description="Registered fixer name.")
-    detail: str = Field(
-        "", description="Compact human-facing summary of the fixer's args."
-    )
+    detail: str = Field("", description="Compact human-facing summary of the fixer's args.")
 
 
 class PipelinePlanResponse(BaseModel):
@@ -468,18 +460,14 @@ class TransformSummary(BaseModel):
 class TransformValidateRequest(BaseModel):
     """Payload for ``POST /api/v1/transforms:validate``."""
 
-    spec: dict[str, Any] = Field(
-        description="Candidate transform spec (v/steps/…) to validate."
-    )
+    spec: dict[str, Any] = Field(description="Candidate transform spec (v/steps/…) to validate.")
 
 
 class TransformValidateReport(BaseModel):
     """Result of validating a candidate transform spec."""
 
     ok: bool = Field(description="True when the spec passed all checks.")
-    errors: list[str] = Field(
-        default_factory=list, description="Human-readable validation errors."
-    )
+    errors: list[str] = Field(default_factory=list, description="Human-readable validation errors.")
 
 
 # ---------------------------------------------------------------------------
@@ -509,7 +497,30 @@ class JobSubmitRequest(BaseModel):
         description="CDM name, required when kind=etl.",
     )
     pipeline: str = Field(..., description="Pipeline name (must exist under ovid2_pipelines).")
-    batch_id: str = Field(..., description="Batch identifier, e.g. ``20260101``.")
+    batch_id: str = Field(
+        "",
+        description=(
+            "Run label. Always *derived* server-side from the input: the "
+            "complete Data Space path of the input location — storage "
+            "account followed by the folder path or ``DATABASE/SCHEMA`` "
+            "(e.g. ``inbox/landing/2026_03``, ``sf_prod/CHAR_DB/SITE_X``). "
+            "A supplied value is used only when the input has no derivable "
+            "location (legacy addresses). Never appended to an address: "
+            "every address is the exact location its data is read from / "
+            "written to."
+        ),
+    )
+    confirm_overwrite: bool = Field(
+        False,
+        description=(
+            "Confirm writing into an output location that already holds "
+            "tables. The output address is the exact write location, so an "
+            "occupied output is overwritten; without this flag the API "
+            "answers ``409 overwrite_required`` listing the existing "
+            "tables. Agent principals (MCP / assistant) setting it go "
+            "through the ``run.overwrite`` human-approval gate."
+        ),
+    )
     input_address: str = Field(
         "",
         description=(
@@ -570,12 +581,22 @@ class JobSubmitRequest(BaseModel):
     )
     engine: str = Field("pyspark", description="Compute engine (default: pyspark).")
     workers: int = Field(25, ge=1, le=200, description="Spark worker count for isolated cluster.")
-    sf_database: str | None = Field(None, description="Snowflake DATABASE override.")
-    sf_account: str | None = Field(None, description="Snowflake ACCOUNT override.")
-    sf_schema: str | None = Field(None, description="Snowflake SCHEMA override.")
-    stderr_log: bool = Field(
-        False, description="Mirror events to stderr as plain-text log lines."
+    sf_database: str | None = Field(
+        None,
+        description=(
+            "Deprecated. The address is the exact location — set "
+            "DATABASE/SCHEMA on the address instead."
+        ),
     )
+    sf_account: str | None = Field(None, description="Snowflake ACCOUNT override.")
+    sf_schema: str | None = Field(
+        None,
+        description=(
+            "Deprecated. The address is the exact location — set "
+            "DATABASE/SCHEMA on the address instead."
+        ),
+    )
+    stderr_log: bool = Field(False, description="Mirror events to stderr as plain-text log lines.")
     extra_mounts: list[str] = Field(
         default_factory=list,
         description=(
@@ -635,6 +656,18 @@ class JobSubmitRequest(BaseModel):
         description=(
             "``kind='health'`` only. Prior-refresh input address for "
             "the freshness / volume-trend panel. Ignored otherwise."
+        ),
+    )
+
+
+class OverwriteConfirm(BaseModel):
+    """Optional body for ``POST /jobs/{job_id}/rerun`` and ``/launch``."""
+
+    confirm_overwrite: bool = Field(
+        False,
+        description=(
+            "Confirm overwriting the occupied output location (the output "
+            "address is the exact write location)."
         ),
     )
 
@@ -844,9 +877,7 @@ class InstallStatus(BaseModel):
         ...,
         description="Machine name of the first incomplete step, or ``done``.",
     )
-    complete: bool = Field(
-        ..., description="True when every step is ``done`` or ``warning``."
-    )
+    complete: bool = Field(..., description="True when every step is ``done`` or ``warning``.")
     steps: list[InstallStepStatus] = Field(
         ..., description="Ordered list of step statuses (bootstrap first, ``done`` last)."
     )
@@ -899,9 +930,7 @@ class ImageBuildDetail(BaseModel):
     tag: str
     context: str
     dockerfile: str
-    status: str = Field(
-        ..., description="``running`` | ``succeeded`` | ``failed``."
-    )
+    status: str = Field(..., description="``running`` | ``succeeded`` | ``failed``.")
     pid: int | None = None
     started_at: str | None = None
     ended_at: str | None = None
@@ -970,9 +999,7 @@ class ConnectionTypeSpec(BaseModel):
     """Field spec catalogue entry for one connector type."""
 
     type: str = Field(..., description="Machine name, e.g. ``snowflake``.")
-    args: list[ConnectionFieldSpec] = Field(
-        default_factory=list, description="Non-secret fields."
-    )
+    args: list[ConnectionFieldSpec] = Field(default_factory=list, description="Non-secret fields.")
     secrets: list[ConnectionFieldSpec] = Field(
         default_factory=list,
         description="Fields stored in secrets.d/*.json (mode 0o600).",
@@ -1129,9 +1156,7 @@ class PipelineTrigger(BaseModel):
       of the same input.
     """
 
-    type: str = Field(
-        ..., description="``manual`` | ``cron`` | ``interval`` | ``watch``."
-    )
+    type: str = Field(..., description="``manual`` | ``cron`` | ``interval`` | ``watch``.")
     cron: str | None = Field(None, description="Crontab expression (when type=cron).")
     interval_minutes: int | None = Field(
         None, description="Minutes between fires (when type=interval)."
@@ -1188,11 +1213,20 @@ class PipelineConfigDetail(BaseModel):
         ),
     )
     engine: str = "pyspark"
+    description: str = ""
     workers: int = 25
     sf_database: str | None = None
     sf_account: str | None = None
     sf_schema: str | None = None
     stderr_log: bool = False
+    allow_overwrite: bool = Field(
+        False,
+        description=(
+            "Standing confirmation that this pipeline's runs may overwrite "
+            "an occupied output location (needed for unattended watch / "
+            "scheduled runs, whose output address is fixed)."
+        ),
+    )
     enabled: bool = True
     trigger: PipelineTrigger = Field(default_factory=lambda: PipelineTrigger(type="manual"))
     last_fired_at: str | None = None
@@ -1212,6 +1246,15 @@ class PipelineConfigSummary(BaseModel):
     input_address: str
     output_address: str
     tables: list[str] = Field(default_factory=list)
+    engine: str = "pyspark"
+    engine_type: str | None = Field(
+        None,
+        description=(
+            "Engine type the `engine` name resolves to (pyspark, "
+            "databricks_spark, snowpark); null when unresolvable."
+        ),
+    )
+    description: str = ""
     trigger_type: str
     enabled: bool
     last_fired_at: str | None = None
@@ -1238,9 +1281,7 @@ class PipelineWrite(BaseModel):
     )
     cdm: str | None = Field(
         None,
-        description=(
-            "CDM name — required when `kind=etl`, ignored otherwise."
-        ),
+        description=("CDM name — required when `kind=etl`, ignored otherwise."),
     )
     pipeline: str
     input_address: str
@@ -1257,11 +1298,27 @@ class PipelineWrite(BaseModel):
         ),
     )
     engine: str = "pyspark"
+    description: str = Field(
+        "",
+        max_length=500,
+        description=(
+            "Free-text purpose of the config, shown in listings and read "
+            "by the assistant when matching a request to a saved config."
+        ),
+    )
     workers: int = Field(25, ge=1, le=200)
     sf_database: str | None = None
     sf_account: str | None = None
     sf_schema: str | None = None
     stderr_log: bool = False
+    allow_overwrite: bool = Field(
+        False,
+        description=(
+            "Standing confirmation that runs of this pipeline may overwrite "
+            "an occupied output location. Set by an agent principal it "
+            "requires the ``run.overwrite`` human approval."
+        ),
+    )
     enabled: bool = True
     trigger: PipelineTrigger = Field(default_factory=lambda: PipelineTrigger(type="manual"))
 
@@ -1277,7 +1334,16 @@ class PipelineRunRequest(BaseModel):
     batch_id: str | None = Field(
         None,
         description=(
-            "Override the synthesised timestamp batch id for this run."
+            "Ignored when the input has a derivable location — the batch id "
+            "is always the complete Data Space path of the input location. "
+            "Used only as the label for legacy (connectionless) inputs."
+        ),
+    )
+    confirm_overwrite: bool = Field(
+        False,
+        description=(
+            "Confirm overwriting an occupied output location for this run "
+            "(see ``JobSubmitRequest.confirm_overwrite``)."
         ),
     )
     tables: list[str] | None = Field(
@@ -1361,7 +1427,6 @@ class SettingsUi(BaseModel):
         except (ZoneInfoNotFoundError, ValueError) as exc:
             raise ValueError(f"Unknown timezone: {name!r}") from exc
         return name
-
 
 
 class SettingsNotifications(BaseModel):
@@ -1471,26 +1536,41 @@ class SettingsAdmin(BaseModel):
             return None
         stripped = value.strip()
         return stripped or None
+
+
 class AuthProviderConfig(BaseModel):
     """Configuration for an authentication provider (OIDC)."""
 
     display_name: str = Field(..., description="Human-readable name for the provider")
     issuer: str = Field(..., description="OIDC discovery issuer URL")
     client_id: str = Field(..., description="OAuth 2.0 client ID")
-    scopes: list[str] = Field(default_factory=lambda: ["openid", "email", "profile"], description="OIDC scopes to request")
+    scopes: list[str] = Field(
+        default_factory=lambda: ["openid", "email", "profile"], description="OIDC scopes to request"
+    )
     enabled: bool = Field(default=True, description="Whether this provider is enabled")
 
 
 class SettingsAuth(BaseModel):
     """Authentication settings."""
+
     enabled: bool = Field(default=False, description="Whether authentication is enabled")
-    providers: dict[str, AuthProviderConfig] = Field(default_factory=dict, description="Authentication providers configuration")
-    bootstrap_admin_emails: list[str] = Field(default_factory=list, description="Email addresses of bootstrap administrators")
-    absolute_ttl_minutes: int = Field(default=480, description="Absolute session TTL in minutes (8 hours)")
+    providers: dict[str, AuthProviderConfig] = Field(
+        default_factory=dict, description="Authentication providers configuration"
+    )
+    bootstrap_admin_emails: list[str] = Field(
+        default_factory=list, description="Email addresses of bootstrap administrators"
+    )
+    absolute_ttl_minutes: int = Field(
+        default=480, description="Absolute session TTL in minutes (8 hours)"
+    )
     idle_ttl_minutes: int = Field(default=45, description="Idle session TTL in minutes")
-    silent_recheck: bool = Field(default=True, description="Whether to silently recheck token validity")
+    silent_recheck: bool = Field(
+        default=True, description="Whether to silently recheck token validity"
+    )
     cookie_name: str = Field(default="ovid2_session", description="Name of the session cookie")
-    trust_forwarded_proto: bool = Field(default=True, description="Whether to trust X-Forwarded-Proto header")
+    trust_forwarded_proto: bool = Field(
+        default=True, description="Whether to trust X-Forwarded-Proto header"
+    )
     service_principal_role: str = Field(
         default="pipeline_operator",
         description=(
@@ -1527,16 +1607,16 @@ class SettingsLlm(BaseModel):
     enabled: bool = Field(
         default=False,
         description="Kill-switch for the right-panel assistant. When False the "
-                    "chat endpoint returns 404.",
+        "chat endpoint returns 404.",
     )
-    general: str | None = Field(
-        default=None, description="General LLM connection name."
-    )
+    general: str | None = Field(default=None, description="General LLM connection name.")
     system1: str | None = Field(
         default=None, description="System 1 decision LLM connection name (e.g. JEV)."
     )
     confidence_threshold: float = Field(
-        default=0.7, ge=0.0, le=1.0,
+        default=0.7,
+        ge=0.0,
+        le=1.0,
         description="Minimum System 1 confidence to accept its decision.",
     )
     fallback_to_general: bool = Field(
@@ -1544,26 +1624,34 @@ class SettingsLlm(BaseModel):
         description="Route to the general LLM when System 1 does not accept.",
     )
     max_concurrent_chats: int = Field(
-        default=4, ge=1, le=64,
+        default=4,
+        ge=1,
+        le=64,
         description="Upper bound on simultaneous chat executor subprocesses.",
     )
     chat_timeout_seconds: int = Field(
-        default=180, ge=10, le=1800,
+        default=180,
+        ge=10,
+        le=1800,
         description="Wall-clock ceiling for one chat turn.",
     )
     tools_enabled: bool = Field(
         default=False,
         description="Let the general LLM call Ovid2 API tools (agent_tools "
-                    "catalogue). GET tools run with a per-turn read-only token "
-                    "scoped to the chatting user (capped at pipeline_operator); "
-                    "write tools are shown as proposals the user must run.",
+        "catalogue). GET tools run with a per-turn read-only token "
+        "scoped to the chatting user (capped at pipeline_operator); "
+        "write tools are shown as proposals the user must run.",
     )
     max_tool_iterations: int = Field(
-        default=6, ge=1, le=20,
+        default=6,
+        ge=1,
+        le=20,
         description="Upper bound on model round-trips per turn when tools are on.",
     )
     tool_result_max_chars: int = Field(
-        default=8000, ge=256, le=200000,
+        default=8000,
+        ge=256,
+        le=200000,
         description="Cap on one tool result fed back to the model.",
     )
 
@@ -1626,9 +1714,7 @@ class EngineTypeSpec(BaseModel):
     """Field spec catalogue entry for one engine type."""
 
     type: str = Field(..., description="Machine name, e.g. ``pyspark``.")
-    args: list[EngineFieldSpec] = Field(
-        default_factory=list, description="Non-secret fields."
-    )
+    args: list[EngineFieldSpec] = Field(default_factory=list, description="Non-secret fields.")
     secrets: list[EngineFieldSpec] = Field(
         default_factory=list,
         description="Fields stored in secrets.d/*.json (mode 0o600).",
@@ -1735,9 +1821,7 @@ class LlmDetail(LlmSummary):
     """One LLM connection with masked secret placeholders."""
 
     args: dict[str, Any] = Field(default_factory=dict)
-    secrets: dict[str, str] = Field(
-        default_factory=dict, description="Every value is ``'***'``."
-    )
+    secrets: dict[str, str] = Field(default_factory=dict, description="Every value is ``'***'``.")
 
 
 class LlmWrite(BaseModel):
@@ -1771,11 +1855,35 @@ class LlmChatMessage(BaseModel):
     content: str = Field(..., max_length=32000)
 
 
+class SavedAppearance(BaseModel):
+    """One named saved theme: a base theme plus its CSS-var overrides."""
+
+    name: str = Field(..., min_length=1, max_length=60)
+    theme: str = Field(..., max_length=40)
+    overrides: dict[str, str] = Field(default_factory=dict, max_length=40)
+
+
+class AppearancePrefs(BaseModel):
+    """The current user's Appearance-panel state (``/api/v1/me/appearance``).
+
+    Stored server-side per user so the look follows them to any browser.
+    Shapes are bounded here; values are pattern-checked by
+    :mod:`ovid2.web.services.prefs_svc` against the same allow-lists the
+    browser and the assistant use.
+    """
+
+    theme: str | None = Field(None, max_length=40)
+    colors: dict[str, str] = Field(default_factory=dict, max_length=8)
+    appearance: dict[str, str] = Field(default_factory=dict, max_length=40)
+    saved_themes: list[SavedAppearance] = Field(default_factory=list, max_length=30)
+
+
 class LlmUiContext(BaseModel):
     """The browser's current look, sent so UI-action tools can reason about it.
 
-    Purely cosmetic, user-owned browser state (localStorage). Bounded and
-    pattern-checked here, re-sanitised by the executor, and never audited.
+    Purely cosmetic, user-owned state (persisted per user via
+    ``/api/v1/me/appearance``). Bounded and pattern-checked here,
+    re-sanitised by the executor, and never audited.
     """
 
     theme: str | None = Field(None, max_length=40, pattern=r"^[a-z0-9-]{1,40}$")
@@ -1841,7 +1949,9 @@ class OdsDimensionSummary(BaseModel):
     """
 
     name: str = Field(..., description="Dimension name (matches a connection type).")
-    address_count: int = Field(0, ge=0, description="How many address configs fall under this dimension.")
+    address_count: int = Field(
+        0, ge=0, description="How many address configs fall under this dimension."
+    )
     default_address: str | None = Field(
         None,
         description="The address configured as this dimension's default (settings.ods.dimension_defaults).",
@@ -1851,53 +1961,41 @@ class OdsDimensionSummary(BaseModel):
 class OdsDimensionCatalog(BaseModel):
     """Response for ``GET /api/v1/dataspace/dimensions``."""
 
-    default_dimension: str = Field(..., description="Global default from settings.ods.default_dimension.")
+    default_dimension: str = Field(
+        ..., description="Global default from settings.ods.default_dimension."
+    )
     dimensions: list[OdsDimensionSummary] = Field(default_factory=list)
 
 
-class OdsPipelineSummary(BaseModel):
-    """One row in the root ODS listing."""
+class OdsEntryModel(BaseModel):
+    """One child in a Data Space listing (a folder, schema, file or table)."""
 
     name: str
-    known_dimensions: list[str] = Field(
-        default_factory=list,
-        description="Dimensions that have at least one address for this pipeline.",
-    )
+    kind: str = Field(..., description="``account`` | ``dir`` | ``file`` | ``table``.")
+    path: str = Field(..., description="The child's full Data Space path (``/<conn>/<…>``).")
+    type: str = Field("", description="Storage type (disc / snowflake / s3 / …).")
+    size_bytes: int | None = None
 
 
-class OdsPipelineListing(BaseModel):
-    """Response for ``GET /api/v1/dataspace``."""
+class OdsListing(BaseModel):
+    """Response for ``GET /api/v1/dataspace?path=…``.
 
-    pipelines: list[OdsPipelineSummary] = Field(default_factory=list)
+    Every data space is the same — a tree of plain directories rooted at
+    a storage account. ``/`` lists storage accounts; deeper paths list
+    the folder / schema. ``batch_id`` is what a run reading this location
+    is labelled with; ``address_name`` the saved address pointing exactly
+    here (if any).
+    """
 
-
-class OdsBatchSummary(BaseModel):
-    """One batch under a pipeline."""
-
-    batch_id: str
-    dimensions: list[str] = Field(default_factory=list)
-
-
-class OdsBatchListing(BaseModel):
-    """Response for ``GET /api/v1/dataspace/{pipeline}``."""
-
-    pipeline: str
-    batches: list[OdsBatchSummary] = Field(default_factory=list)
-
-
-class OdsTableSummary(BaseModel):
-    """One table under a batch."""
-
-    name: str
-    dimensions: list[str] = Field(default_factory=list)
-
-
-class OdsTableListing(BaseModel):
-    """Response for ``GET /api/v1/dataspace/{pipeline}/{batch}``."""
-
-    pipeline: str
-    batch_id: str
-    tables: list[OdsTableSummary] = Field(default_factory=list)
+    path: str
+    connection: str | None = None
+    type: str = ""
+    location: str = ""
+    batch_id: str = ""
+    address_name: str | None = None
+    supported: bool = True
+    message: str | None = None
+    entries: list[OdsEntryModel] = Field(default_factory=list)
 
 
 class CdmSummary(BaseModel):
@@ -1975,25 +2073,22 @@ class CdmDetail(BaseModel):
 class OdsResolveResult(BaseModel):
     """Response for ``GET /api/v1/dataspace/resolve``.
 
-    Contains the naming information but never the credentials or the
-    concrete address object — the web tier deliberately keeps the
-    pyspark import surface at zero.
+    Naming information only — never credentials. The path is
+    ``/<connection>/<location…>``; ``location`` is the exact folder /
+    ``DATABASE/SCHEMA`` it names and ``batch_id`` the run label for it.
     """
 
     path: str
-    pipeline: str | None = None
-    batch_id: str | None = None
-    table: str | None = None
-    dimension: str
-    address_name: str
-    tier: str = Field(
-        ...,
-        description=(
-            "Which resolution rule fired: 'explicit', 'pipeline_route', "
-            "'dimension_default', or 'sole_candidate'."
-        ),
+    connection: str | None = None
+    type: str = ""
+    location: str = ""
+    batch_id: str = ""
+    address_name: str | None = Field(
+        None, description="A saved address pointing exactly at this location, if any."
     )
-    candidates: list[str] = Field(default_factory=list)
+    candidates: list[str] = Field(
+        default_factory=list, description="Every saved address on this storage account."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -2040,8 +2135,7 @@ class FsRoot(BaseModel):
     source: str = Field(
         ...,
         description=(
-            "Origin of the root: 'home', 'allowlist', 'settings', "
-            "'connection', or 'system'."
+            "Origin of the root: 'home', 'allowlist', 'settings', 'connection', or 'system'."
         ),
     )
 

@@ -18,7 +18,6 @@ import pytest
 
 from ovid2.core.engines.pyspark import PySparkEngine
 
-
 # ---------------------------------------------------------------------------
 # Preflight: no JDK visible at all
 # ---------------------------------------------------------------------------

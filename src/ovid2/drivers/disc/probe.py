@@ -68,8 +68,11 @@ def probe_read_from_host_path(host_path: str, detail: dict[str, object]) -> Prob
     auth = probe_auth_from_host_path(host_path, detail)
     if not auth.ok:
         return ProbeResult(
-            ok=auth.ok, code=auth.code, message=auth.message,
-            capability="read", detail=dict(auth.detail),
+            ok=auth.ok,
+            code=auth.code,
+            message=auth.message,
+            capability="read",
+            detail=dict(auth.detail),
         )
     try:
         os.listdir(host_path)
@@ -110,8 +113,11 @@ def probe_write_from_host_path(host_path: str, detail: dict[str, object]) -> Pro
     auth = probe_auth_from_host_path(host_path, detail)
     if not auth.ok:
         return ProbeResult(
-            ok=auth.ok, code=auth.code, message=auth.message,
-            capability="write", detail=dict(auth.detail),
+            ok=auth.ok,
+            code=auth.code,
+            message=auth.message,
+            capability="write",
+            detail=dict(auth.detail),
         )
     probe_file = os.path.join(host_path, f".ovid2_probe_{os.getpid()}")
     try:

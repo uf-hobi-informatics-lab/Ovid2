@@ -17,14 +17,13 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from Crypto.Hash import SHA
+from Crypto.Hash import SHA1
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import (
     coalesce,
     col,
     current_timestamp,
     date_format,
-    pandas_udf,
     regexp_extract,
     regexp_replace,
     substring,
@@ -33,6 +32,7 @@ from pyspark.sql.functions import (
     upper,
     when,
 )
+from pyspark.sql.pandas.functions import pandas_udf
 from pyspark.sql.types import StringType
 
 from ovid2.config.settings import LEGACY_CREDENTIALS_DIR, SEED_FILE_NAME
@@ -338,7 +338,7 @@ def _get_encryption_key() -> bytes:
     for candidate in _seed_file_candidates():
         if candidate.is_file():
             seed = candidate.read_text(encoding="utf-8").strip()
-            key = SHA.new(seed.encode("utf-8")).digest()
+            key = SHA1.new(seed.encode("utf-8")).digest()
             _encryption_cache["hashing_key"] = key
             return key
 
@@ -388,7 +388,9 @@ def encrypt_id_udf(pipeline: str) -> Any:
     pipeline_prefix = PIPELINE_ENCRYPTION_VALUES.get(pipeline.upper())
     key_len = len(hashing_key)
 
-    @pandas_udf(StringType())
+    # pyspark's .pyi predates the type-hint-based pandas_udf form and
+    # requires ``functionType``; the call is valid at runtime (Spark >= 3.0).
+    @pandas_udf(StringType())  # type: ignore[call-overload, untyped-decorator]
     def _encrypt_batch(id_series: pd.Series) -> pd.Series:
         if pipeline_prefix is None:
             return id_series.astype(object)

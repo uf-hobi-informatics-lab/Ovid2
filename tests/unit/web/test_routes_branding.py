@@ -96,13 +96,14 @@ def test_branding_route_excluded_from_openapi(web_client: object) -> None:
 
 @pytest.mark.unit
 def test_dashboard_has_drawer_and_theme_toggle(web_client: object) -> None:
-    """The dashboard renders the v2 drawer layout with a theme toggle."""
+    """The dashboard renders the v2 drawer layout with the Appearance tool."""
     response = web_client.get("/")  # type: ignore[attr-defined]
     assert response.status_code == 200
     body = response.text
     # New chrome elements.
     assert 'class="drawer"' in body
-    assert 'id="theme-toggle"' in body
+    # The day/night toggle was replaced by the Appearance tool rail button.
+    assert 'id="tool-appearance"' in body
     assert 'id="drawer-toggle"' in body
     # SVG favicon link present (with PNG fallback for older browsers).
     assert '<link rel="icon"' in body
@@ -114,12 +115,12 @@ def test_dashboard_has_drawer_and_theme_toggle(web_client: object) -> None:
     assert 'class="brand-mark"' not in body
     assert 'class="brand-logo"' not in body
     # Static assets referenced.
-    assert '/static/theme.js' in body
-    assert '/static/nav.js' in body
+    assert "/static/theme.js" in body
+    assert "/static/nav.js" in body
     # Drawer section labels.
     assert 'class="side-group"' in body
-    assert 'Operate' in body
-    assert 'Configure' in body
+    assert "Operate" in body
+    assert "Configure" in body
 
 
 @pytest.mark.unit
@@ -130,7 +131,7 @@ def test_dashboard_marks_active_nav(web_client: object) -> None:
     body = response.text
     # First drawer nav-item (Dashboard) should carry the active class.
     assert 'data-nav="dashboard"' in body
-    assert 'nav-item active' in body
+    assert "nav-item active" in body
 
 
 @pytest.mark.unit
@@ -158,12 +159,11 @@ def test_health_page_marks_active_nav(web_client: object) -> None:
 
 @pytest.mark.unit
 def test_theme_js_served(web_client: object) -> None:
-    """``theme.js`` is served from ``/static`` and wires the toggle button."""
+    """``theme.js`` is served from ``/static`` and applies ``data-theme``."""
     response = web_client.get("/static/theme.js")  # type: ignore[attr-defined]
     assert response.status_code == 200
     body = response.text
-    assert "theme-toggle" in body
-    assert "ovid2Theme" in body
+    assert "OVID2_APPEARANCE" in body
     assert "data-theme" in body
 
 
@@ -183,7 +183,7 @@ def test_base_template_has_prepaint_script(web_client: object) -> None:
     response = web_client.get("/")  # type: ignore[attr-defined]
     body = response.text
     # Inline script sets data-theme before stylesheet loads.
-    prepaint_pos = body.find("ovid2Theme")
+    prepaint_pos = body.find("window.OVID2_APPEARANCE")
     css_pos = body.find("/static/ovid2.css")
     assert prepaint_pos != -1
     assert css_pos != -1

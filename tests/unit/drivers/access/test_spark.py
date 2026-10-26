@@ -58,9 +58,7 @@ class TestAllStringCustomSchema:
     """
 
     def test_every_column_typed_string(self) -> None:
-        schema = access_spark._all_string_custom_schema(
-            ["class_id", "class_name"]
-        )
+        schema = access_spark._all_string_custom_schema(["class_id", "class_name"])
         assert schema == "`class_id` STRING, `class_name` STRING"
 
     def test_single_column(self) -> None:
@@ -72,9 +70,7 @@ class TestAllStringCustomSchema:
     def test_backtick_is_doubled(self) -> None:
         # Backtick is Spark's identifier quote; doubling it is both valid
         # DDL and closes the only injection vector.
-        assert (
-            access_spark._all_string_custom_schema(["a`b"]) == "`a``b` STRING"
-        )
+        assert access_spark._all_string_custom_schema(["a`b"]) == "`a``b` STRING"
 
 
 class TestRegisterDialect:
@@ -176,7 +172,7 @@ class TestRegisterDialect:
 
         import pytest
 
-        with pytest.raises(RuntimeError, match="not on the.*classpath"):
+        with pytest.raises(RuntimeError, match=r"not on the.*classpath"):
             access_spark._register_dialect(_FakeSpark())  # type: ignore[arg-type]
 
 
@@ -200,9 +196,7 @@ class TestJdbcUrl:
         assert folder == str(target)
         assert target.is_dir()  # created on demand
 
-    def test_mirror_folder_prefers_image_baked_dir(
-        self, tmp_path, monkeypatch
-    ) -> None:
+    def test_mirror_folder_prefers_image_baked_dir(self, tmp_path, monkeypatch) -> None:
         """When the ETL image's chmod-777 dir exists, default there.
 
         The JDBC read runs on the Spark *executor* (worker container),
@@ -215,14 +209,10 @@ class TestJdbcUrl:
         monkeypatch.delenv("OVID2_ACCESS_MIRROR_DIR", raising=False)
         baked = tmp_path / "docker_data" / "spark_tmp"
         baked.mkdir(parents=True)
-        monkeypatch.setattr(
-            access_spark, "_IMAGE_BAKED_MIRROR_DIR", str(baked)
-        )
+        monkeypatch.setattr(access_spark, "_IMAGE_BAKED_MIRROR_DIR", str(baked))
         assert access_spark._mirror_folder() == str(baked)
 
-    def test_mirror_folder_falls_back_to_tempdir_off_image(
-        self, tmp_path, monkeypatch
-    ) -> None:
+    def test_mirror_folder_falls_back_to_tempdir_off_image(self, tmp_path, monkeypatch) -> None:
         """Off the ETL image (tests / plain-python) fall back to tempdir.
 
         The baked dir does not exist outside the image, so the resolver
@@ -231,12 +221,8 @@ class TestJdbcUrl:
         """
         monkeypatch.delenv("OVID2_ACCESS_MIRROR_DIR", raising=False)
         missing = tmp_path / "does" / "not" / "exist"
-        monkeypatch.setattr(
-            access_spark, "_IMAGE_BAKED_MIRROR_DIR", str(missing)
-        )
-        monkeypatch.setattr(
-            access_spark.tempfile, "gettempdir", lambda: str(tmp_path)
-        )
+        monkeypatch.setattr(access_spark, "_IMAGE_BAKED_MIRROR_DIR", str(missing))
+        monkeypatch.setattr(access_spark.tempfile, "gettempdir", lambda: str(tmp_path))
         folder = access_spark._mirror_folder()
         assert folder == str(tmp_path / "ovid2_access_mirror")
         assert (tmp_path / "ovid2_access_mirror").is_dir()

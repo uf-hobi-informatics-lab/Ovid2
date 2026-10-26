@@ -16,15 +16,15 @@ from ovid2.web.services import jobs_svc
 
 
 @pytest.fixture()
-def registered_pipeline(
-    isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> str:
+def registered_pipeline(isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     """Register a stub pipeline package with valid address configs."""
     root = tmp_path / "pipelines_root"
     pkg = root / "ovid2_pipelines" / "tp_jobs"
     (pkg / "formatters").mkdir(parents=True)
     (pkg / "__init__.py").write_text("", encoding="utf-8")
-    (pkg / "pipeline_settings.py").write_text("mappers_type = 'pcornet_mappers'\n", encoding="utf-8")
+    (pkg / "pipeline_settings.py").write_text(
+        "mappers_type = 'pcornet_mappers'\n", encoding="utf-8"
+    )
     monkeypatch.syspath_prepend(str(root))
     for mod in list(sys.modules):
         if mod == "ovid2_pipelines" or mod.startswith("ovid2_pipelines."):
@@ -37,6 +37,11 @@ def registered_pipeline(
     )
     (configs / "out_test.json").write_text(
         json.dumps({"src_name": "disc", "src_args": {"path": "/tmp/out"}}),
+        encoding="utf-8",
+    )
+    # A source type that cannot list its own tables (legacy postgres).
+    (configs / "in_pg.json").write_text(
+        json.dumps({"src_name": "postgres", "src_args": {"host": "db.example.org"}}),
         encoding="utf-8",
     )
     yield "tp_jobs"
@@ -223,9 +228,7 @@ def test_submit_health_generic_label_needs_no_installed_package(
     conndir = isolated_xdg / "config" / "ovid2" / "connections"
     conndir.mkdir(parents=True, exist_ok=True)
     (conndir / "c.json").write_text(
-        json.dumps(
-            {"type": "disc", "args": {"host_path": "/d", "container_path": "/data"}}
-        ),
+        json.dumps({"type": "disc", "args": {"host_path": "/d", "container_path": "/data"}}),
         encoding="utf-8",
     )
     response = jobs_svc.submit(
@@ -313,9 +316,7 @@ def test_submit_copy_move_without_package_ok(registered_pipeline: str) -> None:
 @pytest.mark.unit
 def test_submit_analysis_without_package_rejected(registered_pipeline: str) -> None:
     """analysis still requires an installed package."""
-    with pytest.raises(
-        jobs_svc.SubmitError, match="is not installed under ovid2_pipelines"
-    ):
+    with pytest.raises(jobs_svc.SubmitError, match="is not installed under ovid2_pipelines"):
         jobs_svc.submit(
             JobSubmitRequest(
                 kind="analysis",
@@ -361,7 +362,7 @@ def test_submit_copy_rejects_all_tables(registered_pipeline: str) -> None:
                 kind="copy",
                 pipeline=registered_pipeline,
                 batch_id="B_COPY",
-                input_address="in_test",
+                input_address="in_pg",
                 output_address="out_test",
                 tables=["all"],
                 transformations=[],
@@ -388,7 +389,8 @@ def test_submit_copy_rejects_transformations(registered_pipeline: str) -> None:
 
 @pytest.mark.unit
 def test_submit_copy_persists_extra_mounts(
-    registered_pipeline: str, tmp_path: Path,
+    registered_pipeline: str,
+    tmp_path: Path,
 ) -> None:
     """Well-formed extra_mounts are persisted verbatim in extra_args."""
     (tmp_path / "a").mkdir()
@@ -413,7 +415,8 @@ def test_submit_copy_persists_extra_mounts(
 
 @pytest.mark.unit
 def test_submit_copy_rejects_bad_extra_mount(
-    registered_pipeline: str, tmp_path: Path,
+    registered_pipeline: str,
+    tmp_path: Path,
 ) -> None:
     """A malformed extra-mount is caught at submit time, not by the worker."""
     with pytest.raises(jobs_svc.SubmitError, match="extra_mounts"):
@@ -433,7 +436,8 @@ def test_submit_copy_rejects_bad_extra_mount(
 
 @pytest.mark.unit
 def test_submit_cdm_rejects_extra_mounts(
-    registered_pipeline: str, tmp_path: Path,
+    registered_pipeline: str,
+    tmp_path: Path,
 ) -> None:
     """extra_mounts is copy-kind-only; other kinds must refuse it."""
     (tmp_path / "a").mkdir()
@@ -635,9 +639,7 @@ def test_resume_in_flight_cancels_when_flagged(registered_pipeline: str) -> None
     jobs_svc.claim_next_queued()
     jobs_svc.mark_running_pid(resp.job_id, 999_999_999)
     with web_db.connect() as conn:
-        conn.execute(
-            "UPDATE web_jobs SET cancel_requested = 1 WHERE job_id = ?", (resp.job_id,)
-        )
+        conn.execute("UPDATE web_jobs SET cancel_requested = 1 WHERE job_id = ?", (resp.job_id,))
     jobs_svc.resume_in_flight()
     detail = jobs_svc.get_job(resp.job_id)
     assert detail is not None
@@ -731,7 +733,7 @@ def test_submit_move_rejects_all_tables(registered_pipeline: str) -> None:
                 kind="move",
                 pipeline=registered_pipeline,
                 batch_id="B_MOVE",
-                input_address="in_test",
+                input_address="in_pg",
                 output_address="out_test",
                 tables=["all"],
                 transformations=[],
@@ -742,9 +744,7 @@ def test_submit_move_rejects_all_tables(registered_pipeline: str) -> None:
 @pytest.mark.unit
 def test_submit_move_rejects_transformations(registered_pipeline: str) -> None:
     """Move jobs must not carry a transformations list — parity with copy."""
-    with pytest.raises(
-        jobs_svc.SubmitError, match="do not accept `transformations`"
-    ):
+    with pytest.raises(jobs_svc.SubmitError, match="do not accept `transformations`"):
         jobs_svc.submit(
             JobSubmitRequest(
                 kind="move",
@@ -802,9 +802,7 @@ def test_submit_move_strict_types_default_omits_key(
 @pytest.mark.unit
 def test_submit_cdm_rejects_strict_types(registered_pipeline: str) -> None:
     """strict_types is move-kind-only; other kinds must refuse it."""
-    with pytest.raises(
-        jobs_svc.SubmitError, match="only accepted on kind='move'"
-    ):
+    with pytest.raises(jobs_svc.SubmitError, match="only accepted on kind='move'"):
         jobs_svc.submit(
             JobSubmitRequest(
                 kind="cdm",
@@ -821,9 +819,7 @@ def test_submit_cdm_rejects_strict_types(registered_pipeline: str) -> None:
 @pytest.mark.unit
 def test_submit_copy_rejects_strict_types(registered_pipeline: str) -> None:
     """strict_types is move-only even though copy shares most other rules."""
-    with pytest.raises(
-        jobs_svc.SubmitError, match="only accepted on kind='move'"
-    ):
+    with pytest.raises(jobs_svc.SubmitError, match="only accepted on kind='move'"):
         jobs_svc.submit(
             JobSubmitRequest(
                 kind="copy",
@@ -840,7 +836,8 @@ def test_submit_copy_rejects_strict_types(registered_pipeline: str) -> None:
 
 @pytest.mark.unit
 def test_submit_move_accepts_extra_mounts(
-    registered_pipeline: str, tmp_path: Path,
+    registered_pipeline: str,
+    tmp_path: Path,
 ) -> None:
     """extra_mounts is copy-and-move-kind; move should accept it."""
     (tmp_path / "out").mkdir()
@@ -1135,3 +1132,98 @@ def test_list_jobs_accepts_draft_filter(registered_pipeline: str) -> None:
     jobs_svc.create_draft(_make_request(registered_pipeline))
     jobs_svc.submit(_make_request(registered_pipeline))
     assert jobs_svc.list_jobs(status="draft").total == 1
+
+
+# ---------------------------------------------------------------------------
+# 2026-10-23: draft/submit-time ``tables=['all']`` expansion for copy/move.
+# ---------------------------------------------------------------------------
+
+
+def _copy_all_request(pipeline: str, kind: str = "copy") -> JobSubmitRequest:
+    return JobSubmitRequest(
+        kind=kind,
+        pipeline=pipeline,
+        batch_id="20260916",
+        input_address="in_test",
+        output_address="out_test",
+        tables=["all"],
+        transformations=[],
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("kind", ["copy", "move"])
+def test_draft_expands_all_to_concrete_largest_first(
+    registered_pipeline: str, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    """The stored draft lists the broker's roster, not the opaque ``all``."""
+    calls: list[list[str]] = []
+
+    def _fake_broker(tool_args: list[str], **_kw: object) -> dict[str, object]:
+        calls.append(tool_args)
+        return {
+            "ok": True,
+            "code": "ok",
+            "tables": ["LAB_RESULT_CM", "DEMOGRAPHIC"],
+            "sizes": {"LAB_RESULT_CM": 900, "DEMOGRAPHIC": 10},
+        }
+
+    monkeypatch.setattr("ovid2.web.services._broker.run_tool_json", _fake_broker)
+    response = jobs_svc.create_draft(_copy_all_request(registered_pipeline, kind))
+    detail = jobs_svc.get_job(response.job_id)
+    assert detail is not None
+    assert detail.tables == ["LAB_RESULT_CM", "DEMOGRAPHIC"]
+    assert calls == [
+        [
+            "list-source-tables",
+            "in_test",
+            "--pipeline",
+            registered_pipeline,
+            "--batch_id",
+            "20260916",
+        ]
+    ]
+
+
+@pytest.mark.unit
+def test_submit_all_listing_error_is_actionable(
+    registered_pipeline: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "ovid2.web.services._broker.run_tool_json",
+        lambda *_a, **_k: {"ok": False, "code": "error", "message": "no batch folder for x"},
+    )
+    with pytest.raises(jobs_svc.SubmitError, match=r"could not expand.*no batch folder"):
+        jobs_svc.submit(_copy_all_request(registered_pipeline))
+
+
+@pytest.mark.unit
+def test_submit_all_unavailable_keeps_sentinel_for_runtime(
+    registered_pipeline: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Expandable type but listing unavailable on the web host → keep ``all``."""
+    from ovid2.web.services._broker import BrokerError
+
+    def _boom(*_a: object, **_k: object) -> dict[str, object]:
+        raise BrokerError("timed out")
+
+    monkeypatch.setattr("ovid2.web.services._broker.run_tool_json", _boom)
+    response = jobs_svc.submit(_copy_all_request(registered_pipeline))
+    detail = jobs_svc.get_job(response.job_id)
+    assert detail is not None
+    assert detail.tables == ["all"]
+
+
+@pytest.mark.unit
+def test_explicit_tables_skip_broker(
+    registered_pipeline: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _never(*_a: object, **_k: object) -> dict[str, object]:
+        raise AssertionError("broker must not run for an explicit list")
+
+    monkeypatch.setattr("ovid2.web.services._broker.run_tool_json", _never)
+    request = _copy_all_request(registered_pipeline)
+    request.tables = ["demographic"]
+    response = jobs_svc.submit(request)
+    detail = jobs_svc.get_job(response.job_id)
+    assert detail is not None and detail.tables == ["demographic"]

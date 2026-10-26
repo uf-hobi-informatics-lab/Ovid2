@@ -235,7 +235,6 @@ def test_install_status_returns_step_list(mcp_bundle) -> None:
         assert "bootstrap" in keys
         assert "done" in keys
 
-
     anyio.run(_call)
 
 

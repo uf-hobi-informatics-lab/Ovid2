@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 from typing import Any
 
 from ovid2.connections.base import BaseConnection, ConnectionTestResult
@@ -16,13 +17,14 @@ class PostgresConnection(BaseConnection):
         """Probe with a ``SELECT 1`` via ``psycopg2`` or ``psycopg``."""
         connector: Any
         try:
-            import psycopg2 as connector  # type: ignore[import-not-found]
+            connector = importlib.import_module("psycopg2")
         except ImportError:
             try:
-                import psycopg as connector  # type: ignore[import-not-found]
+                connector = importlib.import_module("psycopg")
             except ImportError:
                 return ConnectionTestResult(
-                    ok=False, code="skipped",
+                    ok=False,
+                    code="skipped",
                     message="Neither psycopg2 nor psycopg is installed on this host.",
                 )
         host = str(self.args.get("host") or "")
@@ -32,11 +34,15 @@ class PostgresConnection(BaseConnection):
         password = self.secrets.get("password")
         if not (host and database and user):
             return ConnectionTestResult(
-                ok=False, code="config",
+                ok=False,
+                code="config",
                 message="host, database, and user are all required.",
             )
         kwargs: dict[str, Any] = {
-            "host": host, "port": port, "dbname": database, "user": user,
+            "host": host,
+            "port": port,
+            "dbname": database,
+            "user": user,
         }
         if password is not None:
             kwargs["password"] = password
@@ -44,10 +50,11 @@ class PostgresConnection(BaseConnection):
         if sslmode:
             kwargs["sslmode"] = sslmode
         try:
-            conn = connector.connect(**kwargs)  # type: ignore[attr-defined]
-        except Exception as exc:  # noqa: BLE001
+            conn = connector.connect(**kwargs)
+        except Exception as exc:
             return ConnectionTestResult(
-                ok=False, code="unreachable",
+                ok=False,
+                code="unreachable",
                 message=f"Postgres connect failed: {exc}",
             )
         try:
@@ -55,15 +62,17 @@ class PostgresConnection(BaseConnection):
             cursor.execute("SELECT 1")
             cursor.fetchone()
             cursor.close()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             conn.close()
             return ConnectionTestResult(
-                ok=False, code="auth",
+                ok=False,
+                code="auth",
                 message=f"Postgres query failed: {exc}",
             )
         conn.close()
         return ConnectionTestResult(
-            ok=True, code="ok",
+            ok=True,
+            code="ok",
             message="Postgres SELECT 1 succeeded.",
         )
 

@@ -25,7 +25,7 @@ import importlib.resources as pkg_resources
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -52,11 +52,13 @@ class FormatterError(ValueError):
 def _load_schema() -> dict[str, Any]:
     """Return the packaged formatter-spec JSON schema."""
     if "schema" not in _SCHEMA_CACHE:
-        text = pkg_resources.files("ovid2.resources.schemas").joinpath(
-            "formatter_spec.v1.json"
-        ).read_text(encoding="utf-8")
+        text = (
+            pkg_resources.files("ovid2.resources.schemas")
+            .joinpath("formatter_spec.v1.json")
+            .read_text(encoding="utf-8")
+        )
         _SCHEMA_CACHE["schema"] = json.loads(text)
-    return _SCHEMA_CACHE["schema"]
+    return cast(dict[str, Any], _SCHEMA_CACHE["schema"])
 
 
 def _formatters_dir(pipeline: str) -> Path | None:
@@ -259,8 +261,7 @@ def save_formatter(
     py_path = directory / f"{table}.py"
     if py_path.is_file():
         raise FormatterError(
-            f"Refusing to overwrite Python-dict spec {py_path}. "
-            "Edit on disk per AGENTS.md."
+            f"Refusing to overwrite Python-dict spec {py_path}. Edit on disk per AGENTS.md."
         )
 
     try:
@@ -305,9 +306,7 @@ def save_formatter(
         target=f"{pipeline}/{table}",
         before_hash=before_hash,
         after_hash=_hash_text(text),
-        detail_json=json.dumps(
-            {"path": str(target), "adapter": parsed.get("adapter")}
-        ),
+        detail_json=json.dumps({"path": str(target), "adapter": parsed.get("adapter")}),
     )
     logger.info("Formatter %s %s/%s at %s", action, pipeline, table, target)
     return WriteResult(name=f"{pipeline}/{table}", path=str(target), action=action)
@@ -331,9 +330,7 @@ def delete_formatter(
 
     py_path = directory / f"{table}.py"
     if py_path.is_file():
-        raise FormatterError(
-            f"Refusing to delete Python-dict spec {py_path}. Edit on disk."
-        )
+        raise FormatterError(f"Refusing to delete Python-dict spec {py_path}. Edit on disk.")
 
     target: Path | None = None
     for suffix in (".yaml", ".yml"):

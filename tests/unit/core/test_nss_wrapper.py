@@ -40,7 +40,6 @@ from ovid2.core.docker import (
 )
 from ovid2.core.isolation import OvidInstance
 
-
 # ---------------------------------------------------------------------------
 # OvidInstance.ensure_nss_files
 # ---------------------------------------------------------------------------
@@ -70,8 +69,9 @@ def test_ensure_nss_files_writes_passwd_and_group(
 
     passwd = passwd_path.read_text(encoding="utf-8")
     assert "99999:88888" in passwd
-    assert ":/docker_data/spark_tmp:" in passwd, \
+    assert ":/docker_data/spark_tmp:" in passwd, (
         "HOME must land on /docker_data/spark_tmp (chmod-777 in Dockerfile)."
+    )
 
     group = group_path.read_text(encoding="utf-8")
     assert "88888" in group
@@ -130,9 +130,7 @@ def test_ensure_nss_files_permissions_are_world_readable(
 
 
 @pytest.mark.unit
-def test_cleanup_removes_nss_dir(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_cleanup_removes_nss_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """``OvidInstance.cleanup()`` scrubs the nss-wrapper overlay tree."""
     monkeypatch.setenv("OVID2_WORK_DIR", str(tmp_path))
     import importlib
@@ -246,8 +244,9 @@ def test_build_compose_dict_sets_user_on_every_service(
     compose = build_compose_dict(_stubbed_instance, num_workers=3)
     assert len(compose["services"]) == 4
     for name, svc in compose["services"].items():
-        assert svc.get("user") == "12345:67890", \
+        assert svc.get("user") == "12345:67890", (
             f"service {name} missing user: field ({svc.get('user')!r})"
+        )
 
 
 @pytest.mark.unit
@@ -260,8 +259,9 @@ def test_build_compose_dict_sets_nss_env_on_every_service(
     for name, svc in compose["services"].items():
         env_list = svc["environment"]
         joined = " ".join(env_list)
-        assert f"LD_PRELOAD={NSS_WRAPPER_LIB}" in joined, \
+        assert f"LD_PRELOAD={NSS_WRAPPER_LIB}" in joined, (
             f"service {name} missing LD_PRELOAD ({env_list})"
+        )
         assert f"NSS_WRAPPER_PASSWD={NSS_PASSWD_IN_CONTAINER}" in joined
         assert f"NSS_WRAPPER_GROUP={NSS_GROUP_IN_CONTAINER}" in joined
 
@@ -275,10 +275,12 @@ def test_build_compose_dict_mounts_nss_overlay_on_every_service(
     compose = build_compose_dict(_stubbed_instance, num_workers=2)
     for name, svc in compose["services"].items():
         joined = "\n".join(svc["volumes"])
-        assert f"/host/passwd:{NSS_PASSWD_IN_CONTAINER}:ro" in joined, \
+        assert f"/host/passwd:{NSS_PASSWD_IN_CONTAINER}:ro" in joined, (
             f"service {name} missing passwd overlay mount"
-        assert f"/host/group:{NSS_GROUP_IN_CONTAINER}:ro" in joined, \
+        )
+        assert f"/host/group:{NSS_GROUP_IN_CONTAINER}:ro" in joined, (
             f"service {name} missing group overlay mount"
+        )
 
 
 @pytest.mark.unit

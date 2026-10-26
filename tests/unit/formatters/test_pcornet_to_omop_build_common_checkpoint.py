@@ -17,48 +17,47 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-
 from ovid2_pipelines.pcornet_to_omop.formatters_custom import _common
 
 
 class _FakeColumn:
     """A no-op column stand-in that supports the chained builder calls."""
 
-    def alias(self, _name: str) -> "_FakeColumn":
+    def alias(self, _name: str) -> _FakeColumn:
         return self
 
-    def otherwise(self, _o: Any) -> "_FakeColumn":
+    def otherwise(self, _o: Any) -> _FakeColumn:
         return self
 
-    def isNotNull(self) -> "_FakeColumn":  # noqa: N802 (Spark camelCase)
+    def isNotNull(self) -> _FakeColumn:
         return self
 
-    def cast(self, _t: str) -> "_FakeColumn":
+    def cast(self, _t: str) -> _FakeColumn:
         return self
 
-    def isin(self, *_a: Any) -> "_FakeColumn":
+    def isin(self, *_a: Any) -> _FakeColumn:
         return self
 
-    def __eq__(self, _o: Any) -> "_FakeColumn":  # type: ignore[override]
+    def __eq__(self, _o: Any) -> _FakeColumn:  # type: ignore[override]
         return self
 
-    def __ne__(self, _o: Any) -> "_FakeColumn":  # type: ignore[override]
+    def __ne__(self, _o: Any) -> _FakeColumn:  # type: ignore[override]
         return self
 
-    def __and__(self, _o: Any) -> "_FakeColumn":
+    def __and__(self, _o: Any) -> _FakeColumn:
         return self
 
-    def __invert__(self) -> "_FakeColumn":
+    def __invert__(self) -> _FakeColumn:
         return self
 
 
 class _FakeDF:
     """A DataFrame stand-in: every transform returns a fresh ``_FakeDF``."""
 
-    def select(self, *_a: Any, **_k: Any) -> "_FakeDF":
+    def select(self, *_a: Any, **_k: Any) -> _FakeDF:
         return _FakeDF()
 
-    def filter(self, *_a: Any, **_k: Any) -> "_FakeDF":
+    def filter(self, *_a: Any, **_k: Any) -> _FakeDF:
         return _FakeDF()
 
 
@@ -108,9 +107,7 @@ class _FakeEngine:
     def __init__(self) -> None:
         self.checkpoint_calls: list[tuple[Any, str]] = []
 
-    def union_by_name(
-        self, left: Any, _right: Any, *, allow_missing_columns: bool = False
-    ) -> Any:
+    def union_by_name(self, left: Any, _right: Any, *, allow_missing_columns: bool = False) -> Any:
         return left
 
     def checkpoint(self, df: Any, name: str) -> Any:

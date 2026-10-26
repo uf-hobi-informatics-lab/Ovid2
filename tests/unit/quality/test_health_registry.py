@@ -118,8 +118,8 @@ def test_dcq_v7_03_contains_full_edc_set() -> None:
     # dcq_v7_03 (Cycle 20 / v7.03) is the full EDC port: it names every
     # EDC (numeric-id) check that ships today, plus the native panels.
     edc_ids = {i for i in all_ids if i[0].isdigit()}
-    assert edc_ids <= set(pkg.checks), (
-        "dcq_v7_03 is missing EDC checks: " + ", ".join(sorted(edc_ids - set(pkg.checks)))
+    assert edc_ids <= set(pkg.checks), "dcq_v7_03 is missing EDC checks: " + ", ".join(
+        sorted(edc_ids - set(pkg.checks))
     )
     assert set(pkg.checks) <= all_ids
 
@@ -188,8 +188,13 @@ def test_check_outcome_resolves_status() -> None:
 
 def test_check_outcome_error_status_sticky() -> None:
     outcome = CheckOutcome(
-        check_id="x", check_name="X", part="part1", edc_table="", description="x",
-        status="error", error="boom",
+        check_id="x",
+        check_name="X",
+        part="part1",
+        edc_table="",
+        description="x",
+        status="error",
+        error="boom",
     )
     outcome.resolve_status()
     assert outcome.status == "error"
@@ -210,16 +215,26 @@ def _outcomes() -> list[CheckOutcome]:
     exc.rows = [MetricRow("1.01", "DC_1_01", "part1", "", "HARVEST", "M", exception_flag=True)]
     exc.resolve_status()
     err = CheckOutcome(
-        check_id="1.04", check_name="DC_1_04", part="part1", edc_table="", description="d",
-        status="error", error="boom",
+        check_id="1.04",
+        check_name="DC_1_04",
+        part="part1",
+        edc_table="",
+        description="d",
+        status="error",
+        error="boom",
     )
     return [passed, exc, err]
 
 
 def test_build_report_summary_counts() -> None:
     report = report_mod.build_report(
-        instance_id="i", pipeline="demo", batch_id="b", cdm="pcornet_7_0",
-        input_address="IN", output_address="OUT", outcomes=_outcomes(),
+        instance_id="i",
+        pipeline="demo",
+        batch_id="b",
+        cdm="pcornet_7_0",
+        input_address="IN",
+        output_address="OUT",
+        outcomes=_outcomes(),
     )
     s = report["summary"]
     assert s["checks_total"] == 3
@@ -231,8 +246,13 @@ def test_build_report_summary_counts() -> None:
 
 def test_write_report_roundtrip(tmp_path: Path) -> None:
     report = report_mod.build_report(
-        instance_id="i", pipeline="demo", batch_id="b", cdm="pcornet_7_0",
-        input_address="IN", output_address="OUT", outcomes=_outcomes(),
+        instance_id="i",
+        pipeline="demo",
+        batch_id="b",
+        cdm="pcornet_7_0",
+        input_address="IN",
+        output_address="OUT",
+        outcomes=_outcomes(),
     )
     path = report_mod.report_path(tmp_path, "i")
     report_mod.write_report(path, report)
@@ -246,11 +266,20 @@ def test_report_validates_against_schema(tmp_path: Path) -> None:
     jsonschema = pytest.importorskip("jsonschema")
     schema_path = (
         Path(__file__).resolve().parents[3]
-        / "src" / "ovid2" / "resources" / "schemas" / "health_report.v1.json"
+        / "src"
+        / "ovid2"
+        / "resources"
+        / "schemas"
+        / "health_report.v1.json"
     )
     schema = json.loads(schema_path.read_text())
     report = report_mod.build_report(
-        instance_id="i", pipeline="demo", batch_id="b", cdm="pcornet_7_0",
-        input_address="IN", output_address="OUT", outcomes=_outcomes(),
+        instance_id="i",
+        pipeline="demo",
+        batch_id="b",
+        cdm="pcornet_7_0",
+        input_address="IN",
+        output_address="OUT",
+        outcomes=_outcomes(),
     )
     jsonschema.validate(report, schema)

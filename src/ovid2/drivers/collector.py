@@ -29,7 +29,7 @@ disk plus the driver metadata are consulted.
 from __future__ import annotations
 
 import logging
-from typing import Iterable
+from collections.abc import Iterable
 
 from ovid2.drivers.container import (
     ContainerRequirement,
@@ -94,7 +94,8 @@ def collect_for_addresses(
                     logger.warning(
                         "Driver-declared mount on address %r targets "
                         "forbidden container path %r; dropping.",
-                        address_name, target,
+                        address_name,
+                        target,
                     )
                     continue
                 if target in RESERVED_CONTAINER_PATHS:
@@ -102,14 +103,16 @@ def collect_for_addresses(
                         "Driver-declared mount on address %r targets "
                         "reserved container path %r; the standard mount set "
                         "already populates it. Dropping auto-mount.",
-                        address_name, target,
+                        address_name,
+                        target,
                     )
                     continue
                 if target in explicit_set:
                     logger.warning(
                         "Explicit --extra-mount overrides auto-mount for "
                         "address %r (container path %s).",
-                        address_name, target,
+                        address_name,
+                        target,
                     )
                     continue
                 if target in seen_mount_containers:
@@ -152,7 +155,9 @@ def secret_refs_for_addresses(address_names: Iterable[str]) -> set[str]:
             payload = load_address_config(address_name)
         except (FileNotFoundError, ValueError) as exc:
             logger.debug(
-                "secret_refs_for_addresses skipping %r: %s", address_name, exc,
+                "secret_refs_for_addresses skipping %r: %s",
+                address_name,
+                exc,
             )
             continue
 
@@ -197,7 +202,9 @@ def _requirements_for_address(
         payload = load_address_config(address_name)
     except (FileNotFoundError, ValueError) as exc:
         logger.debug(
-            "collect_for_addresses skipping %r: %s", address_name, exc,
+            "collect_for_addresses skipping %r: %s",
+            address_name,
+            exc,
         )
         return ()
 
@@ -217,19 +224,21 @@ def _requirements_for_address(
         location = dict(payload.get("location") or {})
         try:
             driver = instantiate(type_name, args=args, secrets={}, location=location)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.warning(
                 "Failed to instantiate driver %r for address %r; "
                 "skipping container-req contribution.",
-                type_name, address_name,
+                type_name,
+                address_name,
             )
             return ()
         try:
             return tuple(driver.container_requirements_for(location))
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.warning(
-                "Driver %r raised while computing container reqs for %r; "
-                "skipping.", type_name, address_name,
+                "Driver %r raised while computing container reqs for %r; skipping.",
+                type_name,
+                address_name,
             )
             return ()
 
@@ -248,11 +257,11 @@ def _requirements_for_address(
     # split is safe as a general default.
     try:
         driver = instantiate(src_name, args=src_args, secrets={}, location={})
-    except Exception:  # noqa: BLE001
+    except Exception:
         return ()
     try:
         return tuple(driver.container_requirements_for({}))
-    except Exception:  # noqa: BLE001
+    except Exception:
         return ()
 
 

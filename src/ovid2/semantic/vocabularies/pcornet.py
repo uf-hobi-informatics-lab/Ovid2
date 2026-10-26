@@ -18,7 +18,9 @@ so a partial vocabulary tree never breaks CDM boot.
 
 from __future__ import annotations
 
+import contextlib
 import logging
+from typing import Any
 
 from ovid2.cdm.yaml_loader import iter_valueset_docs
 from ovid2.semantic.handle import VocabularyHandle
@@ -41,14 +43,15 @@ def _register_valuesets() -> None:
             handle = _build_handle(payload)
         except (ValueError, KeyError) as exc:
             logger.warning(
-                "Skipping PCORnet valueset %s.%s: %s", table, field, exc,
+                "Skipping PCORnet valueset %s.%s: %s",
+                table,
+                field,
+                exc,
             )
             continue
-        try:
+        # Already registered — safe in reload/test scenarios.
+        with contextlib.suppress(ValueError):
             register(handle)
-        except ValueError:
-            # Already registered — safe in reload/test scenarios.
-            pass
         # Bind the vocabulary to the CDM column so `ovid2 semantic bindings`
         # and future strict-mode checks can find it.
         binding = ColumnBinding(
@@ -58,16 +61,14 @@ def _register_valuesets() -> None:
             vocabulary=handle.name,
             role=f"pcornet_{table}_{field.lower()}",
         )
-        try:
+        # Duplicate binding — safe in reload/test scenarios.
+        with contextlib.suppress(ValueError):
             bind_column(binding)
-        except ValueError:
-            # Duplicate binding — safe in reload/test scenarios.
-            pass
         count += 1
     logger.debug("Registered %d PCORnet valueset(s).", count)
 
 
-def _build_handle(payload: dict) -> VocabularyHandle:
+def _build_handle(payload: dict[str, Any]) -> VocabularyHandle:
     """Convert one valueset YAML payload into a :class:`VocabularyHandle`."""
     name = payload["name"]
     items_raw = payload.get("items") or []
@@ -82,9 +83,7 @@ def _build_handle(payload: dict) -> VocabularyHandle:
         description=str(payload.get("description") or ""),
         code_column=str(payload.get("code_column") or "code"),
         description_column=(
-            str(payload["description_column"])
-            if payload.get("description_column")
-            else None
+            str(payload["description_column"]) if payload.get("description_column") else None
         ),
         inline_items=tuple(items),
         tags=("clinical", "pcornet"),

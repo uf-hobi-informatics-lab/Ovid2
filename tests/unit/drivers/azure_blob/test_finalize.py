@@ -22,7 +22,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Fake azure-storage-blob SDK
 # ---------------------------------------------------------------------------
@@ -68,10 +67,7 @@ class _FakeContainerClient:
         self.deleted: list[list[str]] = []
 
     def list_blobs(self, name_starts_with: str = "") -> list[Any]:
-        return [
-            types.SimpleNamespace(name=n)
-            for n in self.listings.get(name_starts_with, [])
-        ]
+        return [types.SimpleNamespace(name=n) for n in self.listings.get(name_starts_with, [])]
 
     def get_blob_client(self, name: str) -> _FakeBlobClient:
         if name not in self.blob_clients:
@@ -92,13 +88,11 @@ def _install_fake_azure_sdk(
     azure_storage = types.ModuleType("azure.storage")
     azure_storage_blob = types.ModuleType("azure.storage.blob")
 
-    class BlobClient:  # noqa: D401 — SDK-parity name
+    class BlobClient:
         """Marker class only used for isinstance checks in the SUT."""
 
     azure_storage_blob.BlobClient = BlobClient
-    azure_storage_blob.ContainerClient = (
-        lambda account_url, container_name, credential: container
-    )
+    azure_storage_blob.ContainerClient = lambda account_url, container_name, credential: container
     azure.storage = azure_storage
     azure_storage.blob = azure_storage_blob
 
@@ -116,7 +110,8 @@ class TestFinalizeCsvBlockCommit:
     """Direct coverage of the module-level block-commit stitch."""
 
     def test_stages_header_then_body_blocks_in_sorted_order(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from ovid2.drivers.azure_blob.spark import finalize_csv_block_commit
 
@@ -163,7 +158,8 @@ class TestFinalizeCsvBlockCommit:
         assert target.committed == [s["block_id"] for s in target.staged]
 
     def test_missing_body_parts_raises(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from ovid2.drivers.azure_blob.spark import finalize_csv_block_commit
 
@@ -183,7 +179,8 @@ class TestFinalizeCsvBlockCommit:
             )
 
     def test_missing_header_raises(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from ovid2.drivers.azure_blob.spark import finalize_csv_block_commit
 
@@ -206,7 +203,8 @@ class TestFinalizeCsvBlockCommit:
             )
 
     def test_body_prefix_trailing_slash_enforced(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from ovid2.drivers.azure_blob.spark import finalize_csv_block_commit
 
@@ -233,7 +231,8 @@ class TestFinalizeCsvBlockCommit:
         assert len(target.committed) == 2  # header + one part
 
     def test_ignores_non_part_blobs(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from ovid2.drivers.azure_blob.spark import finalize_csv_block_commit
 
@@ -299,17 +298,17 @@ class _FakeWriter:
     def __init__(self, log: list[tuple[str, tuple[Any, ...]]]) -> None:
         self._log = log
 
-    def _rec(self, name: str, *args: Any) -> "_FakeWriter":
+    def _rec(self, name: str, *args: Any) -> _FakeWriter:
         self._log.append((name, args))
         return self
 
-    def option(self, *a: Any) -> "_FakeWriter":
+    def option(self, *a: Any) -> _FakeWriter:
         return self._rec("option", *a)
 
-    def format(self, *a: Any) -> "_FakeWriter":
+    def format(self, *a: Any) -> _FakeWriter:
         return self._rec("format", *a)
 
-    def mode(self, *a: Any) -> "_FakeWriter":
+    def mode(self, *a: Any) -> _FakeWriter:
         return self._rec("mode", *a)
 
     def save(self, *a: Any) -> None:
@@ -327,7 +326,7 @@ class _FakeDF:
         self.log: list[tuple[str, tuple[Any, ...]]] = []
         self.write = _FakeWriter(self.log)
 
-    def coalesce(self, n: int) -> "_FakeDF":
+    def coalesce(self, n: int) -> _FakeDF:
         self.log.append(("coalesce", (n,)))
         return self
 
@@ -349,10 +348,11 @@ class TestAzureBlobIOWriteChain:
         names = [n for n, _ in df.log]
         assert "coalesce" not in names
         assert ("format", ("csv",)) in df.log
-        assert ("save", ("abfss://c@acct.dfs.core.windows.net/p/b/t.csv",)) in df.log
+        assert ("save", ("abfss://c@acct.dfs.core.windows.net/t.csv",)) in df.log
 
     def test_single_file_true_uses_finalize_path(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from ovid2.drivers.azure_blob import spark as azb_spark
 
@@ -360,8 +360,12 @@ class TestAzureBlobIOWriteChain:
         called: dict[str, Any] = {}
 
         def fake(
-            self: Any, df: Any, pipeline: str, batch_id: str,
-            table_name: str, delimiter: str,
+            self: Any,
+            df: Any,
+            pipeline: str,
+            batch_id: str,
+            table_name: str,
+            delimiter: str,
         ) -> None:
             called["pipeline"] = pipeline
             called["table"] = table_name
@@ -375,13 +379,13 @@ class TestAzureBlobIOWriteChain:
         io = self._make(format="parquet")
         df = _FakeDF()
         io.write(df, _FakeSparkSession(), "p", "b", "t")  # type: ignore[arg-type]
-        assert ("parquet", ("abfss://c@acct.dfs.core.windows.net/p/b/t.parquet",)) in df.log
+        assert ("parquet", ("abfss://c@acct.dfs.core.windows.net/t.parquet",)) in df.log
 
     def test_json_write_unchanged(self) -> None:
         io = self._make(format="json")
         df = _FakeDF()
         io.write(df, _FakeSparkSession(), "p", "b", "t")  # type: ignore[arg-type]
-        assert ("json", ("abfss://c@acct.dfs.core.windows.net/p/b/t.json",)) in df.log
+        assert ("json", ("abfss://c@acct.dfs.core.windows.net/t.json",)) in df.log
 
     def test_unknown_format_raises(self) -> None:
         io = self._make(format="avro")

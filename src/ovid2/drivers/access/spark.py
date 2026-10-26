@@ -182,8 +182,7 @@ def list_tables(spark: SparkSession, container_file_path: str) -> list[str]:
     gateway = spark.sparkContext._gateway
     if jvm is None or gateway is None:  # pragma: no cover - JVM always up
         raise RuntimeError(
-            "No active JVM gateway on the Spark context; cannot open the "
-            "Access file over JDBC."
+            "No active JVM gateway on the Spark context; cannot open the Access file over JDBC."
         )
     # Ensure the driver class is loaded. Resolve via the thread context
     # classloader — the system classloader used by a bare
@@ -194,9 +193,7 @@ def list_tables(spark: SparkSession, container_file_path: str) -> list[str]:
     # ``DriverManager`` autoloading (which also consults only the system
     # classloader).
     context_cl = jvm.java.lang.Thread.currentThread().getContextClassLoader()
-    driver_cls = jvm.java.lang.Class.forName(
-        _UCANACCESS_DRIVER, True, context_cl
-    )
+    driver_cls = jvm.java.lang.Class.forName(_UCANACCESS_DRIVER, True, context_cl)
     driver_instance = driver_cls.newInstance()
     connection = None
     tables: list[str] = []
@@ -219,8 +216,7 @@ def list_tables(spark: SparkSession, container_file_path: str) -> list[str]:
             result_set.close()
     except Exception as exc:
         raise RuntimeError(
-            f"Failed to enumerate Access tables in "
-            f"{container_file_path!r}: {exc}"
+            f"Failed to enumerate Access tables in {container_file_path!r}: {exc}"
         ) from exc
     finally:
         if connection is not None:
@@ -269,9 +265,7 @@ def _all_string_custom_schema(column_names: list[str]) -> str:
     Returns:
         A ``customSchema`` clause like ``` `col_a` STRING, `col_b` STRING ```.
     """
-    return ", ".join(
-        f"`{name.replace('`', '``')}` STRING" for name in column_names
-    )
+    return ", ".join(f"`{name.replace('`', '``')}` STRING" for name in column_names)
 
 
 def _register_dialect(spark: SparkSession) -> None:
@@ -312,18 +306,13 @@ def _register_dialect(spark: SparkSession) -> None:
     jvm = spark.sparkContext._jvm
     if jvm is None:  # pragma: no cover - JVM always up in a live session
         raise RuntimeError(
-            "No active JVM gateway on the Spark context; cannot register "
-            "the UCanAccess dialect."
+            "No active JVM gateway on the Spark context; cannot register the UCanAccess dialect."
         )
     try:
         context_cl = jvm.java.lang.Thread.currentThread().getContextClassLoader()
-        dialect_cls = jvm.java.lang.Class.forName(
-            _DIALECT_CLASS, True, context_cl
-        )
-        jvm.org.apache.spark.sql.jdbc.JdbcDialects.registerDialect(
-            dialect_cls.newInstance()
-        )
-    except Exception as exc:  # noqa: BLE001 - re-wrapped with guidance below
+        dialect_cls = jvm.java.lang.Class.forName(_DIALECT_CLASS, True, context_cl)
+        jvm.org.apache.spark.sql.jdbc.JdbcDialects.registerDialect(dialect_cls.newInstance())
+    except Exception as exc:
         raise RuntimeError(
             f"UCanAccess Spark dialect {_DIALECT_CLASS!r} is not on the "
             "JVM classpath. It is compiled at Docker build time into "
@@ -382,9 +371,7 @@ def read_table(
     # re-open the reader forcing every column to STRING. ``.schema`` on a
     # JDBC relation is answered from ``ResultSetMetaData``.
     column_names = _reader().load().columns
-    df: DataFrame = _reader().option(
-        "customSchema", _all_string_custom_schema(column_names)
-    ).load()
+    df: DataFrame = _reader().option("customSchema", _all_string_custom_schema(column_names)).load()
     if lowercase_columns:
         df = df.toDF(*[c.lower() for c in df.columns])
     return df

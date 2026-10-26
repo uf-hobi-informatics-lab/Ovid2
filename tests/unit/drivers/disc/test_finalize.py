@@ -16,16 +16,15 @@ in the 2026-08 single-CSV finalize refactor:
 from __future__ import annotations
 
 import csv
-import shutil
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Module-level helpers — no Spark required.
 # ---------------------------------------------------------------------------
+
 
 class TestMergeCsvPartFiles:
     """Coverage for the internal ``cat``-based CSV finalizer."""
@@ -39,7 +38,8 @@ class TestMergeCsvPartFiles:
             (work_dir / f"part-{i:05d}-abcd.csv").write_text(body)
 
     def test_concats_header_then_parts_in_sorted_order(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         from ovid2.drivers.disc.spark import _merge_csv_part_files
 
@@ -88,7 +88,9 @@ class TestMergeCsvPartFiles:
             _merge_csv_part_files(str(work), str(tmp_path / "o.csv"))
 
     def test_pure_python_fallback_when_cat_missing(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Simulate an environment without ``cat`` on ``PATH``."""
         from ovid2.drivers.disc import spark as disc_spark
@@ -112,7 +114,7 @@ class TestMergeCsvPartFiles:
         work = tmp_path / "tmp_out"
         work.mkdir()
         # UTF-8 with a multibyte char.
-        (work / "_header.csv").write_bytes("col\n".encode())
+        (work / "_header.csv").write_bytes(b"col\n")
         (work / "part-00000-x.csv").write_bytes("é\n".encode())
 
         out = tmp_path / "out.csv"
@@ -124,24 +126,25 @@ class TestMaybeCoalesce:
     """The operator-tunable coalesce hook."""
 
     def test_no_coalesce_by_default(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from ovid2.drivers.disc import spark as disc_spark
 
         monkeypatch.setattr(disc_spark, "DISC_WRITE_PARTITIONS", None)
 
         class FakeDF:
-            def coalesce(self, n: int) -> "FakeDF":
+            def coalesce(self, n: int) -> FakeDF:
                 raise AssertionError(
-                    f"coalesce({n}) should not have been called when "
-                    "DISC_WRITE_PARTITIONS is None."
+                    f"coalesce({n}) should not have been called when DISC_WRITE_PARTITIONS is None."
                 )
 
         df = FakeDF()
         assert disc_spark._maybe_coalesce(df) is df  # type: ignore[arg-type]
 
     def test_coalesces_when_configured(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from ovid2.drivers.disc import spark as disc_spark
 
@@ -150,7 +153,7 @@ class TestMaybeCoalesce:
         calls: list[int] = []
 
         class FakeDF:
-            def coalesce(self, n: int) -> "FakeDF":
+            def coalesce(self, n: int) -> FakeDF:
                 calls.append(n)
                 return self
 
@@ -160,14 +163,15 @@ class TestMaybeCoalesce:
         assert calls == [8]
 
     def test_treats_zero_as_no_op(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from ovid2.drivers.disc import spark as disc_spark
 
         monkeypatch.setattr(disc_spark, "DISC_WRITE_PARTITIONS", 0)
 
         class FakeDF:
-            def coalesce(self, n: int) -> "FakeDF":  # pragma: no cover
+            def coalesce(self, n: int) -> FakeDF:  # pragma: no cover
                 raise AssertionError("should not coalesce on 0")
 
         df = FakeDF()
@@ -197,26 +201,27 @@ class TestEndToEndWrite:
         return [(1, "a"), (2, "b"), (3, "c"), (4, "d")]
 
     def test_single_file_write_produces_one_merged_csv(
-        self, spark: object, tmp_path: Path,
+        self,
+        spark: object,
+        tmp_path: Path,
     ) -> None:
         from ovid2.drivers.disc.spark import write_dataframe
 
         df = spark.createDataFrame(  # type: ignore[attr-defined]
-            self._rows(), schema=["id", "letter"],
+            self._rows(),
+            schema=["id", "letter"],
         )
         root = tmp_path / "root"
         write_dataframe(
             df,
             str(root),
-            "demo",
-            "20260101",
             "letters",
             delimiter=",",
             fmt="csv",
             single_file=True,
         )
 
-        out = root / "demo" / "20260101" / "letters.csv"
+        out = root / "letters.csv"
         assert out.is_file(), f"Expected a single file at {out}"
         text = out.read_text().strip().splitlines()
         assert text[0] == "id,letter"
@@ -224,23 +229,31 @@ class TestEndToEndWrite:
         assert data == ["1,a", "2,b", "3,c", "4,d"]
 
         # Staging directory was cleaned up.
-        staging = root / "demo" / "20260101" / "tmp_letters.csv"
+        staging = root / "tmp_letters.csv"
         assert not staging.exists()
 
     def test_single_file_write_via_csv_module_matches_body(
-        self, spark: object, tmp_path: Path,
+        self,
+        spark: object,
+        tmp_path: Path,
     ) -> None:
         """Round-trip through Python's csv module: same row count + values."""
         from ovid2.drivers.disc.spark import write_dataframe
 
         df = spark.createDataFrame(  # type: ignore[attr-defined]
-            self._rows(), schema=["id", "letter"],
+            self._rows(),
+            schema=["id", "letter"],
         )
         root = tmp_path / "root"
         write_dataframe(
-            df, str(root), "p", "b", "t", ",", "csv", single_file=True,
+            df,
+            str(root),
+            "t",
+            ",",
+            "csv",
+            single_file=True,
         )
-        out = root / "p" / "b" / "t.csv"
+        out = root / "t.csv"
         with out.open() as fh:
             rows = list(csv.reader(fh))
         assert rows[0] == ["id", "letter"]
@@ -248,24 +261,29 @@ class TestEndToEndWrite:
         assert body == self._rows()
 
     def test_multi_file_write_leaves_part_directory(
-        self, spark: object, tmp_path: Path,
+        self,
+        spark: object,
+        tmp_path: Path,
     ) -> None:
         from ovid2.drivers.disc.spark import write_dataframe
 
         df = spark.createDataFrame(  # type: ignore[attr-defined]
-            self._rows(), schema=["id", "letter"],
+            self._rows(),
+            schema=["id", "letter"],
         )
         root = tmp_path / "root"
         write_dataframe(
-            df, str(root), "demo", "20260101", "letters",
-            delimiter=",", fmt="csv", single_file=False,
+            df,
+            str(root),
+            "letters",
+            delimiter=",",
+            fmt="csv",
+            single_file=False,
         )
 
         # With single_file=False the output is a directory of parts.
-        out = root / "demo" / "20260101" / "letters.csv"
-        assert out.is_dir(), (
-            f"Expected a directory (Spark part-layout) at {out}"
-        )
+        out = root / "letters.csv"
+        assert out.is_dir(), f"Expected a directory (Spark part-layout) at {out}"
         parts = sorted(out.glob("part-*.csv"))
         assert parts, "Spark should have produced at least one part file."
         # Every part carries its own header row (Spark default).
@@ -274,17 +292,23 @@ class TestEndToEndWrite:
             assert first == "id,letter"
 
     def test_write_dispatch_error_on_unknown_format(
-        self, spark: object, tmp_path: Path,
+        self,
+        spark: object,
+        tmp_path: Path,
     ) -> None:
         from ovid2.drivers.disc.spark import write_dataframe
 
         df = spark.createDataFrame(  # type: ignore[attr-defined]
-            self._rows(), schema=["id", "letter"],
+            self._rows(),
+            schema=["id", "letter"],
         )
         with pytest.raises(ValueError, match="Unsupported format"):
             write_dataframe(
-                df, str(tmp_path), "p", "b", "t",
-                delimiter=None, fmt="avro",
+                df,
+                str(tmp_path),
+                "t",
+                delimiter=None,
+                fmt="avro",
             )
 
 
@@ -301,7 +325,7 @@ class TestDriverLocationView:
 
         d = DiscDriver(args={"host_path": str(tmp_path)}, location={"path": "sub"})
         view = d._merged_location_view()
-        assert view["single_file"] is True  # noqa: S101 — assertion is the test
+        assert view["single_file"] is True
 
     def test_honours_explicit_false(self, tmp_path: Path) -> None:
         from ovid2.drivers.disc.driver import DiscDriver
@@ -322,7 +346,8 @@ class TestDriverLocationView:
         assert d._merged_location_view()["single_file"] is True
 
     def test_as_legacy_src_args_forwards_single_file(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         from ovid2.drivers.disc.driver import DiscDriver
 
@@ -350,7 +375,8 @@ class TestLegacyAddressSingleFile:
         assert a.single_file is False
 
     def test_write_threads_single_file(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """``DiscAddress.write`` forwards ``single_file`` to the impl."""
         from ovid2.drivers.disc.legacy import DiscAddress
@@ -359,15 +385,21 @@ class TestLegacyAddressSingleFile:
         seen: dict[str, object] = {}
 
         def fake_write_dataframe(
-            df: object, root: str, pipeline: str, batch: str, table: str,
-            delimiter: object, fmt: str, *, single_file: bool = True,
+            df: object,
+            root: str,
+            table: str,
+            delimiter: object,
+            fmt: str,
+            *,
+            single_file: bool = True,
         ) -> None:
             seen["single_file"] = single_file
             seen["fmt"] = fmt
             seen["table"] = table
 
         with patch(
-            "ovid2.drivers.disc.spark.write_dataframe", new=fake_write_dataframe,
+            "ovid2.drivers.disc.spark.write_dataframe",
+            new=fake_write_dataframe,
         ):
             a.write(object(), object(), "demo", "20260101", "letters")
         assert seen == {"single_file": False, "fmt": "csv", "table": "letters"}

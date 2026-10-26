@@ -232,10 +232,7 @@ def set_role(args: argparse.Namespace) -> int:
     except users_svc.UserError as exc:
         print(f"[ovid2 web] set-role failed: {exc}")
         return 1
-    print(
-        f"[ovid2 web] Set role of {email} to {updated['role']} "
-        f"(user_id={updated['user_id']})."
-    )
+    print(f"[ovid2 web] Set role of {email} to {updated['role']} (user_id={updated['user_id']}).")
     return 0
 
 

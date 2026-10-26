@@ -110,7 +110,7 @@ def test_touch_slides_idle_expiry_within_window():
     expires = datetime.fromisoformat(updated.expires_at)
     absolute = datetime.fromisoformat(updated.absolute_deadline)
     # Should be close to 5 minute idle window
-    assert abs((expires - now).total_seconds() - 5*60) < 5
+    assert abs((expires - now).total_seconds() - 5 * 60) < 5
     # Should not exceed absolute deadline
     assert expires <= absolute
 

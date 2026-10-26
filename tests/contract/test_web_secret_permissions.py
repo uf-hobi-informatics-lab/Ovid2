@@ -45,8 +45,7 @@ def test_secrets_writes_use_mode_0600(src_root: Path) -> None:
             offenders.append(str(py.relative_to(src_root)))
 
     assert not offenders, (
-        "Web-tier module writes under secrets.d/ without 0o600 mode:\n"
-        + "\n".join(offenders)
+        "Web-tier module writes under secrets.d/ without 0o600 mode:\n" + "\n".join(offenders)
     )
 
 
@@ -101,6 +100,8 @@ def test_no_permissive_chmod_on_secrets(src_root: Path) -> None:
                 if kw.arg == "mode":
                     mode_node = kw.value
             if isinstance(mode_node, ast.Constant) and mode_node.value != 0o600:
-                offenders.append(f"{py.relative_to(src_root)}:{node.lineno} chmod={mode_node.value:o}")
+                offenders.append(
+                    f"{py.relative_to(src_root)}:{node.lineno} chmod={mode_node.value:o}"
+                )
 
     assert not offenders, "Permissive chmod on secret path:\n" + "\n".join(offenders)

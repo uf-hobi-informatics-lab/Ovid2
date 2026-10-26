@@ -39,13 +39,9 @@ def test_every_registered_engine_class_has_a_family_stager() -> None:
     for type_name in sorted(ENGINE_TYPE_MAP):
         cls = load_engine_class(type_name)
         family_attr = getattr(cls, "family", None)
-        assert family_attr is not None, (
-            f"Engine class {cls.__name__} has no 'family' attribute."
-        )
+        assert family_attr is not None, f"Engine class {cls.__name__} has no 'family' attribute."
         family_value = (
-            family_attr.value
-            if isinstance(family_attr, EngineFamily)
-            else str(family_attr)
+            family_attr.value if isinstance(family_attr, EngineFamily) else str(family_attr)
         )
         stager_cls = stager_class_for_engine_family(family_value)
         assert stager_cls is not None, (

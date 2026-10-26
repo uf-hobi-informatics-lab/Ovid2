@@ -35,8 +35,10 @@ hook return an empty tuple.
 
 from __future__ import annotations
 
+import contextlib
 import logging
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from ovid2.drivers.base import (
     ConnectionFieldSpec,
@@ -51,6 +53,7 @@ from ovid2.drivers.registry import register
 if TYPE_CHECKING:
     from ovid2.connections.base import BaseConnection
     from ovid2.core.addresses.base import BaseAddress
+    from ovid2.core.engines.protocols import EngineSession
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +61,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Metadata bridge
 # ---------------------------------------------------------------------------
+
 
 def _connection_field_spec_from_legacy(type_name: str) -> ConnectionFieldSpec:
     """Read ``_FIELD_SPECS[type_name]`` and rebuild it as a typed spec."""
@@ -119,6 +123,7 @@ _CONTAINER_HOOKS: dict[str, _ContainerHook] = {}
 # Adapter class factory
 # ---------------------------------------------------------------------------
 
+
 def build_legacy_driver_class(type_name: str) -> type[Driver]:
     """Return a :class:`Driver` subclass that adapts the given legacy type.
 
@@ -168,7 +173,8 @@ def build_legacy_driver_class(type_name: str) -> type[Driver]:
             return str(value)
 
         def container_requirements_for(
-            self, location: dict[str, Any] | None = None,
+            self,
+            location: dict[str, Any] | None = None,
         ) -> tuple[ContainerRequirement, ...]:
             hook = _CONTAINER_HOOKS.get(self.type_name)
             if hook is None:
@@ -188,17 +194,19 @@ def build_legacy_driver_class(type_name: str) -> type[Driver]:
         def probe_auth(self) -> ProbeResult:
             try:
                 legacy = self._build_legacy_connection()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 return ProbeResult(
-                    ok=False, code="error",
+                    ok=False,
+                    code="error",
                     message=f"Could not build legacy connection: {exc}",
                     capability="auth",
                 )
             try:
                 result = legacy.test()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 return ProbeResult(
-                    ok=False, code="error",
+                    ok=False,
+                    code="error",
                     message=f"probe raised: {exc.__class__.__name__}: {exc}",
                     capability="auth",
                 )
@@ -232,8 +240,9 @@ def build_legacy_driver_class(type_name: str) -> type[Driver]:
 
         def _build_legacy_address(self) -> BaseAddress:
             """Lazily import + construct the matching legacy address class."""
-            from ovid2.config.addresses import ADDRESS_TYPE_MAP
             import importlib
+
+            from ovid2.config.addresses import ADDRESS_TYPE_MAP
 
             src_name, src_args = self.as_legacy_src_args()
             if src_name not in ADDRESS_TYPE_MAP:
@@ -247,22 +256,57 @@ def build_legacy_driver_class(type_name: str) -> type[Driver]:
             address_cls = getattr(module, class_name)
             return address_cls(src_args)  # type: ignore[no-any-return]
 
-        def read(self, session, pipeline, batch_id, file_name, delimiter=None, *,
-                 table_name=None):
+        def read(
+            self,
+            session: EngineSession,
+            pipeline: str,
+            batch_id: str,
+            file_name: str,
+            delimiter: str | None = None,
+            *,
+            table_name: str | None = None,
+        ) -> Any:
             address = self._build_legacy_address()
             return address.read(
-                session, pipeline, batch_id, file_name, delimiter,
+                session,  # type: ignore[arg-type]  # legacy BaseAddress is typed SparkSession
+                pipeline,
+                batch_id,
+                file_name,
+                delimiter,
                 table_name=table_name,
             )
 
-        def write(self, df, session, pipeline, batch_id, table_name,
-                  delimiter=None):
+        def write(
+            self,
+            df: Any,
+            session: EngineSession,
+            pipeline: str,
+            batch_id: str,
+            table_name: str,
+            delimiter: str | None = None,
+        ) -> None:
             address = self._build_legacy_address()
-            address.write(df, session, pipeline, batch_id, table_name, delimiter)
+            address.write(
+                df,
+                session,  # type: ignore[arg-type]  # legacy BaseAddress is typed SparkSession
+                pipeline,
+                batch_id,
+                table_name,
+                delimiter,
+            )
 
-        def create_complementary_tables(self, session, pipeline, batch_id):
+        def create_complementary_tables(
+            self,
+            session: EngineSession,
+            pipeline: str,
+            batch_id: str,
+        ) -> None:
             address = self._build_legacy_address()
-            return address.create_complementary_tables(session, pipeline, batch_id)
+            return address.create_complementary_tables(
+                session,  # type: ignore[arg-type]  # legacy BaseAddress is typed SparkSession
+                pipeline,
+                batch_id,
+            )
 
     _LegacyDriverAdapter.type_name = type_name
     _LegacyDriverAdapter.__name__ = f"LegacyDriverAdapter_{type_name}"
@@ -278,6 +322,7 @@ _CLASS_CACHE: dict[str, type[Driver]] = {}
 # ---------------------------------------------------------------------------
 # Auto-population
 # ---------------------------------------------------------------------------
+
 
 def register_all_legacy_drivers() -> None:
     """Register a :class:`LegacyDriverAdapter` for every legacy type.
@@ -312,12 +357,10 @@ def register_all_legacy_drivers() -> None:
         "ovid2.drivers.access",
     )
     for module_path in _NATIVE_DRIVER_MODULES:
-        try:
+        # A broken native driver falls back to the legacy adapter
+        # for that type on the next loop iteration.
+        with contextlib.suppress(Exception):
             __import__(module_path)
-        except Exception:  # noqa: BLE001 — init must never propagate
-            # A broken native driver falls back to the legacy adapter
-            # for that type on the next loop iteration.
-            pass
 
     for type_name in CONNECTION_TYPE_MAP:
         # Skip types already registered by a native driver module (D3+).
@@ -355,11 +398,9 @@ __all__ = [
 # ``register_all_legacy_drivers`` isn't defined yet, so it silently
 # no-ops. Once this module finishes defining it, we do the actual
 # registration here.
-try:
+# Registry stays empty; callers will get a KeyError with a
+# useful message from load_class(). This branch is only hit if
+# the connections registry itself failed to import, which is a
+# separate bug worth surfacing on the next probe attempt.
+with contextlib.suppress(Exception):
     register_all_legacy_drivers()
-except Exception:  # noqa: BLE001 — module init must never propagate
-    # Registry stays empty; callers will get a KeyError with a
-    # useful message from load_class(). This branch is only hit if
-    # the connections registry itself failed to import, which is a
-    # separate bug worth surfacing on the next probe attempt.
-    pass

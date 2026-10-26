@@ -31,8 +31,8 @@ from ovid2.connections.registry import (
 )
 
 __all__ = [
-    "BaseConnection",
     "CONNECTION_TYPE_MAP",
+    "BaseConnection",
     "ConnectionTestResult",
     "connection_field_spec",
     "list_connection_types",

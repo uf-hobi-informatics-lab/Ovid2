@@ -21,9 +21,7 @@ from typing import Any
 import yaml
 
 _CHECKS_DIR = Path(__file__).resolve().parent.parent.parent / "resources" / "health" / "checks"
-_PACKAGES_DIR = (
-    Path(__file__).resolve().parent.parent.parent / "resources" / "health" / "packages"
-)
+_PACKAGES_DIR = Path(__file__).resolve().parent.parent.parent / "resources" / "health" / "packages"
 
 _PART_ORDER: dict[str, int] = {
     "part1": 0,

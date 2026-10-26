@@ -18,7 +18,8 @@ class DatabricksConnection(BaseConnection):
             from databricks import sql  # type: ignore[import-not-found]
         except ImportError:
             return ConnectionTestResult(
-                ok=False, code="skipped",
+                ok=False,
+                code="skipped",
                 message="databricks-sql-connector is not installed on this host.",
             )
         host = str(self.args.get("host") or "")
@@ -26,7 +27,8 @@ class DatabricksConnection(BaseConnection):
         token = self.secrets.get("token")
         if not (host and http_path and token):
             return ConnectionTestResult(
-                ok=False, code="config",
+                ok=False,
+                code="config",
                 message="host, http_path, and token are all required.",
             )
         try:
@@ -35,9 +37,10 @@ class DatabricksConnection(BaseConnection):
                 http_path=http_path,
                 access_token=str(token),
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return ConnectionTestResult(
-                ok=False, code="unreachable",
+                ok=False,
+                code="unreachable",
                 message=f"Databricks connect failed: {exc}",
             )
         try:
@@ -45,15 +48,17 @@ class DatabricksConnection(BaseConnection):
             cursor.execute("SELECT 1")
             cursor.fetchall()
             cursor.close()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             conn.close()
             return ConnectionTestResult(
-                ok=False, code="auth",
+                ok=False,
+                code="auth",
                 message=f"Databricks query failed: {exc}",
             )
         conn.close()
         return ConnectionTestResult(
-            ok=True, code="ok",
+            ok=True,
+            code="ok",
             message="Databricks SELECT 1 succeeded.",
         )
 

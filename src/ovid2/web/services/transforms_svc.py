@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ def _schema() -> dict[str, Any]:
     root = Path(ovid2.__file__).resolve().parent
     path = root / "resources" / "schemas" / "transform_spec.v1.json"
     with path.open("r", encoding="utf-8") as fh:
-        return json.load(fh)
+        return cast(dict[str, Any], json.load(fh))
 
 
 def validate_transform_spec(spec: dict[str, Any]) -> dict[str, Any]:

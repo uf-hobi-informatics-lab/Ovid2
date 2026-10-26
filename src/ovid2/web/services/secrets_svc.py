@@ -120,9 +120,7 @@ def _validate_name(name: str) -> None:
     if not name:
         raise SecretError("Secret name is required.")
     if not all(c.isalnum() or c in "-_." for c in name):
-        raise SecretError(
-            f"Invalid secret name '{name}'. Use letters, digits, '-', '_', '.' only."
-        )
+        raise SecretError(f"Invalid secret name '{name}'. Use letters, digits, '-', '_', '.' only.")
     if name.startswith("."):
         raise SecretError(f"Secret name '{name}' is reserved.")
 
@@ -163,9 +161,7 @@ def _ensure_safe_to_write(path: Path) -> None:
 
 def _hash(payload: dict[str, Any]) -> str:
     """Return a stable content hash for audit rows."""
-    return hashlib.sha256(
-        json.dumps(payload, sort_keys=True).encode("utf-8")
-    ).hexdigest()
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 def _read_raw(path: Path) -> dict[str, Any]:
@@ -353,9 +349,7 @@ def delete_secret(name: str, *, actor: str = "web") -> WriteResult:
     _validate_name(name)
     target = _secrets_dir() / f"{name}.json"
     if not target.is_file():
-        raise SecretError(
-            f"Secret '{name}' not found under {_secrets_dir()}."
-        )
+        raise SecretError(f"Secret '{name}' not found under {_secrets_dir()}.")
     before_hash: str | None = None
     try:
         before_hash = _hash(_read_raw(target))

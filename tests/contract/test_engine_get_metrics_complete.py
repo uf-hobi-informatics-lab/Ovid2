@@ -23,12 +23,9 @@ def test_every_engine_implements_get_metrics() -> None:
     for type_name in sorted(ENGINE_TYPE_MAP):
         cls = load_engine_class(type_name)
         assert hasattr(cls, "get_metrics"), (
-            f"Engine '{type_name}' ({cls.__module__}.{cls.__name__}) "
-            f"has no get_metrics method"
+            f"Engine '{type_name}' ({cls.__module__}.{cls.__name__}) has no get_metrics method"
         )
-        assert callable(cls.get_metrics), (
-            f"Engine '{type_name}' get_metrics is not callable"
-        )
+        assert callable(cls.get_metrics), f"Engine '{type_name}' get_metrics is not callable"
 
 
 @pytest.mark.contract
@@ -46,7 +43,7 @@ def test_default_get_metrics_returns_bare_sample() -> None:
         type_name = "stub"
         family = EngineFamily.SPARK
 
-        def get_session(self):  # noqa: D401
+        def get_session(self):
             raise NotImplementedError
 
         def stop_session(self) -> None:

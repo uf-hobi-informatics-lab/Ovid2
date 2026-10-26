@@ -36,9 +36,7 @@ def test_generic_label_resolves_cdm_without_package() -> None:
 
 
 @pytest.mark.unit
-def test_generic_label_ignores_a_same_named_package(
-    tmp_path, monkeypatch
-) -> None:
+def test_generic_label_ignores_a_same_named_package(tmp_path, monkeypatch) -> None:
     """Even if a package named ``pcornet_edc`` existed, the label wins.
 
     The generic label is deliberately decoupled from the filesystem: a

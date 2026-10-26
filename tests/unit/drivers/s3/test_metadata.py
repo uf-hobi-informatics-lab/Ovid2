@@ -48,10 +48,7 @@ class TestResolveAuthMode:
 
     def test_static_when_only_pair_present(self) -> None:
         assert (
-            resolve_auth_mode(
-                {"aws_access_key_id": "A", "aws_secret_access_key": "S"}
-            )
-            == "static"
+            resolve_auth_mode({"aws_access_key_id": "A", "aws_secret_access_key": "S"}) == "static"
         )
 
     def test_default_chain_when_all_absent(self) -> None:
@@ -64,9 +61,7 @@ class TestResolveAuthMode:
         signing error at Spark-runtime rather than a config-time
         failure.
         """
-        assert (
-            resolve_auth_mode({"aws_access_key_id": "AKIA"}) == "default_chain"
-        )
+        assert resolve_auth_mode({"aws_access_key_id": "AKIA"}) == "default_chain"
 
     def test_default_chain_when_only_session_token(self) -> None:
         """A stray session token without a key pair means nothing."""
@@ -74,9 +69,7 @@ class TestResolveAuthMode:
 
     def test_blank_values_treated_as_absent(self) -> None:
         assert (
-            resolve_auth_mode(
-                {"aws_access_key_id": "", "aws_secret_access_key": "   "}
-            )
+            resolve_auth_mode({"aws_access_key_id": "", "aws_secret_access_key": "   "})
             == "default_chain"
         )
 
@@ -207,7 +200,9 @@ class TestBuildAddressConfig:
 
     def test_path_None_omitted(self) -> None:
         got = build_address_config(
-            args={}, secrets={}, location={"bucket": "b"},
+            args={},
+            secrets={},
+            location={"bucket": "b"},
         )
         assert "prefix" not in got
 
@@ -250,9 +245,7 @@ class TestConstantsExported:
     """
 
     def test_simple_provider_is_hadoop_simple(self) -> None:
-        assert _SIMPLE_CREDS_PROVIDER == (
-            "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider"
-        )
+        assert _SIMPLE_CREDS_PROVIDER == ("org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider")
 
     def test_temporary_provider_is_hadoop_temporary(self) -> None:
         assert _TEMPORARY_CREDS_PROVIDER == (
@@ -260,12 +253,10 @@ class TestConstantsExported:
         )
 
     def test_default_provider_is_aws_default_chain(self) -> None:
-        assert _DEFAULT_CREDS_PROVIDER == (
-            "com.amazonaws.auth.DefaultAWSCredentialsProviderChain"
-        )
+        assert _DEFAULT_CREDS_PROVIDER == ("com.amazonaws.auth.DefaultAWSCredentialsProviderChain")
 
     def test_valid_formats(self) -> None:
-        assert _VALID_FORMATS == frozenset({"csv", "parquet", "json"})
+        assert frozenset({"csv", "parquet", "json"}) == _VALID_FORMATS
 
 
 if __name__ == "__main__":  # pragma: no cover

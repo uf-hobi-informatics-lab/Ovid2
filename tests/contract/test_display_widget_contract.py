@@ -22,13 +22,7 @@ import re
 from pathlib import Path
 
 WIDGETS_ROOT = (
-    Path(__file__).resolve().parents[2]
-    / "src"
-    / "ovid2"
-    / "web"
-    / "static"
-    / "display"
-    / "widgets"
+    Path(__file__).resolve().parents[2] / "src" / "ovid2" / "web" / "static" / "display" / "widgets"
 )
 
 REQUIRED_KEYS = ("id", "mount", "update", "tick", "unmount")
@@ -44,12 +38,8 @@ def _widget_files() -> list[Path]:
 
 
 def test_widgets_directory_exists() -> None:
-    assert WIDGETS_ROOT.is_dir(), (
-        f"expected widgets directory at {WIDGETS_ROOT}"
-    )
-    assert _widget_files(), (
-        "no widget modules found; the display bus needs at least one."
-    )
+    assert WIDGETS_ROOT.is_dir(), f"expected widgets directory at {WIDGETS_ROOT}"
+    assert _widget_files(), "no widget modules found; the display bus needs at least one."
 
 
 def test_every_widget_has_required_keys() -> None:
@@ -65,9 +55,8 @@ def test_every_widget_has_required_keys() -> None:
         gone = [k for k in REQUIRED_KEYS if not re.search(rf"\b{k}\s*[:(]", block)]
         if gone:
             missing.append((path.name, gone))
-    assert not missing, (
-        "widget files missing required lifecycle keys:\n  "
-        + "\n  ".join(f"{n}: {m}" for n, m in missing)
+    assert not missing, "widget files missing required lifecycle keys:\n  " + "\n  ".join(
+        f"{n}: {m}" for n, m in missing
     )
 
 
@@ -85,9 +74,8 @@ def test_widget_ids_are_unique() -> None:
             dupes.append((wid, seen[wid], path.name))
         else:
             seen[wid] = path.name
-    assert not dupes, (
-        "duplicate widget ids:\n  "
-        + "\n  ".join(f"{i}: {a} vs {b}" for i, a, b in dupes)
+    assert not dupes, "duplicate widget ids:\n  " + "\n  ".join(
+        f"{i}: {a} vs {b}" for i, a, b in dupes
     )
 
 
@@ -104,14 +92,10 @@ def test_canvas_and_bus_modules_present() -> None:
     """
     base = WIDGETS_ROOT.parent
     for name in ("canvas.js", "bus.js"):
-        assert (base / name).exists(), (
-            f"display module missing: {base / name}"
-        )
+        assert (base / name).exists(), f"display module missing: {base / name}"
     # canvas.js is the widget host — it must wire up the bus.
     canvas_text = (base / "canvas.js").read_text(encoding="utf-8")
-    assert "bus.js" in canvas_text, (
-        "canvas.js must import the display bus (./bus.js)"
-    )
+    assert "bus.js" in canvas_text, "canvas.js must import the display bus (./bus.js)"
     assert "mountCanvas" in canvas_text, (
         "canvas.js must export the mountCanvas entry point so an agent "
         "or bootstrap can host widgets."
@@ -120,6 +104,5 @@ def test_canvas_and_bus_modules_present() -> None:
     # in test_every_widget_has_required_keys) — here we just assert the
     # folder is non-empty so the seam has at least one reference widget.
     assert _widget_files(), (
-        "no widget modules found; the display seam needs at least one "
-        "reference widget."
+        "no widget modules found; the display seam needs at least one reference widget."
     )

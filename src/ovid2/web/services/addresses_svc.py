@@ -148,9 +148,7 @@ def _validate_name(name: str) -> None:
 
 def _hash(payload: dict[str, Any]) -> str:
     """Return a stable content hash for audit rows."""
-    return hashlib.sha256(
-        json.dumps(payload, sort_keys=True).encode("utf-8")
-    ).hexdigest()
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 def list_addresses() -> list[AddressSummary]:
@@ -180,14 +178,13 @@ def list_addresses() -> list[AddressSummary]:
             try:
                 # Lazy import to avoid a circular loop.
                 from ovid2.config import connections as _connections
+
                 path_conn = _connections.locate_connection(str(connection_name))
                 if path_conn is not None:
                     with path_conn.open(encoding="utf-8") as fh:
                         conn_payload = json.load(fh)
                     conn_type = str(conn_payload.get("type", "unknown"))
-                    src_name = _addresses.CONNECTION_TO_SRC_NAME.get(
-                        conn_type, "unknown"
-                    )
+                    src_name = _addresses.CONNECTION_TO_SRC_NAME.get(conn_type, "unknown")
             except Exception:
                 src_name = "unknown"
             summaries.append(
@@ -224,6 +221,7 @@ def get_address(name: str) -> AddressDetail | None:
     # location fields instead of the full credential form.
     if "connection" in payload:
         from ovid2.config import connections as _connections
+
         connection_name = str(payload["connection"])
         location = dict(payload.get("location") or {})
         src_name = "unknown"
@@ -355,9 +353,7 @@ def _normalise_location(location: dict[str, Any] | None) -> dict[str, Any]:
     return result
 
 
-def find_matching_address(
-    connection: str, location: dict[str, Any] | None
-) -> str | None:
+def find_matching_address(connection: str, location: dict[str, Any] | None) -> str | None:
     """Return the name of an existing W7 address with identical shape.
 
     Scans every address config on the search path and returns the
@@ -504,8 +500,7 @@ def write_address(
         )
     if not is_new_shape and not is_legacy_shape:
         raise AddressError(
-            "Address payload is empty. Provide src_name+src_args or "
-            "connection+location."
+            "Address payload is empty. Provide src_name+src_args or connection+location."
         )
 
     if is_new_shape:
@@ -541,10 +536,12 @@ def write_address(
         target=name,
         before_hash=before_hash,
         after_hash=after_hash,
-        detail_json=json.dumps({
-            "path": str(target),
-            "shape": "connection" if is_new_shape else "legacy",
-        }),
+        detail_json=json.dumps(
+            {
+                "path": str(target),
+                "shape": "connection" if is_new_shape else "legacy",
+            }
+        ),
     )
     logger.info("Address %s %s at %s", action, name, target)
     return WriteResult(name=name, path=str(target), action=action)
@@ -555,10 +552,9 @@ def _build_new_shape_doc(name: str, payload: AddressWrite) -> dict[str, Any]:
     if not payload.connection:
         raise AddressError("connection is required when using the W7 shape.")
     from ovid2.config import connections as _connections
+
     if _connections.locate_connection(str(payload.connection)) is None:
-        raise AddressError(
-            f"Connection '{payload.connection}' is not on the config search path."
-        )
+        raise AddressError(f"Connection '{payload.connection}' is not on the config search path.")
     location = dict(payload.location or {})
     return {"connection": str(payload.connection), "location": location}
 
@@ -571,8 +567,7 @@ def _build_legacy_shape_doc(
         raise AddressError("src_name is required for legacy-shape writes.")
     if payload.src_name not in _VALID_SRC_NAMES:
         raise AddressError(
-            f"Unknown src_name '{payload.src_name}'. "
-            f"Valid: {sorted(_VALID_SRC_NAMES)}."
+            f"Unknown src_name '{payload.src_name}'. Valid: {sorted(_VALID_SRC_NAMES)}."
         )
     existing_src_args = (
         dict(existing_raw.get("src_args", {}))
@@ -583,9 +578,7 @@ def _build_legacy_shape_doc(
     if payload.src_name == "disc" and not merged_src_args.get("path"):
         raise AddressError("disc addresses require a non-empty 'path' argument.")
     if payload.src_name == "snowflake" and not merged_src_args.get("user"):
-        raise AddressError(
-            "snowflake addresses require a 'user' argument at write time."
-        )
+        raise AddressError("snowflake addresses require a 'user' argument at write time.")
     return {"src_name": payload.src_name, "src_args": merged_src_args}
 
 
@@ -611,9 +604,7 @@ def delete_address(name: str, *, actor: str = "web") -> WriteResult:
     _validate_name(name)
     target = _writable_path(name)
     if not target.is_file():
-        raise AddressError(
-            f"Address '{name}' not found under {_paths.configs_dir()}."
-        )
+        raise AddressError(f"Address '{name}' not found under {_paths.configs_dir()}.")
     before_hash: str | None = None
     try:
         before_hash = _hash(_read_raw(target))

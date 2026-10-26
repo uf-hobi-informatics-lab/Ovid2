@@ -13,7 +13,6 @@ from typing import Any
 from ovid2.transforms.base import BaseTransform, DataFrame, TransformContext
 
 
-
 class RandomSampleTransform(BaseTransform):
     """Take a random fraction of rows (Bernoulli sampling)."""
 
@@ -48,9 +47,7 @@ class RandomSampleTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return a lazily-sampled DataFrame."""
         fraction = float(params["fraction"])
         if not 0 < fraction <= 1:
@@ -59,9 +56,7 @@ class RandomSampleTransform(BaseTransform):
         seed = params.get("seed")
         if seed is None:
             return df.sample(withReplacement=with_replacement, fraction=fraction)
-        return df.sample(
-            withReplacement=with_replacement, fraction=fraction, seed=int(seed)
-        )
+        return df.sample(withReplacement=with_replacement, fraction=fraction, seed=int(seed))
 
 
 class LimitTransform(BaseTransform):
@@ -89,9 +84,7 @@ class LimitTransform(BaseTransform):
             "properties": {"n": {"type": "integer", "minimum": 1}},
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return the first ``n`` rows (lazy)."""
         n = int(params["n"])
         if n < 1:
@@ -138,9 +131,7 @@ class StratifiedSampleTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return the stratified sample (lazy)."""
         key = str(params["key"])
         fractions_raw = params.get("fractions")
@@ -204,9 +195,7 @@ class HeadByGroupTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return the top-N-per-group DataFrame (lazy)."""
         from ovid2.transforms.ops._window import build_window, row_number_expr
 

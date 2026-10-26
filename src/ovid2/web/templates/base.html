@@ -37,78 +37,18 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/branding/favicon.png">
   <link rel="apple-touch-icon" sizes="128x128" href="/branding/ovid_logo_128.png">
 
+  {% include "_appearance_prepaint.html" %}
   <script>
-    /* Pre-paint theme + drawer state.
+    /* Pre-paint layout state (device-local, kept in localStorage).
      *
-     * Must run BEFORE the stylesheet loads so users never see a flash
-     * of the wrong theme (any of the six named themes) or a flash of
-     * their custom colours resetting, nor a flash-of-open drawer on
-     * mobile. Wrapped in try/catch because localStorage can be
-     * disabled (Safari private mode, corporate policy, …). The full
-     * interactive logic lives in theme.js; this snippet only needs to
-     * settle the initial paint. */
+     * Must run BEFORE the stylesheet loads so users never see a
+     * flash-of-open drawer on mobile. Wrapped in try/catch because
+     * localStorage can be disabled (Safari private mode, corporate
+     * policy, …). Appearance (theme / colours / fonts) is NOT here: it
+     * is per user, server-side, and painted by _appearance_prepaint.html
+     * above. */
     (function () {
       var root = document.documentElement;
-      var KNOWN = ["clinical", "matrix", "super-mario-world",
-                   "tatooine", "financial", "lego",
-                   /* legacy light/dark aliases (map to clinical/matrix) */
-                   "light", "dark"];
-      /* Legacy slugs whose CSS block was replaced in the movie/game
-       * theme pass; remap so a stored old value still resolves to a
-       * real theme (mirrors LEGACY_ALIASES in theme.js). */
-      var ALIASES = { dune: "tatooine", industry: "lego" };
-      try {
-        var stored = localStorage.getItem("ovid2Theme");
-        if (stored && ALIASES[stored]) { stored = ALIASES[stored]; }
-        var prefersDark = window.matchMedia
-          && window.matchMedia("(prefers-color-scheme: dark)").matches;
-        if (stored && KNOWN.indexOf(stored) !== -1) {
-          root.setAttribute("data-theme", stored);
-        } else {
-          root.setAttribute("data-theme", prefersDark ? "matrix" : "clinical");
-        }
-      } catch (e) {
-        root.setAttribute("data-theme", "clinical");
-      }
-      try {
-        /* Re-apply saved custom colour overrides before first paint so
-         * a customised accent/background does not flash back to the
-         * base theme. Mirrors applyCustomOverrides() in theme.js. */
-        var raw = localStorage.getItem("ovid2ThemeCustom");
-        if (raw) {
-          var c = JSON.parse(raw);
-          var hex = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
-          var ok = function (v) { return typeof v === "string" && hex.test(v); };
-          if (c && typeof c === "object") {
-            if (ok(c.accent)) { root.style.setProperty("--accent", c.accent); }
-            if (ok(c.bg)) { root.style.setProperty("--bg", c.bg); }
-            if (ok(c.surface)) {
-              root.style.setProperty("--bg-elev", c.surface);
-              root.style.setProperty("--card-bg", c.surface);
-            }
-            if (ok(c.fg)) { root.style.setProperty("--fg", c.fg); }
-          }
-        }
-      } catch (e) { /* ignore malformed overrides */ }
-      try {
-        /* Re-apply per-component appearance overrides (colours, font
-         * sizes/weights/families) before first paint. Stored as a flat
-         * map of CSS custom-property name -> value by appearance.js.
-         * Only whitelisted --token names are honoured to keep the
-         * inline write safe. Mirrors applyAppearance() in appearance.js. */
-        var araw = localStorage.getItem("ovid2Appearance");
-        if (araw) {
-          var a = JSON.parse(araw);
-          var allow = /^--[a-z0-9-]+$/;
-          if (a && typeof a === "object") {
-            Object.keys(a).forEach(function (k) {
-              if (allow.test(k) && typeof a[k] === "string") {
-                root.style.setProperty(k, a[k]);
-              }
-            });
-          }
-        }
-      } catch (e) { /* ignore malformed appearance overrides */ }
       try {
         /* Right tools panel open state (all viewports; on mobile the
          * panel overlays rather than shrinking main — handled in CSS). */

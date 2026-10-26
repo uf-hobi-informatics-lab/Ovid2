@@ -81,15 +81,13 @@ def _fallback_role() -> Role:
         role = Role(configured)
     except ValueError:
         logger.warning(
-            "Service-principal fallback role %r is not a known role; "
-            "using pipeline_operator.",
+            "Service-principal fallback role %r is not a known role; using pipeline_operator.",
             configured,
         )
         return _MAX_FALLBACK_ROLE
     if role == Role.SYSTEM_ADMIN:
         logger.warning(
-            "Service-principal fallback role must not be system_admin; "
-            "using pipeline_operator."
+            "Service-principal fallback role must not be system_admin; using pipeline_operator."
         )
         return _MAX_FALLBACK_ROLE
     return role
@@ -127,14 +125,10 @@ def verify_token(token: str) -> Role | None:
     try:
         role = Role(stored_role)
     except ValueError:
-        logger.warning(
-            "Service token carries unknown role string; using fallback."
-        )
+        logger.warning("Service token carries unknown role string; using fallback.")
         return _fallback_role()
     if role == Role.SYSTEM_ADMIN:
-        logger.warning(
-            "Service token mapped to system_admin; downgrading to fallback."
-        )
+        logger.warning("Service token mapped to system_admin; downgrading to fallback.")
         return _fallback_role()
     return role
 

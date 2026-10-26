@@ -33,9 +33,7 @@ def test_remove_instance_network_shells_out(
     inst = OvidInstance("20260101-000000-abcdef")
     docker_mod._remove_instance_network(inst)
 
-    assert calls == [
-        ["docker", "network", "rm", "ovid2-net-20260101-000000-abcdef"]
-    ]
+    assert calls == [["docker", "network", "rm", "ovid2-net-20260101-000000-abcdef"]]
 
 
 @pytest.mark.unit

@@ -45,7 +45,10 @@
   </aside>
 
   <div class="run-detail-region" id="run-detail-region">
-    {% if run or job %}
+    {#- ``identifier`` is set whenever a run is selected (deep link or
+        auto-select). It may name an event-log-only instance with no
+        tracker row and no web job, which must still get its console. -#}
+    {% if run or job or identifier %}
       {% include "_run_console.html" with context %}
     {% else %}
       <div class="run-detail-placeholder">

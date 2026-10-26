@@ -12,9 +12,7 @@ from ovid2.web.services import formatters_svc, mappers_svc
 
 
 @pytest.fixture()
-def pipeline_writable(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_xdg: Path
-) -> str:
+def pipeline_writable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_xdg: Path) -> str:
     """Create a pipeline package with empty formatters/mappers dirs on disk."""
     root = tmp_path / "pipelines_root"
     pkg = root / "ovid2_pipelines" / "tp_writable"
@@ -101,9 +99,7 @@ def test_save_refused_for_schema_error(pipeline_writable: str) -> None:
     """Missing required ``v`` key triggers a schema violation."""
     bad = "formatter: bad\nadapter: source_passthrough\n"
     with pytest.raises(formatters_svc.FormatterError, match="Schema"):
-        formatters_svc.save_formatter(
-            pipeline_writable, "bad", FormatterWrite(raw_text=bad)
-        )
+        formatters_svc.save_formatter(pipeline_writable, "bad", FormatterWrite(raw_text=bad))
 
 
 @pytest.mark.unit
@@ -162,16 +158,12 @@ def test_save_refused_for_invalid_mapper(pipeline_writable: str) -> None:
     """Schema-invalid mapper YAML is refused."""
     bad = "v: 1\ntable: bad\nops: not-a-list\n"
     with pytest.raises(mappers_svc.MapperError):
-        mappers_svc.save_mapper(
-            pipeline_writable, "bad", MapperWrite(raw_text=bad)
-        )
+        mappers_svc.save_mapper(pipeline_writable, "bad", MapperWrite(raw_text=bad))
 
 
 @pytest.mark.unit
 def test_delete_removes_mapper(pipeline_writable: str) -> None:
     """Delete removes the YAML mapper."""
-    mappers_svc.save_mapper(
-        pipeline_writable, "demographic", MapperWrite(raw_text=_VALID_MAPPER)
-    )
+    mappers_svc.save_mapper(pipeline_writable, "demographic", MapperWrite(raw_text=_VALID_MAPPER))
     result = mappers_svc.delete_mapper(pipeline_writable, "demographic")
     assert result.action == "deleted"

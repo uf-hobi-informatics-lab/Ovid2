@@ -43,7 +43,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, SupportsInt, cast
 
 import yaml
 
@@ -145,7 +145,7 @@ def _cell_int(value: object) -> int | None:
     if value is None or value == "":
         return None
     try:
-        return int(value)  # type: ignore[arg-type]
+        return int(cast("SupportsInt | str", value))
     except (TypeError, ValueError):
         return None
 
@@ -226,9 +226,7 @@ def _read_xlsx(source: Path, cdm_name: str) -> _ImportedSpec:
                             else None
                         ),
                         valueset=_cell_bool_yn(
-                            row[headers["VALUESET"] - 1]
-                            if "VALUESET" in headers
-                            else None
+                            row[headers["VALUESET"] - 1] if "VALUESET" in headers else None
                         ),
                         definition=_cell_str(
                             row[headers["FIELD_DEFINITION"] - 1]
@@ -544,11 +542,7 @@ def _render_valueset_yaml(
 ) -> dict[str, Any] | None:
     """Render one ``valuesets/<table>.<field>.yaml`` payload, or None."""
     rows = sorted(
-        [
-            v
-            for v in spec.valuesets
-            if v.table == table and v.field == field_name
-        ],
+        [v for v in spec.valuesets if v.table == table and v.field == field_name],
         key=lambda v: (v.order if v.order is not None else 9999, v.code),
     )
     if not rows:

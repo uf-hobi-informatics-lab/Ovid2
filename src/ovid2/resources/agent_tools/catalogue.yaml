@@ -15,9 +15,10 @@
 #                    without a proposal click and opens the draft's run page.
 #                    A draft never executes; the human gate is the ▶ there.
 #                    Description must start with DRAFT (contract-enforced).
-#   ui_action: true -> (cosmetic, browser-only) no method/path. The browser
-#                    validates + applies the change to its own UI and shows
-#                    Undo. Description must start with UI: (contract-enforced).
+#   ui_action: true -> (cosmetic) no method/path. The browser validates +
+#                    applies the change to its own UI, saves it to the user's
+#                    own appearance profile, and shows Undo. Description must
+#                    start with UI: (contract-enforced).
 #
 # Deliberately excluded (PHI / privilege): secrets, settings, install,
 # users, approvals, LLM connections, storage browse, pipeline file
@@ -103,7 +104,7 @@ tools:
         pipeline: {type: string}
 
   - name: get_run
-    description: One batch run by batch_id.
+    description: One batch run by batch_id (the input's Data Space path) or instance_id.
     method: GET
     path: /api/v1/runs/{batch_id}
     capability: view_runs
@@ -179,7 +180,12 @@ tools:
       kind, input/output, tables, packages, schedule, enabled flag). Names
       here (e.g. DC_CHECKS) are configs, NOT pipeline packages - read one
       with get_pipeline_config. A config may keep its input or output open
-      (empty address); the run must then supply it.
+      (empty address); the run must then supply it. Each entry carries
+      engine (config name) and engine_type (pyspark / databricks_spark /
+      snowpark) plus a free-text description. Call this FIRST for any
+      "copy / move A to B [using <engine>]" request and pick the config
+      whose kind matches (copy or move) and whose engine_type equals the
+      requested engine (e.g. "using snowpark" -> engine_type snowpark).
     method: GET
     path: /api/v1/pipelines
     capability: view_pipeline_data
@@ -326,43 +332,24 @@ tools:
         name: {type: string}
 
   # ------------------------------------------------------------ data space
-  - name: ods_list_pipelines
-    description: Ovid Data Space - list pipelines that have batches (/pipeline level).
+  - name: ods_list
+    description: Ovid Data Space - list a folder or schema. '/' lists storage accounts; '/<account>/<folder...>' lists that folder or DATABASE/SCHEMA. Every store is a tree of plain directories; a folder's full path is the batch id of a run reading it.
     method: GET
     path: /api/v1/dataspace
     capability: view_pipeline_data
+    params:
+      type: object
+      properties:
+        path: {type: string, description: "e.g. / or /inbox/landing or /sf_prod/CHAR_DB"}
 
   - name: ods_list_dimensions
-    description: Ovid Data Space - the storage dimensions (disc, snowflake, s3, ...).
+    description: Ovid Data Space - the storage types (disc, snowflake, s3, ...) and how many addresses use each.
     method: GET
     path: /api/v1/dataspace/dimensions
     capability: view_pipeline_data
 
-  - name: ods_list_batches
-    description: Ovid Data Space - batches for one pipeline.
-    method: GET
-    path: /api/v1/dataspace/{pipeline}
-    capability: view_pipeline_data
-    params:
-      type: object
-      required: [pipeline]
-      properties:
-        pipeline: {type: string}
-
-  - name: ods_list_tables
-    description: Ovid Data Space - tables in one batch of a pipeline.
-    method: GET
-    path: /api/v1/dataspace/{pipeline}/{batch_id}
-    capability: view_pipeline_data
-    params:
-      type: object
-      required: [pipeline, batch_id]
-      properties:
-        pipeline: {type: string}
-        batch_id: {type: string}
-
   - name: ods_resolve
-    description: Resolve an ODS path (/pipeline/batch/table) to its physical location(s).
+    description: Resolve a Data Space path (/<account>/<folder...>) to its storage account, exact location, batch id and matching saved address.
     method: GET
     path: /api/v1/dataspace/resolve
     capability: view_pipeline_data
@@ -370,8 +357,7 @@ tools:
       type: object
       required: [path]
       properties:
-        path: {type: string, description: "e.g. /demo/20260316/DEMOGRAPHIC"}
-        dim: {type: string, description: "Optional dimension (disc, snowflake, s3, ...)."}
+        path: {type: string, description: "e.g. /inbox/landing/2026_03"}
 
   # ======================================================= drafts (write)
   # Executed by the user's browser WITHOUT a click: it only creates a draft
@@ -380,28 +366,32 @@ tools:
 
   - name: create_job_draft
     description: >-
-      DRAFT a fully specified job and open it on the Jobs page, ready to run.
-      This is the PREFERRED way to act on "run X on A into B": nothing
-      executes - the user reviews the run page and presses the Run button.
-      kind is one of etl, analysis, dq_checks, health, copy, move. To run a
-      saved config, copy its kind, pipeline, packages/checks, engine,
-      workers and tables (read it with get_pipeline_config) and set
-      input_address / output_address to address NAMES exactly as returned by
-      list_addresses (e.g. CHAR_DEMO). Only when no saved address fits, use
-      *_connection plus *_location as a plain path like DATABASE/SCHEMA (never
-      JSON). batch_id is a short label for this run (e.g. today's date
-      YYYYMMDD).
+      DRAFT a fully specified job and open it on the Jobs page, ready to run
+      (nothing executes until the user presses Run). Use for "run X on A
+      into B". kind is one of etl, analysis, dq_checks, health, copy, move.
+      If a saved config fits (same kind and engine_type in
+      list_pipeline_configs) use draft_pipeline_config instead; otherwise
+      copy a config's kind, pipeline, packages/checks, engine, workers and
+      tables (get_pipeline_config). Set input_address / output_address to
+      address NAMES exactly as returned by list_addresses (e.g. CHAR_DEMO).
+      Else use *_connection + *_location as a plain DATABASE/SCHEMA path (the
+      exact location read / written). Omit batch_id. For copy / move, omit tables or
+      pass ["all"] - the server lists the source; do NOT guess table names
+      from a CDM. Pass explicit names only for a subset. engine: a
+      list_engines name or bare type (pyspark, databricks_spark, snowpark);
+      omit for pyspark. A user-named engine ("using snowpark") must be
+      kept - never silently drop it.
     method: POST
     path: /api/v1/job-drafts
     capability: submit_jobs
     opens_draft: true
     params:
       type: object
-      required: [pipeline, batch_id]
+      required: [pipeline]
       properties:
         kind: {type: string, enum: [etl, analysis, dq_checks, health, copy, move], default: etl}
         pipeline: {type: string}
-        batch_id: {type: string}
+        batch_id: {type: string, description: "Omit - derived from the input location."}
         cdm: {type: string}
         input_address: {type: string, description: "Saved address name from list_addresses (preferred)."}
         output_address: {type: string, description: "Saved address name from list_addresses (preferred)."}
@@ -409,9 +399,9 @@ tools:
         input_location: {type: string, description: "Plain path, e.g. CHAR_DEMO/PUBLIC. Never JSON."}
         output_connection: {type: string, description: "Only if no saved address fits."}
         output_location: {type: string, description: "Plain path, e.g. SANDBOX/PUBLIC. Never JSON."}
-        tables: {type: array, items: {type: string}}
+        tables: {type: array, items: {type: string}, description: "copy/move: omit or [\"all\"] to copy every source table (server expands it); explicit names only for a subset."}
         transformations: {type: array, items: {type: string}}
-        engine: {type: string}
+        engine: {type: string, description: "Engine name from list_engines; omit for pyspark."}
         workers: {type: integer, minimum: 1, maximum: 200}
         packages: {type: array, items: {type: string}}
         parts: {type: array, items: {type: string}}
@@ -424,19 +414,23 @@ tools:
     description: >-
       PROPOSE enqueuing a new job immediately (skips the draft review; prefer
       create_job_draft). kind is one of etl, analysis, dq_checks,
-      health, copy, move. Requires pipeline and batch_id plus an input and
-      output (address names, or connection + location). The user must
-      confirm before anything runs.
+      health, copy, move. Requires pipeline plus an input and output
+      (address names, or connection + location); each is the exact location
+      read / written. batch_id is derived from the input. If the output
+      already holds tables the API answers 409 overwrite_required - propose
+      again with confirm_overwrite true only if the user wants to replace
+      them. The user must confirm before anything runs.
     method: POST
     path: /api/v1/runs
     capability: submit_jobs
     params:
       type: object
-      required: [pipeline, batch_id]
+      required: [pipeline]
       properties:
         kind: {type: string, enum: [etl, analysis, dq_checks, health, copy, move], default: etl}
         pipeline: {type: string}
-        batch_id: {type: string}
+        batch_id: {type: string, description: "Omit - derived from the input location."}
+        confirm_overwrite: {type: boolean, description: "Replace tables already at the output (only after a 409 and the user's say-so)."}
         cdm: {type: string}
         input_address: {type: string}
         output_address: {type: string}
@@ -459,8 +453,14 @@ tools:
       ready to run. Nothing executes - the user presses the Run button there.
       Use this for "run <config> on A into B": pass input_address /
       output_address as saved address NAMES from list_addresses (they fill
-      the config's open input/output for this run), plus optional batch_id
-      (e.g. today's date YYYYMMDD) or tables.
+      the config's open input/output for this run), plus optional tables.
+      Every address is the exact location read / written; the batch id is
+      derived from the input. PREFERRED for "copy / move A
+      to B using <engine>": choose the copy / move config whose engine_type
+      matches the requested engine, then map A and B to address names
+      (a phrase like "<db> <schema>" matches an address whose location is
+      <DB>/<SCHEMA>, a bare "<db>" one whose location is just <DB>; read
+      list_addresses, never invent names). The config supplies the engine.
     method: POST
     path: /api/v1/pipelines/{name}/draft
     capability: submit_jobs
@@ -470,7 +470,7 @@ tools:
       required: [name]
       properties:
         name: {type: string, description: "Saved pipeline config name."}
-        batch_id: {type: string}
+        batch_id: {type: string, description: "Omit - derived from the input location."}
         tables: {type: array, items: {type: string}}
         input_address: {type: string, description: "Saved address name from list_addresses."}
         output_address: {type: string, description: "Saved address name from list_addresses."}
@@ -487,7 +487,7 @@ tools:
         job_id: {type: string}
 
   - name: rerun_job
-    description: PROPOSE re-submitting a finished job with the same payload. The user must confirm.
+    description: PROPOSE re-submitting a finished job with the same payload. It writes to the same exact output, so after a 409 overwrite_required propose again with confirm_overwrite true if the user wants to replace the data. The user must confirm.
     method: POST
     path: /api/v1/jobs/{job_id}/rerun
     capability: submit_jobs
@@ -496,6 +496,7 @@ tools:
       required: [job_id]
       properties:
         job_id: {type: string}
+        confirm_overwrite: {type: boolean}
 
   - name: enable_pipeline_config
     description: PROPOSE enabling a saved pipeline configuration's schedule. The user must confirm.
@@ -522,13 +523,15 @@ tools:
   # ------------------------------------------------------------ UI actions
   # ui_action: true -> no method / path; never reaches the API. The executor
   # emits a ui_action event, the user's browser re-validates the arguments
-  # against its own allow-list (llm_panel.js), applies the change to THAT
-  # browser only (localStorage) and shows an Undo button. Cosmetic and
+  # against its own allow-list (llm_panel.js), applies the change, saves it
+  # to that user's own server-side appearance profile (the Appearance
+  # panel's store, PUT /api/v1/me/appearance) and shows an Undo button.
+  # The assistant's own token can never call that route. Cosmetic and
   # reversible by construction. Description must start with "UI:"; the set
   # of names is pinned by the contract test.
   - name: set_appearance
     description: >-
-      UI: change how the Ovid2 web page looks for this user, in their browser only.
+      UI: change how the Ovid2 web pages look for this user (saved to their own profile).
       Applies immediately and the user can undo it. Use only when the user asks to
       change the theme, colours, fonts or text sizes. Setting `theme` switches the
       base theme and clears earlier colour/font overrides first; `colors` and
@@ -590,7 +593,7 @@ tools:
   - name: save_appearance
     description: >-
       UI: save the user's current look (base theme plus all overrides) as a named
-      saved theme in their browser, overwriting a saved theme with the same name.
+      saved theme in their profile, overwriting a saved theme with the same name.
       The user can undo it. Call set_appearance first if the look should change.
     ui_action: true
     capability: use_llm
@@ -604,7 +607,7 @@ tools:
   - name: apply_saved_appearance
     description: >-
       UI: switch to one of the user's saved themes by name (names are listed in the
-      system prompt). Applies immediately in their browser; the user can undo it.
+      system prompt). Applies immediately on their pages; the user can undo it.
     ui_action: true
     capability: use_llm
     params:

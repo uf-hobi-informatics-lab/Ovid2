@@ -19,7 +19,6 @@ Locks the invariants the M1 MCP surface has to hold:
 
 from __future__ import annotations
 
-from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest

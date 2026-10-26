@@ -89,8 +89,7 @@ def _summary(name: str, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _validate_against_spec(provider: str, args: dict[str, Any],
-                           secrets: dict[str, Any]) -> None:
+def _validate_against_spec(provider: str, args: dict[str, Any], secrets: dict[str, Any]) -> None:
     spec = _llms.llm_field_spec(provider)
     known_args = {f["name"] for f in spec["args"]}
     known_secrets = {f["name"] for f in spec["secrets"]}
@@ -121,13 +120,15 @@ def list_providers() -> list[LlmProviderSpec]:
     out: list[LlmProviderSpec] = []
     for provider in _llms.list_providers():
         spec = _llms.llm_field_spec(provider)
-        out.append(LlmProviderSpec(
-            provider=provider,
-            roles=list(spec["roles"]),
-            args=[LlmFieldSpec(**f) for f in spec["args"]],
-            secrets=[LlmFieldSpec(**f) for f in spec["secrets"]],
-            note=spec["note"],
-        ))
+        out.append(
+            LlmProviderSpec(
+                provider=provider,
+                roles=list(spec["roles"]),
+                args=[LlmFieldSpec(**f) for f in spec["args"]],
+                secrets=[LlmFieldSpec(**f) for f in spec["secrets"]],
+                note=spec["note"],
+            )
+        )
     return out
 
 
@@ -161,8 +162,9 @@ def get_llm(name: str) -> LlmDetail | None:
         detail = secrets_svc.get_secret(str(ref))
         if detail is not None:
             masked = dict.fromkeys(detail.keys, SENTINEL_MASK)
-    return LlmDetail(**_summary(name, path, payload),
-                     args=dict(payload.get("args") or {}), secrets=masked)
+    return LlmDetail(
+        **_summary(name, path, payload), args=dict(payload.get("args") or {}), secrets=masked
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -170,22 +172,30 @@ def get_llm(name: str) -> LlmDetail | None:
 # ---------------------------------------------------------------------------
 
 
-def write_llm(name: str, payload: LlmWrite, *, actor: str = "web",
-              create_only: bool = False) -> WriteResult:
+def write_llm(
+    name: str, payload: LlmWrite, *, actor: str = "web", create_only: bool = False
+) -> WriteResult:
     """Create or update an LLM connection JSON (+ its 0o600 secret file)."""
     _validate_name(name)
     provider = str(payload.provider)
     if provider not in _llms.list_providers():
-        raise LlmError(f"Unknown LLM provider '{provider}'. "
-                       f"Registered: {_llms.list_providers()}.")
+        raise LlmError(f"Unknown LLM provider '{provider}'. Registered: {_llms.list_providers()}.")
     role = str(payload.role or "general")
     if role not in _llms.provider_roles(provider):
-        raise LlmError(f"Provider '{provider}' cannot fill role '{role}'. "
-                       f"Allowed: {list(_llms.provider_roles(provider))}.")
-    args = {k: v for k, v in dict(payload.args or {}).items()
-            if not (isinstance(v, str) and not v.strip())}
-    secrets = {k: v for k, v in dict(payload.secrets or {}).items()
-               if not (isinstance(v, str) and not v.strip())}
+        raise LlmError(
+            f"Provider '{provider}' cannot fill role '{role}'. "
+            f"Allowed: {list(_llms.provider_roles(provider))}."
+        )
+    args = {
+        k: v
+        for k, v in dict(payload.args or {}).items()
+        if not (isinstance(v, str) and not v.strip())
+    }
+    secrets = {
+        k: v
+        for k, v in dict(payload.secrets or {}).items()
+        if not (isinstance(v, str) and not v.strip())
+    }
     _validate_against_spec(provider, args, secrets)
 
     existing_path = _llms.locate_llm(name)
@@ -198,10 +208,10 @@ def write_llm(name: str, payload: LlmWrite, *, actor: str = "web",
         except (OSError, json.JSONDecodeError, LlmError) as exc:
             raise LlmError(f"Existing config is not readable: {exc}") from exc
 
-    secret_ref = str(payload.secret_ref or (existing_raw or {}).get("secret_ref")
-                     or f"llm_{name}")
-    required_secrets = [f["name"] for f in _llms.llm_field_spec(provider)["secrets"]
-                        if f.get("required")]
+    secret_ref = str(payload.secret_ref or (existing_raw or {}).get("secret_ref") or f"llm_{name}")
+    required_secrets = [
+        f["name"] for f in _llms.llm_field_spec(provider)["secrets"] if f.get("required")
+    ]
     if secrets:
         # secrets_svc merges '***' sentinels with the on-disk values itself.
         try:
@@ -229,11 +239,14 @@ def write_llm(name: str, payload: LlmWrite, *, actor: str = "web",
 
     action = "updated" if existing_raw is not None else "created"
     web_db.ensure_schema()
-    web_db.audit(actor=actor, action=f"llm.{action}", target=name,
-                 before_hash=_hash(existing_raw) if existing_raw else None,
-                 after_hash=_hash(doc),
-                 detail_json=json.dumps({"path": str(target), "provider": provider,
-                                         "role": role}))
+    web_db.audit(
+        actor=actor,
+        action=f"llm.{action}",
+        target=name,
+        before_hash=_hash(existing_raw) if existing_raw else None,
+        after_hash=_hash(doc),
+        detail_json=json.dumps({"path": str(target), "provider": provider, "role": role}),
+    )
     logger.info("LLM connection %s %s at %s", action, name, target)
     return WriteResult(name=name, path=str(target), action=action)
 
@@ -258,16 +271,20 @@ def delete_llm(name: str, *, actor: str = "web") -> WriteResult:
         raise LlmError(f"LLM connection '{name}' not found under {_llms.llms_dir()}.")
     refs = _references(name)
     if refs:
-        raise LlmError(f"LLM '{name}' is in use by {', '.join(refs)}. "
-                       "Change the routing first.")
+        raise LlmError(f"LLM '{name}' is in use by {', '.join(refs)}. Change the routing first.")
     try:
         before = _hash(_read_raw(target))
     except (OSError, json.JSONDecodeError, LlmError):
         before = None
     target.unlink()
     web_db.ensure_schema()
-    web_db.audit(actor=actor, action="llm.deleted", target=name, before_hash=before,
-                 detail_json=json.dumps({"path": str(target)}))
+    web_db.audit(
+        actor=actor,
+        action="llm.deleted",
+        target=name,
+        before_hash=before,
+        detail_json=json.dumps({"path": str(target)}),
+    )
     return WriteResult(name=name, path=str(target), action="deleted")
 
 
@@ -285,12 +302,18 @@ def test_llm(name: str) -> LlmTestReport:
     except llm_exec.ExecError as exc:
         return LlmTestReport(ok=False, code="unreachable", message=str(exc))
     report = LlmTestReport(
-        ok=bool(result.get("ok")), code=str(result.get("code", "error")),
-        message=str(result.get("message", "")), detail=dict(result.get("detail") or {}),
+        ok=bool(result.get("ok")),
+        code=str(result.get("code", "error")),
+        message=str(result.get("message", "")),
+        detail=dict(result.get("detail") or {}),
     )
     web_db.ensure_schema()
-    web_db.audit(actor="web", action="llm.tested", target=name,
-                 detail_json=json.dumps({"ok": report.ok, "code": report.code}))
+    web_db.audit(
+        actor="web",
+        action="llm.tested",
+        target=name,
+        detail_json=json.dumps({"ok": report.ok, "code": report.code}),
+    )
     return report
 
 
@@ -307,8 +330,11 @@ def status() -> LlmStatus:
         return detail.model if detail else None
 
     return LlmStatus(
-        enabled=llm.enabled, general=llm.general, general_model=model_of(llm.general),
-        system1=llm.system1, system1_model=model_of(llm.system1),
+        enabled=llm.enabled,
+        general=llm.general,
+        general_model=model_of(llm.general),
+        system1=llm.system1,
+        system1_model=model_of(llm.system1),
         confidence_threshold=llm.confidence_threshold,
         fallback_to_general=llm.fallback_to_general,
         tools_enabled=llm.tools_enabled,

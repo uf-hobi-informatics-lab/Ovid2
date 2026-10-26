@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from ovid2.drivers._table_listing import PrefixTableListingMixin
 from ovid2.drivers.base import (
     ConnectionFieldSpec,
     Driver,
@@ -34,18 +35,26 @@ from ovid2.drivers.base import (
 )
 from ovid2.drivers.s3.metadata import (
     build_address_config,
-    connection_fields as _connection_fields,
-    location_fields as _location_fields,
     resolve_auth_mode,
 )
-from ovid2.drivers.s3.probe import list_dir_from_config, probe_auth_from_config
+from ovid2.drivers.s3.metadata import (
+    connection_fields as _connection_fields,
+)
+from ovid2.drivers.s3.metadata import (
+    location_fields as _location_fields,
+)
+from ovid2.drivers.s3.probe import (
+    list_dir_from_config,
+    list_tables_from_config,
+    probe_auth_from_config,
+)
 
 if TYPE_CHECKING:
     from ovid2.core.engines.protocols import EngineSession
     from ovid2.drivers.s3.spark import S3IO
 
 
-class S3Driver(Driver):
+class S3Driver(PrefixTableListingMixin, Driver):
     """Native driver for the ``s3`` peripheral.
 
     Constructor keeps the uniform ``(args, secrets, location)`` shape
@@ -95,6 +104,12 @@ class S3Driver(Driver):
             dict(self.args), dict(self.secrets), dict(self.location), prefix
         )
 
+    def _list_tables(self, sub_prefix: str) -> list[StorageEntry]:
+        """Size-aggregated listing under ``sub_prefix`` (see :class:`PrefixTableListingMixin`)."""
+        return list_tables_from_config(
+            dict(self.args), dict(self.secrets), dict(self.location), sub_prefix
+        )
+
     # ------------------------------------------------------------------
     # Introspection (debug / display)
     # ------------------------------------------------------------------
@@ -127,7 +142,9 @@ class S3Driver(Driver):
         did before the driver refactor.
         """
         merged = build_address_config(
-            dict(self.args), dict(self.secrets), dict(self.location),
+            dict(self.args),
+            dict(self.secrets),
+            dict(self.location),
         )
         return "s3", merged
 
@@ -177,7 +194,7 @@ class S3Driver(Driver):
         table_name: str,
         delimiter: str | None = None,
     ) -> None:
-        """Materialise ``df`` under ``{prefix}/{pipeline}/{batch_id}/``."""
+        """Materialise ``df`` directly under the address location ``{prefix}/``."""
         io = self._build_io()
         io.write(df, session, pipeline, batch_id, table_name, delimiter)  # type: ignore[arg-type]
 

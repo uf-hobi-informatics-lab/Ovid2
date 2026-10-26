@@ -49,8 +49,7 @@ def client(isolated_xdg: Path) -> Iterator[TestClient]:
 
 def _route(**kw: Any) -> None:
     current = settings_svc.get_settings()
-    settings_svc.save_settings(current.model_copy(update={"llm": SettingsLlm(**kw)}),
-                               actor="test")
+    settings_svc.save_settings(current.model_copy(update={"llm": SettingsLlm(**kw)}), actor="test")
 
 
 def _bearer(token: str) -> dict[str, str]:
@@ -78,8 +77,9 @@ def test_token_get_allowed_and_attributed(client: TestClient) -> None:
 def test_token_cannot_write_even_with_auth_disabled(client: TestClient) -> None:
     tok = llm_token.mint("alice", Role.SYSTEM_ADMIN, email=None, ttl_seconds=30)
     try:
-        r = client.post("/api/v1/runs", headers=_bearer(tok),
-                        json={"pipeline": "p", "batch_id": "1"})
+        r = client.post(
+            "/api/v1/runs", headers=_bearer(tok), json={"pipeline": "p", "batch_id": "1"}
+        )
         assert r.status_code == 403
         assert client.delete("/api/v1/secrets/x", headers=_bearer(tok)).status_code == 403
         assert client.put("/api/v1/settings", headers=_bearer(tok), json={}).status_code == 403
@@ -102,8 +102,11 @@ def test_token_cannot_start_nested_chat(client: TestClient) -> None:
     _route(enabled=True, general="nemo", tools_enabled=True)
     tok = llm_token.mint("alice", Role.VIEWER, email=None, ttl_seconds=30)
     try:
-        r = client.post("/api/v1/llm/chat/stream", headers=_bearer(tok),
-                        json={"messages": [{"role": "user", "content": "hi"}]})
+        r = client.post(
+            "/api/v1/llm/chat/stream",
+            headers=_bearer(tok),
+            json={"messages": [{"role": "user", "content": "hi"}]},
+        )
         assert r.status_code == 403
     finally:
         llm_token.revoke(tok)
@@ -181,14 +184,48 @@ class _ToolGateway(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/event-stream")
         self.end_headers()
         if not tool_msgs and payload.get("tools"):
-            chunks = [{"choices": [{"delta": {"tool_calls": [
-                {"index": 0, "id": "call_a", "function": {"name": "list_jobs",
-                                                          "arguments": '{"limit": 5}'}}]}}]}]
+            chunks = [
+                {
+                    "choices": [
+                        {
+                            "delta": {
+                                "tool_calls": [
+                                    {
+                                        "index": 0,
+                                        "id": "call_a",
+                                        "function": {
+                                            "name": "list_jobs",
+                                            "arguments": '{"limit": 5}',
+                                        },
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
         elif len(tool_msgs) == 1 and payload.get("tools"):
-            chunks = [{"choices": [{"delta": {"content": "Cancelling."}}]},
-                      {"choices": [{"delta": {"tool_calls": [
-                          {"index": 0, "id": "call_b", "function": {
-                              "name": "cancel_job", "arguments": '{"job_id": "j-42"}'}}]}}]}]
+            chunks = [
+                {"choices": [{"delta": {"content": "Cancelling."}}]},
+                {
+                    "choices": [
+                        {
+                            "delta": {
+                                "tool_calls": [
+                                    {
+                                        "index": 0,
+                                        "id": "call_b",
+                                        "function": {
+                                            "name": "cancel_job",
+                                            "arguments": '{"job_id": "j-42"}',
+                                        },
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+            ]
         else:
             chunks = [{"choices": [{"delta": {"content": "done"}}]}]
         for c in chunks:
@@ -221,9 +258,16 @@ def live_server(isolated_xdg: Path) -> Iterator[str]:
     web_db.ensure_schema()
     settings_svc.invalidate_cache()
     port = _free_port()
-    server = uvicorn.Server(uvicorn.Config(create_app(), host="127.0.0.1", port=port,
-                                           log_level="warning", ws="none",
-                                           lifespan="off"))
+    server = uvicorn.Server(
+        uvicorn.Config(
+            create_app(),
+            host="127.0.0.1",
+            port=port,
+            log_level="warning",
+            ws="none",
+            lifespan="off",
+        )
+    )
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
     for _ in range(100):
@@ -241,16 +285,30 @@ def live_server(isolated_xdg: Path) -> Iterator[str]:
 def test_chat_with_tools_end_to_end(live_server: str, tool_gateway: str) -> None:
     from ovid2.web.services import llms_svc
 
-    llms_svc.write_llm("nemo", LlmWrite(provider="openai_compatible", role="general",
-                                        args={"base_url": tool_gateway, "model": "m"},
-                                        secrets={"api_key": "sk-test"}))
+    llms_svc.write_llm(
+        "nemo",
+        LlmWrite(
+            provider="openai_compatible",
+            role="general",
+            args={"base_url": tool_gateway, "model": "m"},
+            secrets={"api_key": "sk-test"},
+        ),
+    )
     _route(enabled=True, general="nemo", tools_enabled=True)
-    with httpx.stream("POST", f"{live_server}/api/v1/llm/chat/stream", timeout=60,
-                      json={"messages": [{"role": "user", "content": "cancel my job"}]}) as r:
+    with httpx.stream(
+        "POST",
+        f"{live_server}/api/v1/llm/chat/stream",
+        timeout=60,
+        json={"messages": [{"role": "user", "content": "cancel my job"}]},
+    ) as r:
         assert r.status_code == 200
         body = "".join(r.iter_text())
-    events = [json.loads(line[5:].strip()) for frame in body.split("\n\n")
-              for line in frame.splitlines() if line.startswith("data:")]
+    events = [
+        json.loads(line[5:].strip())
+        for frame in body.split("\n\n")
+        for line in frame.splitlines()
+        if line.startswith("data:")
+    ]
     kinds = [e["type"] for e in events]
     assert kinds[-1] == "done" and events[-1]["ok"] is True, events
     call = next(e for e in events if e["type"] == "tool_call")
@@ -270,14 +328,15 @@ def test_chat_with_tools_end_to_end(live_server: str, tool_gateway: str) -> None
 
     # Token revoked after the turn; audit is metadata-only.
     with web_db.connect() as conn:
-        rows = conn.execute("SELECT actor, action, detail_json FROM web_audit "
-                            "ORDER BY rowid").fetchall()
+        rows = conn.execute(
+            "SELECT actor, action, detail_json FROM web_audit ORDER BY rowid"
+        ).fetchall()
     chat = [r for r in rows if r[1] == "llm.chat"][-1]
     meta = json.loads(chat[2])
-    assert meta["tool_calls"] == [{"name": "list_jobs", "status": 200,
-                                   "ms": result["elapsed_ms"]}]
-    assert meta["proposals"] == [{"name": "cancel_job", "method": "POST",
-                                  "path": "/api/v1/jobs/j-42/cancel"}]
+    assert meta["tool_calls"] == [{"name": "list_jobs", "status": 200, "ms": result["elapsed_ms"]}]
+    assert meta["proposals"] == [
+        {"name": "cancel_job", "method": "POST", "path": "/api/v1/jobs/j-42/cancel"}
+    ]
     assert "Cancelling" not in chat[2]
     assert not llm_token._GRANTS
 
@@ -297,8 +356,10 @@ def test_ui_actions_offered_to_llm_users_only() -> None:
 def test_build_request_forwards_ui_context_only_with_ui_tools(client: TestClient) -> None:
     from ovid2.web.models import LlmChatRequest
 
-    body = LlmChatRequest(messages=[{"role": "user", "content": "x"}],
-                          ui_context={"theme": "matrix", "saved_themes": ["night"]})
+    body = LlmChatRequest(
+        messages=[{"role": "user", "content": "x"}],
+        ui_context={"theme": "matrix", "saved_themes": ["night"]},
+    )
     p = llm_chat_svc.ChatPrincipal("u", Role.VIEWER, api_url="http://h:1")
     _route(enabled=True, general="nemo", tools_enabled=True)
     req = llm_chat_svc.build_request(body, p)
@@ -309,9 +370,13 @@ def test_build_request_forwards_ui_context_only_with_ui_tools(client: TestClient
 
 def test_ui_context_is_bounded(client: TestClient) -> None:
     _route(enabled=True, general="nemo", tools_enabled=True)
-    r = client.post("/api/v1/llm/chat/stream",
-                    json={"messages": [{"role": "user", "content": "hi"}],
-                          "ui_context": {"theme": "Bad Theme!"}})
+    r = client.post(
+        "/api/v1/llm/chat/stream",
+        json={
+            "messages": [{"role": "user", "content": "hi"}],
+            "ui_context": {"theme": "Bad Theme!"},
+        },
+    )
     assert r.status_code == 422
 
 
@@ -332,9 +397,23 @@ class _UiGateway(BaseHTTPRequestHandler):
         self.end_headers()
         if not tool_msgs:
             args = json.dumps({"theme": "tatooine", "appearance": {"--body-fs": "16px"}})
-            chunks = [{"choices": [{"delta": {"tool_calls": [
-                {"index": 0, "id": "call_ui", "function": {"name": "set_appearance",
-                                                           "arguments": args}}]}}]}]
+            chunks = [
+                {
+                    "choices": [
+                        {
+                            "delta": {
+                                "tool_calls": [
+                                    {
+                                        "index": 0,
+                                        "id": "call_ui",
+                                        "function": {"name": "set_appearance", "arguments": args},
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
         else:
             chunks = [{"choices": [{"delta": {"content": "Switched to Tatooine."}}]}]
         for c in chunks:
@@ -349,22 +428,36 @@ def test_set_appearance_end_to_end(live_server: str) -> None:
     gw = ThreadingHTTPServer(("127.0.0.1", 0), _UiGateway)
     threading.Thread(target=gw.serve_forever, daemon=True).start()
     try:
-        llms_svc.write_llm("nemo", LlmWrite(
-            provider="openai_compatible", role="general",
-            args={"base_url": f"http://127.0.0.1:{gw.server_address[1]}/v1", "model": "m"},
-            secrets={"api_key": "sk-test"}))
+        llms_svc.write_llm(
+            "nemo",
+            LlmWrite(
+                provider="openai_compatible",
+                role="general",
+                args={"base_url": f"http://127.0.0.1:{gw.server_address[1]}/v1", "model": "m"},
+                secrets={"api_key": "sk-test"},
+            ),
+        )
         _route(enabled=True, general="nemo", tools_enabled=True)
-        with httpx.stream("POST", f"{live_server}/api/v1/llm/chat/stream", timeout=60,
-                          json={"messages": [{"role": "user", "content": "make it sandy"}],
-                                "ui_context": {"theme": "clinical",
-                                               "saved_themes": ["night"]}}) as r:
+        with httpx.stream(
+            "POST",
+            f"{live_server}/api/v1/llm/chat/stream",
+            timeout=60,
+            json={
+                "messages": [{"role": "user", "content": "make it sandy"}],
+                "ui_context": {"theme": "clinical", "saved_themes": ["night"]},
+            },
+        ) as r:
             assert r.status_code == 200
             body = "".join(r.iter_text())
     finally:
         gw.shutdown()
         gw.server_close()
-    events = [json.loads(line[5:].strip()) for frame in body.split("\n\n")
-              for line in frame.splitlines() if line.startswith("data:")]
+    events = [
+        json.loads(line[5:].strip())
+        for frame in body.split("\n\n")
+        for line in frame.splitlines()
+        if line.startswith("data:")
+    ]
     ui = [e for e in events if e["type"] == "ui_action"]
     assert ui and ui[0]["name"] == "set_appearance"
     assert ui[0]["args"] == {"theme": "tatooine", "appearance": {"--body-fs": "16px"}}

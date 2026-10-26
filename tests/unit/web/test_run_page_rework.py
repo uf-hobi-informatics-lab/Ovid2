@@ -21,17 +21,13 @@ import pytest
 
 
 @pytest.fixture()
-def pipeline_env_run(
-    isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> str:
+def pipeline_env_run(isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     """Register a stub pipeline + two disc address configs."""
     root = tmp_path / "pipelines_root"
     pkg = root / "ovid2_pipelines" / "tp_run"
     (pkg / "__init__.py").parent.mkdir(parents=True, exist_ok=True)
     (pkg / "__init__.py").write_text("", encoding="utf-8")
-    (pkg / "pipeline_settings.py").write_text(
-        "mappers_type='pcornet_mappers'\n", encoding="utf-8"
-    )
+    (pkg / "pipeline_settings.py").write_text("mappers_type='pcornet_mappers'\n", encoding="utf-8")
     monkeypatch.syspath_prepend(str(root))
     for mod in list(sys.modules):
         if mod == "ovid2_pipelines" or mod.startswith("ovid2_pipelines."):
@@ -65,9 +61,7 @@ def _submit(web_client: object, pipeline: str, *, engine: str = "snowpark") -> d
 
 
 @pytest.mark.unit
-def test_run_page_shows_engine_input_output(
-    web_client: object, pipeline_env_run: str
-) -> None:
+def test_run_page_shows_engine_input_output(web_client: object, pipeline_env_run: str) -> None:
     job = _submit(web_client, pipeline_env_run, engine="snowpark")
     resp = web_client.get(f"/runs/{job['instance_id']}")  # type: ignore[attr-defined]
     assert resp.status_code == 200
@@ -81,9 +75,7 @@ def test_run_page_shows_engine_input_output(
 
 
 @pytest.mark.unit
-def test_run_page_has_no_submitted_flash(
-    web_client: object, pipeline_env_run: str
-) -> None:
+def test_run_page_has_no_submitted_flash(web_client: object, pipeline_env_run: str) -> None:
     """The 'Submitted job <id>' flash bar is removed."""
     job = _submit(web_client, pipeline_env_run)
     # Even if a stale ?flash= is passed, the page must not render it.
@@ -96,9 +88,7 @@ def test_run_page_has_no_submitted_flash(
 
 
 @pytest.mark.unit
-def test_submit_redirect_drops_flash(
-    web_client: object, pipeline_env_run: str
-) -> None:
+def test_submit_redirect_drops_flash(web_client: object, pipeline_env_run: str) -> None:
     resp = web_client.post(  # type: ignore[attr-defined]
         "/submit",
         data={
@@ -115,9 +105,7 @@ def test_submit_redirect_drops_flash(
 
 
 @pytest.mark.unit
-def test_run_page_menu_shows_cancel_when_queued(
-    web_client: object, pipeline_env_run: str
-) -> None:
+def test_run_page_menu_shows_cancel_when_queued(web_client: object, pipeline_env_run: str) -> None:
     job = _submit(web_client, pipeline_env_run)
     resp = web_client.get(f"/runs/{job['instance_id']}")  # type: ignore[attr-defined]
     html = resp.text
@@ -134,9 +122,9 @@ def test_run_page_menu_shows_cancel_when_queued(
     assert "term-summary" in html
     assert "term-split" in html
     summary_part = html.split("term-split", 1)[0]
-    assert (
-        "term-prompt-btn" in summary_part
-    ), "prompt transport control must be in the top summary block"
+    assert "term-prompt-btn" in summary_part, (
+        "prompt transport control must be in the top summary block"
+    )
     # The instance id sits at the right edge, after the flex spacer.
     assert "term-flex" in summary_part
     flex_part = summary_part.split("term-flex", 1)[1]
@@ -144,9 +132,7 @@ def test_run_page_menu_shows_cancel_when_queued(
 
 
 @pytest.mark.unit
-def test_run_page_menu_shows_rerun_when_terminal(
-    web_client: object, pipeline_env_run: str
-) -> None:
+def test_run_page_menu_shows_rerun_when_terminal(web_client: object, pipeline_env_run: str) -> None:
     from ovid2.web.services import jobs_svc
 
     job = _submit(web_client, pipeline_env_run)
@@ -161,9 +147,7 @@ def test_run_page_menu_shows_rerun_when_terminal(
 
 
 @pytest.mark.unit
-def test_run_page_shows_rerun_when_cancelled(
-    web_client: object, pipeline_env_run: str
-) -> None:
+def test_run_page_shows_rerun_when_cancelled(web_client: object, pipeline_env_run: str) -> None:
     """A cancelled job renders the ▶ Play (rerun) glyph, not ■ Stop.
 
     Regression: a cancelled run whose worker was killed before it could
@@ -216,11 +200,8 @@ def test_mount_js_seeds_glyph_from_terminal_status() -> None:
     assert "if (startedTerminal) return;" in guard_body
 
 
-
 @pytest.mark.unit
-def test_run_page_has_started_at_anchor(
-    web_client: object, pipeline_env_run: str
-) -> None:
+def test_run_page_has_started_at_anchor(web_client: object, pipeline_env_run: str) -> None:
     """The elapsed clock anchor is server-rendered once the job starts."""
     from ovid2.web.services import jobs_svc
 
@@ -234,9 +215,7 @@ def test_run_page_has_started_at_anchor(
 
 
 @pytest.mark.unit
-def test_run_page_has_split_region(
-    web_client: object, pipeline_env_run: str
-) -> None:
+def test_run_page_has_split_region(web_client: object, pipeline_env_run: str) -> None:
     job = _submit(web_client, pipeline_env_run)
     resp = web_client.get(f"/runs/{job['instance_id']}")  # type: ignore[attr-defined]
     html = resp.text
@@ -294,14 +273,7 @@ def test_terminal_pane_panel_matches_run_kind(
 
 @pytest.mark.unit
 def test_live_js_imports_table_panel() -> None:
-    p = (
-        Path(__file__).resolve().parents[3]
-        / "src"
-        / "ovid2"
-        / "web"
-        / "static"
-        / "live.js"
-    )
+    p = Path(__file__).resolve().parents[3] / "src" / "ovid2" / "web" / "static" / "live.js"
     text = p.read_text(encoding="utf-8")
     assert "display/tables/panel.js" in text
 
@@ -314,9 +286,7 @@ def test_table_panel_module_served(web_client: object) -> None:
 
 
 @pytest.mark.unit
-def test_run_page_seeds_planned_tables_attr(
-    web_client: object, pipeline_env_run: str
-) -> None:
+def test_run_page_seeds_planned_tables_attr(web_client: object, pipeline_env_run: str) -> None:
     """The pane carries ``data-planned-tables`` so the roster pre-seeds.
 
     A default submit uses the ``["all"]`` sentinel; the attribute is
@@ -368,14 +338,7 @@ def test_table_panel_renders_status_dot_not_word() -> None:
 
 
 def _static(*parts: str) -> Path:
-    return (
-        Path(__file__).resolve().parents[3]
-        / "src"
-        / "ovid2"
-        / "web"
-        / "static"
-        / Path(*parts)
-    )
+    return Path(__file__).resolve().parents[3] / "src" / "ovid2" / "web" / "static" / Path(*parts)
 
 
 @pytest.mark.unit
@@ -494,9 +457,7 @@ def test_health_pane_seeds_check_selection_attrs(ctx_key: str, attr: str) -> Non
 
 
 @pytest.mark.unit
-def test_runs_workspace_has_list_and_console(
-    web_client: object, pipeline_env_run: str
-) -> None:
+def test_runs_workspace_has_list_and_console(web_client: object, pipeline_env_run: str) -> None:
     """GET /runs renders the master-detail workspace: a run-history list
     on the left and the live console on the right (same page)."""
     job = _submit(web_client, pipeline_env_run)
@@ -506,7 +467,7 @@ def test_runs_workspace_has_list_and_console(
     # Left list.
     assert 'class="run-list"' in html
     assert 'class="run-list-items"' in html
-    assert 'data-run-nav' in html
+    assert "data-run-nav" in html
     # Batch id (primary sub-bar) + pipeline name (primary label).
     assert "B1" in html
     assert pipeline_env_run in html
@@ -542,9 +503,7 @@ def test_run_detail_fetch_mode_returns_console_fragment_only(
 
 
 @pytest.mark.unit
-def test_run_detail_full_page_is_workspace(
-    web_client: object, pipeline_env_run: str
-) -> None:
+def test_run_detail_full_page_is_workspace(web_client: object, pipeline_env_run: str) -> None:
     """A plain (non-fetch) GET of /runs/{id} renders the full workspace
     with that run pre-selected."""
     job = _submit(web_client, pipeline_env_run)
@@ -557,9 +516,7 @@ def test_run_detail_full_page_is_workspace(
 
 
 @pytest.mark.unit
-def test_runs_list_partial_returns_rows_only(
-    web_client: object, pipeline_env_run: str
-) -> None:
+def test_runs_list_partial_returns_rows_only(web_client: object, pipeline_env_run: str) -> None:
     """The infinite-scroll partial emits only <li> rows, no page shell."""
     _submit(web_client, pipeline_env_run)
     resp = web_client.get("/partials/runs/list?offset=0")  # type: ignore[attr-defined]
@@ -572,13 +529,10 @@ def test_runs_list_partial_returns_rows_only(
 
 
 @pytest.mark.unit
-def test_jobs_url_redirects_to_runs(
-    web_client: object, pipeline_env_run: str
-) -> None:
+def test_jobs_url_redirects_to_runs(web_client: object, pipeline_env_run: str) -> None:
     """Legacy /jobs 302-redirects into the merged workspace."""
     resp = web_client.get(  # type: ignore[attr-defined]
         "/jobs", follow_redirects=False
     )
     assert resp.status_code == 302
     assert resp.headers["location"] == "/runs"
-

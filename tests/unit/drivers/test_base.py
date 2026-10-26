@@ -28,9 +28,7 @@ class _StubDriver(Driver):
 
     @classmethod
     def location_fields(cls) -> tuple[LocationField, ...]:
-        return (
-            LocationField(name="path", required=False, help="Sub-path."),
-        )
+        return (LocationField(name="path", required=False, help="Sub-path."),)
 
     def probe_auth(self) -> ProbeResult:
         return ProbeResult(ok=True, code="ok", message="stub-auth")
@@ -39,17 +37,24 @@ class _StubDriver(Driver):
 class TestFieldSpec:
     def test_to_dict_minimum(self) -> None:
         assert FieldSpec(name="x", required=True).to_dict() == {
-            "name": "x", "required": True,
+            "name": "x",
+            "required": True,
         }
 
     def test_to_dict_full(self) -> None:
         got = FieldSpec(
-            name="x", required=False, default="a", help="help",
+            name="x",
+            required=False,
+            default="a",
+            help="help",
             widget="path_picker",
         ).to_dict()
         assert got == {
-            "name": "x", "required": False, "default": "a",
-            "help": "help", "widget": "path_picker",
+            "name": "x",
+            "required": False,
+            "default": "a",
+            "help": "help",
+            "widget": "path_picker",
         }
 
 
@@ -78,7 +83,10 @@ class TestProbeResult:
 
     def test_to_legacy_test_result_drops_capability(self) -> None:
         r = ProbeResult(
-            ok=False, code="auth", message="denied", capability="read",
+            ok=False,
+            code="auth",
+            message="denied",
+            capability="read",
             detail={"account": "x"},
         )
         legacy = r.to_legacy_test_result()
@@ -140,7 +148,11 @@ class TestDriverOptionalCapabilities:
     def test_write_raises_not_implemented_by_default(self) -> None:
         with pytest.raises(NotImplementedError):
             _StubDriver().write(
-                df=None, session=None, pipeline="p", batch_id="b", table_name="t",
+                df=None,
+                session=None,
+                pipeline="p",
+                batch_id="b",
+                table_name="t",
             )
 
     def test_create_complementary_tables_is_a_noop(self) -> None:

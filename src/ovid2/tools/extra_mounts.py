@@ -47,18 +47,20 @@ class ExtraMountError(ValueError):
 #: set. Shadowing any of these with an ``--extra-mount`` would silently
 #: replace the pipeline source tree, config tree, credential material,
 #: or input data — all footguns big enough to justify a hard reject.
-RESERVED_CONTAINER_PATHS: frozenset[str] = frozenset({
-    "/app",
-    "/data",
-    "/ovid2-user-config",
-    "/ovid_credentials",
-    "/usr/include/rsa",
-})
+RESERVED_CONTAINER_PATHS: frozenset[str] = frozenset(
+    {
+        "/app",
+        "/data",
+        "/ovid2-user-config",
+        "/ovid_credentials",
+        "/usr/include/rsa",
+    }
+)
 
 #: Container paths that are illegal on their own (``/`` shadows the
 #: entire container fs; ``/tmp`` is a Bitnami-managed writable tmpfs
 #: whose contents the pipeline relies on).
-FORBIDDEN_CONTAINER_PATHS: frozenset[str] = frozenset({"/", "/tmp"})
+FORBIDDEN_CONTAINER_PATHS: frozenset[str] = frozenset({"/", "/tmp"})  # noqa: S108 — a denylist
 
 
 @dataclass(frozen=True)
@@ -108,9 +110,7 @@ def parse_extra_mount(spec: str) -> ExtraMount:
     elif len(parts) == 3:
         host, container, mode = parts
     else:
-        raise ExtraMountError(
-            f"extra-mount must be HOST:CONTAINER[:MODE], got {spec!r}"
-        )
+        raise ExtraMountError(f"extra-mount must be HOST:CONTAINER[:MODE], got {spec!r}")
 
     host = host.strip()
     container = container.strip()
@@ -121,24 +121,16 @@ def parse_extra_mount(spec: str) -> ExtraMount:
     if not container:
         raise ExtraMountError(f"extra-mount container path is empty: {spec!r}")
     if not os.path.isabs(host):
-        raise ExtraMountError(
-            f"extra-mount host path must be absolute, got {host!r}"
-        )
+        raise ExtraMountError(f"extra-mount host path must be absolute, got {host!r}")
     if not os.path.isabs(container):
-        raise ExtraMountError(
-            f"extra-mount container path must be absolute, got {container!r}"
-        )
+        raise ExtraMountError(f"extra-mount container path must be absolute, got {container!r}")
     # Reject relative-segment shenanigans (``..`` or ``.``). ``normpath``
     # resolves these; if the result differs, the caller was being cute
     # in a way we don't want to compile into a ``docker run`` argv.
     if os.path.normpath(host) != host:
-        raise ExtraMountError(
-            f"extra-mount host path must be normalized, got {host!r}"
-        )
+        raise ExtraMountError(f"extra-mount host path must be normalized, got {host!r}")
     if os.path.normpath(container) != container:
-        raise ExtraMountError(
-            f"extra-mount container path must be normalized, got {container!r}"
-        )
+        raise ExtraMountError(f"extra-mount container path must be normalized, got {container!r}")
     if container in RESERVED_CONTAINER_PATHS:
         raise ExtraMountError(
             f"extra-mount container path {container!r} is reserved; the "
@@ -146,17 +138,11 @@ def parse_extra_mount(spec: str) -> ExtraMount:
             "container path"
         )
     if container in FORBIDDEN_CONTAINER_PATHS:
-        raise ExtraMountError(
-            f"extra-mount container path {container!r} is forbidden"
-        )
+        raise ExtraMountError(f"extra-mount container path {container!r} is forbidden")
     if mode not in ("rw", "ro"):
-        raise ExtraMountError(
-            f"extra-mount mode must be 'rw' or 'ro', got {mode!r}"
-        )
+        raise ExtraMountError(f"extra-mount mode must be 'rw' or 'ro', got {mode!r}")
     if not os.path.exists(host):
-        raise ExtraMountError(
-            f"extra-mount host path does not exist: {host!r}"
-        )
+        raise ExtraMountError(f"extra-mount host path does not exist: {host!r}")
 
     return ExtraMount(host=host, container=container, mode=mode)
 

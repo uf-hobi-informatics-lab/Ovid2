@@ -22,7 +22,6 @@ from ovid2.core.engines.stager import (
     SnowparkStagingStrategy,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -36,7 +35,8 @@ def _isolate_env(monkeypatch, tmp_path):
     monkeypatch.delenv("OVID2_SNOWPARK_STAGING_S3_INTEGRATION", raising=False)
     monkeypatch.delenv("OVID2_SNOWPARK_STAGING_SCHEMA", raising=False)
     monkeypatch.delenv(
-        "OVID2_SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI", raising=False,
+        "OVID2_SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI",
+        raising=False,
     )
     monkeypatch.delenv(
         "OVID2_SNOWPARK_STAGING_DATABRICKS_BOUNCE_S3_INTEGRATION",
@@ -91,7 +91,7 @@ class _FakeSession:
         return None
 
     @property
-    def native(self) -> "Any":
+    def native(self) -> Any:
         return self
 
 
@@ -161,6 +161,7 @@ class TestImportSafety:
                 del sys.modules[mod]
         pyspark_before = {m for m in sys.modules if m.startswith("pyspark")}
         import ovid2.drivers.snowflake.staging.databricks  # noqa: F401
+
         pyspark_after = {m for m in sys.modules if m.startswith("pyspark")}
         assert pyspark_after == pyspark_before
 
@@ -168,13 +169,10 @@ class TestImportSafety:
         for mod in list(sys.modules):
             if mod == "ovid2.drivers.snowflake.staging.databricks":
                 del sys.modules[mod]
-        snowpark_before = {
-            m for m in sys.modules if m.startswith("snowflake.snowpark")
-        }
+        snowpark_before = {m for m in sys.modules if m.startswith("snowflake.snowpark")}
         import ovid2.drivers.snowflake.staging.databricks  # noqa: F401
-        snowpark_after = {
-            m for m in sys.modules if m.startswith("snowflake.snowpark")
-        }
+
+        snowpark_after = {m for m in sys.modules if m.startswith("snowflake.snowpark")}
         assert snowpark_after == snowpark_before
 
 
@@ -216,7 +214,8 @@ class TestHelpers:
         from ovid2.drivers.snowflake.staging.databricks import _qualify_table
 
         out = _qualify_table(
-            {"catalog": "main", "schema": "public"}, "ENCOUNTER",
+            {"catalog": "main", "schema": "public"},
+            "ENCOUNTER",
         )
         assert out == "`main`.`public`.`ENCOUNTER`"
 
@@ -287,9 +286,7 @@ class TestHelpers:
             _rebrand_stage_name,
         )
 
-        assert _rebrand_stage_name("OVID2_STG_S3_IN_ABC") == (
-            "OVID2_STG_DBX_IN_ABC"
-        )
+        assert _rebrand_stage_name("OVID2_STG_S3_IN_ABC") == ("OVID2_STG_DBX_IN_ABC")
         # No-op when the prefix doesn't match.
         assert _rebrand_stage_name("OTHER") == "OTHER"
 
@@ -298,9 +295,7 @@ class TestHelpers:
             _rebrand_temp_table_fqtn,
         )
 
-        assert _rebrand_temp_table_fqtn("DB.SCH.OVID2_STG_S3_XY") == (
-            "DB.SCH.OVID2_STG_DBX_XY"
-        )
+        assert _rebrand_temp_table_fqtn("DB.SCH.OVID2_STG_S3_XY") == ("DB.SCH.OVID2_STG_DBX_XY")
 
 
 # ---------------------------------------------------------------------------
@@ -316,17 +311,22 @@ class TestResolveBounceTarget:
         )
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI",
+            settings,
+            "SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI",
             "s3://bouncebkt/dbx/",
         )
         bucket, prefix = _resolve_bounce_target(
-            "20260806-140000-def456", "demo", "20260101", "encounter",
+            "20260806-140000-def456",
+            "demo",
+            "20260101",
+            "encounter",
             kind="in",
         )
         assert bucket == "bouncebkt"
         assert prefix.startswith("dbx/20260806-140000-def456/demo/20260101/")
         # The suffix is safe-charset only.
         import re
+
         suffix = prefix.rsplit("/", 1)[-1]
         assert re.match(r"^[A-Za-z0-9_]+$", suffix)
         assert "in" in suffix.lower()
@@ -338,14 +338,23 @@ class TestResolveBounceTarget:
         )
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI",
+            settings,
+            "SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI",
             "s3://bkt/",
         )
         _, in_prefix = _resolve_bounce_target(
-            "i", "p", "b", "t", kind="in",
+            "i",
+            "p",
+            "b",
+            "t",
+            kind="in",
         )
         _, out_prefix = _resolve_bounce_target(
-            "i", "p", "b", "t", kind="out",
+            "i",
+            "p",
+            "b",
+            "t",
+            kind="out",
         )
         assert in_prefix != out_prefix
         assert in_prefix.endswith("_in")
@@ -358,7 +367,9 @@ class TestResolveBounceTarget:
         )
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI", None,
+            settings,
+            "SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI",
+            None,
         )
         with pytest.raises(ValueError, match="no bounce bucket configured"):
             _resolve_bounce_target("i", "p", "b", "t", kind="in")
@@ -370,7 +381,8 @@ class TestResolveBounceTarget:
         )
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI",
+            settings,
+            "SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI",
             "azure://acct/container/",
         )
         with pytest.raises(ValueError, match="not an s3:// URL"):
@@ -417,7 +429,8 @@ class TestBounceS3MergedConfig:
         assert out["format"] == "csv"
 
     def test_no_creds_leaves_config_empty_for_default_provider(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         from ovid2.config import settings
         from ovid2.drivers.snowflake.staging.databricks import (
@@ -603,7 +616,8 @@ class TestRunDatabricksSql:
         fake_conn.close.assert_called_once()
 
     def test_closes_connection_even_on_execute_failure(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         from ovid2.drivers.snowflake.staging.databricks import (
             _run_databricks_sql,
@@ -637,7 +651,11 @@ class TestRunDatabricksSql:
 
 class TestMaterialise:
     def _prepare_stubs(
-        self, monkeypatch, *, header: bytes, part_key: str,
+        self,
+        monkeypatch,
+        *,
+        header: bytes,
+        part_key: str,
     ) -> tuple[MagicMock, MagicMock]:
         """Install fake boto3 + databricks.sql modules."""
         # boto3: get_object returns header bytes; list_objects_v2
@@ -675,7 +693,8 @@ class TestMaterialise:
         return fake_client, fake_cursor
 
     def test_materialise_runs_unload_and_snowflake_stage(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         from ovid2.config import settings
         from ovid2.drivers.snowflake.staging.databricks import (
@@ -683,11 +702,14 @@ class TestMaterialise:
         )
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI",
+            settings,
+            "SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI",
             "s3://bouncebkt/dbx/",
         )
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_S3_INTEGRATION", "MY_INT",
+            settings,
+            "SNOWPARK_STAGING_S3_INTEGRATION",
+            "MY_INT",
         )
         monkeypatch.setattr(
             settings,
@@ -709,18 +731,25 @@ class TestMaterialise:
         )
 
         session = _FakeSession()
-        driver = _FakeDatabricksDriver({
-            "host": "https://ws.example.databricks.com/",
-            "http_path": "/sql/warehouses/wh1",
-            "token": "dapiXYZ",
-            "catalog": "main",
-            "schema": "public",
-        })
+        driver = _FakeDatabricksDriver(
+            {
+                "host": "https://ws.example.databricks.com/",
+                "http_path": "/sql/warehouses/wh1",
+                "token": "dapiXYZ",
+                "catalog": "main",
+                "schema": "public",
+            }
+        )
         strategy = SnowparkDatabricksStrategy()
 
         df = strategy.materialise(
-            session, driver, "demo", "20260101",
-            "ENCOUNTER", None, None,
+            session,
+            driver,
+            "demo",
+            "20260101",
+            "ENCOUNTER",
+            None,
+            None,
         )
 
         # Databricks-side unload fired.
@@ -731,12 +760,10 @@ class TestMaterialise:
 
         # Snowflake-side firings.
         create_stage = [
-            q for q in session.sql_calls
-            if q.startswith("CREATE OR REPLACE TEMPORARY STAGE")
+            q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TEMPORARY STAGE")
         ]
         create_table = [
-            q for q in session.sql_calls
-            if q.startswith("CREATE OR REPLACE TRANSIENT TABLE")
+            q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TRANSIENT TABLE")
         ]
         copy_into = [q for q in session.sql_calls if q.startswith("COPY INTO")]
         assert len(create_stage) == 1
@@ -758,21 +785,34 @@ class TestMaterialise:
         )
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI", None,
+            settings,
+            "SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI",
+            None,
         )
-        driver = _FakeDatabricksDriver({
-            "host": "h", "http_path": "p", "token": "t",
-            "catalog": "main", "schema": "public",
-        })
+        driver = _FakeDatabricksDriver(
+            {
+                "host": "h",
+                "http_path": "p",
+                "token": "t",
+                "catalog": "main",
+                "schema": "public",
+            }
+        )
         strategy = SnowparkDatabricksStrategy()
         with pytest.raises(ValueError, match="no bounce bucket configured"):
             strategy.materialise(
-                _FakeSession(), driver, "demo", "20260101",
-                "ENCOUNTER", None, None,
+                _FakeSession(),
+                driver,
+                "demo",
+                "20260101",
+                "ENCOUNTER",
+                None,
+                None,
             )
 
     def test_materialise_raises_when_no_part_file_found(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         """The bounce listing must find at least one part-*.csv."""
         from ovid2.config import settings
@@ -781,11 +821,14 @@ class TestMaterialise:
         )
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI",
+            settings,
+            "SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI",
             "s3://b/",
         )
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_S3_INTEGRATION", "MY_INT",
+            settings,
+            "SNOWPARK_STAGING_S3_INTEGRATION",
+            "MY_INT",
         )
         # boto3: list returns only _SUCCESS, no part-*.csv.
         fake_client = MagicMock()
@@ -807,15 +850,25 @@ class TestMaterialise:
         monkeypatch.setitem(sys.modules, "databricks", fake_dbx)
         monkeypatch.setitem(sys.modules, "databricks.sql", fake_sql_mod)
 
-        driver = _FakeDatabricksDriver({
-            "host": "h", "http_path": "p", "token": "t",
-            "catalog": "main", "schema": "public",
-        })
+        driver = _FakeDatabricksDriver(
+            {
+                "host": "h",
+                "http_path": "p",
+                "token": "t",
+                "catalog": "main",
+                "schema": "public",
+            }
+        )
         strategy = SnowparkDatabricksStrategy()
-        with pytest.raises(ValueError, match="no part-\\*.csv found"):
+        with pytest.raises(ValueError, match=r"no part-\*\.csv found"):
             strategy.materialise(
-                _FakeSession(), driver, "demo", "20260101",
-                "ENCOUNTER", None, None,
+                _FakeSession(),
+                driver,
+                "demo",
+                "20260101",
+                "ENCOUNTER",
+                None,
+                None,
             )
 
 
@@ -826,7 +879,8 @@ class TestMaterialise:
 
 class TestPersist:
     def test_persist_writes_to_bounce_and_runs_copy_into(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         from ovid2.config import settings
         from ovid2.drivers.snowflake.staging.databricks import (
@@ -834,11 +888,14 @@ class TestPersist:
         )
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI",
+            settings,
+            "SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI",
             "s3://bouncebkt/dbx/",
         )
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_S3_INTEGRATION", "MY_INT",
+            settings,
+            "SNOWPARK_STAGING_S3_INTEGRATION",
+            "MY_INT",
         )
 
         # Fake databricks.sql
@@ -853,24 +910,31 @@ class TestPersist:
         monkeypatch.setitem(sys.modules, "databricks.sql", fake_sql_mod)
 
         session = _FakeSession()
-        driver = _FakeDatabricksDriver({
-            "host": "ws.example.databricks.com",
-            "http_path": "/sql/1.0/warehouses/w1",
-            "token": "dapiXYZ",
-            "catalog": "main",
-            "schema": "public",
-        })
+        driver = _FakeDatabricksDriver(
+            {
+                "host": "ws.example.databricks.com",
+                "http_path": "/sql/1.0/warehouses/w1",
+                "token": "dapiXYZ",
+                "catalog": "main",
+                "schema": "public",
+            }
+        )
         strategy = SnowparkDatabricksStrategy()
         df = MagicMock()
 
         strategy.persist(
-            session, df, driver, "demo", "20260101", "ENCOUNTER", None,
+            session,
+            df,
+            driver,
+            "demo",
+            "20260101",
+            "ENCOUNTER",
+            None,
         )
 
         # 1) Snowflake CREATE STAGE fired.
         create_stage = [
-            q for q in session.sql_calls
-            if q.startswith("CREATE OR REPLACE TEMPORARY STAGE")
+            q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TEMPORARY STAGE")
         ]
         assert len(create_stage) == 1
         assert "OVID2_STG_DBX_" in create_stage[0]
@@ -897,25 +961,38 @@ class TestPersist:
         )
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI",
+            settings,
+            "SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI",
             "s3://b/",
         )
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_S3_INTEGRATION", "INT",
+            settings,
+            "SNOWPARK_STAGING_S3_INTEGRATION",
+            "INT",
         )
-        driver = _FakeDatabricksDriver({
-            "host": "h", "http_path": "p", "token": "t",
-            # No catalog / schema.
-        })
+        driver = _FakeDatabricksDriver(
+            {
+                "host": "h",
+                "http_path": "p",
+                "token": "t",
+                # No catalog / schema.
+            }
+        )
         strategy = SnowparkDatabricksStrategy()
         with pytest.raises(ValueError, match="no catalog"):
             strategy.persist(
-                _FakeSession(), MagicMock(), driver,
-                "demo", "20260101", "ENCOUNTER", None,
+                _FakeSession(),
+                MagicMock(),
+                driver,
+                "demo",
+                "20260101",
+                "ENCOUNTER",
+                None,
             )
 
     def test_persist_accepts_dotted_table_reference(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         """A dotted ``catalog.schema.table`` overrides the driver's."""
         from ovid2.config import settings
@@ -924,11 +1001,14 @@ class TestPersist:
         )
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI",
+            settings,
+            "SNOWPARK_STAGING_DATABRICKS_BOUNCE_URI",
             "s3://b/",
         )
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_S3_INTEGRATION", "INT",
+            settings,
+            "SNOWPARK_STAGING_S3_INTEGRATION",
+            "INT",
         )
 
         fake_cursor = MagicMock()
@@ -941,15 +1021,24 @@ class TestPersist:
         monkeypatch.setitem(sys.modules, "databricks", fake_dbx)
         monkeypatch.setitem(sys.modules, "databricks.sql", fake_sql_mod)
 
-        driver = _FakeDatabricksDriver({
-            "host": "h", "http_path": "p", "token": "t",
-        })  # no catalog/schema on the driver
+        driver = _FakeDatabricksDriver(
+            {
+                "host": "h",
+                "http_path": "p",
+                "token": "t",
+            }
+        )  # no catalog/schema on the driver
         strategy = SnowparkDatabricksStrategy()
         df = MagicMock()
 
         strategy.persist(
-            _FakeSession(), df, driver, "demo", "20260101",
-            "othercat.otherschema.T", None,
+            _FakeSession(),
+            df,
+            driver,
+            "demo",
+            "20260101",
+            "othercat.otherschema.T",
+            None,
         )
         (load_sql,), _ = fake_cursor.execute.call_args
         assert "`othercat`.`otherschema`.`T`" in load_sql
@@ -962,7 +1051,8 @@ class TestPersist:
 
 class TestCleanup:
     def test_cleanup_registered_once_per_session_instance(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         from ovid2.drivers.snowflake.staging.databricks import (
             SnowparkDatabricksStrategy,
@@ -970,7 +1060,8 @@ class TestCleanup:
 
         atexit_hooks: list = []
         monkeypatch.setattr(
-            "atexit.register", lambda fn: atexit_hooks.append(fn),
+            "atexit.register",
+            lambda fn: atexit_hooks.append(fn),
         )
         session = _FakeSession()
         strategy = SnowparkDatabricksStrategy()
@@ -987,7 +1078,8 @@ class TestCleanup:
 
         atexit_hooks: list = []
         monkeypatch.setattr(
-            "atexit.register", lambda fn: atexit_hooks.append(fn),
+            "atexit.register",
+            lambda fn: atexit_hooks.append(fn),
         )
         monkeypatch.setattr(settings, "SNOWPARK_STAGING_KEEP", True)
         session = _FakeSession()
@@ -996,7 +1088,8 @@ class TestCleanup:
         assert atexit_hooks == []
 
     def test_cleanup_deletes_bounce_prefix_via_boto3(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         from ovid2.drivers.snowflake.staging.databricks import (
             SnowparkDatabricksStrategy,
@@ -1004,7 +1097,8 @@ class TestCleanup:
 
         atexit_hooks: list = []
         monkeypatch.setattr(
-            "atexit.register", lambda fn: atexit_hooks.append(fn),
+            "atexit.register",
+            lambda fn: atexit_hooks.append(fn),
         )
 
         fake_client = MagicMock()
@@ -1026,7 +1120,9 @@ class TestCleanup:
         strategy = SnowparkDatabricksStrategy()
         strategy._maybe_schedule_cleanup(session, "inst-1")
         strategy._register_bounce_prefix(
-            session, "bouncebkt", "dbx/inst/demo/b/x_in",
+            session,
+            "bouncebkt",
+            "dbx/inst/demo/b/x_in",
         )
         atexit_hooks[0]()  # trigger
 
@@ -1046,7 +1142,8 @@ class TestCleanup:
 
         atexit_hooks: list = []
         monkeypatch.setattr(
-            "atexit.register", lambda fn: atexit_hooks.append(fn),
+            "atexit.register",
+            lambda fn: atexit_hooks.append(fn),
         )
 
         fake_client = MagicMock()

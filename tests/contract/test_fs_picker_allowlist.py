@@ -34,6 +34,7 @@ def test_fs_picker_rejects_outside_allowlist(
     monkeypatch.setenv("OVID2_SETTINGS_FILE", str(cfg / "settings.json"))
 
     from ovid2.web.services import fs_svc, settings_svc
+
     settings_svc.invalidate_cache()
 
     # In-allowlist path succeeds.
@@ -50,9 +51,7 @@ def test_fs_picker_rejects_outside_allowlist(
 
 
 @pytest.mark.contract
-def test_fs_picker_disable_kill_switch(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_fs_picker_disable_kill_switch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """When enabled=False, list_dir raises even for the allowlist root itself."""
     cfg = tmp_path / "config" / "ovid2"
     cfg.mkdir(parents=True, exist_ok=True)
@@ -63,6 +62,7 @@ def test_fs_picker_disable_kill_switch(
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.setenv("OVID2_SETTINGS_FILE", str(cfg / "settings.json"))
     from ovid2.web.services import fs_svc, settings_svc
+
     settings_svc.invalidate_cache()
 
     with pytest.raises(fs_svc.FsPickerDisabledError):

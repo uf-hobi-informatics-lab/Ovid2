@@ -14,7 +14,6 @@ from typing import Any
 
 from ovid2.transforms.base import BaseTransform, DataFrame, TransformContext
 
-
 #: Aggregation functions accepted by ``reduce`` / ``head_by_group``.
 _AGG_FUNCS: frozenset[str] = frozenset(
     {"max", "min", "sum", "avg", "mean", "count", "first", "last"}
@@ -67,9 +66,7 @@ class ReduceTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return the grouped-and-aggregated DataFrame (lazy)."""
         group_by = params.get("group_by")
         aggs = params.get("aggs")
@@ -120,9 +117,7 @@ class ExplodeTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with the column exploded (lazy)."""
         column = str(params["column"])
         alias = str(params.get("alias", column))
@@ -176,9 +171,7 @@ class UnpivotTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return the long-form DataFrame (lazy)."""
         id_columns = [str(c) for c in params["id_columns"]]
         value_columns = [str(c) for c in params["value_columns"]]
@@ -233,9 +226,7 @@ class PivotTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return the wide DataFrame (lazy)."""
         group_by = [str(c) for c in params["group_by"]]
         pivot_column = str(params["pivot_column"])
@@ -288,9 +279,7 @@ class AddRowNumberTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with the row-number column added (lazy)."""
         from ovid2.transforms.ops._window import build_window, row_number_expr
 
@@ -320,9 +309,7 @@ class RankTransform(BaseTransform):
         """Return the JSON-schema fragment for this op."""
         return AddRowNumberTransform().params_schema
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with the rank column added (lazy)."""
         from ovid2.transforms.ops._window import build_window, rank_expr
 
@@ -352,9 +339,7 @@ class DenseRankTransform(BaseTransform):
         """Return the JSON-schema fragment for this op."""
         return AddRowNumberTransform().params_schema
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with the dense-rank column added (lazy)."""
         from ovid2.transforms.ops._window import build_window, dense_rank_expr
 

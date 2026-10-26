@@ -25,7 +25,6 @@ import pytest
 from ovid2.core.engines.protocols import EngineFamily
 from ovid2.core.engines.snowpark import SnowparkEngine
 
-
 # ---------------------------------------------------------------------------
 # _configs_inline (legacy path)
 # ---------------------------------------------------------------------------
@@ -71,10 +70,8 @@ def test_inline_missing_account_and_user_raises() -> None:
 @pytest.mark.unit
 def test_inline_missing_credentials_raises() -> None:
     """'account' + 'user' with no password or private_key → clear error."""
-    engine = SnowparkEngine(
-        args={"account": "acct", "user": "usr"}, secrets={}
-    )
-    with pytest.raises(ValueError, match="password.*private_key"):
+    engine = SnowparkEngine(args={"account": "acct", "user": "usr"}, secrets={})
+    with pytest.raises(ValueError, match=r"password.*private_key"):
         engine._build_configs()
 
 
@@ -221,9 +218,7 @@ def _write_connection(
 
 
 @pytest.fixture
-def xdg_home(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> Path:
+def xdg_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Point the connection loader + secrets loader at a scratch XDG tree."""
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     monkeypatch.setenv("OVID2_CONNECTIONS_DIR", str(tmp_path / "connections"))
@@ -307,7 +302,7 @@ def test_connection_missing_credentials_raises(xdg_home: Path) -> None:
         None,
     )
     engine = SnowparkEngine(args={"connection": "sf_broken"})
-    with pytest.raises(ValueError, match="did not yield.*credentials"):
+    with pytest.raises(ValueError, match=r"did not yield.*credentials"):
         engine._build_configs()
 
 
@@ -373,9 +368,7 @@ def test_test_reports_unreachable_when_driver_missing(
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr("builtins.__import__", fake_import)
-    engine = SnowparkEngine(
-        args={"account": "a", "user": "u"}, secrets={"password": "p"}
-    )
+    engine = SnowparkEngine(args={"account": "a", "user": "u"}, secrets={"password": "p"})
     result = engine.test()
     assert result.ok is False
     assert result.code == "unreachable"
@@ -399,9 +392,7 @@ def test_test_reports_auth_when_connection_credentials_missing(
     # never-called `Session`.
     snowpark_mod = types.ModuleType("snowflake.snowpark")
     snowpark_mod.Session = MagicMock(  # type: ignore[attr-defined]
-        side_effect=AssertionError(
-            "Session must not be built when credentials are missing"
-        )
+        side_effect=AssertionError("Session must not be built when credentials are missing")
     )
     snowflake_pkg = types.ModuleType("snowflake")
     snowflake_pkg.snowpark = snowpark_mod  # type: ignore[attr-defined]
@@ -494,7 +485,8 @@ def test_prepare_workspace_binds_writable_db_and_schema(
     import ovid2.drivers.snowflake.staging.disc as disc_mod
 
     monkeypatch.setattr(
-        disc_mod, "_ensure_writable_staging_schema",
+        disc_mod,
+        "_ensure_writable_staging_schema",
         lambda _n: "OMOP_OUT.OVID2_SNOWPARK_STAGING",
     )
 
@@ -560,7 +552,7 @@ def test_snowpark_checkpoint_writes_transient_table_and_returns_handle() -> None
     calls: dict[str, Any] = {}
 
     class _FakeWriter:
-        def mode(self, m: str) -> "_FakeWriter":
+        def mode(self, m: str) -> _FakeWriter:
             calls["mode"] = m
             return self
 
@@ -597,7 +589,7 @@ def test_snowpark_checkpoint_sanitises_name() -> None:
     calls: dict[str, Any] = {}
 
     class _FakeWriter:
-        def mode(self, m: str) -> "_FakeWriter":
+        def mode(self, m: str) -> _FakeWriter:
             return self
 
         def save_as_table(self, name: str, table_type: str | None = None) -> None:
@@ -725,4 +717,3 @@ def test_base_engine_cancel_running_queries_is_noop() -> None:
     engine = PySparkEngine(args={})
     # Should not raise even without a session.
     engine.cancel_running_queries()
-

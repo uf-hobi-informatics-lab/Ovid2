@@ -66,9 +66,7 @@ def run_tool_json(
             check=False,
         )
     except subprocess.TimeoutExpired as exc:
-        raise BrokerError(
-            f"Operation timed out after {timeout:.0f}s: {tool_args}"
-        ) from exc
+        raise BrokerError(f"Operation timed out after {timeout:.0f}s: {tool_args}") from exc
     except OSError as exc:
         raise BrokerError(f"Could not launch executor subprocess: {exc}") from exc
 

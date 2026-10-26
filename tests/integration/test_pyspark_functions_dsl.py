@@ -15,7 +15,6 @@ import pytest
 
 from ovid2.core.engines.pyspark import PySparkEngine
 
-
 pytestmark = pytest.mark.integration
 
 
@@ -62,29 +61,24 @@ def test_map_from_dict_hit_and_default(spark, engine: PySparkEngine) -> None:  #
     f = engine.get_functions()
     df = spark.createDataFrame([("M",), ("F",), ("?",)], ["sex"])
     mapping = {"M": "8507", "F": "8532"}
-    out = df.select(
-        f.map_from_dict(mapping, f.col("sex"), default="0").alias("concept")
-    ).collect()
+    out = df.select(f.map_from_dict(mapping, f.col("sex"), default="0").alias("concept")).collect()
     assert [r["concept"] for r in out] == ["8507", "8532", "0"]
 
 
 def test_map_from_dict_empty_returns_default(spark, engine: PySparkEngine) -> None:  # type: ignore[no-untyped-def]
     f = engine.get_functions()
     df = spark.createDataFrame([("x",)], ["k"])
-    out = df.select(
-        f.map_from_dict({}, f.col("k"), default="fallback").alias("v")
-    ).collect()
+    out = df.select(f.map_from_dict({}, f.col("k"), default="fallback").alias("v")).collect()
     assert out[0]["v"] == "fallback"
 
 
 def test_stable_hash_is_nonnegative_string_and_deterministic(
-    spark, engine: PySparkEngine  # type: ignore[no-untyped-def]
+    spark,
+    engine: PySparkEngine,  # type: ignore[no-untyped-def]
 ) -> None:
     f = engine.get_functions()
     df = spark.createDataFrame([("PAT1", "ENC1"), ("PAT1", "ENC1")], ["p", "e"])
-    out = df.select(
-        f.stable_hash(f.col("p"), f.col("e")).alias("id")
-    ).collect()
+    out = df.select(f.stable_hash(f.col("p"), f.col("e")).alias("id")).collect()
     ids = [r["id"] for r in out]
     # Rendered as a decimal string.
     assert all(isinstance(v, str) for v in ids)
@@ -98,9 +92,7 @@ def test_stable_hash_handles_nulls(spark, engine: PySparkEngine) -> None:  # typ
     from pyspark.sql.types import StringType, StructField, StructType
 
     f = engine.get_functions()
-    schema = StructType(
-        [StructField("p", StringType()), StructField("e", StringType())]
-    )
+    schema = StructType([StructField("p", StringType()), StructField("e", StringType())])
     df = spark.createDataFrame([("PAT1", None)], schema)
     out = df.select(f.stable_hash(f.col("p"), f.col("e")).alias("id")).collect()
     assert int(out[0]["id"]) >= 0

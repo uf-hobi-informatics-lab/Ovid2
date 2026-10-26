@@ -49,9 +49,7 @@ def test_browse_root(web_client, isolated_xdg: Path, disc_tree: Path) -> None:  
 @pytest.mark.unit
 def test_browse_descends(web_client, isolated_xdg: Path, disc_tree: Path) -> None:  # type: ignore[no-untyped-def]
     _write_disc_connection(isolated_xdg, "local_disc", str(disc_tree))
-    r = web_client.get(
-        "/api/v1/storage/local_disc/browse", params={"prefix": "demo/20260101"}
-    )
+    r = web_client.get("/api/v1/storage/local_disc/browse", params={"prefix": "demo/20260101"})
     assert r.status_code == 200
     entries = r.json()["entries"]
     assert entries == [
@@ -64,9 +62,7 @@ def test_browse_escape_is_reported_not_crash(
     web_client, isolated_xdg: Path, disc_tree: Path
 ) -> None:  # type: ignore[no-untyped-def]
     _write_disc_connection(isolated_xdg, "local_disc", str(disc_tree))
-    r = web_client.get(
-        "/api/v1/storage/local_disc/browse", params={"prefix": "../.."}
-    )
+    r = web_client.get("/api/v1/storage/local_disc/browse", params={"prefix": "../.."})
     assert r.status_code == 200
     body = r.json()
     assert body["entries"] == []
@@ -80,9 +76,7 @@ def test_browse_unknown_storage_404(web_client, isolated_xdg: Path) -> None:  # 
 
 
 @pytest.mark.unit
-def test_browse_unsupported_type_marks_supported_false(
-    web_client, isolated_xdg: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_browse_unsupported_type_marks_supported_false(web_client, isolated_xdg: Path) -> None:  # type: ignore[no-untyped-def]
     """A postgres storage account has no list_dir → supported=False."""
     conndir = isolated_xdg / "config" / "ovid2" / "connections"
     conndir.mkdir(parents=True, exist_ok=True)

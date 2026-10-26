@@ -125,7 +125,7 @@ class BaseEngine(ABC):
             message=f"Engine '{self.type_name}' has no test probe",
         )
 
-    def get_metrics(self) -> "EngineMetricsSample":
+    def get_metrics(self) -> EngineMetricsSample:
         """Return a cheap point-in-time metrics sample.
 
         Called on a fixed cadence by
@@ -145,14 +145,13 @@ class BaseEngine(ABC):
         """
         # Local import to keep ``base.py`` free of the (very cheap)
         # metrics module until someone actually samples.
-        from ovid2.core.engines.metrics import EngineMetricsSample
-        from datetime import datetime, timezone
         import time
+        from datetime import datetime, timezone
+
+        from ovid2.core.engines.metrics import EngineMetricsSample
 
         family_value = (
-            self.family.value
-            if isinstance(self.family, EngineFamily)
-            else str(self.family)
+            self.family.value if isinstance(self.family, EngineFamily) else str(self.family)
         )
         return EngineMetricsSample(
             t_ms=int(time.monotonic() * 1000),
@@ -188,9 +187,7 @@ class BaseEngine(ABC):
     # (camelCase) API; :class:`~ovid2.core.engines.snowpark.SnowparkEngine`
     # overrides them with the snake_case Snowpark equivalents.
 
-    def union_by_name(
-        self, left: Any, right: Any, *, allow_missing_columns: bool = False
-    ) -> Any:
+    def union_by_name(self, left: Any, right: Any, *, allow_missing_columns: bool = False) -> Any:
         """Union two DataFrames by column name.
 
         Spark: ``left.unionByName(right, allowMissingColumns=...)``.
@@ -279,9 +276,7 @@ class BaseEngine(ABC):
         from ovid2.core.engines.stager import stager_class_for_engine_family
 
         family_value = (
-            self.family.value
-            if isinstance(self.family, EngineFamily)
-            else str(self.family)
+            self.family.value if isinstance(self.family, EngineFamily) else str(self.family)
         )
         stager_cls = stager_class_for_engine_family(family_value)
         if stager_cls is None:

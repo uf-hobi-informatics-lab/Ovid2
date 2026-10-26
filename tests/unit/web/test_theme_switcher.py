@@ -10,9 +10,10 @@ Covers the theming feature layered on top of the v2 shell:
 - ``ovid2.css`` declares a ``[data-theme]`` block for each shipped
   named theme.
 - The pre-paint script honours any known slug, remaps the retired
-  ``dune`` / ``industry`` slugs, and re-applies saved custom colour
-  overrides before first paint.
-- The change is client-only: no theme route leaked into the schema.
+  ``dune`` / ``industry`` slugs, and re-applies the server-rendered
+  custom colour overrides before first paint.
+- Appearance is stored per user on the server under ``/api/v1/me/appearance``
+  (no other theme route exists).
 """
 
 from __future__ import annotations
@@ -89,9 +90,9 @@ def test_theme_js_is_classic_script_without_imports(web_client: object) -> None:
 
 @pytest.mark.unit
 def test_theme_js_has_custom_override_and_guardrail(web_client: object) -> None:
-    """``theme.js`` persists custom colours and derives readable ink."""
+    """``theme.js`` persists custom colours to the server and derives ink."""
     body = web_client.get("/static/theme.js").text  # type: ignore[attr-defined]
-    assert "ovid2ThemeCustom" in body
+    assert "/api/v1/me/appearance" in body
     assert "applyCustomOverrides" in body
     assert "readableInk" in body
     assert "contrastRatio" in body
@@ -117,7 +118,8 @@ def test_css_declares_bundled_theme_fonts(web_client: object) -> None:
 def test_prepaint_honours_slug_and_custom(web_client: object) -> None:
     """The pre-paint script applies any known slug + saved overrides."""
     body = web_client.get("/").text  # type: ignore[attr-defined]
-    assert "ovid2ThemeCustom" in body
+    assert "window.OVID2_APPEARANCE" in body
+    assert "p.colors" in body
     # Slug list drives the pre-paint attribute set; verify it is no
     # longer hard-limited to light/dark by checking a named theme slug,
     # and that the retired slugs are remapped rather than dropped.
@@ -128,9 +130,10 @@ def test_prepaint_honours_slug_and_custom(web_client: object) -> None:
 
 
 @pytest.mark.unit
-def test_no_theme_route_in_schema(web_client: object) -> None:
-    """The feature is client-only: no theme endpoint entered the schema."""
+def test_appearance_route_is_the_only_theme_surface(web_client: object) -> None:
+    """Appearance persists via ``/api/v1/me/appearance`` and nothing else."""
     schema = web_client.get("/openapi.json").json()  # type: ignore[attr-defined]
     paths = schema.get("paths", {})
+    assert set(paths["/api/v1/me/appearance"]) == {"get", "put"}
     for path in paths:
         assert "theme" not in path.lower(), f"unexpected theme route {path!r}"

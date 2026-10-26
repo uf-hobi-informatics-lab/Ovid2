@@ -48,6 +48,7 @@ serve multiple engines that differ only in warehouse.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -161,8 +162,11 @@ class _SnowparkFunctions:
         return self._F.regexp_replace(c, pattern, replacement)
 
     def regexp_extract(self, c: Any, pattern: str, idx: int) -> Any:
-        # Snowpark uses regexp_substr for extraction.
-        return self._F.regexp_substr(c, pattern, 1, idx)
+        # Snowpark's own ``regexp_extract`` mirrors Spark exactly (capture
+        # group ``idx``, ``""`` on no match). The previous hand-rolled
+        # ``regexp_substr(c, pattern, 1, idx)`` raised ``TypeError`` (ints
+        # are not Columns) and put ``idx`` in the *occurrence* slot.
+        return self._F.regexp_extract(c, pattern, idx)
 
     def to_date(self, c: Any, fmt: str | None = None) -> Any:
         # Spark's ``to_date`` returns NULL when the input does not match
@@ -234,9 +238,7 @@ class _SnowparkFunctions:
     def max(self, c: Any) -> Any:
         return self._F.max(c)  # noqa: OVID2001 aggregate function reference, not an eager action
 
-    def map_from_dict(
-        self, mapping: dict[str, Any], key_col: Any, default: Any = None
-    ) -> Any:
+    def map_from_dict(self, mapping: dict[str, Any], key_col: Any, default: Any = None) -> Any:
         """Emit a chained ``when(...).otherwise(...)`` mapping.
 
         Portable replacement for the Spark ``create_map(...)[key]``
@@ -271,9 +273,7 @@ class _SnowparkFunctions:
         still yields a stable id, matching the PySpark ``stable_hash``
         contract (stable within a single engine).
         """
-        parts = [
-            self._F.coalesce(c.cast("string"), self._F.lit("")) for c in cols
-        ]
+        parts = [self._F.coalesce(c.cast("string"), self._F.lit("")) for c in cols]
         return self._F.abs(self._F.hash(*parts)).cast("string")
 
     def rand(self, seed: int | None = None) -> Any:
@@ -292,7 +292,7 @@ class SnowparkEngineSession:
     go through :meth:`SnowparkEngine.native` instead.
     """
 
-    def __init__(self, native: "SnowparkNativeSession") -> None:
+    def __init__(self, native: SnowparkNativeSession) -> None:
         self._native = native
 
     def table(self, name: str) -> Any:
@@ -306,7 +306,7 @@ class SnowparkEngineSession:
         return self._native.create_dataframe(data, schema=schema)
 
     @property
-    def native(self) -> "SnowparkNativeSession":
+    def native(self) -> SnowparkNativeSession:
         return self._native
 
 
@@ -327,7 +327,7 @@ class SnowparkEngine(BaseEngine):
         secrets: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(args=args, secrets=secrets)
-        self._native: "SnowparkNativeSession | None" = None
+        self._native: SnowparkNativeSession | None = None
         self._session: SnowparkEngineSession | None = None
         self._functions: EngineFunctions | None = None
 
@@ -452,10 +452,7 @@ class SnowparkEngine(BaseEngine):
         required = ("account", "user")
         missing = [k for k in required if not self.args.get(k)]
         if missing:
-            raise ValueError(
-                f"snowpark: missing required args {missing} "
-                "(and no 'connection' set)"
-            )
+            raise ValueError(f"snowpark: missing required args {missing} (and no 'connection' set)")
         cfg: dict[str, Any] = {
             "account": str(self.args["account"]),
             "user": str(self.args["user"]),
@@ -486,10 +483,8 @@ class SnowparkEngine(BaseEngine):
     def stop_session(self) -> None:
         """Close the Snowpark session if one has been created."""
         if self._native is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._native.close()
-            except Exception:  # noqa: BLE001
-                pass
             self._native = None
             self._session = None
             self._functions = None
@@ -526,21 +521,17 @@ class SnowparkEngine(BaseEngine):
             # bind-parameter form for a session function, so we build the
             # statement by concatenating the validated int (never
             # operator input) — no f-string SQL, no injection surface.
-            cancel_sql = (
-                "SELECT SYSTEM$CANCEL_ALL_QUERIES(" + str(int(session_id)) + ")"
-            )
+            cancel_sql = "SELECT SYSTEM$CANCEL_ALL_QUERIES(" + str(int(session_id)) + ")"
             native.sql(cancel_sql).collect()  # noqa: OVID2001
             _log.info(
                 "Issued SYSTEM$CANCEL_ALL_QUERIES for Snowflake session %s",
                 session_id,
             )
-        except Exception as exc:  # noqa: BLE001
-            _log.warning(
-                "SYSTEM$CANCEL_ALL_QUERIES(%s) failed: %s", session_id, exc
-            )
+        except Exception as exc:
+            _log.warning("SYSTEM$CANCEL_ALL_QUERIES(%s) failed: %s", session_id, exc)
 
     @staticmethod
-    def _resolve_session_id(native: "SnowparkNativeSession") -> int | None:
+    def _resolve_session_id(native: SnowparkNativeSession) -> int | None:
         """Best-effort resolve the numeric Snowflake session id.
 
         Snowpark's ``Session`` exposes ``session_id``; older builds only
@@ -606,9 +597,7 @@ class SnowparkEngine(BaseEngine):
 
     # ---- DataFrame-shape portable helpers (snake_case Snowpark API) ----
 
-    def union_by_name(
-        self, left: Any, right: Any, *, allow_missing_columns: bool = False
-    ) -> Any:
+    def union_by_name(self, left: Any, right: Any, *, allow_missing_columns: bool = False) -> Any:
         """Union two Snowpark DataFrames by column name.
 
         Snowpark's ``union_by_name`` requires both sides to share the
@@ -684,11 +673,12 @@ class SnowparkEngine(BaseEngine):
         # table into the session's current (staging) schema. ``overwrite``
         # keeps re-runs of the same table idempotent within a session.
         df.write.mode("overwrite").save_as_table(
-            table_name, table_type="transient",
+            table_name,
+            table_type="transient",
         )
         return native.table(table_name)
 
-    def native(self) -> "SnowparkNativeSession":
+    def native(self) -> SnowparkNativeSession:
         """Return the underlying real Snowpark ``Session``."""
         self.get_session()
         assert self._native is not None  # for type-checkers
@@ -719,7 +709,7 @@ class SnowparkEngine(BaseEngine):
                         if callable(getter):
                             try:
                                 account = str(getter() or "")
-                            except Exception:  # noqa: BLE001
+                            except Exception:
                                 account = ""
                             break
                 if not account:
@@ -737,15 +727,14 @@ class SnowparkEngine(BaseEngine):
                 detail={"row": str(rows)},
             )
         except ValueError as exc:
-            return EngineTestResult(
-                ok=False, code="auth", message=str(exc)
-            )
+            return EngineTestResult(ok=False, code="auth", message=str(exc))
         except (FileNotFoundError, PermissionError, IsADirectoryError) as exc:
             return EngineTestResult(
-                ok=False, code="auth",
+                ok=False,
+                code="auth",
                 message=f"Snowflake credentials file unavailable: {exc}",
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return EngineTestResult(
                 ok=False,
                 code="unreachable",

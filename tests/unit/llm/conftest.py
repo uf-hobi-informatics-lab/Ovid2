@@ -16,8 +16,10 @@ class _FakeGateway(BaseHTTPRequestHandler):
 
     api_key = "sk-test"
     models = ("general-test-model", "other")
-    decision_reply = ('{"in_scope": true, "decision": "approve", "confidence": 0.9, '
-                      '"action": "noop", "rationale": "clear", "answer": "Approved."}')
+    decision_reply = (
+        '{"in_scope": true, "decision": "approve", "confidence": 0.9, '
+        '"action": "noop", "rationale": "clear", "answer": "Approved."}'
+    )
     requests: list[dict[str, object]] = []
 
     def log_message(self, *_args: object) -> None:  # silence
@@ -32,7 +34,7 @@ class _FakeGateway(BaseHTTPRequestHandler):
             return False
         return True
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
         if not self._authed():
             return
         body = json.dumps({"data": [{"id": m} for m in self.models]}).encode()
@@ -41,7 +43,7 @@ class _FakeGateway(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def do_POST(self) -> None:  # noqa: N802
+    def do_POST(self) -> None:
         if not self._authed():
             return
         length = int(self.headers.get("Content-Length") or 0)
@@ -103,8 +105,9 @@ def llm_xdg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return cfg
 
 
-def write_llm(cfg: Path, name: str, doc: dict[str, object],
-              secret: dict[str, object] | None = None) -> None:
+def write_llm(
+    cfg: Path, name: str, doc: dict[str, object], secret: dict[str, object] | None = None
+) -> None:
     """Drop an LLM JSON (+ optional 0o600 secret) into the isolated config."""
     d = cfg / "ovid2" / "llms"
     d.mkdir(parents=True, exist_ok=True)
@@ -115,3 +118,15 @@ def write_llm(cfg: Path, name: str, doc: dict[str, object],
         p.write_text(json.dumps(secret))
         p.chmod(0o600)
     (d / f"{name}.json").write_text(json.dumps(doc))
+
+
+@pytest.fixture(autouse=True)
+def _stub_overwrite_probe(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default the overwrite pre-flight to "occupancy unknown" (no subprocess).
+
+    Tests that exercise the overwrite gate call
+    :func:`tests.helpers.output_probe.set_output_tables` to override.
+    """
+    from tests.helpers.output_probe import stub_output_probe
+
+    stub_output_probe(monkeypatch)

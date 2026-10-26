@@ -264,14 +264,14 @@ class SchedulerService:
 
         pending: list[dict[str, str]] = []
         for row in ready:
-            batch = by_batch_id.get(row["batch_id"])
-            if batch is None:
+            on_disk = by_batch_id.get(row["batch_id"])
+            if on_disk is None:
                 logger.warning(
                     "Batch '%s' is in tracker but no longer on disk — skipping",
                     row["batch_id"],
                 )
                 continue
-            pending.append(batch)
+            pending.append(on_disk)
         return pending
 
     # ----------------------------------------------------------- dispatch

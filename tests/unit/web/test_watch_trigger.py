@@ -42,7 +42,9 @@ def watch_pipeline(isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.Monke
     pkg = root / "ovid2_pipelines" / "tp_watch"
     (pkg / "formatters").mkdir(parents=True)
     (pkg / "__init__.py").write_text("", encoding="utf-8")
-    (pkg / "pipeline_settings.py").write_text("mappers_type = 'pcornet_mappers'\n", encoding="utf-8")
+    (pkg / "pipeline_settings.py").write_text(
+        "mappers_type = 'pcornet_mappers'\n", encoding="utf-8"
+    )
     monkeypatch.syspath_prepend(str(root))
     for mod in list(sys.modules):
         if mod == "ovid2_pipelines" or mod.startswith("ovid2_pipelines."):
@@ -254,9 +256,17 @@ def test_worker_dispatch_fires_one_job_per_new_folder(
     )
 
     fired: list[str] = []
+    inputs: list[str | None] = []
 
-    def _fake_run_now(name: str, *, actor: str = "web", batch_id: str | None = None):
+    def _fake_run_now(
+        name: str,
+        *,
+        actor: str = "web",
+        batch_id: str | None = None,
+        input_address: str | None = None,
+    ):
         fired.append(str(batch_id))
+        inputs.append(input_address)
         from ovid2.web.models import JobSubmitResponse
 
         return JobSubmitResponse(
@@ -268,6 +278,14 @@ def test_worker_dispatch_fires_one_job_per_new_folder(
     worker = Worker(max_parallel=0)
     worker._dispatch_watch_pipelines()
     assert sorted(fired) == ["2024_01", "2024_02"]
+    # Address = exact location: each batch runs against a child address
+    # pointing exactly at the new folder under the watched location.
+    from ovid2.web.services import addresses_svc
+
+    locations = sorted(
+        (addresses_svc.get_address(str(n)).location or {}).get("path") for n in inputs
+    )
+    assert locations == ["2024_01", "2024_02"]
 
     # Second tick: cursor advanced, nothing new.
     fired.clear()

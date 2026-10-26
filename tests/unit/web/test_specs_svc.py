@@ -20,7 +20,7 @@ def pipeline_with_specs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     (pkg / "__init__.py").write_text("", encoding="utf-8")
     # Valid formatter YAML.
     (pkg / "formatters" / "good.yaml").write_text(
-        'v: 1\nformatter: good\nadapter: source_passthrough\n'
+        "v: 1\nformatter: good\nadapter: source_passthrough\n"
         'sources:\n  good:\n    glob: "*Good*"\n'
         'projections:\n  ID: "id"\n',
         encoding="utf-8",

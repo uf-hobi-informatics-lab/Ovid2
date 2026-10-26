@@ -15,26 +15,26 @@ from ovid2.core.docker import _build_health_argv
 
 
 def _ns(**kw) -> argparse.Namespace:
-    base = dict(
-        command="health",
-        pipeline="pcornet_edc",
-        batch_id="20260101",
-        engine="pyspark",
-        input_address=None,
-        output_address=None,
-        input_connection=None,
-        input_location=None,
-        output_connection=None,
-        output_location=None,
-        packages=["20r1"],
-        parts=None,
-        checks=None,
-        prev_input_address=None,
-        cdm=None,
-        sf_database=None,
-        sf_account=None,
-        sf_schema=None,
-    )
+    base = {
+        "command": "health",
+        "pipeline": "pcornet_edc",
+        "batch_id": "20260101",
+        "engine": "pyspark",
+        "input_address": None,
+        "output_address": None,
+        "input_connection": None,
+        "input_location": None,
+        "output_connection": None,
+        "output_location": None,
+        "packages": ["20r1"],
+        "parts": None,
+        "checks": None,
+        "prev_input_address": None,
+        "cdm": None,
+        "sf_database": None,
+        "sf_account": None,
+        "sf_schema": None,
+    }
     base.update(kw)
     return argparse.Namespace(**base)
 

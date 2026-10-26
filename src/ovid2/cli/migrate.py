@@ -20,7 +20,9 @@ from ovid2.tools.golden_diff import compare_directories
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the ``migrate`` subcommand and its actions."""
-    parser = subparsers.add_parser("migrate", help="Migrate legacy pipeline scripts to Ovid2 specs.")
+    parser = subparsers.add_parser(
+        "migrate", help="Migrate legacy pipeline scripts to Ovid2 specs."
+    )
     action = parser.add_subparsers(dest="action", metavar="ACTION", required=True)
 
     fmt = action.add_parser("formatter", help="Convert one legacy formatter file.")

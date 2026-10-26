@@ -49,6 +49,7 @@ from ovid2.drivers.snowflake.metadata import (
 )
 from ovid2.drivers.snowflake.probe import (
     list_dir_from_config,
+    list_schema_tables_from_config,
     probe_auth_from_config,
 )
 
@@ -87,7 +88,7 @@ class SnowflakeDriver(Driver):
         return _location_fields()
 
     @classmethod
-    def declared_cdm(cls, location: dict[str, Any]) -> str | None:
+    def declared_cdm(cls, location: dict[str, Any] | None) -> str | None:
         """Return the CDM stamp on ``location`` (D6.0 advisory type check).
 
         Snowflake is the primary CDM-carrying peripheral in the
@@ -98,6 +99,8 @@ class SnowflakeDriver(Driver):
         writes into a Snowflake address whose stamped CDM disagrees
         with the source's.
         """
+        if not location:
+            return None
         v = location.get("cdm")
         return str(v) if v else None
 
@@ -127,9 +130,73 @@ class SnowflakeDriver(Driver):
         so the ``snowflake-connector-python`` import stays lazy. See
         that function for the prefix grammar.
         """
-        return list_dir_from_config(
-            dict(self.args), dict(self.secrets), prefix
-        )
+        return list_dir_from_config(dict(self.args), dict(self.secrets), prefix)
+
+    # ------------------------------------------------------------------
+    # ``all`` expansion + size hints (control plane, ``SHOW`` only)
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def supports_expand_all(cls) -> bool:
+        """A Snowflake schema is enumerable (``SHOW TABLES``), so ``all`` expands."""
+        return True
+
+    def _database_schema(self, location: dict[str, Any] | None = None) -> tuple[str, str]:
+        """Return ``(database, schema)`` the read path targets.
+
+        Same precedence as :func:`~ovid2.drivers.snowflake.metadata.build_address_config`:
+        explicit ``database`` / ``schema`` keys win over a ``path`` of the
+        form ``DATABASE[/SCHEMA]``. Schema defaults to ``PUBLIC`` (the
+        connection default ``read`` falls back to).
+        """
+        loc = dict(location if location is not None else self.location)
+        parts = [p for p in str(loc.get("path") or "").split("/") if p]
+        database = str(loc.get("database") or (parts[0] if parts else "") or "")
+        schema = str(loc.get("schema") or (parts[1] if len(parts) > 1 else "") or "PUBLIC")
+        return database, schema
+
+    def _schema_tables(self, location: dict[str, Any] | None = None) -> list[StorageEntry]:
+        """List every table / view (with sizes) in the address's schema."""
+        database, schema = self._database_schema(location)
+        return list_schema_tables_from_config(dict(self.args), dict(self.secrets), database, schema)
+
+    def expand_all_tables(
+        self,
+        location: dict[str, Any] | None = None,
+        *,
+        pipeline: str | None = None,
+        batch_id: str | None = None,
+    ) -> list[str] | None:
+        """Expand ``all`` to every table + view in the address's schema.
+
+        ``pipeline`` / ``batch_id`` are ignored: the address is the exact
+        location — its own ``database.schema`` (see
+        :meth:`SnowflakeAddress.read`).
+
+        Raises:
+            ValueError: When the address has no database.
+        """
+        del pipeline, batch_id
+        return [e.name for e in self._schema_tables(location)]
+
+    def table_sizes(
+        self,
+        file_names: list[str],
+        *,
+        pipeline: str,
+        batch_id: str,
+    ) -> dict[str, int]:
+        """Return ``SHOW TABLES`` ``bytes`` per table (case-insensitive match)."""
+        del pipeline, batch_id
+        by_upper = {
+            e.name.upper(): e.size_bytes for e in self._schema_tables() if e.size_bytes is not None
+        }
+        out: dict[str, int] = {}
+        for name in file_names:
+            size = by_upper.get(name.upper())
+            if size is not None:
+                out[name] = size
+        return out
 
     # ------------------------------------------------------------------
     # Legacy bridge
@@ -145,7 +212,9 @@ class SnowflakeDriver(Driver):
         conversion of the private key material).
         """
         merged = build_address_config(
-            dict(self.args), dict(self.secrets), dict(self.location),
+            dict(self.args),
+            dict(self.secrets),
+            dict(self.location),
         )
         return "snowflake", merged
 
@@ -184,7 +253,11 @@ class SnowflakeDriver(Driver):
         """Read a Snowflake table via the engine session."""
         addr = self._build_address()
         return addr.read(
-            session, pipeline, batch_id, file_name, delimiter,  # type: ignore[arg-type]
+            session,  # type: ignore[arg-type]  # EngineSession wraps a SparkSession at runtime
+            pipeline,
+            batch_id,
+            file_name,
+            delimiter,
             table_name=table_name,
         )
 
@@ -197,7 +270,7 @@ class SnowflakeDriver(Driver):
         table_name: str,
         delimiter: str | None = None,
     ) -> None:
-        """Write ``df`` into ``{database}.OVID_{pipeline}_{batch_id}.{table_name}``."""
+        """Write ``df`` into the address's ``{database}.{schema}.{table_name}``."""
         addr = self._build_address()
         addr.write(df, session, pipeline, batch_id, table_name, delimiter)  # type: ignore[arg-type]
 

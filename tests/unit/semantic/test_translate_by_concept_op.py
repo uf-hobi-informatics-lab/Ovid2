@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from pyspark.sql import SparkSession
 
 
-def _ctx(spark: "SparkSession", table: str = "diagnosis") -> MapOpContext:
+def _ctx(spark: SparkSession, table: str = "diagnosis") -> MapOpContext:
     """Build a minimal :class:`MapOpContext` for tests."""
     return MapOpContext(
         spark=spark,
@@ -29,7 +29,7 @@ def _ctx(spark: "SparkSession", table: str = "diagnosis") -> MapOpContext:
 
 
 @pytest.mark.unit
-def test_translate_by_concept_basic_lookup(spark: "SparkSession") -> None:
+def test_translate_by_concept_basic_lookup(spark: SparkSession) -> None:
     """A matched value is replaced with the vocabulary's target column."""
     concept = spark.createDataFrame(
         [
@@ -53,11 +53,9 @@ def test_translate_by_concept_basic_lookup(spark: "SparkSession") -> None:
 
 
 @pytest.mark.unit
-def test_translate_by_concept_keeps_unmatched(spark: "SparkSession") -> None:
+def test_translate_by_concept_keeps_unmatched(spark: SparkSession) -> None:
     """Unmatched values pass through unchanged by default."""
-    concept = spark.createDataFrame(
-        [("I10", "Hypertension")], ["concept_code", "concept_name"]
-    )
+    concept = spark.createDataFrame([("I10", "Hypertension")], ["concept_code", "concept_name"])
     concept.createOrReplaceTempView("concept")
 
     df = spark.createDataFrame([("P1", "I10"), ("P2", "UNKNOWN")], ["PATID", "DX"])
@@ -73,11 +71,9 @@ def test_translate_by_concept_keeps_unmatched(spark: "SparkSession") -> None:
 
 
 @pytest.mark.unit
-def test_translate_by_concept_drops_unmatched_when_flag_set(spark: "SparkSession") -> None:
+def test_translate_by_concept_drops_unmatched_when_flag_set(spark: SparkSession) -> None:
     """``keep_unmatched=False`` drops rows with no vocabulary match."""
-    concept = spark.createDataFrame(
-        [("I10", "Hypertension")], ["concept_code", "concept_name"]
-    )
+    concept = spark.createDataFrame([("I10", "Hypertension")], ["concept_code", "concept_name"])
     concept.createOrReplaceTempView("concept")
 
     df = spark.createDataFrame([("P1", "I10"), ("P2", "UNKNOWN")], ["PATID", "DX"])
@@ -98,11 +94,9 @@ def test_translate_by_concept_drops_unmatched_when_flag_set(spark: "SparkSession
 
 
 @pytest.mark.unit
-def test_translate_by_concept_case_insensitive(spark: "SparkSession") -> None:
+def test_translate_by_concept_case_insensitive(spark: SparkSession) -> None:
     """Case-insensitive matching is the default."""
-    concept = spark.createDataFrame(
-        [("i10", "Hypertension")], ["concept_code", "concept_name"]
-    )
+    concept = spark.createDataFrame([("i10", "Hypertension")], ["concept_code", "concept_name"])
     concept.createOrReplaceTempView("concept")
 
     df = spark.createDataFrame([("P1", "I10")], ["PATID", "DX"])
@@ -118,11 +112,9 @@ def test_translate_by_concept_case_insensitive(spark: "SparkSession") -> None:
 
 
 @pytest.mark.unit
-def test_translate_by_concept_case_sensitive_flag(spark: "SparkSession") -> None:
+def test_translate_by_concept_case_sensitive_flag(spark: SparkSession) -> None:
     """``case_sensitive=True`` rejects case-mismatched values."""
-    concept = spark.createDataFrame(
-        [("i10", "Hypertension")], ["concept_code", "concept_name"]
-    )
+    concept = spark.createDataFrame([("i10", "Hypertension")], ["concept_code", "concept_name"])
     concept.createOrReplaceTempView("concept")
 
     df = spark.createDataFrame([("P1", "I10")], ["PATID", "DX"])
@@ -144,11 +136,9 @@ def test_translate_by_concept_case_sensitive_flag(spark: "SparkSession") -> None
 
 
 @pytest.mark.unit
-def test_translate_by_concept_target_column_override(spark: "SparkSession") -> None:
+def test_translate_by_concept_target_column_override(spark: SparkSession) -> None:
     """Write the mapped value into a different column."""
-    concept = spark.createDataFrame(
-        [("I10", "Hypertension")], ["concept_code", "concept_name"]
-    )
+    concept = spark.createDataFrame([("I10", "Hypertension")], ["concept_code", "concept_name"])
     concept.createOrReplaceTempView("concept")
 
     df = spark.createDataFrame([("P1", "I10")], ["PATID", "DX"])
@@ -171,12 +161,12 @@ def test_translate_by_concept_target_column_override(spark: "SparkSession") -> N
 
 
 @pytest.mark.unit
-def test_translate_by_concept_domain_filter(spark: "SparkSession") -> None:
+def test_translate_by_concept_domain_filter(spark: SparkSession) -> None:
     """``domain_filter`` restricts the vocabulary side via ``domain_column``."""
     concept = spark.createDataFrame(
         [
             ("I10", "Hypertension", "Condition"),
-            ("I10", "Some drug",   "Drug"),
+            ("I10", "Some drug", "Drug"),
         ],
         ["concept_code", "concept_name", "domain_id"],
     )
@@ -200,7 +190,7 @@ def test_translate_by_concept_domain_filter(spark: "SparkSession") -> None:
 
 
 @pytest.mark.unit
-def test_translate_by_concept_unknown_vocabulary_is_noop(spark: "SparkSession") -> None:
+def test_translate_by_concept_unknown_vocabulary_is_noop(spark: SparkSession) -> None:
     """An unregistered vocabulary logs and passes the DataFrame through."""
     df = spark.createDataFrame([("P1", "I10")], ["PATID", "DX"])
     op = TranslateByConceptOp()
@@ -214,7 +204,7 @@ def test_translate_by_concept_unknown_vocabulary_is_noop(spark: "SparkSession") 
 
 
 @pytest.mark.unit
-def test_translate_by_concept_missing_view_is_noop(spark: "SparkSession") -> None:
+def test_translate_by_concept_missing_view_is_noop(spark: SparkSession) -> None:
     """When the vocabulary view is not in Spark's catalog, the op no-ops.
 
     Simulated by dropping the ``concept`` temp view before the op runs.

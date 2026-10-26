@@ -210,13 +210,15 @@ def _llm_principal(request: Request) -> AuthContext | None:
         return None
     grant = llm_token.lookup(credential)
     if grant is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                            detail="Assistant token expired or unknown.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Assistant token expired or unknown."
+        )
     path = request.url.path
     if request.method.upper() not in ("GET", "HEAD") or not path.startswith("/api/v1/"):
         logger.warning("Rejected assistant %s %s (read-only token).", request.method, path)
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail="The assistant token is read-only.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="The assistant token is read-only."
+        )
     return AuthContext(
         user_id=f"{llm_token.LLM_PRINCIPAL_PREFIX}{grant.user_id}",
         role=grant.role,

@@ -27,9 +27,15 @@ PCORNET_LITE_1_0: CdmHandle = CdmHandle(
     },
     reference_tables=frozenset({"demographic", "encounter", "provider", "harvest"}),
     id_columns={
-        "patient": IdColumn(role="patient", column="PATID", width=32, reference_table="demographic"),
-        "encounter": IdColumn(role="encounter", column="ENCOUNTERID", width=48, reference_table="encounter"),
-        "provider": IdColumn(role="provider", column="PROVIDERID", width=32, reference_table="provider"),
+        "patient": IdColumn(
+            role="patient", column="PATID", width=32, reference_table="demographic"
+        ),
+        "encounter": IdColumn(
+            role="encounter", column="ENCOUNTERID", width=48, reference_table="encounter"
+        ),
+        "provider": IdColumn(
+            role="provider", column="PROVIDERID", width=32, reference_table="provider"
+        ),
     },
     flavour_of_null=frozenset({"NI", "", None}),
     shared_views=(),

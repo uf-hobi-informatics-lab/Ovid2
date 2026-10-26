@@ -27,14 +27,19 @@ import sys
 from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from rich.panel import Panel
 
 from ovid2.display.reader import follow_events, latest_event_log
 from ovid2.display.renderers._run_state import (
     TABLE_ITEMS,
     RunAggregate,
-    is_item_event as _is_item_event,
     pick_item_kind,
+)
+from ovid2.display.renderers._run_state import (
+    is_item_event as _is_item_event,
 )
 
 logger = logging.getLogger(__name__)
@@ -110,7 +115,7 @@ class _State:
         return self._agg.items_failed if self._agg is not None else 0
 
 
-def _build_panel(state: _State) -> Panel:  # noqa: F821 — annotated as string
+def _build_panel(state: _State) -> Panel:
     """Return a Rich Panel showing the current state."""
     from rich.panel import Panel
     from rich.table import Table

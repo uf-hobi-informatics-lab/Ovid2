@@ -20,13 +20,14 @@ import pytest
 import ovid2.semantic as semantic
 from ovid2.semantic.handle import VocabularyHandle
 
-
-_LEG_NAMES: frozenset[str] = frozenset({
-    "source_path",
-    "shared_view",
-    "address",
-    "inline_items",
-})
+_LEG_NAMES: frozenset[str] = frozenset(
+    {
+        "source_path",
+        "shared_view",
+        "address",
+        "inline_items",
+    }
+)
 
 
 @pytest.mark.contract

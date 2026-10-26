@@ -31,9 +31,7 @@ def test_snowpark_disc_strategy_self_registers_on_driver_import() -> None:
     """
     # Force a fresh import chain.
     for mod in list(sys.modules):
-        if mod == "ovid2.drivers.snowflake" or mod.startswith(
-            "ovid2.drivers.snowflake."
-        ):
+        if mod == "ovid2.drivers.snowflake" or mod.startswith("ovid2.drivers.snowflake."):
             del sys.modules[mod]
         if mod == "ovid2.core.engines.stager":
             del sys.modules[mod]

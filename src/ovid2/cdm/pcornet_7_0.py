@@ -18,11 +18,12 @@ touching the curated top-level metadata.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 
 from ovid2.cdm.handle import CdmHandle
 from ovid2.cdm.registry import register
-from ovid2.cdm.yaml_loader import CdmYamlError, load_cdm
+from ovid2.cdm.yaml_loader import load_cdm
 
 logger = logging.getLogger(__name__)
 
@@ -32,11 +33,9 @@ PCORNET_7_0: CdmHandle = load_cdm("pcornet_7_0")
 
 def _register_default() -> None:
     """Idempotently register the PCORnet handle."""
-    try:
+    # Already registered — safe in reload/test scenarios.
+    with contextlib.suppress(ValueError):
         register(PCORNET_7_0)
-    except ValueError:
-        # Already registered — safe in reload/test scenarios.
-        pass
 
 
 _register_default()

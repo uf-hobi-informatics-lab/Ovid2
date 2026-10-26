@@ -17,14 +17,11 @@ class ValidateMappersArgs(BaseModel):
 
 TOOL_NAME = "validate_mappers"
 TOOL_DESCRIPTION = (
-    "Run the packaged JSON-schema validator against every mapper YAML "
-    "in a pipeline package."
+    "Run the packaged JSON-schema validator against every mapper YAML in a pipeline package."
 )
 ARGS_MODEL = ValidateMappersArgs
 
 
 async def run(client: WebApiClient, args: ValidateMappersArgs) -> Any:
     """Call ``POST /api/v1/pipelines/{pipeline}/mappers:validate``."""
-    return await client.post(
-        f"/api/v1/pipelines/{args.pipeline}/mappers:validate"
-    )
+    return await client.post(f"/api/v1/pipelines/{args.pipeline}/mappers:validate")

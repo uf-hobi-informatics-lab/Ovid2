@@ -16,6 +16,13 @@ The native :class:`SnowflakeDriver` self-registers in
 
 from __future__ import annotations
 
+# Import the staging subpackage so each Snowpark strategy under
+# ``ovid2.drivers.snowflake.staging.*`` self-registers on the
+# :class:`SnowparkEngineStager` dispatch map. Phase C adds ``disc``;
+# Phase D will add ``s3`` and ``azure_blob``. Import is side-effect
+# only — the subpackage exports nothing.
+from ovid2.drivers.snowflake import staging as _staging  # noqa: F401
+
 # Import the driver module so its bottom-of-file ``register()`` call
 # runs, replacing the LegacyDriverAdapter_snowflake entry.
 from ovid2.drivers.snowflake.driver import SnowflakeDriver
@@ -34,13 +41,6 @@ from ovid2.drivers.snowflake.probe import (
     _read_private_key_pem,
     _resolve_credentials_dir,
 )
-
-# Import the staging subpackage so each Snowpark strategy under
-# ``ovid2.drivers.snowflake.staging.*`` self-registers on the
-# :class:`SnowparkEngineStager` dispatch map. Phase C adds ``disc``;
-# Phase D will add ``s3`` and ``azure_blob``. Import is side-effect
-# only — the subpackage exports nothing.
-from ovid2.drivers.snowflake import staging as _staging  # noqa: F401,E402
 
 __all__ = [
     "DEFAULT_CREDENTIALS_DIR",

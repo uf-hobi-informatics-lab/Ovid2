@@ -19,9 +19,8 @@ def test_ensure_schema_creates_auth_tables(isolated_xdg: Path) -> None:
 
     with web_db.connect() as conn:
         tables = {
-            r[0] for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            ).fetchall()
+            r[0]
+            for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
         }
     assert {"web_users", "web_sessions"}.issubset(tables)
 
@@ -33,9 +32,8 @@ def test_ensure_schema_creates_auth_indexes(isolated_xdg: Path) -> None:
 
     with web_db.connect() as conn:
         indexes = {
-            r[0] for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'index'"
-            ).fetchall()
+            r[0]
+            for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'index'").fetchall()
         }
     # web_users indexes
     assert "ix_web_users_status" in indexes
@@ -68,9 +66,18 @@ def test_web_users_unique_issuer_subject_constraint(isolated_xdg: Path) -> None:
                 created_at, updated_at, last_login_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            ("user1", "issuer1", "subject1", "user1@example.com", "User One",
-             "admin", "active", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z",
-             None),
+            (
+                "user1",
+                "issuer1",
+                "subject1",
+                "user1@example.com",
+                "User One",
+                "admin",
+                "active",
+                "2026-01-01T00:00:00Z",
+                "2026-01-01T00:00:00Z",
+                None,
+            ),
         )
         conn.commit()
         # Attempt to insert duplicate (issuer, subject) should fail
@@ -82,8 +89,17 @@ def test_web_users_unique_issuer_subject_constraint(isolated_xdg: Path) -> None:
                     created_at, updated_at, last_login_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                ("user2", "issuer1", "subject1", "user2@example.com", "User Two",
-                 "user", "pending", "2026-01-02T00:00:00Z", "2026-01-02T00:00:00Z",
-                 None),
+                (
+                    "user2",
+                    "issuer1",
+                    "subject1",
+                    "user2@example.com",
+                    "User Two",
+                    "user",
+                    "pending",
+                    "2026-01-02T00:00:00Z",
+                    "2026-01-02T00:00:00Z",
+                    None,
+                ),
             )
             conn.commit()

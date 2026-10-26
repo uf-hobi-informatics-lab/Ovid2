@@ -66,9 +66,7 @@ def _signed_cookie_value(session_id: str) -> str:
     response = Response()
     cookie_mod.issue_cookie(response, session_id)
     line = next(
-        value.decode("latin-1")
-        for key, value in response.raw_headers
-        if key == b"set-cookie"
+        value.decode("latin-1") for key, value in response.raw_headers if key == b"set-cookie"
     )
     jar: SimpleCookie[str] = SimpleCookie()
     jar.load(line)
@@ -172,10 +170,7 @@ def test_enabled_api_not_redirected_by_middleware(
     resp = app_client.get("/api/v1/health")
     # The middleware must not issue a redirect to /login for API paths. The
     # route dependency answers JSON (401 for VIEW_PUBLIC without a session).
-    assert not (
-        resp.status_code == 302
-        and resp.headers.get("location", "").startswith("/login")
-    )
+    assert not (resp.status_code == 302 and resp.headers.get("location", "").startswith("/login"))
 
 
 # ---------------------------------------------------------------------------
@@ -207,9 +202,7 @@ def test_enabled_disabled_user_sees_pending_page(
         email="disabled-mw@example.org",
         name="disabled-mw",
     )
-    record = users_svc.activate(
-        user_id=record["user_id"], role=Role.VIEWER, actor="test"
-    )
+    record = users_svc.activate(user_id=record["user_id"], role=Role.VIEWER, actor="test")
     users_svc.disable(user_id=record["user_id"], actor="test")
     session = sessions_svc.create(
         user_id=str(record["user_id"]),
@@ -241,9 +234,7 @@ def test_enabled_active_admin_sees_console(
 
 
 @pytest.mark.unit
-def test_disabled_root_open(
-    monkeypatch: pytest.MonkeyPatch, app_client: TestClient
-) -> None:
+def test_disabled_root_open(monkeypatch: pytest.MonkeyPatch, app_client: TestClient) -> None:
     """auth.enabled=False → GET / is 200 with no session (today's behaviour)."""
     _enable_auth(monkeypatch, enabled=False)
     _set_cookie(app_client, None)

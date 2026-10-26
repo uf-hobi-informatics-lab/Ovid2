@@ -80,9 +80,7 @@ def test_mcp_does_not_import_secrets_storage_or_pipeline(src_root: Path) -> None
                 continue
             target = _module_target(node)
             if target and _is_forbidden(target):
-                offenders.append(
-                    f"{py.relative_to(src_root)}:{node.lineno} imports {target}"
-                )
+                offenders.append(f"{py.relative_to(src_root)}:{node.lineno} imports {target}")
 
     assert not offenders, (
         "Agent tier (MCP) must not import secret / storage / pipeline "
@@ -112,14 +110,11 @@ def test_mcp_only_imports_allowlisted_ovid2_modules(src_root: Path) -> None:
                 continue
             if target in ALLOWED_EXACT:
                 continue
-            offenders.append(
-                f"{py.relative_to(src_root)}:{node.lineno} imports {target}"
-            )
+            offenders.append(f"{py.relative_to(src_root)}:{node.lineno} imports {target}")
 
     assert not offenders, (
         "Agent tier (MCP) imported a non-allow-listed ovid2 module. "
-        "Allowed: ovid2.mcp.*, ovid2.web.settings, ovid2 (__version__).\n"
-        + "\n".join(offenders)
+        "Allowed: ovid2.mcp.*, ovid2.web.settings, ovid2 (__version__).\n" + "\n".join(offenders)
     )
 
 

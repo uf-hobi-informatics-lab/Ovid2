@@ -78,29 +78,21 @@ class AzureBlobIO:
         try:
             self.container: str = str(config["container"])
         except KeyError as exc:
-            raise ValueError(
-                "AzureBlobAddress config missing required 'container' key."
-            ) from exc
+            raise ValueError("AzureBlobAddress config missing required 'container' key.") from exc
         self.prefix: str = str(config.get("prefix", "")).strip("/")
-        self.endpoint_suffix: str = str(
-            config.get("endpoint_suffix", "core.windows.net")
-        )
+        self.endpoint_suffix: str = str(config.get("endpoint_suffix", "core.windows.net"))
         self.format: str = str(config.get("format", "csv"))
         self.lowercase_columns: bool = bool(config.get("lowercase_columns", False))
         self.single_file: bool = bool(config.get("single_file", False))
 
         # Squirrel every credential we might need away; the ABFS driver
         # reads them at session configuration time.
-        self._connection_string: str | None = self._nonempty(
-            config.get("connection_string")
-        )
+        self._connection_string: str | None = self._nonempty(config.get("connection_string"))
         self._account_key: str | None = self._nonempty(config.get("account_key"))
         self._sas_token: str | None = self._nonempty(config.get("sas_token"))
         self._tenant_id: str | None = self._nonempty(config.get("tenant_id"))
         self._client_id: str | None = self._nonempty(config.get("client_id"))
-        self._client_secret: str | None = self._nonempty(
-            config.get("client_secret")
-        )
+        self._client_secret: str | None = self._nonempty(config.get("client_secret"))
 
         self.auth_mode: str = resolve_address_auth_mode(
             {
@@ -144,38 +136,41 @@ class AzureBlobIO:
         return f"abfss://{self.container}@{self._fs_host()}/"
 
     def _resolve_read_path(
-        self, pipeline: str, batch_id: str, file_name: str,
+        self,
+        pipeline: str,
+        batch_id: str,
+        file_name: str,
     ) -> str:
         """Assemble the fully-qualified read path.
 
         Args:
-            pipeline: Pipeline name (case-sensitive — the driver does
-                not offer the glob-based case-insensitive fallback the
-                :class:`DiscAddress` uses).
-            batch_id: Batch identifier.
+            pipeline: Ignored — the address is the exact location.
+            batch_id: Ignored — the address is the exact location.
             file_name: File name; may itself contain wildcards accepted
                 by the Hadoop path resolver (``*``, ``?``, ``[…]``).
 
         Returns:
             An ``abfss://…`` URI suitable for ``spark.read`` methods.
         """
-        parts = [p for p in (self.prefix, pipeline, batch_id, file_name) if p]
+        del pipeline, batch_id  # the address is the exact location
+        parts = [p for p in (self.prefix, file_name) if p]
         return self._base_uri() + "/".join(parts)
 
     def _resolve_write_dir(self, pipeline: str, batch_id: str) -> str:
-        """Return the write directory URI (no trailing file name)."""
-        parts = [p for p in (self.prefix, pipeline, batch_id) if p]
-        return self._base_uri() + "/".join(parts)
+        """Return the write directory URI — the address location itself."""
+        del pipeline, batch_id  # the address is the exact location
+        # No trailing slash: callers append ``/{table}.{fmt}``.
+        return (self._base_uri() + self.prefix).rstrip("/")
 
     def _write_blob_prefix(self, pipeline: str, batch_id: str) -> str:
-        """Return the container-relative prefix ``{prefix}/{pipeline}/{batch}``.
+        """Return the container-relative prefix ``{prefix}`` (the exact address location).
 
         Used by the ``azure-storage-blob``-based finalize step. Never
         carries a leading slash so it composes with
         ``<container>/<blob>``.
         """
-        parts = [p for p in (self.prefix, pipeline, batch_id) if p]
-        return "/".join(parts)
+        del pipeline, batch_id  # the address is the exact location
+        return self.prefix.strip("/")
 
     # -------------------------------------------------- Spark session config
 
@@ -206,9 +201,7 @@ class AzureBlobIO:
             parsed = _parse_connection_string(self._connection_string)
             account_key = parsed.get("AccountKey")
             if not account_key:
-                raise ValueError(
-                    "AzureBlobAddress connection_string is missing 'AccountKey'."
-                )
+                raise ValueError("AzureBlobAddress connection_string is missing 'AccountKey'.")
             conf.set(f"fs.azure.account.auth.type.{host}", "SharedKey")
             conf.set(f"fs.azure.account.key.{host}", account_key)
 
@@ -221,9 +214,7 @@ class AzureBlobIO:
             assert self._sas_token is not None
             token = self._sas_token.lstrip("?")
             conf.set(f"fs.azure.account.auth.type.{host}", "SAS")
-            conf.set(
-                f"fs.azure.sas.token.provider.type.{host}", _FIXED_SAS_PROVIDER
-            )
+            conf.set(f"fs.azure.sas.token.provider.type.{host}", _FIXED_SAS_PROVIDER)
             conf.set(f"fs.azure.sas.fixed.token.{host}", token)
 
         elif self.auth_mode == "service_principal":
@@ -245,9 +236,7 @@ class AzureBlobIO:
 
         else:  # managed_identity — the default path on the Ovid host.
             conf.set(f"fs.azure.account.auth.type.{host}", "OAuth")
-            conf.set(
-                f"fs.azure.account.oauth.provider.type.{host}", _MSI_PROVIDER
-            )
+            conf.set(f"fs.azure.account.oauth.provider.type.{host}", _MSI_PROVIDER)
 
         self._configured_sessions.add(session_id)
 
@@ -294,7 +283,7 @@ class AzureBlobIO:
         table_name: str,
         delimiter: str | None = None,
     ) -> None:
-        """Write a DataFrame under ``{prefix}/{pipeline}/{batch_id}/``.
+        """Write a DataFrame directly under the address location ``{prefix}/``.
 
         Behaviour depends on ``single_file`` (address location field,
         default ``False``):
@@ -317,7 +306,11 @@ class AzureBlobIO:
         if self.format == "csv":
             if self.single_file:
                 self._write_csv_single_file(
-                    df, pipeline, batch_id, table_name, delimiter or CSV_DELIMITER,
+                    df,
+                    pipeline,
+                    batch_id,
+                    table_name,
+                    delimiter or CSV_DELIMITER,
                 )
             else:
                 (
@@ -363,9 +356,7 @@ class AzureBlobIO:
         behind for debugging; the caller can re-run.
         """
         blob_prefix = self._write_blob_prefix(pipeline, batch_id)
-        target_blob = (
-            f"{blob_prefix}/{table_name}.csv" if blob_prefix else f"{table_name}.csv"
-        )
+        target_blob = f"{blob_prefix}/{table_name}.csv" if blob_prefix else f"{table_name}.csv"
         staging_prefix = (
             f"{blob_prefix}/_ovid2_staging_{table_name}"
             if blob_prefix
@@ -376,7 +367,8 @@ class AzureBlobIO:
 
         # Step 1: header once.
         (
-            df.limit(0).coalesce(1)
+            df.limit(0)
+            .coalesce(1)
             .write.format("csv")
             .option("header", True)
             .option("nullValue", None)
@@ -429,7 +421,7 @@ class AzureBlobIO:
             assert self._sas_token is not None
             return self._sas_token.lstrip("?")
         if self.auth_mode == "service_principal":
-            from azure.identity import ClientSecretCredential  # type: ignore[import-untyped]
+            from azure.identity import ClientSecretCredential
 
             assert self._tenant_id and self._client_id and self._client_secret
             return ClientSecretCredential(
@@ -438,7 +430,7 @@ class AzureBlobIO:
                 client_secret=self._client_secret,
             )
         # managed_identity — DefaultAzureCredential walks env → MSI → az CLI.
-        from azure.identity import DefaultAzureCredential  # type: ignore[import-untyped]
+        from azure.identity import DefaultAzureCredential
 
         return DefaultAzureCredential()
 
@@ -448,7 +440,7 @@ class AzureBlobIO:
         Best-effort; a failed delete raises so the operator sees the
         leaked staging space.
         """
-        from azure.storage.blob import ContainerClient  # type: ignore[import-untyped]
+        from azure.storage.blob import ContainerClient
 
         account_url = f"https://{self._blob_host()}"
         container_client = ContainerClient(
@@ -470,6 +462,7 @@ class AzureBlobIO:
 # Server-side stitch — module-level so tests can drive it without an
 # AzureBlobIO instance.
 # ---------------------------------------------------------------------------
+
 
 def _b64_block_id(index: int) -> str:
     """Return a stable, sortable, base64-encoded block id.
@@ -521,7 +514,7 @@ def finalize_csv_block_commit(
         FileNotFoundError: If no body parts are found under
             ``body_prefix``.
     """
-    from azure.storage.blob import BlobClient, ContainerClient  # type: ignore[import-untyped]
+    from azure.storage.blob import BlobClient, ContainerClient
 
     account_url = f"https://{account_name}.blob.{endpoint_suffix}"
     container_client = ContainerClient(
@@ -539,22 +532,17 @@ def finalize_csv_block_commit(
             body_blobs.append(b.name)
     body_blobs.sort()
     if not body_blobs:
-        raise FileNotFoundError(
-            f"No body part blobs under {container}/{body_prefix}."
-        )
+        raise FileNotFoundError(f"No body part blobs under {container}/{body_prefix}.")
 
     # Locate the single header part blob under header_blob_dir.
     header_list_prefix = header_blob_dir.rstrip("/") + "/"
     header_candidates = [
         b.name
         for b in container_client.list_blobs(name_starts_with=header_list_prefix)
-        if b.name.split("/")[-1].startswith("part-")
-        and b.name.endswith(".csv")
+        if b.name.split("/")[-1].startswith("part-") and b.name.endswith(".csv")
     ]
     if not header_candidates:
-        raise FileNotFoundError(
-            f"No header part blob under {container}/{header_list_prefix}."
-        )
+        raise FileNotFoundError(f"No header part blob under {container}/{header_list_prefix}.")
     header_blob_name = header_candidates[0]
 
     target_client: BlobClient = container_client.get_blob_client(target_blob)
@@ -575,11 +563,13 @@ def finalize_csv_block_commit(
             source_url=source_url,
         )
 
-    target_client.commit_block_list(block_ids)
+    # The SDK accepts plain block-id strings (committed as "latest");
+    # its annotation only advertises list[BlobBlock].
+    target_client.commit_block_list(block_ids)  # type: ignore[arg-type]
 
 
 __all__ = [
-    "AzureBlobIO",
     "_VALID_FORMATS",
+    "AzureBlobIO",
     "finalize_csv_block_commit",
 ]

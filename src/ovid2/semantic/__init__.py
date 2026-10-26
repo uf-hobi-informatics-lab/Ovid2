@@ -25,6 +25,12 @@ design and rollout plan.
 
 from __future__ import annotations
 
+# Import each bundled vocabulary module for its side effect (self-registration).
+# The `vocabularies` package's `__init__` calls the YAML loader, which
+# reads `resources/semantic/vocabularies/*.yaml` (phase S3 — bundled
+# cross-CDM vocabularies including OMOP CONCEPT) and
+# `resources/semantic/bindings/*.yaml` (S3 — column bindings).
+from ovid2.semantic import vocabularies as _vocabularies  # noqa: F401
 from ovid2.semantic.handle import SemanticHandle, VocabularyHandle
 from ovid2.semantic.registry import (
     ColumnBinding,
@@ -38,13 +44,6 @@ from ovid2.semantic.registry import (
     registered,
     registered_kinds,
 )
-
-# Import each bundled vocabulary module for its side effect (self-registration).
-# The `vocabularies` package's `__init__` calls the YAML loader, which
-# reads `resources/semantic/vocabularies/*.yaml` (phase S3 — bundled
-# cross-CDM vocabularies including OMOP CONCEPT) and
-# `resources/semantic/bindings/*.yaml` (S3 — column bindings).
-from ovid2.semantic import vocabularies as _vocabularies  # noqa: F401
 
 # PCORnet CDM valuesets (SEX, DX_TYPE, …) — registered as inline
 # vocabularies from `resources/cdms/pcornet_7_0/valuesets/*.yaml` at

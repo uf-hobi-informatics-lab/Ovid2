@@ -32,7 +32,7 @@ def list_engine_types() -> list[str]:
     return sorted(ENGINE_TYPE_MAP)
 
 
-def load_engine_class(type_name: str) -> "type[BaseEngine]":
+def load_engine_class(type_name: str) -> type[BaseEngine]:
     """Import and return the engine class registered under ``type_name``.
 
     Args:
@@ -42,9 +42,7 @@ def load_engine_class(type_name: str) -> "type[BaseEngine]":
         KeyError: If ``type_name`` is not registered.
     """
     if type_name not in ENGINE_TYPE_MAP:
-        raise KeyError(
-            f"Unknown engine type '{type_name}'. Known: {list_engine_types()}"
-        )
+        raise KeyError(f"Unknown engine type '{type_name}'. Known: {list_engine_types()}")
     module_path, class_name = ENGINE_TYPE_MAP[type_name].rsplit(".", 1)
     module = importlib.import_module(module_path)
     return getattr(module, class_name)  # type: ignore[no-any-return]

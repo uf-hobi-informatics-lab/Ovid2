@@ -53,10 +53,15 @@ class TestRunConsoleRendering:
         assert 'id="ovid2-terminal"' not in html
 
     def test_run_detail_console_fills_main(self, web_client) -> None:
-        """The console page opts into the full-width fill layout."""
+        """The console fills the right region of the merged runs workspace.
+
+        (The standalone ``console-page`` wrapper was retired when /runs and
+        /runs/{id} merged into one list + console workspace.)
+        """
         response = web_client.get("/runs/example-instance-id")
         html = response.text
-        assert "console-page" in html
+        assert "runs-workspace" in html
+        assert 'id="run-detail-region"' in html
         assert "console-fill" in html, (
             "run-detail page must mark the terminal pane console-fill "
             "so the console fills the whole main content area."
@@ -78,9 +83,7 @@ class TestRunConsoleRendering:
         """Total-elapsed footer present (the meta-strip timer is gone)."""
         response = web_client.get("/runs/example-instance-id")
         html = response.text
-        assert "term-footer" in html and "term-total" in html, (
-            "missing total-elapsed footer"
-        )
+        assert "term-footer" in html and "term-total" in html, "missing total-elapsed footer"
         assert "Total Elapsed Time" in html
         # The removed live meta strip must not linger.
         assert "term-header" not in html
@@ -114,9 +117,7 @@ class TestVendorBundleServed:
         assert "d3" in body[:400].lower()
         # Bundle is expected to be at least ~50 KB — smaller means
         # something has gone wrong (a stub, an empty file, …).
-        assert len(body) > 50_000, (
-            f"D3 bundle looks truncated ({len(body)} bytes)"
-        )
+        assert len(body) > 50_000, f"D3 bundle looks truncated ({len(body)} bytes)"
 
     def test_static_route_serves_display_bus(self, web_client) -> None:
         response = web_client.get("/static/display/bus.js")
@@ -166,9 +167,7 @@ class TestTerminalPaneRendering:
         response = web_client.get("/runs/example-instance-id")
         assert response.status_code == 200
         html = response.text
-        assert "terminal-pane" in html, (
-            "run-detail page must include the console pane"
-        )
+        assert "terminal-pane" in html, "run-detail page must include the console pane"
         # data-instance-id wired through so the reader hits the right
         # events endpoint.
         assert 'data-instance-id="example-instance-id"' in html
@@ -227,21 +226,12 @@ class TestLiveJsWiring:
     """live.js imports the terminal module and the job-status nudge glue."""
 
     def _live_js(self) -> str:
-        p = (
-            Path(__file__).resolve().parents[3]
-            / "src"
-            / "ovid2"
-            / "web"
-            / "static"
-            / "live.js"
-        )
+        p = Path(__file__).resolve().parents[3] / "src" / "ovid2" / "web" / "static" / "live.js"
         return p.read_text(encoding="utf-8")
 
     def test_live_js_imports_terminal_mount(self) -> None:
         text = self._live_js()
-        assert "display/terminal/mount.js" in text, (
-            "live.js must import the terminal mount module"
-        )
+        assert "display/terminal/mount.js" in text, "live.js must import the terminal mount module"
 
     def test_live_js_wires_job_status_nudge(self) -> None:
         text = self._live_js()
@@ -250,15 +240,11 @@ class TestLiveJsWiring:
             "nudge so the /partials/runs/{id}/status swap fires on "
             "terminal-state events without waiting for the next poll."
         )
-        assert "run-job-status" in text, (
-            "the nudge handler must target #run-job-status"
-        )
+        assert "run-job-status" in text, "the nudge handler must target #run-job-status"
 
     def test_live_js_boots_terminal(self) -> None:
         text = self._live_js()
-        assert "bootTerminal" in text, (
-            "live.js must boot the terminal console"
-        )
+        assert "bootTerminal" in text, "live.js must boot the terminal console"
 
 
 class TestDisplayTimezone:
@@ -299,9 +285,7 @@ class TestDisplayTimezone:
             / "panel.js"
         )
         text = p.read_text(encoding="utf-8")
-        assert "display/tz.js" in text, (
-            "panel.js must import the tz helper"
-        )
+        assert "display/tz.js" in text, "panel.js must import the tz helper"
         assert "formatClockTs" in text, (
             "panel.js must format detail-log timestamps via the tz helper"
         )
@@ -387,4 +371,3 @@ class TestPerTableDetailFreeList:
         assert "status-running" in text
         # Detail follow re-arms on scroll-to-bottom (userPinned reset).
         assert "userPinned = false" in text
-

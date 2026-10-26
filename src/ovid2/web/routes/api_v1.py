@@ -10,16 +10,19 @@ formatter update, address CRUD, ...) land in later phases.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
-from fastapi.responses import PlainTextResponse, Response
+from typing import Any
 
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import PlainTextResponse, Response, StreamingResponse
+
+from ovid2.web.auth.csrf import require_json_content_type
 from ovid2.web.auth.deps import AuthContext, require_capability
 from ovid2.web.auth.roles import Capability, Role
 from ovid2.web.models import (
     AddressDetail,
     AddressSummary,
     AddressWrite,
+    AppearancePrefs,
     ApprovalDecision,
     ApprovalListResponse,
     ApprovalSummary,
@@ -64,11 +67,10 @@ from ovid2.web.models import (
     MapperSpecDetail,
     MapperValidationReport,
     MapperWrite,
-    OdsBatchListing,
     OdsDimensionCatalog,
-    OdsPipelineListing,
+    OdsListing,
     OdsResolveResult,
-    OdsTableListing,
+    OverwriteConfirm,
     PipelineConfigDetail,
     PipelineConfigSummary,
     PipelineDetail,
@@ -120,6 +122,7 @@ from ovid2.web.services import (
     pipeline_plan_svc,
     pipelines_meta_svc,
     pipelines_svc,
+    prefs_svc,
     runs_svc,
     secrets_svc,
     settings_svc,
@@ -155,6 +158,56 @@ def _gate(action: str, target: str | None, requested_by: str = "web") -> None:
                 "target": exc.target,
             },
         ) from exc
+
+
+#: Principals that are *agents* (the MCP service token, the assistant's
+#: per-turn token). An agent may propose an overwrite of an occupied output
+#: location but a human must approve it (``run.overwrite`` gate).
+_AGENT_PRINCIPAL_PREFIXES: tuple[str, ...] = ("mcp:", "llm:")
+
+
+def _is_agent(ctx: AuthContext | None) -> bool:
+    """Return ``True`` when ``ctx`` is an agent principal (MCP / assistant)."""
+    return bool(ctx and ctx.user_id.startswith(_AGENT_PRINCIPAL_PREFIXES))
+
+
+def _actor(ctx: AuthContext | None) -> str:
+    """Audit label for a job written through the API.
+
+    Humans (and the auth-disabled bypass) keep the historical ``web``
+    label; agent principals are recorded verbatim (``mcp:service`` /
+    ``llm:<user>``) so an agent-initiated run is attributable.
+    """
+    return ctx.user_id if _is_agent(ctx) and ctx is not None else "web"
+
+
+def _overwrite_target(job_or_output: str) -> str:
+    """Return the approval target string for an overwrite of ``job_or_output``."""
+    return f"output:{job_or_output}"
+
+
+def _overwrite_conflict(
+    exc: jobs_svc.OverwriteRequired | pipelines_svc.OverwriteRequired,
+) -> HTTPException:
+    """Map an ``OverwriteRequired`` (jobs / pipelines) to ``409 overwrite_required``."""
+    return HTTPException(
+        status_code=409,
+        detail={
+            "status": "overwrite_required",
+            "output_address": exc.output_address,
+            "existing_tables": exc.tables,
+            "message": str(exc),
+            "hint": "Re-submit with confirm_overwrite=true to replace the existing data.",
+        },
+    )
+
+
+def _gate_agent_overwrite(ctx: AuthContext | None, confirm: bool, output: str) -> None:
+    """Route an agent's ``confirm_overwrite`` through the human-approval gate."""
+    if confirm and _is_agent(ctx):
+        _gate(
+            "run.overwrite", _overwrite_target(output), requested_by=ctx.user_id if ctx else "agent"
+        )
 
 
 @router.get(
@@ -447,12 +500,8 @@ def api_pipeline_plan(pipeline: str) -> PipelinePlanResponse:
     dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
 )
 def api_source_tables(
-    address: str = Query(
-        "", description="Saved source-address name (Saved-address mode)."
-    ),
-    connection: str = Query(
-        "", description="Storage-account name (Browse-storage mode)."
-    ),
+    address: str = Query("", description="Saved source-address name (Saved-address mode)."),
+    connection: str = Query("", description="Storage-account name (Browse-storage mode)."),
     location: str = Query(
         "",
         description="Browsed source path within the storage account "
@@ -472,9 +521,7 @@ def api_source_tables(
     if address.strip():
         tables, supported = source_tables_svc.tables_for_address(address)
     elif connection.strip():
-        tables, supported = source_tables_svc.tables_for_connection(
-            connection, location
-        )
+        tables, supported = source_tables_svc.tables_for_connection(connection, location)
     else:
         return SourceTablesResponse(
             supported=False,
@@ -487,9 +534,7 @@ def api_source_tables(
             "Source is enumerable but no tables were returned "
             "(unreadable file, or table listing unavailable in this tier)."
         )
-    return SourceTablesResponse(
-        supported=supported, tables=tables, message=message
-    )
+    return SourceTablesResponse(supported=supported, tables=tables, message=message)
 
 
 @router.get(
@@ -682,20 +727,6 @@ def api_list_runs(
 
 
 @router.get(
-    "/runs/{batch_id}",
-    response_model=RunSummary,
-    summary="One run by batch_id",
-    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
-)
-def api_get_run(batch_id: str) -> RunSummary:
-    """Return the run row for one ``batch_id``."""
-    run = runs_svc.get_run(batch_id)
-    if run is None:
-        raise HTTPException(status_code=404, detail=f"Run '{batch_id}' not found.")
-    return run
-
-
-@router.get(
     "/runs/{instance_id}/events",
     response_model=RunEventPage,
     summary="Cursor-paged events for a run",
@@ -743,7 +774,7 @@ def api_run_events_log(instance_id: str) -> PlainTextResponse:
     response_model=list,
     dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
 )
-def api_health_checks() -> list:
+def api_health_checks() -> list[dict[str, Any]]:
     """Return the registered data-health / EDC check catalogue.
 
     Reads the packaged YAML specs directly (web-safe); does not import
@@ -759,7 +790,7 @@ def api_health_checks() -> list:
     response_model=list,
     dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
 )
-def api_health_packages() -> list:
+def api_health_packages() -> list[dict[str, Any]]:
     """Return the registered EDC/DC report-cycle package catalogue.
 
     Reads the packaged package manifests directly (web-safe); does not
@@ -817,7 +848,7 @@ def api_validate_transform(payload: TransformValidateRequest) -> TransformValida
     response_model=dict,
     dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
 )
-def api_run_health_report(instance_id: str) -> dict:
+def api_run_health_report(instance_id: str) -> dict[str, Any]:
     """Return the parsed data-health report artifact for ``instance_id``.
 
     The artifact is written by ``ovid2 health`` beside the event log
@@ -827,9 +858,7 @@ def api_run_health_report(instance_id: str) -> dict:
     """
     report = health_report_svc.get_report(instance_id)
     if report is None:
-        raise HTTPException(
-            status_code=404, detail=f"No health report for run '{instance_id}'."
-        )
+        raise HTTPException(status_code=404, detail=f"No health report for run '{instance_id}'.")
     return report
 
 
@@ -843,7 +872,7 @@ def api_run_health_report(instance_id: str) -> dict:
     summary="Most recent engine.metrics sample for a run",
     dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
 )
-def api_run_metrics_latest(instance_id: str) -> dict:
+def api_run_metrics_latest(instance_id: str) -> dict[str, Any]:
     """Return the most recent live-metrics sample for the run.
 
     Returns ``{}`` when no sample has been written yet — the sampler
@@ -862,7 +891,7 @@ def api_run_metrics_latest(instance_id: str) -> dict:
     include_in_schema=False,
     dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
 )
-def api_run_metrics_stream(instance_id: str):
+def api_run_metrics_stream(instance_id: str) -> StreamingResponse:
     """Server-Sent Events stream of live ``engine.metrics`` samples.
 
     Frames:
@@ -894,7 +923,7 @@ def api_run_metrics_stream(instance_id: str):
     summary="Live briefing of runs currently cooking",
     dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
 )
-def api_briefing_cooking() -> list[dict]:
+def api_briefing_cooking() -> list[dict[str, Any]]:
     """Return a compact list of runs currently running + their last sample.
 
     Powers the "cooking now" one-liner on the dashboard. Reads
@@ -905,6 +934,39 @@ def api_briefing_cooking() -> list[dict]:
     from ovid2.web.services import metrics_svc
 
     return metrics_svc.briefing_cooking()
+
+
+@router.get(
+    "/runs/{batch_id}",
+    response_model=RunSummary,
+    summary="One run by batch_id",
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def api_get_run(batch_id: str) -> RunSummary:
+    """Return the run row for one ``batch_id`` (or ``instance_id``).
+
+    A batch id is a Data Space path (``conn/folder/leaf``); send it URL-
+    encoded (``%2F``) or use the slash-tolerant twin registered below.
+    """
+    run = runs_svc.get_run(batch_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"Run '{batch_id}' not found.")
+    return run
+
+
+@router.get(
+    "/runs/{batch_id:path}",
+    response_model=RunSummary,
+    include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def api_get_run_by_path(batch_id: str) -> RunSummary:
+    """Slash-tolerant twin of :func:`api_get_run` (batch ids are Data Space paths).
+
+    Registered after every ``/runs/{instance_id}/…`` sub-route so the
+    ``:path`` converter cannot shadow them.
+    """
+    return api_get_run(batch_id)
 
 
 # ---------------------------------------------------------------------------
@@ -919,10 +981,22 @@ def api_briefing_cooking() -> list[dict]:
     summary="Submit a new ETL run",
     dependencies=[Depends(require_capability(Capability.SUBMIT_JOBS))],
 )
-def api_submit_run(request: JobSubmitRequest) -> JobSubmitResponse:
-    """Enqueue an ETL job. The worker will spawn ``ovid2 etl`` shortly."""
+def api_submit_run(
+    request: JobSubmitRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.SUBMIT_JOBS)),
+) -> JobSubmitResponse:
+    """Enqueue a job. The worker spawns the matching ``ovid2`` subcommand shortly.
+
+    The output address is the exact write location: an output that
+    already holds tables answers ``409 overwrite_required`` until the
+    caller re-submits with ``confirm_overwrite=true`` (agent principals
+    then go through the ``run.overwrite`` human approval → ``202``).
+    """
+    _gate_agent_overwrite(ctx, request.confirm_overwrite, request.output_address or "")
     try:
-        return jobs_svc.submit(request, actor="web")
+        return jobs_svc.submit(request, actor=_actor(ctx))
+    except jobs_svc.OverwriteRequired as exc:
+        raise _overwrite_conflict(exc) from exc
     except jobs_svc.SubmitError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -981,10 +1055,25 @@ def api_cancel_job(job_id: str) -> JobDetail:
     summary="Rerun a finished job",
     dependencies=[Depends(require_capability(Capability.SUBMIT_JOBS))],
 )
-def api_rerun_job(job_id: str) -> JobSubmitResponse:
-    """Enqueue a byte-identical retry of a finished job."""
+def api_rerun_job(
+    job_id: str,
+    body: OverwriteConfirm | None = None,
+    confirm_overwrite: bool = Query(
+        False, description="Confirm overwriting the (occupied) output location."
+    ),
+    ctx: AuthContext = Depends(require_capability(Capability.SUBMIT_JOBS)),
+) -> JobSubmitResponse:
+    """Enqueue a retry of a finished job (same input, output, tables).
+
+    A rerun writes to the same exact output location, so it answers
+    ``409 overwrite_required`` until ``confirm_overwrite=true``.
+    """
+    confirm_overwrite = bool(confirm_overwrite or (body and body.confirm_overwrite))
+    _gate_agent_overwrite(ctx, confirm_overwrite, f"job:{job_id}")
     try:
-        return jobs_svc.rerun(job_id, actor="web")
+        return jobs_svc.rerun(job_id, actor=_actor(ctx), confirm_overwrite=confirm_overwrite)
+    except jobs_svc.OverwriteRequired as exc:
+        raise _overwrite_conflict(exc) from exc
     except jobs_svc.SubmitError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -1015,10 +1104,25 @@ def api_create_job_draft(request: JobSubmitRequest) -> JobSubmitResponse:
     summary="Launch a draft job (draft → queued)",
     dependencies=[Depends(require_capability(Capability.SUBMIT_JOBS))],
 )
-def api_launch_job(job_id: str) -> JobDetail:
-    """Promote a draft job to ``queued`` so the worker runs it."""
+def api_launch_job(
+    job_id: str,
+    body: OverwriteConfirm | None = None,
+    confirm_overwrite: bool = Query(
+        False, description="Confirm overwriting the (occupied) output location."
+    ),
+    ctx: AuthContext = Depends(require_capability(Capability.SUBMIT_JOBS)),
+) -> JobDetail:
+    """Promote a draft job to ``queued`` so the worker runs it.
+
+    Runs the overwrite gate: ``409 overwrite_required`` when the output is
+    occupied and ``confirm_overwrite`` is not set.
+    """
+    confirm_overwrite = bool(confirm_overwrite or (body and body.confirm_overwrite))
+    _gate_agent_overwrite(ctx, confirm_overwrite, f"job:{job_id}")
     try:
-        return jobs_svc.launch_draft(job_id, actor="web")
+        return jobs_svc.launch_draft(job_id, actor=_actor(ctx), confirm_overwrite=confirm_overwrite)
+    except jobs_svc.OverwriteRequired as exc:
+        raise _overwrite_conflict(exc) from exc
     except jobs_svc.SubmitError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -1297,9 +1401,7 @@ def api_test_connection(name: str) -> ConnectionTestReport:
     summary="Browse a storage account's folder tree",
     dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
 )
-def api_browse_storage(
-    name: str, prefix: str | None = Query(None)
-) -> StorageBrowseResponse:
+def api_browse_storage(name: str, prefix: str | None = Query(None)) -> StorageBrowseResponse:
     """List one level of a storage account's contents.
 
     Drives the graphical folder/pipeline picker on the pipeline submit
@@ -1350,8 +1452,14 @@ def api_get_pipeline_config(name: str) -> PipelineConfigDetail:
     summary="Create a pipeline",
     dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG))],
 )
-def api_create_pipeline_config(name: str, payload: PipelineWrite) -> WriteResult:
+def api_create_pipeline_config(
+    name: str,
+    payload: PipelineWrite,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_CONFIG)),
+) -> WriteResult:
     """Create a new pipeline JSON."""
+    # A standing overwrite permission set by an agent needs human approval.
+    _gate_agent_overwrite(ctx, bool(payload.allow_overwrite), f"pipeline:{name}")
     try:
         return pipelines_svc.write_pipeline(name, payload, actor="web", create_only=True)
     except pipelines_svc.PipelineError as exc:
@@ -1364,8 +1472,14 @@ def api_create_pipeline_config(name: str, payload: PipelineWrite) -> WriteResult
     summary="Create or update a pipeline",
     dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG))],
 )
-def api_put_pipeline_config(name: str, payload: PipelineWrite) -> WriteResult:
+def api_put_pipeline_config(
+    name: str,
+    payload: PipelineWrite,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_CONFIG)),
+) -> WriteResult:
     """Idempotent create-or-update of a pipeline JSON."""
+    # A standing overwrite permission set by an agent needs human approval.
+    _gate_agent_overwrite(ctx, bool(payload.allow_overwrite), f"pipeline:{name}")
     try:
         return pipelines_svc.write_pipeline(name, payload, actor="web")
     except pipelines_svc.PipelineError as exc:
@@ -1405,8 +1519,7 @@ def api_draft_pipeline_config(
     ``draft_pipeline_config`` tool.
     """
     body = body or PipelineRunRequest()
-    tables = ([t for t in body.tables if t and t != "all"]
-              if body.tables is not None else None)
+    tables = [t for t in body.tables if t and t != "all"] if body.tables is not None else None
     try:
         return pipelines_svc.run_now(
             name,
@@ -1429,7 +1542,9 @@ def api_draft_pipeline_config(
     dependencies=[Depends(require_capability(Capability.SUBMIT_JOBS))],
 )
 def api_run_pipeline_config(
-    name: str, body: PipelineRunRequest | None = None
+    name: str,
+    body: PipelineRunRequest | None = None,
+    ctx: AuthContext = Depends(require_capability(Capability.SUBMIT_JOBS)),
 ) -> JobSubmitResponse:
     """Convert a pipeline into a job submission and enqueue it.
 
@@ -1449,6 +1564,8 @@ def api_run_pipeline_config(
     input_override: str | None = None
     output_override: str | None = None
     draft = False
+    confirm = bool(body.confirm_overwrite) if body is not None else False
+    _gate_agent_overwrite(ctx, confirm, f"pipeline:{name}")
     if body is not None:
         batch_override = (body.batch_id or None) if body.batch_id else None
         input_override = (body.input_address or "").strip() or None
@@ -1468,7 +1585,10 @@ def api_run_pipeline_config(
             output_address=output_override,
             tables=tables_override,
             draft=draft,
+            confirm_overwrite=confirm,
         )
+    except pipelines_svc.OverwriteRequired as exc:
+        raise _overwrite_conflict(exc) from exc
     except pipelines_svc.PipelineError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -1637,70 +1757,50 @@ def api_test_engine(name: str) -> EngineTestReport:
 
 @router.get(
     "/dataspace",
-    response_model=OdsPipelineListing,
-    summary="List every pipeline in the Ovid Data Space",
+    response_model=OdsListing,
+    summary="List one level of the Ovid Data Space",
     dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
 )
-def api_ods_list_pipelines() -> OdsPipelineListing:
-    """Return every pipeline and the dimensions they are known in."""
-    return dataspace_svc.list_pipelines()
+def api_ods_list(
+    path: str = Query(
+        "/",
+        description=(
+            "Data Space path: '/' lists storage accounts, '/<account>/<folder…>' "
+            "lists a folder or DATABASE/SCHEMA. Every data space is a tree of "
+            "plain directories."
+        ),
+    ),
+) -> OdsListing:
+    """List the children of a Data Space path (storage accounts / folders / schemas)."""
+    try:
+        return dataspace_svc.list_path(path)
+    except dataspace_svc.OdsServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get(
     "/dataspace/dimensions",
     response_model=OdsDimensionCatalog,
-    summary="List every ODS dimension + resolution defaults",
+    summary="List every storage type (dimension) in the Data Space",
     dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
 )
 def api_ods_dimensions() -> OdsDimensionCatalog:
-    """Return the dimension catalogue and the deployment's routing defaults."""
+    """Return the storage types and how many addresses use each."""
     return dataspace_svc.get_dimension_catalog()
 
 
 @router.get(
     "/dataspace/resolve",
     response_model=OdsResolveResult,
-    summary="Resolve an ODS path + dimension to an address",
+    summary="Resolve a Data Space path to its storage account + exact location",
     dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
 )
 def api_ods_resolve(
-    path: str = Query(..., description="ODS path (e.g. /demo/20260316/DEMOGRAPHIC)."),
-    dim: str | None = Query(
-        None,
-        description="Optional dimension name (disc, snowflake, s3, ...).",
-    ),
+    path: str = Query(..., description="Data Space path, e.g. /inbox/landing/2026_03."),
 ) -> OdsResolveResult:
-    """Return the address that would serve ``(path, dim)`` without doing I/O."""
+    """Return the storage account, exact location, batch id and matching address."""
     try:
-        return dataspace_svc.resolve_path(path, dim=dim)
-    except dataspace_svc.OdsServiceError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@router.get(
-    "/dataspace/{pipeline}",
-    response_model=OdsBatchListing,
-    summary="List every batch under a pipeline",
-    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
-)
-def api_ods_list_batches(pipeline: str) -> OdsBatchListing:
-    """Return the batches under ``/{pipeline}``."""
-    try:
-        return dataspace_svc.list_pipeline_batches(pipeline)
-    except dataspace_svc.OdsServiceError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@router.get(
-    "/dataspace/{pipeline}/{batch_id}",
-    response_model=OdsTableListing,
-    summary="List every table under a pipeline batch",
-    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
-)
-def api_ods_list_tables(pipeline: str, batch_id: str) -> OdsTableListing:
-    """Return the tables under ``/{pipeline}/{batch_id}``."""
-    try:
-        return dataspace_svc.list_batch_tables(pipeline, batch_id)
+        return dataspace_svc.resolve_path(path)
     except dataspace_svc.OdsServiceError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -1730,10 +1830,7 @@ def api_fs_roots() -> FsRoots:
 def api_fs_list(
     path: str | None = Query(
         None,
-        description=(
-            "Absolute host path to list. Empty falls back to the first "
-            "allowlist root."
-        ),
+        description=("Absolute host path to list. Empty falls back to the first allowlist root."),
     ),
     show_hidden: bool | None = Query(
         None,
@@ -1876,7 +1973,7 @@ def _loopback_api_url(request: Request) -> str | None:
     if not server or not server[0]:
         return None
     host, port = str(server[0]), int(server[1] or 80)
-    if host in ("0.0.0.0", "::"):
+    if host in ("0.0.0.0", "::"):  # noqa: S104 — rewriting a wildcard bind, not binding
         host = "127.0.0.1"
     if ":" in host:
         host = f"[{host}]"
@@ -1917,18 +2014,69 @@ def api_llm_chat_stream(
         # The assistant may not start a nested assistant turn.
         raise HTTPException(status_code=403, detail="The assistant cannot chat with itself.")
     principal = llm_chat_svc.ChatPrincipal(
-        user_id=ctx.user_id, role=ctx.role, email=ctx.email,
+        user_id=ctx.user_id,
+        role=ctx.role,
+        email=ctx.email,
         api_url=_loopback_api_url(request),
     )
     try:
-        gen = llm_chat_svc.sse_stream(payload, actor=ctx.email or ctx.user_id,
-                                      principal=principal)
+        gen = llm_chat_svc.sse_stream(payload, actor=ctx.email or ctx.user_id, principal=principal)
     except llm_chat_svc.ChatDisabledError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return StreamingResponse(
-        gen, media_type="text/event-stream",
+        gen,
+        media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ---------------------------------------------------------------------------
+# Current user's own preferences (cosmetic, per user)
+# ---------------------------------------------------------------------------
+
+
+def _prefs_owner(ctx: AuthContext) -> str:
+    """Return the prefs key for ``ctx``; refuse machine principals.
+
+    The assistant (``llm:``) and the MCP service token (``mcp:``) have no
+    appearance of their own and may not edit a human's.
+    """
+    if ctx.user_id.startswith(("llm:", "mcp:")):
+        raise HTTPException(
+            status_code=403, detail="Appearance preferences belong to a signed-in person."
+        )
+    return ctx.user_id
+
+
+@router.get(
+    "/me/appearance",
+    response_model=AppearancePrefs,
+    summary="Get the current user's appearance (theme, colours, fonts, saved looks)",
+)
+def api_get_my_appearance(
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_PUBLIC)),
+) -> AppearancePrefs:
+    """Return the caller's stored appearance (defaults when never saved)."""
+    return AppearancePrefs(**prefs_svc.get_appearance(_prefs_owner(ctx)))
+
+
+@router.put(
+    "/me/appearance",
+    response_model=AppearancePrefs,
+    summary="Replace the current user's appearance (cosmetic, not audited)",
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_put_my_appearance(
+    payload: AppearancePrefs,
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_PUBLIC)),
+) -> AppearancePrefs:
+    """Validate and store the caller's appearance; returns what was stored."""
+    owner = _prefs_owner(ctx)
+    try:
+        doc = prefs_svc.save_appearance(owner, payload.model_dump())
+    except prefs_svc.PrefsError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return AppearancePrefs(**doc)
 
 
 # ---------------------------------------------------------------------------
@@ -2018,13 +2166,9 @@ def _parse_role(role: str) -> Role:
     try:
         parsed = Role(role)
     except ValueError as exc:
-        raise HTTPException(
-            status_code=400, detail=f"Unknown role: {role!r}"
-        ) from exc
+        raise HTTPException(status_code=400, detail=f"Unknown role: {role!r}") from exc
     if parsed == Role.PENDING:
-        raise HTTPException(
-            status_code=400, detail="Role 'pending' cannot be assigned."
-        )
+        raise HTTPException(status_code=400, detail="Role 'pending' cannot be assigned.")
     return parsed
 
 

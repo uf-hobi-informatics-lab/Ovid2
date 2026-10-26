@@ -40,7 +40,7 @@ from __future__ import annotations
 import importlib.util
 from dataclasses import dataclass
 
-__all__ = ["PipelineTemplate", "TEMPLATES", "get_template", "list_templates"]
+__all__ = ["TEMPLATES", "PipelineTemplate", "get_template", "list_templates"]
 
 
 @dataclass(frozen=True)
@@ -133,6 +133,5 @@ def get_template(template_id: str) -> PipelineTemplate | None:
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(
-        "This module is a data catalogue imported by the scaffolder; "
-        "it is not a script."
+        "This module is a data catalogue imported by the scaffolder; it is not a script."
     )

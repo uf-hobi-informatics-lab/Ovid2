@@ -50,9 +50,7 @@ def test_step1_lists_connections(web_client, isolated_xdg: Path) -> None:
 
 
 @pytest.mark.unit
-def test_step1_empty_shows_link_to_new_connection(
-    web_client, isolated_xdg: Path
-) -> None:
+def test_step1_empty_shows_link_to_new_connection(web_client, isolated_xdg: Path) -> None:
     """With no connections, step 1 nudges the user to create one first."""
     r = web_client.get("/addresses/new")
     assert r.status_code == 200
@@ -83,9 +81,7 @@ def test_step2_renders_disc_location_fields(web_client, isolated_xdg: Path) -> N
 
 
 @pytest.mark.unit
-def test_step2_snowflake_marks_database_required(
-    web_client, isolated_xdg: Path
-) -> None:
+def test_step2_snowflake_marks_database_required(web_client, isolated_xdg: Path) -> None:
     """Snowflake addresses require a database — the input must have `required`."""
     _make_conn(web_client, "c_sf", type_="snowflake")
     # Snowflake write is refused unless secrets are set; connection *creation*
@@ -97,14 +93,12 @@ def test_step2_snowflake_marks_database_required(
     assert 'name="loc_database"' in r.text
     # The template renders `required` on required fields.
     idx = r.text.index('name="loc_database"')
-    surrounding = r.text[idx: idx + 200]
+    surrounding = r.text[idx : idx + 200]
     assert "required" in surrounding
 
 
 @pytest.mark.unit
-def test_step2_missing_connection_bounces_back_to_step1(
-    web_client, isolated_xdg: Path
-) -> None:
+def test_step2_missing_connection_bounces_back_to_step1(web_client, isolated_xdg: Path) -> None:
     """Passing an unknown connection name redirects to step 1 with a flash."""
     r = web_client.get(
         "/addresses/new/step2?connection=does_not_exist",
@@ -148,9 +142,7 @@ def test_html_post_creates_w7_address(web_client, isolated_xdg: Path) -> None:
 
 
 @pytest.mark.unit
-def test_html_post_without_connection_bounces_back(
-    web_client, isolated_xdg: Path
-) -> None:
+def test_html_post_without_connection_bounces_back(web_client, isolated_xdg: Path) -> None:
     """Missing connection field on POST redirects back to step 1."""
     r = web_client.post(
         "/addresses",
@@ -162,9 +154,7 @@ def test_html_post_without_connection_bounces_back(
 
 
 @pytest.mark.unit
-def test_html_post_drops_blank_optional_fields(
-    web_client, isolated_xdg: Path
-) -> None:
+def test_html_post_drops_blank_optional_fields(web_client, isolated_xdg: Path) -> None:
     """Blank optional inputs are not persisted as ``""`` — they are omitted."""
     _make_conn(web_client, "c_disc")
     r = web_client.post(
@@ -172,7 +162,7 @@ def test_html_post_drops_blank_optional_fields(
         data={
             "name": "compact",
             "connection": "c_disc",
-            "loc_path": "",       # blank optional
+            "loc_path": "",  # blank optional
             "loc_format": "csv",
         },
         follow_redirects=False,

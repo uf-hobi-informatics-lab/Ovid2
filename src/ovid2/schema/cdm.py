@@ -106,9 +106,9 @@ def _load_all(cdm_name: str) -> list[CdmField]:
     # Try YAML first — matches the phase-C1 layout.
     try:
         from ovid2.cdm.yaml_loader import (  # local: avoids cycle at module load
+            CdmYamlError,
             cdm_yaml_dir,
             load_table_fields_from_yaml,
-            CdmYamlError,
         )
 
         try:
@@ -129,7 +129,7 @@ def _load_all(cdm_name: str) -> list[CdmField]:
             if rows:
                 _CDM_CACHE[cdm_name] = rows
                 return _CDM_CACHE[cdm_name]
-    except Exception as exc:  # noqa: BLE001 — YAML issues fall back to CSV
+    except Exception as exc:
         logger.debug("YAML fallback for %s: %s", cdm_name, exc)
 
     # Fallback: the CSV that shipped with Ovid pre-C1.
@@ -236,7 +236,10 @@ def _snowflake_type_for(field: CdmField) -> str:
     # silently drop data. Logged so operators notice.
     logger.warning(
         "Unrecognised CDM RDBMS_DATA_TYPE %r for %s.%s — defaulting to VARCHAR(%d).",
-        rdbms, field.table, field.name, _DEFAULT_VARCHAR_WIDTH,
+        rdbms,
+        field.table,
+        field.name,
+        _DEFAULT_VARCHAR_WIDTH,
     )
     return f"VARCHAR({_DEFAULT_VARCHAR_WIDTH})"
 
@@ -284,6 +287,7 @@ def build_snowflake_typed_columns(cdm_ref: str) -> list[tuple[str, str]]:
         return []
     return [(f.name, _snowflake_type_for(f)) for f in fields]
 
+
 def build_snowflake_write_schema(cdm_ref: str) -> list[tuple[str, str, int]]:
     """Return per-column ``(name, kind, width)`` triples for the Spark writer.
 
@@ -320,9 +324,7 @@ def build_snowflake_write_schema(cdm_ref: str) -> list[tuple[str, str, int]]:
         upper = sf_type.upper()
         if upper.startswith("DATE"):
             result.append((field.name, "date", 0))
-        elif upper.startswith(
-            ("NUMBER", "FLOAT", "DOUBLE", "DECIMAL", "NUMERIC", "INT")
-        ):
+        elif upper.startswith(("NUMBER", "FLOAT", "DOUBLE", "DECIMAL", "NUMERIC", "INT")):
             result.append((field.name, "number", 0))
         else:
             match = re.search(r"\((\d+)\)", sf_type)

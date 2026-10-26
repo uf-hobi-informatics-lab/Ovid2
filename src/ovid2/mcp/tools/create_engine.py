@@ -34,10 +34,7 @@ class CreateEngineArgs(BaseModel):
     )
     secret_ref: str | None = Field(
         None,
-        description=(
-            "Override the auto-generated secret file stem "
-            "(default: engine_<name>)."
-        ),
+        description=("Override the auto-generated secret file stem (default: engine_<name>)."),
     )
 
 

@@ -28,9 +28,7 @@ def test_legacy_address_configs_still_load() -> None:
     legacy_files = [
         entry
         for entry in REPO_CONFIGS_DIR.iterdir()
-        if entry.is_file()
-        and entry.suffix == ".json"
-        and not entry.stem.endswith("_sample")
+        if entry.is_file() and entry.suffix == ".json" and not entry.stem.endswith("_sample")
     ]
     if not legacy_files:
         pytest.skip("No non-sample configs in the repo — nothing to lock in.")
@@ -48,15 +46,14 @@ def test_legacy_address_configs_still_load() -> None:
         # parsing — the shim relies on those keys to walk the old code
         # path.
         if "src_name" not in data or "src_args" not in data:
-            offenders.append(
-                f"{path.name}: missing src_name/src_args (not a legacy shape)"
-            )
+            offenders.append(f"{path.name}: missing src_name/src_args (not a legacy shape)")
             continue
         # ``load_address_config`` sets ``_shape='legacy'`` on old files.
         # Run it through the loader search path via a temporary env
         # override so this test does not depend on the operator's XDG
         # home.
         import os
+
         prev = os.environ.get("OVID2_CONFIGS_DIR")
         os.environ["OVID2_CONFIGS_DIR"] = str(REPO_CONFIGS_DIR)
         try:
@@ -67,11 +64,8 @@ def test_legacy_address_configs_still_load() -> None:
             else:
                 os.environ["OVID2_CONFIGS_DIR"] = prev
         if cfg.get("_shape") != "legacy":
-            offenders.append(
-                f"{path.name}: expected _shape='legacy', got {cfg.get('_shape')!r}"
-            )
+            offenders.append(f"{path.name}: expected _shape='legacy', got {cfg.get('_shape')!r}")
 
     assert not offenders, (
-        "W7 contract broken: legacy address configs must keep loading:\n"
-        + "\n".join(offenders)
+        "W7 contract broken: legacy address configs must keep loading:\n" + "\n".join(offenders)
     )

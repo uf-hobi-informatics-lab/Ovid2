@@ -33,7 +33,6 @@ from pathlib import Path
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -41,7 +40,8 @@ import pytest
 
 @pytest.fixture()
 def hermetic_config_dir(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> Path:
     """Return a fresh configs / connections / secrets tree.
 
@@ -73,7 +73,8 @@ class TestLegacyShape:
     """Legacy ``{src_name, src_args}`` addresses resolve to native drivers."""
 
     def test_s3_legacy_splits_credentials_into_secrets(
-        self, hermetic_config_dir: Path,
+        self,
+        hermetic_config_dir: Path,
     ) -> None:
         from ovid2.drivers.registry import driver_from_address
         from ovid2.drivers.s3 import S3Driver
@@ -108,15 +109,15 @@ class TestLegacyShape:
         assert d.auth_mode() == "session"
 
     def test_disc_legacy_splits_path_into_location(
-        self, hermetic_config_dir: Path,
+        self,
+        hermetic_config_dir: Path,
     ) -> None:
         from ovid2.drivers.disc import DiscDriver
         from ovid2.drivers.registry import driver_from_address
 
         _write(
             hermetic_config_dir / "configs" / "legacy-disc.json",
-            {"src_name": "disc", "src_args": {"path": "/tmp/some_dir",
-                                              "format": "csv"}},
+            {"src_name": "disc", "src_args": {"path": "/tmp/some_dir", "format": "csv"}},
         )
         d = driver_from_address("legacy-disc")
         assert isinstance(d, DiscDriver)
@@ -163,14 +164,14 @@ class TestW7Shape:
         conn_payload: dict = {
             "name": conn_name,
             "type": "s3",
-            "args": conn_args or {"region": "us-west-2",
-                                  "bucket_default": "default-bucket"},
+            "args": conn_args or {"region": "us-west-2", "bucket_default": "default-bucket"},
         }
         if secret_ref:
             conn_payload["secret_ref"] = secret_ref
             _write(
                 root / "ovid2" / "secrets.d" / f"{secret_ref}.json",
-                secret_payload or {
+                secret_payload
+                or {
                     "aws_access_key_id": "AKIA2",
                     "aws_secret_access_key": "sekrit2",
                 },
@@ -183,7 +184,8 @@ class TestW7Shape:
         )
 
     def test_lifts_args_and_secrets_from_connection(
-        self, hermetic_config_dir: Path,
+        self,
+        hermetic_config_dir: Path,
     ) -> None:
         from ovid2.drivers.registry import driver_from_address
         from ovid2.drivers.s3 import S3Driver
@@ -202,7 +204,8 @@ class TestW7Shape:
         assert d.auth_mode() == "static"
 
     def test_bucket_default_used_when_location_bucket_absent(
-        self, hermetic_config_dir: Path,
+        self,
+        hermetic_config_dir: Path,
     ) -> None:
         from ovid2.drivers.registry import driver_from_address
 
@@ -213,7 +216,8 @@ class TestW7Shape:
         assert merged.get("bucket") == "default-bucket"
 
     def test_cdm_name_lands_on_location(
-        self, hermetic_config_dir: Path,
+        self,
+        hermetic_config_dir: Path,
     ) -> None:
         from ovid2.drivers.registry import driver_from_address
 
@@ -222,7 +226,8 @@ class TestW7Shape:
         assert d.location.get("cdm") == "pcornet_7_0"
 
     def test_missing_connection_field_raises(
-        self, hermetic_config_dir: Path,
+        self,
+        hermetic_config_dir: Path,
     ) -> None:
         from ovid2.drivers.registry import driver_from_address
 
@@ -234,7 +239,8 @@ class TestW7Shape:
             driver_from_address("broken")
 
     def test_missing_connection_file_raises(
-        self, hermetic_config_dir: Path,
+        self,
+        hermetic_config_dir: Path,
     ) -> None:
         from ovid2.drivers.registry import driver_from_address
 

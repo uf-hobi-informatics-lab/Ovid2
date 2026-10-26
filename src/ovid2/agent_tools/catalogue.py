@@ -88,8 +88,7 @@ class AgentTool:
     method: str
     path: str
     capability: str
-    params: dict[str, Any] = field(default_factory=lambda: {"type": "object",
-                                                             "properties": {}})
+    params: dict[str, Any] = field(default_factory=lambda: {"type": "object", "properties": {}})
     max_result_chars: int = 8000
     truncate: str = "head"
     opens_draft: bool = False
@@ -119,22 +118,35 @@ class AgentTool:
 
     def to_openai(self) -> dict[str, Any]:
         """Render as an OpenAI ``tools`` array entry."""
-        return {"type": "function",
-                "function": {"name": self.name, "description": self.description,
-                             "parameters": self.params}}
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": self.params,
+            },
+        }
 
     def to_dict(self) -> dict[str, Any]:
         """JSON-serialisable public form (for ``GET /api/v1/llm/tools``)."""
-        return {"name": self.name, "description": self.description,
-                "method": self.method, "path": self.path,
-                "capability": self.capability, "mutating": self.mutating,
-                "opens_draft": self.opens_draft, "ui_action": self.ui_action,
-                "kind": self.kind, "params": self.params}
+        return {
+            "name": self.name,
+            "description": self.description,
+            "method": self.method,
+            "path": self.path,
+            "capability": self.capability,
+            "mutating": self.mutating,
+            "opens_draft": self.opens_draft,
+            "ui_action": self.ui_action,
+            "kind": self.kind,
+            "params": self.params,
+        }
 
 
 def _schema() -> dict[str, Any]:
     text = (resources.files("ovid2.resources") / "schemas" / "agent_tools.v1.json").read_text(
-        encoding="utf-8")
+        encoding="utf-8"
+    )
     loaded: dict[str, Any] = json.loads(text)
     return loaded
 
@@ -156,10 +168,13 @@ def _parse(doc: Any) -> tuple[AgentTool, ...]:
         params = dict(raw.get("params") or {"type": "object", "properties": {}})
         params.setdefault("properties", {})
         tool = AgentTool(
-            name=name, description=" ".join(str(raw["description"]).split()),
-            method=str(raw.get("method", "")), path=str(raw.get("path", "")),
+            name=name,
+            description=" ".join(str(raw["description"]).split()),
+            method=str(raw.get("method", "")),
+            path=str(raw.get("path", "")),
             capability=raw["capability"],
-            params=params, max_result_chars=int(raw.get("max_result_chars", 8000)),
+            params=params,
+            max_result_chars=int(raw.get("max_result_chars", 8000)),
             truncate=str(raw.get("truncate", "head")),
             opens_draft=bool(raw.get("opens_draft", False)),
             ui_action=bool(raw.get("ui_action", False)),
@@ -174,7 +189,8 @@ def _parse(doc: Any) -> tuple[AgentTool, ...]:
         for ph in tool.path_params:
             if ph not in params["properties"] or ph not in required:
                 raise CatalogueError(
-                    f"tool '{name}': path placeholder '{ph}' must be a required param")
+                    f"tool '{name}': path placeholder '{ph}' must be a required param"
+                )
         out.append(tool)
     return tuple(out)
 
@@ -187,7 +203,8 @@ def load_catalogue() -> tuple[AgentTool, ...]:
         CatalogueError: On schema violation, duplicates or bad placeholders.
     """
     text = (resources.files("ovid2.resources") / "agent_tools" / "catalogue.yaml").read_text(
-        encoding="utf-8")
+        encoding="utf-8"
+    )
     return _parse(yaml.safe_load(text))
 
 
@@ -202,8 +219,7 @@ def get_tool(name: str) -> AgentTool | None:
 def openai_tools(names: list[str] | tuple[str, ...] | None = None) -> list[dict[str, Any]]:
     """Return the OpenAI ``tools`` array, optionally restricted to ``names``."""
     allowed = set(names) if names is not None else None
-    return [t.to_openai() for t in load_catalogue()
-            if allowed is None or t.name in allowed]
+    return [t.to_openai() for t in load_catalogue() if allowed is None or t.name in allowed]
 
 
 def _coerce_args(tool: AgentTool, args: Any) -> dict[str, Any]:
@@ -263,8 +279,7 @@ def build_request(tool: AgentTool, args: Any) -> dict[str, Any]:
             raise ToolCallError(f"'{tool.name}' requires '{ph}'")
         path = path.replace("{" + ph + "}", quote(str(value), safe=""))
     if tool.method == "GET":
-        query = {k: (json.dumps(v) if isinstance(v, (dict, list)) else v)
-                 for k, v in clean.items()}
+        query = {k: (json.dumps(v) if isinstance(v, (dict, list)) else v) for k, v in clean.items()}
         return {"method": "GET", "path": path, "query": query, "body": None}
     return {"method": tool.method, "path": path, "query": {}, "body": clean}
 

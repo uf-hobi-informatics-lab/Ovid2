@@ -39,7 +39,6 @@ from ovid2.core.engines.stager import (
     stager_class_for_engine_type,
 )
 
-
 # ---------------------------------------------------------------------------
 # Test doubles
 # ---------------------------------------------------------------------------
@@ -72,7 +71,7 @@ class _FakeSession:
         return _R()
 
     @property
-    def native(self) -> "_FakeSession":
+    def native(self) -> _FakeSession:
         return self
 
 
@@ -100,9 +99,9 @@ class _ContextTrackingSession:
         self.sql_calls.append(query)
         upper = query.strip().upper()
         if upper.startswith("USE DATABASE "):
-            self.current_database = query.strip()[len("USE DATABASE "):].strip()
+            self.current_database = query.strip()[len("USE DATABASE ") :].strip()
         elif upper.startswith("USE SCHEMA "):
-            self.current_schema = query.strip()[len("USE SCHEMA "):].strip()
+            self.current_schema = query.strip()[len("USE SCHEMA ") :].strip()
 
         class _R:
             def collect(self_inner):  # noqa: N805
@@ -111,7 +110,7 @@ class _ContextTrackingSession:
         return _R()
 
     @property
-    def native(self) -> "_ContextTrackingSession":
+    def native(self) -> _ContextTrackingSession:
         return self
 
 
@@ -211,6 +210,7 @@ class _FakeDriver:
 class TestSparkStager:
     def test_supports_every_registered_driver(self) -> None:
         from ovid2.drivers.registry import DRIVERS
+
         for name in DRIVERS:
             assert SparkEngineStager.supports(name), name
 
@@ -219,6 +219,7 @@ class TestSparkStager:
 
     def test_supported_driver_types_equals_registry(self) -> None:
         from ovid2.drivers.registry import DRIVERS
+
         assert SparkEngineStager.supported_driver_types() == frozenset(DRIVERS)
 
     def test_materialise_is_pass_through(self) -> None:
@@ -226,7 +227,11 @@ class TestSparkStager:
         stager = SparkEngineStager(engine)
         driver = _FakeDriver("disc")
         df = stager.materialise(
-            driver, "demo", "20260101", "*ENC*", "|",
+            driver,
+            "demo",
+            "20260101",
+            "*ENC*",
+            "|",
             table_name="ENCOUNTER",
         )
         assert df == "df:*ENC*"
@@ -241,7 +246,12 @@ class TestSparkStager:
         stager = SparkEngineStager(engine)
         driver = _FakeDriver("snowflake")
         stager.persist(
-            "some_df", driver, "demo", "20260101", "ENCOUNTER", "|",
+            "some_df",
+            driver,
+            "demo",
+            "20260101",
+            "ENCOUNTER",
+            "|",
         )
         assert driver.write_calls == [
             ("some_df", engine._session, "demo", "20260101", "ENCOUNTER", "|"),
@@ -267,26 +277,31 @@ class TestSnowparkStager:
         strategy's self-registration side-effect has fired.
         """
         import ovid2.drivers.snowflake  # noqa: F401
+
         assert SnowparkEngineStager.supports("disc") is True
 
     def test_supports_s3_since_phase_d(self) -> None:
         """Phase D landed :class:`SnowparkS3Strategy`."""
         import ovid2.drivers.snowflake  # noqa: F401
+
         assert SnowparkEngineStager.supports("s3") is True
 
     def test_supports_azure_blob_since_phase_d(self) -> None:
         """Phase D landed :class:`SnowparkAzureBlobStrategy`."""
         import ovid2.drivers.snowflake  # noqa: F401
+
         assert SnowparkEngineStager.supports("azure_blob") is True
 
     def test_supports_databricks_since_phase_e(self) -> None:
         """Phase E landed :class:`SnowparkDatabricksStrategy`."""
         import ovid2.drivers.snowflake  # noqa: F401
+
         assert SnowparkEngineStager.supports("databricks") is True
 
     def test_supports_gcs_since_phase_f(self) -> None:
         """Phase F landed :class:`SnowparkGcsStrategy`."""
         import ovid2.drivers.snowflake  # noqa: F401
+
         assert SnowparkEngineStager.supports("gcs") is True
 
     def test_does_not_support_postgres_today(self) -> None:
@@ -302,6 +317,7 @@ class TestSnowparkStager:
         be present.
         """
         import ovid2.drivers.snowflake  # noqa: F401
+
         supported = SnowparkEngineStager.supported_driver_types()
         assert "snowflake" in supported
         assert "disc" in supported
@@ -326,7 +342,11 @@ class TestSnowparkStager:
             {"database": "MYDB", "schema": "MYSCHEMA"},
         )
         df = stager.materialise(
-            driver, "demo", "20260101", "DEMOGRAPHIC", None,
+            driver,
+            "demo",
+            "20260101",
+            "DEMOGRAPHIC",
+            None,
             table_name="DEMOGRAPHIC",
         )
         # session.table('MYDB.MYSCHEMA.DEMOGRAPHIC') was called.
@@ -353,11 +373,11 @@ class TestSnowparkStager:
             def __init__(self, name: str) -> None:
                 self._name = name
 
-            def cast(self, t: str) -> "_FakeCol":
+            def cast(self, t: str) -> _FakeCol:
                 cast_calls.append(f"{self._name}:{t}")
                 return self
 
-            def alias(self, name: str) -> "_FakeCol":
+            def alias(self, name: str) -> _FakeCol:
                 return self
 
         class _NativeTable:
@@ -366,7 +386,7 @@ class TestSnowparkStager:
             def __getitem__(self, name: str) -> _FakeCol:
                 return _FakeCol(name)
 
-            def select(self, *args: Any) -> "_NativeTable":
+            def select(self, *args: Any) -> _NativeTable:
                 return self
 
         class _CastingSession:
@@ -378,17 +398,22 @@ class TestSnowparkStager:
                 return _NativeTable()
 
             @property
-            def native(self) -> "_CastingSession":
+            def native(self) -> _CastingSession:
                 return self
 
         engine = _FakeEngine()
-        engine._session = _CastingSession()  # noqa: SLF001
+        engine._session = _CastingSession()
         stager = SnowparkEngineStager(engine)
         driver = _FakeDriverWithLocation(
-            "snowflake", {"database": "MYDB", "schema": "MYSCHEMA"},
+            "snowflake",
+            {"database": "MYDB", "schema": "MYSCHEMA"},
         )
         result = stager.materialise(
-            driver, "demo", "20260101", "PRESCRIBING", None,
+            driver,
+            "demo",
+            "20260101",
+            "PRESCRIBING",
+            None,
             table_name="PRESCRIBING",
         )
         assert engine._session.table_calls == ["MYDB.MYSCHEMA.PRESCRIBING"]
@@ -417,11 +442,11 @@ class TestSnowparkStager:
             def __init__(self, name: str) -> None:
                 self._name = name
 
-            def cast(self, t: str) -> "_FakeCol":
+            def cast(self, t: str) -> _FakeCol:
                 cast_calls.append(f"{self._name}:{t}")
                 return self
 
-            def alias(self, name: str) -> "_FakeCol":
+            def alias(self, name: str) -> _FakeCol:
                 self._name = name
                 return self
 
@@ -433,7 +458,7 @@ class TestSnowparkStager:
             def __getitem__(self, name: str) -> _FakeCol:
                 return _FakeCol(name)
 
-            def select(self, *args: Any) -> "_FakeNativeTable":
+            def select(self, *args: Any) -> _FakeNativeTable:
                 self.select_args = list(args)
                 return self
 
@@ -443,8 +468,9 @@ class TestSnowparkStager:
             def table(self, fqtn: str) -> _FakeNativeTable:
                 return table
 
-        result = stager_mod._all_string_table(  # noqa: SLF001
-            _CastingNative(), "MYDB.MYSCHEMA.MED_ADMIN",
+        result = stager_mod._all_string_table(
+            _CastingNative(),
+            "MYDB.MYSCHEMA.MED_ADMIN",
         )
 
         # Every column cast to string.
@@ -469,7 +495,7 @@ class TestSnowparkStager:
                 return _NoColTable()
 
         native = _Native()
-        result = stager_mod._all_string_table(native, "D.S.T")  # noqa: SLF001
+        result = stager_mod._all_string_table(native, "D.S.T")
         assert isinstance(result, _NoColTable)
 
     def test_materialise_falls_back_to_table_name_for_disc_style_glob(
@@ -479,10 +505,15 @@ class TestSnowparkStager:
         engine = _FakeEngine()
         stager = SnowparkEngineStager(engine)
         driver = _FakeDriverWithLocation(
-            "snowflake", {"database": "D", "schema": "S"},
+            "snowflake",
+            {"database": "D", "schema": "S"},
         )
         stager.materialise(
-            driver, "demo", "20260101", "*disc_glob*", None,
+            driver,
+            "demo",
+            "20260101",
+            "*disc_glob*",
+            None,
             table_name="DEMOGRAPHIC",
         )
         assert engine._session.table_calls == ["D.S.DEMOGRAPHIC"]
@@ -493,7 +524,11 @@ class TestSnowparkStager:
         driver = _FakeDriverWithLocation("snowflake", {"schema": "S"})
         with pytest.raises(ValueError, match="'database'"):
             stager.materialise(
-                driver, "demo", "20260101", "DEMOGRAPHIC", None,
+                driver,
+                "demo",
+                "20260101",
+                "DEMOGRAPHIC",
+                None,
                 table_name="DEMOGRAPHIC",
             )
 
@@ -501,11 +536,16 @@ class TestSnowparkStager:
         engine = _FakeEngine()
         stager = SnowparkEngineStager(engine)
         driver = _FakeDriverWithLocation(
-            "snowflake", {"database": "D", "schema": "S"},
+            "snowflake",
+            {"database": "D", "schema": "S"},
         )
         with pytest.raises(ValueError, match="valid Snowflake identifier"):
             stager.materialise(
-                driver, "demo", "20260101", "*disc_glob*", None,
+                driver,
+                "demo",
+                "20260101",
+                "*disc_glob*",
+                None,
                 table_name=None,
             )
 
@@ -520,11 +560,17 @@ class TestSnowparkStager:
         engine = _FakeEngine()
         stager = SnowparkEngineStager(engine)
         driver = _FakeDriverWithLocation(
-            "snowflake", {"database": "MYDB", "schema": "MYSCHEMA"},
+            "snowflake",
+            {"database": "MYDB", "schema": "MYSCHEMA"},
         )
         df = _FakeSnowparkDataFrame()
         stager.persist(
-            df, driver, "demo", "20260101", "demographic", None,
+            df,
+            driver,
+            "demo",
+            "20260101",
+            "demographic",
+            None,
         )
         # save_as_table is called with the fully-qualified target as a
         # list of identifier parts — [database, schema, TABLE] — so the
@@ -554,12 +600,14 @@ class TestSnowparkStager:
         """
         engine = _FakeEngine()
         session = _ContextTrackingSession(
-            db="STAGING_DB", schema="OVID2_SNOWPARK_STAGING",
+            db="STAGING_DB",
+            schema="OVID2_SNOWPARK_STAGING",
         )
-        engine._session = session  # noqa: SLF001
+        engine._session = session
         stager = SnowparkEngineStager(engine)
         driver = _FakeDriverWithLocation(
-            "snowflake", {"database": "OUT_DB", "schema": "OUT_SCHEMA"},
+            "snowflake",
+            {"database": "OUT_DB", "schema": "OUT_SCHEMA"},
         )
         df = _FakeSnowparkDataFrame()
         stager.persist(df, driver, "demo", "20260101", "person", None)
@@ -572,17 +620,10 @@ class TestSnowparkStager:
         assert session.current_database == "STAGING_DB"
         assert session.current_schema == "OVID2_SNOWPARK_STAGING"
         # No USE SCHEMA / USE DATABASE was ever issued.
-        assert not any(
-            q.strip().upper().startswith("USE SCHEMA") for q in session.sql_calls
-        )
-        assert not any(
-            q.strip().upper().startswith("USE DATABASE") for q in session.sql_calls
-        )
+        assert not any(q.strip().upper().startswith("USE SCHEMA") for q in session.sql_calls)
+        assert not any(q.strip().upper().startswith("USE DATABASE") for q in session.sql_calls)
         # It did ensure the target schema exists (idempotent DDL).
-        assert any(
-            "CREATE SCHEMA IF NOT EXISTS OUT_DB.OUT_SCHEMA" in q
-            for q in session.sql_calls
-        )
+        assert any("CREATE SCHEMA IF NOT EXISTS OUT_DB.OUT_SCHEMA" in q for q in session.sql_calls)
 
     def test_materialise_raises_for_unsupported_driver(self) -> None:
         engine = _FakeEngine()
@@ -607,7 +648,8 @@ class TestSnowparkStager:
         assert SnowparkEngineStager.family == "snowpark"
 
     def test_persist_applies_cdm_types_and_lenient_casts(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         """A CDM-stamped target is created typed with lenient casts.
 
@@ -629,11 +671,10 @@ class TestSnowparkStager:
         # *newer* module object than the one this file's top-level import
         # bound the class to. ``persist`` reads the name from its own
         # ``__globals__``, so patching that dict item is reload-safe.
-        strategy_globals = (
-            SnowparkEngineStager._STRATEGIES["snowflake"].persist.__globals__
-        )
+        strategy_globals = SnowparkEngineStager._STRATEGIES["snowflake"].persist.__globals__
         monkeypatch.setitem(
-            strategy_globals, "_resolve_typed_columns",
+            strategy_globals,
+            "_resolve_typed_columns",
             lambda driver, table_name: [
                 ("MEASUREMENT_ID", "NUMBER(38,10)"),
                 ("MEASUREMENT_DATE", "DATE"),
@@ -645,7 +686,7 @@ class TestSnowparkStager:
 
         engine = _FakeEngine()
         session = _ContextTrackingSession(db="OUT_DB", schema="OUT_SCHEMA")
-        engine._session = session  # noqa: SLF001
+        engine._session = session
         stager = SnowparkEngineStager(engine)
         driver = _FakeDriverWithLocation(
             "snowflake",
@@ -653,8 +694,10 @@ class TestSnowparkStager:
         )
         df = _FakeSnowparkDataFrame(
             columns=[
-                "MEASUREMENT_ID", "MEASUREMENT_DATE",
-                "VALUE_SOURCE_VALUE", "VALUE_AS_CONCEPT_ID",
+                "MEASUREMENT_ID",
+                "MEASUREMENT_DATE",
+                "VALUE_SOURCE_VALUE",
+                "VALUE_AS_CONCEPT_ID",
             ],
         )
         stager.persist(df, driver, "demo", "20260101", "measurement", None)
@@ -671,28 +714,26 @@ class TestSnowparkStager:
         assert f"FROM {view}" in stmt
         # Numeric column: lenient TRY_CAST with empty→NULL coercion.
         assert (
-            'TRY_CAST(NULLIF(TRIM(TO_VARCHAR("MEASUREMENT_ID")), \'\') '
+            "TRY_CAST(NULLIF(TRIM(TO_VARCHAR(\"MEASUREMENT_ID\")), '') "
             'AS NUMBER(38,10)) AS "MEASUREMENT_ID"'
         ) in stmt
         # Date column also lenient.
         assert 'AS DATE) AS "MEASUREMENT_DATE"' in stmt
         # VARCHAR is width-truncated with LEFT so over-long source values
         # land truncated instead of aborting the write.
-        assert (
-            'CAST(LEFT(TO_VARCHAR("VALUE_SOURCE_VALUE"), 250) AS VARCHAR(250))'
-        ) in stmt
+        assert ('CAST(LEFT(TO_VARCHAR("VALUE_SOURCE_VALUE"), 250) AS VARCHAR(250))') in stmt
         # A CDM column absent from the DataFrame becomes a typed NULL.
         assert 'CAST(NULL AS NUMBER(38,10)) AS "MISSING_COL"' in stmt
         # No USE SCHEMA / USE DATABASE issued.
         assert not any(
-            q.strip().upper().startswith(("USE SCHEMA", "USE DATABASE"))
-            for q in session.sql_calls
+            q.strip().upper().startswith(("USE SCHEMA", "USE DATABASE")) for q in session.sql_calls
         )
         # save_as_table must NOT be used on the typed path.
         assert df.write.save_as_table_calls == []
 
     def test_persist_truncates_over_width_varchar_columns(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         """Width-bounded string columns are truncated, not hard-cast.
 
@@ -708,11 +749,10 @@ class TestSnowparkStager:
         Also exercises the ``TEXT(n)`` / ``STRING(n)`` / bare-``VARCHAR``
         spellings so the width parser stays robust.
         """
-        strategy_globals = (
-            SnowparkEngineStager._STRATEGIES["snowflake"].persist.__globals__
-        )
+        strategy_globals = SnowparkEngineStager._STRATEGIES["snowflake"].persist.__globals__
         monkeypatch.setitem(
-            strategy_globals, "_resolve_typed_columns",
+            strategy_globals,
+            "_resolve_typed_columns",
             lambda driver, table_name: [
                 ("SPECIMEN_SOURCE_VALUE", "VARCHAR(50)"),
                 ("VALUE_AS_STRING", "TEXT(250)"),
@@ -723,7 +763,7 @@ class TestSnowparkStager:
 
         engine = _FakeEngine()
         session = _ContextTrackingSession(db="OUT_DB", schema="OUT_SCHEMA")
-        engine._session = session  # noqa: SLF001
+        engine._session = session
         stager = SnowparkEngineStager(engine)
         driver = _FakeDriverWithLocation(
             "snowflake",
@@ -731,24 +771,20 @@ class TestSnowparkStager:
         )
         df = _FakeSnowparkDataFrame(
             columns=[
-                "SPECIMEN_SOURCE_VALUE", "VALUE_AS_STRING", "NAME", "UNBOUNDED",
+                "SPECIMEN_SOURCE_VALUE",
+                "VALUE_AS_STRING",
+                "NAME",
+                "UNBOUNDED",
             ],
         )
         stager.persist(df, driver, "demo", "20260101", "specimen", None)
 
-        ctas = [
-            q for q in session.sql_calls
-            if q.startswith("CREATE OR REPLACE TABLE")
-        ]
+        ctas = [q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TABLE")]
         assert len(ctas) == 1
         stmt = ctas[0]
         # Width-bounded VARCHAR / TEXT / STRING columns get a truncating LEFT.
-        assert (
-            'CAST(LEFT(TO_VARCHAR("SPECIMEN_SOURCE_VALUE"), 50) AS VARCHAR(50))'
-        ) in stmt
-        assert (
-            'CAST(LEFT(TO_VARCHAR("VALUE_AS_STRING"), 250) AS TEXT(250))'
-        ) in stmt
+        assert ('CAST(LEFT(TO_VARCHAR("SPECIMEN_SOURCE_VALUE"), 50) AS VARCHAR(50))') in stmt
+        assert ('CAST(LEFT(TO_VARCHAR("VALUE_AS_STRING"), 250) AS TEXT(250))') in stmt
         assert 'CAST(LEFT(TO_VARCHAR("NAME"), 20) AS STRING(20))' in stmt
         # An unbounded VARCHAR (no width) keeps the plain CAST.
         assert 'CAST("UNBOUNDED" AS VARCHAR) AS "UNBOUNDED"' in stmt
@@ -806,7 +842,8 @@ class _FakeDiscStrategy(SnowparkStagingStrategy):
 
 class TestRegisterSnowparkStrategy:
     def test_registered_type_becomes_supported(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         # Isolate the strategy map so this test doesn't leak into
         # sibling tests (they assert Phase A+B/C state).
@@ -820,7 +857,8 @@ class TestRegisterSnowparkStrategy:
         assert SnowparkEngineStager.supports("_test_stagable") is True
 
     def test_registered_strategy_is_used_for_materialise(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(
             SnowparkEngineStager,
@@ -833,7 +871,11 @@ class TestRegisterSnowparkStrategy:
         stager = SnowparkEngineStager(engine)
         driver = _FakeDriver("_test_stagable")
         df = stager.materialise(
-            driver, "demo", "20260101", "*ENC*", None,
+            driver,
+            "demo",
+            "20260101",
+            "*ENC*",
+            None,
             table_name="ENCOUNTER",
         )
         # Uses the registered strategy, not the pass-through.
@@ -907,3 +949,63 @@ class TestAbstract:
     def test_cannot_instantiate_base_class(self) -> None:
         with pytest.raises(TypeError):
             EngineStager(_FakeEngine())  # type: ignore[abstract]
+
+
+# ---------------------------------------------------------------------------
+# Native Snowpark strategy: ``path``-form Snowflake locations
+# ---------------------------------------------------------------------------
+
+
+class TestNativeSnowparkPathLocation:
+    """``{"path": "DB[/SCHEMA]"}`` addresses work the same as explicit keys.
+
+    Regression: the web UI saves Snowflake addresses as
+    ``{"path": "CHAR_DEMO/PUBLIC"}``; the native strategy only read
+    ``location.database`` and failed with "driver has no 'database'"
+    on every Snowpark copy from such an address.
+    """
+
+    def test_materialise_reads_database_and_schema_from_path(self) -> None:
+        engine = _FakeEngine()
+        stager = SnowparkEngineStager(engine)
+        driver = _FakeDriverWithLocation("snowflake", {"path": "CHAR_DEMO/PUBLIC"})
+        stager.materialise(driver, "demo", "b1", "DEMOGRAPHIC", None, table_name="DEMOGRAPHIC")
+        assert engine._session.table_calls == ["CHAR_DEMO.PUBLIC.DEMOGRAPHIC"]
+
+    def test_explicit_keys_win_over_path(self) -> None:
+        engine = _FakeEngine()
+        stager = SnowparkEngineStager(engine)
+        driver = _FakeDriverWithLocation(
+            "snowflake", {"path": "IGNORED/X", "database": "D", "schema": "S"}
+        )
+        stager.materialise(driver, "demo", "b1", "T", None, table_name="T")
+        assert engine._session.table_calls == ["D.S.T"]
+
+    def test_persist_path_with_schema_targets_it_verbatim(self) -> None:
+        engine = _FakeEngine()
+        stager = SnowparkEngineStager(engine)
+        driver = _FakeDriverWithLocation("snowflake", {"path": "SANDBOX/PUBLIC"})
+        df = _FakeSnowparkDataFrame()
+        stager.persist(df, driver, "demo", "b1", "demographic", None)
+        assert df.write.save_as_table_calls == [
+            (["SANDBOX", "PUBLIC", "DEMOGRAPHIC"], {"mode": "overwrite"}),
+        ]
+
+    def test_persist_database_only_path_is_rejected(self) -> None:
+        """``{"path": "SANDBOX"}`` names no schema → rejected (no ``OVID_*`` fallback)."""
+        engine = _FakeEngine()
+        stager = SnowparkEngineStager(engine)
+        driver = _FakeDriverWithLocation("snowflake", {"path": "SANDBOX"})
+        df = _FakeSnowparkDataFrame()
+        with pytest.raises(ValueError, match="DATABASE/SCHEMA"):
+            stager.persist(df, driver, "COPY_SNOWPARK", "20261023", "demographic", None)
+        assert df.write.save_as_table_calls == []
+
+    def test_persist_date_shaped_schema_is_quoted(self) -> None:
+        """A date-shaped schema (``SANDBOX/20261023``) is double-quoted in DDL."""
+        engine = _FakeEngine()
+        stager = SnowparkEngineStager(engine)
+        driver = _FakeDriverWithLocation("snowflake", {"path": "SANDBOX/20261023"})
+        df = _FakeSnowparkDataFrame()
+        stager.persist(df, driver, "demo", "SANDBOX/20261023", "demographic", None)
+        assert 'CREATE SCHEMA IF NOT EXISTS SANDBOX."20261023"' in engine._session.sql_calls

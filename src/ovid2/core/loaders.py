@@ -185,10 +185,7 @@ def has_formatter(pipeline: str, table: str) -> bool:
 
     # 3) Hand-written class fallback.
     custom_module = f"ovid2_pipelines.{pipeline}.formatters_custom.{table}_formatter"
-    if _module_exists(custom_module):
-        return True
-
-    return False
+    return bool(_module_exists(custom_module))
 
 
 def _module_exists(dotted_name: str) -> bool:

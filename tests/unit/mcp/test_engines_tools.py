@@ -6,7 +6,6 @@ import inspect
 
 import pytest
 
-
 ENGINE_TOOL_NAMES = frozenset(
     {
         "list_engine_types",

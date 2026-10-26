@@ -22,11 +22,12 @@ never needs to gate on capabilities.
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING, Any
 
 from ovid2.core.engines.base import BaseEngine, EngineTestResult
 from ovid2.core.engines.protocols import EngineFamily, EngineFunctions, EngineSession
-from ovid2.core.engines.pyspark import _SparkFunctions
+from ovid2.core.engines.pyspark import _SparkFunctions, read_status_tracker
 
 if TYPE_CHECKING:
     from pyspark.sql import SparkSession
@@ -80,20 +81,16 @@ class DatabricksSparkEngine(BaseEngine):
 
             conn = self._connection_string()
             self._session = SparkSession.builder.remote(conn).getOrCreate()
-            try:
+            # Databricks Connect does not always expose sparkContext.
+            with contextlib.suppress(Exception):
                 self._session.sparkContext.setLogLevel("OFF")
-            except Exception:  # noqa: BLE001
-                # Databricks Connect does not always expose sparkContext.
-                pass
         return self._session  # type: ignore[return-value]
 
     def stop_session(self) -> None:
         """Stop the remote Spark session if one has been created."""
         if self._session is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._session.stop()
-            except Exception:  # noqa: BLE001
-                pass
             self._session = None
             self._functions = None
 
@@ -103,7 +100,7 @@ class DatabricksSparkEngine(BaseEngine):
             self._functions = _SparkFunctions()
         return self._functions
 
-    def native(self) -> "SparkSession":
+    def native(self) -> SparkSession:
         """Return the underlying Databricks-Connect ``SparkSession``."""
         return self.get_session()  # type: ignore[return-value]
 
@@ -134,10 +131,8 @@ class DatabricksSparkEngine(BaseEngine):
                 detail={"row": str(row)},
             )
         except ValueError as exc:
-            return EngineTestResult(
-                ok=False, code="auth", message=str(exc)
-            )
-        except Exception as exc:  # noqa: BLE001
+            return EngineTestResult(ok=False, code="auth", message=str(exc))
+        except Exception as exc:
             return EngineTestResult(
                 ok=False,
                 code="unreachable",
@@ -145,7 +140,7 @@ class DatabricksSparkEngine(BaseEngine):
                 detail={"exception_type": type(exc).__name__},
             )
 
-    def get_metrics(self) -> "EngineMetricsSample":
+    def get_metrics(self) -> EngineMetricsSample:
         """Return a live snapshot, tolerating Databricks-Connect quirks.
 
         Databricks-Connect does not always expose ``sparkContext``
@@ -162,54 +157,28 @@ class DatabricksSparkEngine(BaseEngine):
         wall = datetime.now(timezone.utc).isoformat()
 
         if self._session is None:
-            return EngineMetricsSample(
-                t_ms=now_ms, wall_iso=wall, engine_family=self.family.value
-            )
+            return EngineMetricsSample(t_ms=now_ms, wall_iso=wall, engine_family=self.family.value)
 
         # Try the same tracker path as PySparkEngine — Databricks Connect
         # sometimes exposes a compatible ``sparkContext``. When it
         # doesn't, this raises AttributeError inside the try/except
         # below and we return a bare sample.
         try:
-            sc = self._session.sparkContext
-            tracker = sc.statusTracker()
-            active_stage_ids = list(tracker.getActiveStageIds())
-            active_stage_infos = [
-                info
-                for info in (tracker.getStageInfo(sid) for sid in active_stage_ids)
-                if info is not None
-            ]
-            tasks_active = sum(int(info.numActiveTasks()) for info in active_stage_infos)
-            tasks_completed = sum(
-                int(info.numCompletedTasks()) for info in active_stage_infos
-            )
-            tasks_failed = sum(
-                int(info.numFailedTasks()) for info in active_stage_infos
-            )
-            current_stage_name: str | None = None
-            if active_stage_infos:
-                current_stage_name = str(active_stage_infos[-1].name())
-            executor_infos = list(tracker.getExecutorInfos())
-            executors_total = len(executor_infos)
-            executors_active = sum(
-                1 for e in executor_infos if int(e.numRunningTasks()) > 0
-            )
+            snap = read_status_tracker(self._session.sparkContext)
             return EngineMetricsSample(
                 t_ms=now_ms,
                 wall_iso=wall,
                 engine_family=self.family.value,
-                executors_active=executors_active,
-                executors_total=executors_total,
-                tasks_active=tasks_active,
-                tasks_completed_total=tasks_completed,
-                tasks_failed_total=tasks_failed,
-                stages_total=len(active_stage_ids),
-                current_stage=current_stage_name,
+                executors_active=snap.executors_active,
+                executors_total=snap.executors_total,
+                tasks_active=snap.tasks_active,
+                tasks_completed_total=snap.tasks_completed,
+                tasks_failed_total=snap.tasks_failed,
+                stages_total=len(snap.active_stage_ids),
+                current_stage=snap.current_stage,
             )
-        except Exception:  # noqa: BLE001
-            return EngineMetricsSample(
-                t_ms=now_ms, wall_iso=wall, engine_family=self.family.value
-            )
+        except Exception:
+            return EngineMetricsSample(t_ms=now_ms, wall_iso=wall, engine_family=self.family.value)
 
 
 __all__ = ["DatabricksSparkEngine"]

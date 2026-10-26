@@ -117,15 +117,11 @@ class HealthCheckRunner:
                 # Snowflake address with no database — is diagnosable from the
                 # event log instead of surfacing as a generic "not available".
                 reason = f"{exc.__class__.__name__}: {exc}"
-                logger.warning(
-                    "health: source table '%s' not available: %s", table, reason
-                )
+                logger.warning("health: source table '%s' not available: %s", table, reason)
                 self.bus.emit(
                     warning_event(
                         instance_id=self.instance_id,
-                        message=(
-                            f"health: source table '{table}' not available: {reason}"
-                        ),
+                        message=(f"health: source table '{table}' not available: {reason}"),
                         table=table,
                         reason=reason,
                     )
@@ -152,7 +148,10 @@ class HealthCheckRunner:
         for table in tables:
             try:
                 df = prior_address.read(
-                    self.session, self.pipeline, self.batch_id, table.lower(),
+                    self.session,
+                    self.pipeline,
+                    self.batch_id,
+                    table.lower(),
                     table_name=table.lower(),
                 )
                 _ = df.columns

@@ -67,8 +67,12 @@ def run_probe(name: str, *, timeout: float) -> dict[str, Any]:
     """Run ``python -m ovid2.llm probe <name>`` and return its JSON result."""
     try:
         completed = subprocess.run(
-            _argv("probe", name), capture_output=True, text=True, timeout=timeout,
-            check=False, env=child_env(),
+            _argv("probe", name),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+            env=child_env(),
         )
     except subprocess.TimeoutExpired as exc:
         raise ExecError(f"LLM probe timed out after {timeout:.0f}s.") from exc
@@ -81,8 +85,10 @@ def run_probe(name: str, *, timeout: float) -> dict[str, Any]:
             continue
         if isinstance(parsed, dict):
             return parsed
-    raise ExecError(f"LLM executor returned no JSON (exit={completed.returncode}). "
-                    f"stderr tail: {(completed.stderr or '')[-400:]}")
+    raise ExecError(
+        f"LLM executor returned no JSON (exit={completed.returncode}). "
+        f"stderr tail: {(completed.stderr or '')[-400:]}"
+    )
 
 
 def _acquire(limit: int) -> bool:
@@ -100,9 +106,13 @@ def _release() -> None:
         _ACTIVE = max(0, _ACTIVE - 1)
 
 
-def chat_stream(request: dict[str, Any], *, timeout: float,
-                max_concurrent: int,
-                extra_env: dict[str, str] | None = None) -> Iterator[dict[str, Any]]:
+def chat_stream(
+    request: dict[str, Any],
+    *,
+    timeout: float,
+    max_concurrent: int,
+    extra_env: dict[str, str] | None = None,
+) -> Iterator[dict[str, Any]]:
     """Run one chat turn in the executor and yield its JSON-line events.
 
     Always terminates with a ``done`` event, even when the child fails.
@@ -115,8 +125,11 @@ def chat_stream(request: dict[str, Any], *, timeout: float,
             / ``OVID2_LLM_API_TOKEN`` when assistant tools are on).
     """
     if not _acquire(max_concurrent):
-        yield {"type": "error", "code": "busy",
-               "message": "The assistant is busy; try again in a moment."}
+        yield {
+            "type": "error",
+            "code": "busy",
+            "message": "The assistant is busy; try again in a moment.",
+        }
         yield {"type": "done", "route": "none", "ok": False, "elapsed_ms": 0}
         return
     proc: subprocess.Popen[str] | None = None
@@ -125,13 +138,20 @@ def chat_stream(request: dict[str, Any], *, timeout: float,
     try:
         try:
             proc = subprocess.Popen(
-                _argv("chat"), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE, text=True, bufsize=1,
+                _argv("chat"),
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
                 env={**child_env(), **(extra_env or {})},
             )
         except OSError as exc:
-            yield {"type": "error", "code": "unreachable",
-                   "message": f"Could not launch LLM executor: {exc}"}
+            yield {
+                "type": "error",
+                "code": "unreachable",
+                "message": f"Could not launch LLM executor: {exc}",
+            }
             yield {"type": "done", "route": "none", "ok": False, "elapsed_ms": 0}
             return
 
@@ -168,8 +188,11 @@ def chat_stream(request: dict[str, Any], *, timeout: float,
             watchdog.cancel()
         if not saw_done:
             if timed_out.is_set():
-                yield {"type": "error", "code": "timeout",
-                       "message": f"The assistant timed out after {timeout:.0f}s."}
+                yield {
+                    "type": "error",
+                    "code": "timeout",
+                    "message": f"The assistant timed out after {timeout:.0f}s.",
+                }
             else:
                 tail = ""
                 if proc.stderr is not None:
@@ -177,8 +200,11 @@ def chat_stream(request: dict[str, Any], *, timeout: float,
                         tail = proc.stderr.read()[-400:]
                     except (OSError, ValueError):
                         tail = ""
-                yield {"type": "error", "code": "error",
-                       "message": f"LLM executor exited unexpectedly. {tail}".strip()}
+                yield {
+                    "type": "error",
+                    "code": "error",
+                    "message": f"LLM executor exited unexpectedly. {tail}".strip(),
+                }
             yield {"type": "done", "route": "none", "ok": False, "elapsed_ms": 0}
     finally:
         if proc is not None:

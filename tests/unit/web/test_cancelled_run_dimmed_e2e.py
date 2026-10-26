@@ -17,17 +17,13 @@ import pytest
 
 
 @pytest.fixture()
-def pipeline_env_run(
-    isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> str:
+def pipeline_env_run(isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     """Register a stub pipeline + two disc address configs."""
     root = tmp_path / "pipelines_root"
     pkg = root / "ovid2_pipelines" / "tp_cancel"
     (pkg / "__init__.py").parent.mkdir(parents=True, exist_ok=True)
     (pkg / "__init__.py").write_text("", encoding="utf-8")
-    (pkg / "pipeline_settings.py").write_text(
-        "mappers_type='pcornet_mappers'\n", encoding="utf-8"
-    )
+    (pkg / "pipeline_settings.py").write_text("mappers_type='pcornet_mappers'\n", encoding="utf-8")
     monkeypatch.syspath_prepend(str(root))
     for mod in list(sys.modules):
         if mod == "ovid2_pipelines" or mod.startswith("ovid2_pipelines."):
@@ -48,9 +44,7 @@ def pipeline_env_run(
 
 
 @pytest.mark.unit
-def test_cancelled_queued_job_renders_dimmed(
-    web_client: object, pipeline_env_run: str
-) -> None:
+def test_cancelled_queued_job_renders_dimmed(web_client: object, pipeline_env_run: str) -> None:
     payload = {
         "pipeline": pipeline_env_run,
         "batch_id": "B1",

@@ -70,7 +70,9 @@ def _iter_python_specs() -> list[tuple[str, str, dict, str]]:
         return []
 
     found: list[tuple[str, str, dict, str]] = []
-    for _, pipeline_name, is_pkg in pkgutil.iter_modules(pipelines_pkg.__path__, "ovid2_pipelines."):
+    for _, pipeline_name, is_pkg in pkgutil.iter_modules(
+        pipelines_pkg.__path__, "ovid2_pipelines."
+    ):
         if not is_pkg:
             continue
         try:

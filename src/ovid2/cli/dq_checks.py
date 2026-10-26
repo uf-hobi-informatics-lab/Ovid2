@@ -72,7 +72,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Pipeline label. Defaults to the generic 'pcornet_edc' EDC label "
         "(CDM pcornet_7_0) so one reusable run can target any PCORnet database.",
     )
-    parser.add_argument("--batch_id", required=True)
+    parser.add_argument(
+        "--batch_id",
+        required=True,
+        help="Batch id — the complete Data Space path of the input location (<connection>/<path>); a run label, never appended to an address.",
+    )
     parser.add_argument(
         "--packages",
         nargs="+",
@@ -106,6 +110,15 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Prior-refresh input address for the freshness / volume-trend panel.",
     )
     parser.add_argument("--engine", default="pyspark")
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help=(
+            "Allow writing into an output location that already holds tables "
+            "(the address is the exact write location; without this flag the "
+            "run refuses to overwrite existing data)."
+        ),
+    )
     parser.add_argument("--workers", type=int, default=25)
     parser.add_argument("--sf_database", default=None)
     parser.add_argument("--sf_account", default=None)
@@ -135,7 +148,11 @@ def _entry(args: argparse.Namespace) -> int:
     # checks / parts / packages, so a bare run does something sensible.
     parts = getattr(args, "parts", None)
     parts_is_default = parts is None or parts == ["all"] or parts == "all"
-    if not getattr(args, "packages", None) and not getattr(args, "checks", None) and parts_is_default:
+    if (
+        not getattr(args, "packages", None)
+        and not getattr(args, "checks", None)
+        and parts_is_default
+    ):
         from ovid2.transformations.quality.registry import latest_package
 
         latest = latest_package()
@@ -148,6 +165,4 @@ def _entry(args: argparse.Namespace) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(
-        "This module is a subcommand plugin; run it via `ovid2 dq_checks`."
-    )
+    raise SystemExit("This module is a subcommand plugin; run it via `ovid2 dq_checks`.")

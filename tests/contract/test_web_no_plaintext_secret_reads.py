@@ -61,9 +61,7 @@ from pathlib import Path
 import pytest
 
 #: Function names that dereference a credential into memory.
-SECRET_READ_CALLS: frozenset[str] = frozenset(
-    {"resolve_secrets", "load_secret", "load_connection"}
-)
+SECRET_READ_CALLS: frozenset[str] = frozenset({"resolve_secrets", "load_secret", "load_connection"})
 
 #: Reserved secret-name prefix for the web tier's own control-plane auth
 #: material (OIDC client secrets, session signing key, break-glass hash).
@@ -178,17 +176,14 @@ def test_web_never_resolves_plaintext_secrets(src_root: Path) -> None:
                 and _resolves_only_auth_secret(node, auth_var_names)
             ):
                 continue
-            offenders.append(
-                f"{py.relative_to(src_root)}:{node.lineno} calls {name}()"
-            )
+            offenders.append(f"{py.relative_to(src_root)}:{node.lineno} calls {name}()")
 
     assert not offenders, (
         "Web tier (ovid2 API) must not resolve plaintext secrets in a "
         "request handler; delegate to an executor subprocess "
         "(see adr-harness-api-executor-trust-model.md). The only allowed "
         "in-process reads are ``auth_``-prefixed control-plane self-secrets "
-        "from web/auth/*:\n"
-        + "\n".join(offenders)
+        "from web/auth/*:\n" + "\n".join(offenders)
     )
 
 

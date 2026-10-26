@@ -61,18 +61,26 @@ class TestProbeRead:
 
 class TestProbeWrite:
     def test_ok_on_writable_dir(self, tmp_path: Path) -> None:
-        r = probe_write_from_host_path(str(tmp_path), {
-            "host_path": str(tmp_path), "mount_mode": "rw",
-        })
+        r = probe_write_from_host_path(
+            str(tmp_path),
+            {
+                "host_path": str(tmp_path),
+                "mount_mode": "rw",
+            },
+        )
         assert r.ok is True
         assert r.capability == "write"
         # And the probe file is cleaned up.
         assert not any(f.name.startswith(".ovid2_probe_") for f in tmp_path.iterdir())
 
     def test_ro_mode_skips_probe(self, tmp_path: Path) -> None:
-        r = probe_write_from_host_path(str(tmp_path), {
-            "host_path": str(tmp_path), "mount_mode": "ro",
-        })
+        r = probe_write_from_host_path(
+            str(tmp_path),
+            {
+                "host_path": str(tmp_path),
+                "mount_mode": "ro",
+            },
+        )
         # ``skipped`` still returns ok=True so callers with a truthy
         # check don't complain, but the code makes the semantics clear.
         assert r.ok is True

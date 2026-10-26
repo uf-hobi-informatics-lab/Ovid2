@@ -25,10 +25,12 @@ so the output address can persist a per-run raw snapshot.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import logging
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 from ovid2.core.docker import is_inside_docker
 from ovid2.core.events import instance_finished, instance_started
@@ -80,8 +82,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     test_engine.add_argument(
         "name",
-        help="Engine config name, or a bare type name (pyspark / "
-        "databricks_spark / snowpark).",
+        help="Engine config name, or a bare type name (pyspark / databricks_spark / snowpark).",
     )
     test_engine.set_defaults(_entry=_test_engine_entry, _tool="test-engine")
 
@@ -119,9 +120,50 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     browse.add_argument("name", help="Storage account (connection) name.")
     browse.add_argument(
-        "--prefix", default=None, help="Sub-path/prefix to descend into.",
+        "--prefix",
+        default=None,
+        help="Sub-path/prefix to descend into.",
     )
     browse.set_defaults(_entry=_browse_storage_entry, _tool="browse-storage")
+
+    # ``ovid2 tools list-source-tables <address> --pipeline P --batch_id B``
+    # — expand a copy/move ``all`` request to concrete table specs (largest
+    # first) in the executor trust domain. The web tier calls this at
+    # draft/submit time so the reviewed draft shows the real roster.
+    list_src = tool_subparsers.add_parser(
+        "list-source-tables",
+        help="Expand a copy/move source to its concrete tables, print JSON.",
+        description=(
+            "Resolves the named source address (secrets included), calls "
+            "the driver's expand_all_tables + table_sizes capabilities, "
+            "and prints one JSON object on the last line of stdout: "
+            '{"ok", "supported", "type", "tables": [spec...], '
+            '"sizes": {file_name: bytes}, "message"}. Tables are ordered '
+            "largest first when sizes are known. Metadata only — no data "
+            "is read."
+        ),
+    )
+    list_src.add_argument("address", help="Source address config name.")
+    list_src.add_argument("--pipeline", required=True, help="Pipeline name.")
+    list_src.add_argument("--batch_id", required=True, help="Batch identifier.")
+    list_src.set_defaults(_entry=_list_source_tables_entry, _tool="list-source-tables")
+
+    # ``ovid2 tools probe-output <address>`` — the overwrite gate's
+    # pre-flight: does the output location already hold tables? The
+    # address is the exact write location, so the web tier asks the
+    # operator to confirm before a run overwrites existing data.
+    probe_out = tool_subparsers.add_parser(
+        "probe-output",
+        help="List the tables already present at an output address, print JSON.",
+        description=(
+            "Resolves the named output address (secrets included) and lists "
+            "the tables already at its exact location. Prints one JSON object "
+            '{"ok", "known", "type", "tables": [name...], "message"} on the '
+            "last line of stdout. Metadata only — no data is read."
+        ),
+    )
+    probe_out.add_argument("address", help="Output address config name.")
+    probe_out.set_defaults(_entry=_probe_output_entry, _tool="probe-output")
 
     # ``ovid2 tools test-llm <name>`` / ``ovid2 tools llm-chat`` — LLM
     # executor commands (L1). The web tier uses the faster
@@ -141,28 +183,34 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 
     # ``ovid2 tools migrate-addresses`` — W7 legacy → connection-shape.
     from ovid2.tools import migrate_addresses as _migrate_addresses
+
     _migrate_addresses.register(tool_subparsers)
 
     # ``ovid2 tools import-cdm`` — xlsx → resources/cdms/<cdm>/ YAML (C1).
     from ovid2.tools import import_cdm as _import_cdm
+
     _import_cdm.register(tool_subparsers)
 
     # ``ovid2 tools import-vocabulary`` — slice OMOP CONCEPT.csv into
     # per-vocabulary YAMLs under resources/semantic/vocabularies/ (S3).
     from ovid2.tools import import_vocabulary as _import_vocabulary
+
     _import_vocabulary.register(tool_subparsers)
 
     # ``ovid2 tools copy`` — one-shot address-to-address data move (C1).
     from ovid2.tools import copy as _copy
+
     _copy.register(tool_subparsers)
 
     # ``ovid2 tools move`` — driver-native successor to ``copy`` (M1).
     from ovid2.tools import move as _move
+
     _move.register(tool_subparsers)
 
     # ``ovid2 tools new-pipeline`` — scaffold a pipeline package from a
     # pipeline template (pipeline-centric panel, Phase 3).
     from ovid2.tools import new_pipeline as _new_pipeline
+
     _new_pipeline.register(tool_subparsers)
 
     # ``ovid2 tools ods ...`` — Ovid Data Space read-only helpers.
@@ -198,7 +246,9 @@ def _raw_upload_entry(args: argparse.Namespace) -> int:
     input_address = load_address(args.input_address, pipeline=args.pipeline)
     output_address = load_address(args.output_address, pipeline=args.pipeline)
     engine = load_engine(args.engine)
-    spark = engine.get_session()
+    # raw_upload reads/writes through the Spark-typed ``BaseAddress`` API;
+    # ``cli/`` may not import pyspark (even for typing), so keep it ``Any``.
+    spark: Any = engine.get_session()
 
     files = args.file or _discover_batch_files(input_address, args.pipeline, args.batch_id)
     failures = 0
@@ -206,7 +256,10 @@ def _raw_upload_entry(args: argparse.Namespace) -> int:
         try:
             table_name = _raw_table_name(args.pipeline, args.batch_id, file_name)
             df = input_address.read(
-                spark, args.pipeline, args.batch_id, file_name,
+                spark,
+                args.pipeline,
+                args.batch_id,
+                file_name,
                 table_name=table_name,
             )
             output_address.write(df, spark, args.pipeline, args.batch_id, table_name)
@@ -221,7 +274,12 @@ def _raw_upload_entry(args: argparse.Namespace) -> int:
 
 
 def _discover_batch_files(input_address: object, pipeline: str, batch_id: str) -> list[str]:
-    """Return the file names inside a disc-address batch directory."""
+    """Return the file names directly inside a disc address directory.
+
+    The address is the exact location of the data; ``pipeline`` /
+    ``batch_id`` do not contribute path segments.
+    """
+    del pipeline, batch_id
     from ovid2.drivers.disc import DiscAddress
 
     if not isinstance(input_address, DiscAddress):
@@ -229,7 +287,7 @@ def _discover_batch_files(input_address: object, pipeline: str, batch_id: str) -
             "raw_upload requires --file when the input address is not a DiscAddress."
         )
 
-    batch_dir = Path(input_address.root_path) / pipeline / batch_id
+    batch_dir = Path(input_address.root_path)
     if not batch_dir.is_dir():
         raise FileNotFoundError(f"Batch directory not found: {batch_dir}")
     return [entry.name for entry in sorted(batch_dir.iterdir()) if entry.is_file()]
@@ -268,10 +326,8 @@ def _test_engine_entry(args: argparse.Namespace) -> int:
             "message": str(outcome.message),
             "detail": dict(outcome.detail),
         }
-        try:
+        with contextlib.suppress(Exception):
             engine.stop_session()
-        except Exception:  # noqa: BLE001
-            pass
     except (FileNotFoundError, ValueError, KeyError) as exc:
         result = {
             "ok": False,
@@ -279,7 +335,7 @@ def _test_engine_entry(args: argparse.Namespace) -> int:
             "message": str(exc),
             "detail": {"exception_type": type(exc).__name__},
         }
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         result = {
             "ok": False,
             "code": "error",
@@ -329,7 +385,8 @@ def _probe_connection_entry(args: argparse.Namespace) -> int:
         type_name = str(raw.get("type") or "")
         if type_name not in DRIVERS:
             result = {
-                "ok": False, "code": "config",
+                "ok": False,
+                "code": "config",
                 "message": f"Connection type '{type_name}' is not registered.",
                 "detail": {},
             }
@@ -345,13 +402,11 @@ def _probe_connection_entry(args: argparse.Namespace) -> int:
             # Surface a resolved auth-mode label (azure_blob) so the web
             # tier can display it without instantiating the connector
             # itself. Best-effort; never includes credential material.
-            try:
+            with contextlib.suppress(Exception):
                 connection = _connections.load_connection(args.name)
                 resolver = getattr(connection, "_auth_mode", None)
                 if resolver is not None:
                     detail.setdefault("auth_mode", str(resolver()))
-            except Exception:  # noqa: BLE001 — auth-mode is best-effort.
-                pass
             result = {
                 "ok": bool(probe_result.ok),
                 "code": str(probe_result.code),
@@ -360,12 +415,16 @@ def _probe_connection_entry(args: argparse.Namespace) -> int:
             }
     except (FileNotFoundError, PermissionError, ValueError, KeyError) as exc:
         result = {
-            "ok": False, "code": "config", "message": str(exc),
+            "ok": False,
+            "code": "config",
+            "message": str(exc),
             "detail": {"exception_type": type(exc).__name__},
         }
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         result = {
-            "ok": False, "code": "error", "message": str(exc),
+            "ok": False,
+            "code": "error",
+            "message": str(exc),
             "detail": {"exception_type": type(exc).__name__},
         }
 
@@ -381,7 +440,8 @@ def _browse_storage_entry(args: argparse.Namespace) -> int:
     endpoint. JSON schema::
 
         {"ok": bool, "supported": bool, "type": str, "prefix": str,
-         "message": str|None, "entries": [{"name","kind","path"}, ...]}
+         "message": str|None,
+         "entries": [{"name","kind","path"[,"size_bytes"]}, ...]}
     """
     import json as _json
 
@@ -395,7 +455,9 @@ def _browse_storage_entry(args: argparse.Namespace) -> int:
         type_name = str(raw.get("type") or "")
         if type_name not in DRIVERS:
             result = {
-                "ok": False, "supported": False, "type": type_name,
+                "ok": False,
+                "supported": False,
+                "type": type_name,
                 "prefix": prefix or "",
                 "message": f"Storage type '{type_name}' is not registered.",
                 "entries": [],
@@ -410,33 +472,170 @@ def _browse_storage_entry(args: argparse.Namespace) -> int:
             try:
                 raw_entries = driver.list_dir(prefix)
                 result = {
-                    "ok": True, "supported": True, "type": type_name,
-                    "prefix": prefix or "", "message": None,
-                    "entries": [
-                        {"name": e.name, "kind": e.kind, "path": e.path}
-                        for e in (raw_entries or [])
-                    ],
+                    "ok": True,
+                    "supported": True,
+                    "type": type_name,
+                    "prefix": prefix or "",
+                    "message": None,
+                    "entries": [e.to_dict() for e in (raw_entries or [])],
                 }
             except NotImplementedError as exc:
                 result = {
-                    "ok": True, "supported": False, "type": type_name,
+                    "ok": True,
+                    "supported": False,
+                    "type": type_name,
                     "prefix": prefix or "",
                     "message": (
-                        f"Browsing is not available for '{type_name}' "
-                        f"storage accounts ({exc})."
+                        f"Browsing is not available for '{type_name}' storage accounts ({exc})."
                     ),
                     "entries": [],
                 }
     except (FileNotFoundError, PermissionError, ValueError, KeyError) as exc:
         result = {
-            "ok": False, "supported": True, "type": "", "prefix": prefix or "",
-            "message": str(exc), "entries": [],
+            "ok": False,
+            "supported": True,
+            "type": "",
+            "prefix": prefix or "",
+            "message": str(exc),
+            "entries": [],
         }
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         result = {
-            "ok": False, "supported": True, "type": "", "prefix": prefix or "",
-            "message": f"Listing failed: {exc}", "entries": [],
+            "ok": False,
+            "supported": True,
+            "type": "",
+            "prefix": prefix or "",
+            "message": f"Listing failed: {exc}",
+            "entries": [],
         }
+
+    sys.stdout.write(_json.dumps(result) + "\n")
+    sys.stdout.flush()
+    return 0 if result.get("ok") else 1
+
+
+def _probe_output_entry(args: argparse.Namespace) -> int:
+    """List the tables already at an output address, emit JSON.
+
+    Executor-domain counterpart of the web tier's overwrite pre-flight
+    (:mod:`ovid2.web.services.output_probe_svc`). JSON schema::
+
+        {"ok": bool, "known": bool, "type": str, "tables": [str, ...],
+         "message": str|None}
+
+    ``known=False`` means occupancy cannot be determined for this
+    driver / host (the executor's own gate still runs at run time).
+    """
+    import json as _json
+
+    from ovid2.drivers.overwrite import probe_output_tables
+    from ovid2.drivers.registry import driver_from_address
+
+    result: dict[str, object] = {
+        "ok": False,
+        "known": False,
+        "type": "",
+        "tables": [],
+        "message": None,
+    }
+    try:
+        driver = driver_from_address(args.address)
+        result["type"] = driver.type_name
+        tables = probe_output_tables(driver)
+        result["ok"] = True
+        if tables is None:
+            result["message"] = "occupancy cannot be determined for this output."
+        else:
+            result["known"] = True
+            result["tables"] = tables
+    except (FileNotFoundError, PermissionError, ValueError, KeyError) as exc:
+        result["message"] = str(exc)
+    except Exception as exc:
+        result["message"] = f"probe failed: {exc}"
+
+    sys.stdout.write(_json.dumps(result) + "\n")
+    sys.stdout.flush()
+    return 0 if result.get("ok") else 1
+
+
+def _list_source_tables_entry(args: argparse.Namespace) -> int:
+    """Expand a copy/move source to concrete ``--tables`` specs, emit JSON.
+
+    Executor-domain counterpart of the web tier's draft-time ``all``
+    expansion (:mod:`ovid2.web.services._table_expand`). JSON schema::
+
+        {"ok": bool, "code": "ok"|"unsupported"|"unavailable"|"error",
+         "supported": bool, "type": str, "tables": [str, ...],
+         "sizes": {str: int}, "message": str|None}
+
+    ``supported=False`` means the driver type cannot enumerate tables;
+    ``ok=False`` with ``supported=True`` means it can but listing failed
+    (missing folder, bad schema) — ``message`` says why.
+    """
+    import json as _json
+
+    from ovid2.drivers.registry import driver_from_address
+    from ovid2.tools.table_order import sort_by_size
+    from ovid2.tools.table_specs import TableSpecError, parse_table_specs
+
+    # ``code``: ``ok`` | ``unsupported`` (driver type cannot enumerate) |
+    # ``unavailable`` (it can, but not from this host — e.g. SDK / jars
+    # missing; the copy executor re-expands ``all`` at run time) |
+    # ``error`` (a concrete listing failure — missing folder, bad schema).
+    result: dict[str, object] = {
+        "ok": False,
+        "code": "unsupported",
+        "supported": False,
+        "type": "",
+        "tables": [],
+        "sizes": {},
+        "message": None,
+    }
+    try:
+        driver = driver_from_address(args.address, pipeline=args.pipeline)
+        result["type"] = driver.type_name
+        if not type(driver).supports_expand_all():
+            result["message"] = (
+                f"'{driver.type_name}' sources cannot list their tables; "
+                "pass an explicit tables list."
+            )
+        else:
+            result["supported"] = True
+            result["code"] = "error"
+            expanded = driver.expand_all_tables(pipeline=args.pipeline, batch_id=args.batch_id)
+            if expanded is None:
+                result["code"] = "unavailable"
+                result["message"] = "table enumeration is unavailable for this source."
+            elif not expanded:
+                result["message"] = "the source contains no tables."
+            else:
+                specs = parse_table_specs(expanded)
+                try:
+                    sizes = driver.table_sizes(
+                        [s.file_name for s in specs],
+                        pipeline=args.pipeline,
+                        batch_id=args.batch_id,
+                    )
+                except Exception as exc:  # sizes are advisory
+                    logger.warning("table_sizes failed for %s: %s", args.address, exc)
+                    sizes = {}
+                ordered = sort_by_size(specs, sizes) if sizes else specs
+                result["tables"] = [
+                    s.table_name if s.table_name == s.file_name else f"{s.table_name}={s.file_name}"
+                    for s in ordered
+                ]
+                result["sizes"] = sizes
+                result["ok"] = True
+                result["code"] = "ok"
+    except NotImplementedError as exc:
+        result["code"] = "unavailable"
+        result["message"] = f"listing is unavailable on this host: {exc}"
+    except (FileNotFoundError, PermissionError, ValueError, KeyError, TableSpecError) as exc:
+        result["code"] = "error"
+        result["message"] = str(exc)
+    except Exception as exc:
+        result["code"] = "error"
+        result["message"] = f"Listing failed: {exc}"
 
     sys.stdout.write(_json.dumps(result) + "\n")
     sys.stdout.flush()
@@ -451,51 +650,35 @@ def _register_ods(
         "ods",
         help="Ovid Data Space helpers (list, resolve, dimensions).",
         description=(
-            "Read-only utilities that walk the Ovid Data Space (a "
-            "POSIX-style /pipeline/batch/table namespace over the "
-            "configured connections). Output is JSON on stdout so the "
-            "commands compose with other tools."
+            "Read-only utilities over the Ovid Data Space: every storage "
+            "account is a tree of plain directories, /<account>/<path…>. "
+            "Output is JSON on stdout so the commands compose with other tools."
         ),
     )
     ods_subparsers = ods.add_subparsers(dest="ods_command", metavar="COMMAND")
 
     ls = ods_subparsers.add_parser(
         "ls",
-        help="List children of an ODS path.",
+        help="List children of a Data Space path.",
         description=(
-            "List the direct children of an ODS path. '/' lists "
-            "pipelines, '/<pipeline>' lists batches, '/<pipeline>/"
-            "<batch>' lists tables."
+            "List the direct children of a Data Space path. '/' lists storage "
+            "accounts; '/<account>/<folder…>' lists that folder or "
+            "DATABASE/SCHEMA."
         ),
     )
-    ls.add_argument(
-        "path",
-        nargs="?",
-        default="/",
-        help="ODS path to list (default '/').",
-    )
-    ls.add_argument(
-        "--dim",
-        default=None,
-        help="Dimension filter (disc, snowflake, s3, ...). Defaults to disc.",
-    )
+    ls.add_argument("path", nargs="?", default="/", help="Data Space path (default '/').")
     ls.set_defaults(_entry=_ods_ls_entry, _tool="ods.ls")
 
     resolve = ods_subparsers.add_parser(
         "resolve",
-        help="Resolve an ODS path + dimension to an address.",
+        help="Resolve a Data Space path to its storage account + exact location.",
     )
-    resolve.add_argument("path", help="ODS path (e.g. /demo/20260316/DEMOGRAPHIC).")
-    resolve.add_argument(
-        "--dim",
-        default=None,
-        help="Optional dimension override.",
-    )
+    resolve.add_argument("path", help="Data Space path (e.g. /inbox/landing/2026_03).")
     resolve.set_defaults(_entry=_ods_resolve_entry, _tool="ods.resolve")
 
     dims = ods_subparsers.add_parser(
         "dimensions",
-        help="List every registered dimension + resolution defaults.",
+        help="List every storage type and the addresses using it.",
     )
     dims.set_defaults(_entry=_ods_dimensions_entry, _tool="ods.dimensions")
 
@@ -507,41 +690,7 @@ def _register_ods(
 
 
 def _ods_ls_entry(args: argparse.Namespace) -> int:
-    """Print children of an ODS path as a JSON list."""
-    import json as _json
-
-    from ovid2 import dataspace
-    from ovid2.dataspace.path import OdsPath, OdsPathError
-
-    try:
-        ods_path = OdsPath.parse(args.path)
-    except OdsPathError as exc:
-        print(_json.dumps({"error": str(exc)}), file=sys.stderr)
-        return 2
-
-    try:
-        if ods_path.is_root:
-            children = dataspace.list_pipelines(dim=args.dim)
-        elif ods_path.depth == 1:
-            children = dataspace.list_batches(ods_path.pipeline or "", dim=args.dim)
-        elif ods_path.depth == 2:
-            children = dataspace.list_tables(
-                ods_path.pipeline or "",
-                ods_path.batch_id or "",
-                dim=args.dim,
-            )
-        else:
-            children = []
-    except (OdsPathError, ValueError) as exc:
-        print(_json.dumps({"error": str(exc)}), file=sys.stderr)
-        return 2
-
-    sys.stdout.write(_json.dumps({"path": ods_path.as_str(), "children": children}) + "\n")
-    return 0
-
-
-def _ods_resolve_entry(args: argparse.Namespace) -> int:
-    """Print the resolution of an ODS path as JSON."""
+    """Print the children of a Data Space path as JSON."""
     import json as _json
 
     from ovid2 import dataspace
@@ -549,19 +698,42 @@ def _ods_resolve_entry(args: argparse.Namespace) -> int:
     from ovid2.dataspace.resolver import OdsResolutionError
 
     try:
-        target = dataspace.resolve(args.path, dim=args.dim, materialise=False)
+        supported, entries, message = dataspace.list_children(args.path)
+    except (OdsPathError, OdsResolutionError, FileNotFoundError, ValueError) as exc:
+        print(_json.dumps({"error": str(exc)}), file=sys.stderr)
+        return 2
+    payload = {
+        "path": args.path,
+        "supported": supported,
+        "message": message,
+        "children": [
+            {"name": e.name, "kind": e.kind, "path": e.path, "type": e.type} for e in entries
+        ],
+    }
+    sys.stdout.write(_json.dumps(payload) + "\n")
+    return 0
+
+
+def _ods_resolve_entry(args: argparse.Namespace) -> int:
+    """Print the resolution of a Data Space path as JSON."""
+    import json as _json
+
+    from ovid2 import dataspace
+    from ovid2.dataspace.path import OdsPathError
+    from ovid2.dataspace.resolver import OdsResolutionError
+
+    try:
+        target = dataspace.resolve(args.path)
     except (OdsPathError, OdsResolutionError) as exc:
         print(_json.dumps({"error": str(exc)}), file=sys.stderr)
         return 2
-
     payload = {
         "path": target.path.as_str(),
-        "pipeline": target.path.pipeline,
-        "batch_id": target.path.batch_id,
-        "table": target.path.table,
-        "dimension": target.dimension,
+        "connection": target.connection,
+        "type": target.type,
+        "location": target.location,
+        "batch_id": target.batch_id,
         "address_name": target.address_name,
-        "tier": target.tier,
         "candidates": list(target.candidates),
     }
     sys.stdout.write(_json.dumps(payload) + "\n")

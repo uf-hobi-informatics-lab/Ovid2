@@ -11,7 +11,6 @@ from typing import Any
 from ovid2.transforms.base import BaseTransform, DataFrame, TransformContext
 
 
-
 class TrimTransform(BaseTransform):
     """Strip leading and trailing whitespace from one or more columns."""
 
@@ -44,9 +43,7 @@ class TrimTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with the named columns trimmed."""
         columns = params.get("columns")
         if not isinstance(columns, list) or not columns:
@@ -93,9 +90,7 @@ class NormalizeWhitespaceTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with whitespace normalised in the named columns."""
         columns = params.get("columns")
         if not isinstance(columns, list) or not columns:

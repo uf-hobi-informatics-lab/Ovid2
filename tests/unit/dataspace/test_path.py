@@ -1,4 +1,4 @@
-"""Tests for :class:`ovid2.dataspace.path.OdsPath` grammar and behaviour."""
+"""Tests for :class:`ovid2.dataspace.path.OdsPath` (``/<connection>/<path…>``)."""
 
 from __future__ import annotations
 
@@ -14,68 +14,48 @@ class TestOdsPathParse:
         p = OdsPath.parse("/")
         assert p.is_root
         assert p.depth == 0
-        assert p.pipeline is None
+        assert p.connection is None
         assert p.as_str() == "/"
 
-    def test_pipeline_only(self) -> None:
-        p = OdsPath.parse("/demo")
+    def test_account_only(self) -> None:
+        p = OdsPath.parse("/inbox")
         assert p.depth == 1
-        assert p.pipeline == "demo"
-        assert p.batch_id is None
-        assert p.table is None
+        assert p.connection == "inbox"
+        assert p.location == ""
+        assert p.batch_id() == "inbox"
 
-    def test_pipeline_batch(self) -> None:
-        p = OdsPath.parse("/demo/20260316")
-        assert p.depth == 2
-        assert p.batch_id == "20260316"
-
-    def test_leaf(self) -> None:
-        p = OdsPath.parse("/demo/20260316/DEMOGRAPHIC")
-        assert p.is_leaf
+    def test_folder_path(self) -> None:
+        p = OdsPath.parse("/inbox/landing/2026_03")
         assert p.depth == 3
-        assert p.table == "DEMOGRAPHIC"
+        assert p.connection == "inbox"
+        assert p.location == "landing/2026_03"
+        assert p.name == "2026_03"
+        assert p.batch_id() == "inbox/landing/2026_03"
+
+    def test_warehouse_schema(self) -> None:
+        p = OdsPath.parse("/sf_prod/CHAR_DB/SITE_X")
+        assert p.location == "CHAR_DB/SITE_X"
 
     def test_trailing_slash_stripped(self) -> None:
         assert OdsPath.parse("/demo/") == OdsPath.parse("/demo")
-        assert OdsPath.parse("/demo/20260316/") == OdsPath.parse("/demo/20260316")
 
     def test_case_preserved_but_equal(self) -> None:
         a = OdsPath.parse("/DEMO/20260316/Demographic")
         b = OdsPath.parse("/demo/20260316/DEMOGRAPHIC")
         assert a == b
         assert hash(a) == hash(b)
-        # Case is preserved in storage even though equality is case-insensitive.
-        assert a.pipeline == "DEMO"
-        assert a.table == "Demographic"
+        assert a.connection == "DEMO"
+        assert a.name == "Demographic"
 
-    def test_dots_in_component_allowed(self) -> None:
-        # File-like names with a single dot are legitimate.
-        p = OdsPath.parse("/demo/20260316/DEMOGRAPHIC.parquet")
-        assert p.table == "DEMOGRAPHIC.parquet"
-
-    def test_underscore_and_hyphen(self) -> None:
-        p = OdsPath.parse("/nursing_site/20260316/some-table")
-        assert p.pipeline == "nursing_site"
-        assert p.table == "some-table"
+    def test_dots_dollar_underscore_hyphen(self) -> None:
+        p = OdsPath.parse("/s3_x/some-dir/DEMOGRAPHIC.parquet/T$1")
+        assert p.parts == ("some-dir", "DEMOGRAPHIC.parquet", "T$1")
 
 
-class TestOdsPathRejections:
-    """Grammar violations must raise :class:`OdsPathError`."""
-
+class TestOdsPathRejects:
     @pytest.mark.parametrize(
         "bad",
-        [
-            "demo",             # not absolute
-            "",                # empty
-            "/demo/../foo",     # parent traversal
-            "/demo/./foo",      # current dir
-            "/demo//20260316",  # empty component
-            "/demo@disc",       # reserved
-            "/demo?dim=disc",   # query char
-            "/demo#frag",       # fragment char
-            "/demo/*/DEMO",     # wildcard
-            "/demo/20260316/DEMO/columns",  # depth-4 rejected
-        ],
+        ["", "demo", "/a//b", "/a/../b", "/a/./b", "/a/*", "/a/@b", "/a/#b", "/a/?b"],
     )
     def test_rejected(self, bad: str) -> None:
         with pytest.raises(OdsPathError):
@@ -83,42 +63,28 @@ class TestOdsPathRejections:
 
     def test_non_string(self) -> None:
         with pytest.raises(OdsPathError):
-            OdsPath.parse(42)  # type: ignore[arg-type]
+            OdsPath.parse(123)  # type: ignore[arg-type]
 
 
 class TestOdsPathNavigation:
-    """``parent`` / ``child`` / ``as_str`` behaviour."""
-
     def test_parent_of_root_is_root(self) -> None:
-        root = OdsPath()
-        assert root.parent() == root
+        assert OdsPath().parent() == OdsPath()
 
     def test_parent_walk(self) -> None:
-        leaf = OdsPath.parse("/demo/20260316/DEMO")
-        assert leaf.parent() == OdsPath.parse("/demo/20260316")
-        assert leaf.parent().parent() == OdsPath.parse("/demo")
-        assert leaf.parent().parent().parent().is_root
+        p = OdsPath.parse("/a/b/c")
+        assert p.parent().as_str() == "/a/b"
+        assert p.parent().parent().as_str() == "/a"
+        assert p.parent().parent().parent().is_root
 
-    def test_child_from_root(self) -> None:
-        assert OdsPath().child("demo") == OdsPath.parse("/demo")
-
-    def test_child_leaf_raises(self) -> None:
-        leaf = OdsPath.parse("/demo/20260316/DEMO")
-        with pytest.raises(OdsPathError):
-            leaf.child("columns")
+    def test_child(self) -> None:
+        assert OdsPath().child("acct").as_str() == "/acct"
+        assert OdsPath.parse("/acct").child("x").child("y").as_str() == "/acct/x/y"
 
     def test_child_validates_component(self) -> None:
         with pytest.raises(OdsPathError):
-            OdsPath().child("../etc")
+            OdsPath.parse("/acct").child("..")
 
 
 class TestOdsPathHashing:
-    """Frozen dataclass — must work as dict key / set member."""
-
     def test_set_membership(self) -> None:
-        s = {OdsPath.parse("/demo/20260316/DEMO")}
-        assert OdsPath.parse("/DEMO/20260316/demo") in s
-
-    def test_dict_key(self) -> None:
-        d = {OdsPath.parse("/demo"): 1}
-        assert d[OdsPath.parse("/DEMO")] == 1
+        assert OdsPath.parse("/A/b") in {OdsPath.parse("/a/B")}

@@ -13,6 +13,16 @@ class RunPipelineConfigArgs(BaseModel):
     """Arguments for :data:`TOOL_NAME`."""
 
     name: str = Field(..., description="Filename stem of the pipeline_config to run.")
+    confirm_overwrite: bool = Field(
+        False,
+        description=(
+            "Set True to let the run overwrite an output location that already "
+            "holds tables. Without it an occupied output answers 409 "
+            "overwrite_required (listing the existing tables). For an agent this "
+            "becomes a run.overwrite approval request (202) a human must approve "
+            "before re-submitting."
+        ),
+    )
 
 
 TOOL_NAME = "run_pipeline_config"
@@ -25,4 +35,5 @@ ARGS_MODEL = RunPipelineConfigArgs
 
 async def run(client: WebApiClient, args: RunPipelineConfigArgs) -> Any:
     """Call ``POST /api/v1/pipelines/{name}/run``."""
-    return await client.post(f"/api/v1/pipelines/{args.name}/run", json_body={})
+    body = {"confirm_overwrite": True} if args.confirm_overwrite else {}
+    return await client.post(f"/api/v1/pipelines/{args.name}/run", json_body=body)

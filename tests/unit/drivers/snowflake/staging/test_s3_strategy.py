@@ -19,7 +19,6 @@ from ovid2.core.engines.stager import (
     SnowparkStagingStrategy,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -73,7 +72,7 @@ class _FakeSession:
         return None  # force _ensure_writable_staging_schema to CREATE
 
     @property
-    def native(self) -> "Any":
+    def native(self) -> Any:
         return self
 
 
@@ -134,6 +133,7 @@ class TestImportSafety:
                 del sys.modules[mod]
         pyspark_before = {m for m in sys.modules if m.startswith("pyspark")}
         import ovid2.drivers.snowflake.staging.s3  # noqa: F401
+
         pyspark_after = {m for m in sys.modules if m.startswith("pyspark")}
         assert pyspark_after == pyspark_before
 
@@ -148,13 +148,18 @@ class TestBuildCreateStageSql:
         from ovid2.drivers.snowflake.staging import s3
 
         monkeypatch.setattr(
-            s3, "SNOWPARK_STAGING_S3_INTEGRATION", None, raising=False,
+            s3,
+            "SNOWPARK_STAGING_S3_INTEGRATION",
+            None,
+            raising=False,
         )
         # Direct set via the settings module (Phase D added this).
         from ovid2.config import settings
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_S3_INTEGRATION", "MY_INT",
+            settings,
+            "SNOWPARK_STAGING_S3_INTEGRATION",
+            "MY_INT",
         )
         sql = s3._build_create_stage_sql(
             stage_name="OVID2_STG_S3_TEST",
@@ -172,7 +177,9 @@ class TestBuildCreateStageSql:
         from ovid2.drivers.snowflake.staging import s3
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_S3_INTEGRATION", None,
+            settings,
+            "SNOWPARK_STAGING_S3_INTEGRATION",
+            None,
         )
         sql = s3._build_create_stage_sql(
             stage_name="OVID2_STG_S3_TEST",
@@ -191,7 +198,9 @@ class TestBuildCreateStageSql:
         from ovid2.drivers.snowflake.staging import s3
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_S3_INTEGRATION", None,
+            settings,
+            "SNOWPARK_STAGING_S3_INTEGRATION",
+            None,
         )
         sql = s3._build_create_stage_sql(
             stage_name="OVID2_STG_S3_TEST",
@@ -209,7 +218,9 @@ class TestBuildCreateStageSql:
         from ovid2.drivers.snowflake.staging import s3
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_S3_INTEGRATION", None,
+            settings,
+            "SNOWPARK_STAGING_S3_INTEGRATION",
+            None,
         )
         with pytest.raises(ValueError, match="no Snowflake→S3 auth path"):
             s3._build_create_stage_sql(
@@ -223,7 +234,9 @@ class TestBuildCreateStageSql:
         from ovid2.drivers.snowflake.staging import s3
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_S3_INTEGRATION", None,
+            settings,
+            "SNOWPARK_STAGING_S3_INTEGRATION",
+            None,
         )
         # A key containing a single quote must be escaped.
         sql = s3._build_create_stage_sql(
@@ -248,7 +261,11 @@ class TestHelpers:
         from ovid2.drivers.snowflake.staging.s3 import _stage_name
 
         name = _stage_name(
-            "20260806-140000-def456", "demo", "20260101", "encounter", kind="in",
+            "20260806-140000-def456",
+            "demo",
+            "20260101",
+            "encounter",
+            kind="in",
         )
         assert name.startswith("OVID2_STG_S3_")
         assert "-" not in name  # sanitised
@@ -278,23 +295,15 @@ class TestHelpers:
     def test_s3_dir_uri_composition(self) -> None:
         from ovid2.drivers.snowflake.staging.s3 import _s3_dir_uri
 
-        assert _s3_dir_uri("bucket", "prefix", "demo", "20260101") == (
-            "s3://bucket/prefix/demo/20260101/"
-        )
-        assert _s3_dir_uri("bucket", "", "demo", "20260101") == (
-            "s3://bucket/demo/20260101/"
-        )
-        assert _s3_dir_uri("bucket", "", "", "") == "s3://bucket/"
+        assert _s3_dir_uri("bucket", "prefix") == ("s3://bucket/prefix/")
+        assert _s3_dir_uri("bucket", "") == ("s3://bucket/")
+        assert _s3_dir_uri("bucket", "") == "s3://bucket/"
 
     def test_s3_key_composition(self) -> None:
         from ovid2.drivers.snowflake.staging.s3 import _s3_key
 
-        assert _s3_key("prefix", "demo", "20260101", "file.csv") == (
-            "prefix/demo/20260101/file.csv"
-        )
-        assert _s3_key("", "demo", "20260101", "file.csv") == (
-            "demo/20260101/file.csv"
-        )
+        assert _s3_key("prefix", "file.csv") == ("prefix/file.csv")
+        assert _s3_key("", "file.csv") == ("file.csv")
 
     def test_escape_sql_doubles_single_quotes(self) -> None:
         from ovid2.drivers.snowflake.staging.s3 import _escape_sql
@@ -342,44 +351,59 @@ class TestMaterialise:
         return fake_client
 
     def test_materialise_creates_stage_and_transient_table(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         from ovid2.config import settings
         from ovid2.drivers.snowflake.staging.s3 import SnowparkS3Strategy
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_S3_INTEGRATION", None,
+            settings,
+            "SNOWPARK_STAGING_S3_INTEGRATION",
+            None,
         )
         self._prepare_boto_stub(
-            monkeypatch, body=b"COL_A\tCOL_B\tCOL_C\nrow1\tx\ty\n",
+            monkeypatch,
+            body=b"COL_A\tCOL_B\tCOL_C\nrow1\tx\ty\n",
         )
 
         session = _FakeSession()
-        driver = _FakeS3Driver({
-            "bucket": "mybucket",
-            "prefix": "raw",
-            "region": "us-east-2",
-            "aws_access_key_id": "AKIA",
-            "aws_secret_access_key": "secret",
-            "format": "csv",
-        })
+        driver = _FakeS3Driver(
+            {
+                "bucket": "mybucket",
+                "prefix": "raw",
+                "region": "us-east-2",
+                "aws_access_key_id": "AKIA",
+                "aws_secret_access_key": "secret",
+                "format": "csv",
+            }
+        )
         strategy = SnowparkS3Strategy()
 
         df = strategy.materialise(
-            session, driver, "demo", "20260101",
-            "encounter.csv", None, None,
+            session,
+            driver,
+            "demo",
+            "20260101",
+            "encounter.csv",
+            None,
+            None,
         )
 
         # A CREATE STAGE, CREATE TRANSIENT TABLE, and COPY INTO fired.
-        create_stage = [q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TEMPORARY STAGE")]
-        create_table = [q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TRANSIENT TABLE")]
+        create_stage = [
+            q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TEMPORARY STAGE")
+        ]
+        create_table = [
+            q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TRANSIENT TABLE")
+        ]
         copy_into = [q for q in session.sql_calls if q.startswith("COPY INTO")]
         assert len(create_stage) == 1
         assert len(create_table) == 1
         assert len(copy_into) == 1
 
         # Stage URL points at the directory.
-        assert "s3://mybucket/raw/demo/20260101/" in create_stage[0]
+        assert "s3://mybucket/raw/" in create_stage[0]
         # Column names appear in the transient-table DDL.
         assert '"COL_A" VARCHAR' in create_table[0]
         assert '"COL_C" VARCHAR' in create_table[0]
@@ -392,16 +416,24 @@ class TestMaterialise:
         from ovid2.drivers.snowflake.staging.s3 import SnowparkS3Strategy
 
         session = _FakeSession()
-        driver = _FakeS3Driver({
-            "bucket": "b",
-            "aws_access_key_id": "a",
-            "aws_secret_access_key": "s",
-            "format": "parquet",
-        })
+        driver = _FakeS3Driver(
+            {
+                "bucket": "b",
+                "aws_access_key_id": "a",
+                "aws_secret_access_key": "s",
+                "format": "parquet",
+            }
+        )
         strategy = SnowparkS3Strategy()
         with pytest.raises(ValueError, match="only supports fmt='csv'"):
             strategy.materialise(
-                session, driver, "demo", "20260101", "f.parquet", None, None,
+                session,
+                driver,
+                "demo",
+                "20260101",
+                "f.parquet",
+                None,
+                None,
             )
 
     def test_materialise_rejects_glob_file_name(self, monkeypatch) -> None:
@@ -409,7 +441,9 @@ class TestMaterialise:
         from ovid2.drivers.snowflake.staging.s3 import SnowparkS3Strategy
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_S3_INTEGRATION", None,
+            settings,
+            "SNOWPARK_STAGING_S3_INTEGRATION",
+            None,
         )
         # Even the header-reader guard should catch the glob before
         # boto3 gets called; install a stub anyway so the code path
@@ -417,15 +451,23 @@ class TestMaterialise:
         self._prepare_boto_stub(monkeypatch, body=b"a,b\n")
 
         session = _FakeSession()
-        driver = _FakeS3Driver({
-            "bucket": "b",
-            "aws_access_key_id": "a",
-            "aws_secret_access_key": "s",
-        })
+        driver = _FakeS3Driver(
+            {
+                "bucket": "b",
+                "aws_access_key_id": "a",
+                "aws_secret_access_key": "s",
+            }
+        )
         strategy = SnowparkS3Strategy()
         with pytest.raises(ValueError, match="cannot read header from a glob"):
             strategy.materialise(
-                session, driver, "demo", "20260101", "en*.csv", None, None,
+                session,
+                driver,
+                "demo",
+                "20260101",
+                "en*.csv",
+                None,
+                None,
             )
 
 
@@ -436,31 +478,44 @@ class TestMaterialise:
 
 class TestPersist:
     def test_persist_creates_stage_and_calls_copy_into_location(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         from ovid2.config import settings
         from ovid2.drivers.snowflake.staging.s3 import SnowparkS3Strategy
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_S3_INTEGRATION", "MY_INT",
+            settings,
+            "SNOWPARK_STAGING_S3_INTEGRATION",
+            "MY_INT",
         )
         session = _FakeSession()
-        driver = _FakeS3Driver({
-            "bucket": "outbucket",
-            "prefix": "cooked",
-            "format": "csv",
-            "single_file": False,
-        })
+        driver = _FakeS3Driver(
+            {
+                "bucket": "outbucket",
+                "prefix": "cooked",
+                "format": "csv",
+                "single_file": False,
+            }
+        )
         strategy = SnowparkS3Strategy()
 
         df = MagicMock()
         strategy.persist(
-            session, df, driver, "demo", "20260101", "encounter", None,
+            session,
+            df,
+            driver,
+            "demo",
+            "20260101",
+            "encounter",
+            None,
         )
 
-        create_stage = [q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TEMPORARY STAGE")]
+        create_stage = [
+            q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TEMPORARY STAGE")
+        ]
         assert len(create_stage) == 1
-        assert "s3://outbucket/cooked/demo/20260101/" in create_stage[0]
+        assert "s3://outbucket/cooked/" in create_stage[0]
         assert "STORAGE_INTEGRATION = MY_INT" in create_stage[0]
 
         # No GET step — the write is server-side via
@@ -481,18 +536,28 @@ class TestPersist:
         from ovid2.drivers.snowflake.staging.s3 import SnowparkS3Strategy
 
         monkeypatch.setattr(
-            settings, "SNOWPARK_STAGING_S3_INTEGRATION", "INT",
+            settings,
+            "SNOWPARK_STAGING_S3_INTEGRATION",
+            "INT",
         )
         session = _FakeSession()
-        driver = _FakeS3Driver({
-            "bucket": "b",
-            "single_file": True,
-            "format": "csv",
-        })
+        driver = _FakeS3Driver(
+            {
+                "bucket": "b",
+                "single_file": True,
+                "format": "csv",
+            }
+        )
         strategy = SnowparkS3Strategy()
         df = MagicMock()
         strategy.persist(
-            session, df, driver, "p", "b", "t", None,
+            session,
+            df,
+            driver,
+            "p",
+            "b",
+            "t",
+            None,
         )
         _, kwargs = df.write.copy_into_location.call_args
         assert kwargs["single"] is True
@@ -501,13 +566,22 @@ class TestPersist:
         from ovid2.drivers.snowflake.staging.s3 import SnowparkS3Strategy
 
         session = _FakeSession()
-        driver = _FakeS3Driver({
-            "bucket": "b", "format": "parquet",
-        })
+        driver = _FakeS3Driver(
+            {
+                "bucket": "b",
+                "format": "parquet",
+            }
+        )
         strategy = SnowparkS3Strategy()
         with pytest.raises(ValueError, match="only supports fmt='csv'"):
             strategy.persist(
-                session, MagicMock(), driver, "p", "b", "t", None,
+                session,
+                MagicMock(),
+                driver,
+                "p",
+                "b",
+                "t",
+                None,
             )
 
 
@@ -518,13 +592,15 @@ class TestPersist:
 
 class TestCleanup:
     def test_cleanup_registered_once_per_session_instance(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         from ovid2.drivers.snowflake.staging.s3 import SnowparkS3Strategy
 
         atexit_calls: list = []
         monkeypatch.setattr(
-            "atexit.register", lambda fn: atexit_calls.append(fn),
+            "atexit.register",
+            lambda fn: atexit_calls.append(fn),
         )
         session = _FakeSession()
         strategy = SnowparkS3Strategy()
@@ -541,7 +617,8 @@ class TestCleanup:
 
         atexit_calls: list = []
         monkeypatch.setattr(
-            "atexit.register", lambda fn: atexit_calls.append(fn),
+            "atexit.register",
+            lambda fn: atexit_calls.append(fn),
         )
         monkeypatch.setattr(settings, "SNOWPARK_STAGING_KEEP", True)
         session = _FakeSession()
@@ -554,7 +631,8 @@ class TestCleanup:
 
         atexit_hooks: list = []
         monkeypatch.setattr(
-            "atexit.register", lambda fn: atexit_hooks.append(fn),
+            "atexit.register",
+            lambda fn: atexit_hooks.append(fn),
         )
         session = _FakeSession()
         strategy = SnowparkS3Strategy()
@@ -577,7 +655,8 @@ class TestCleanup:
 
         atexit_hooks: list = []
         monkeypatch.setattr(
-            "atexit.register", lambda fn: atexit_hooks.append(fn),
+            "atexit.register",
+            lambda fn: atexit_hooks.append(fn),
         )
         session = _FakeSession()
 

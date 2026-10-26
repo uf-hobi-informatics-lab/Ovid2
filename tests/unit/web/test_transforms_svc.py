@@ -47,9 +47,7 @@ def test_validate_good_spec() -> None:
 @pytest.mark.unit
 def test_validate_unknown_op() -> None:
     """An unknown op name is reported as an error."""
-    result = transforms_svc.validate_transform_spec(
-        {"v": 1, "steps": [{"op": "totally_made_up"}]}
-    )
+    result = transforms_svc.validate_transform_spec({"v": 1, "steps": [{"op": "totally_made_up"}]})
     assert result["ok"] is False
     assert any("totally_made_up" in e for e in result["errors"])
 

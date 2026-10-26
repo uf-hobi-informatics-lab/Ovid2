@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 NSS_WRAPPER_LIB: str = "/opt/bitnami/common/lib/libnss_wrapper.so"
 
 #: In-container path for the synthetic ``passwd`` overlay.
-NSS_PASSWD_IN_CONTAINER: str = "/etc/nss_wrapper/passwd"
+NSS_PASSWD_IN_CONTAINER: str = "/etc/nss_wrapper/passwd"  # noqa: S105 — a path, not a secret
 
 #: In-container path for the synthetic ``group`` overlay.
 NSS_GROUP_IN_CONTAINER: str = "/etc/nss_wrapper/group"
@@ -176,7 +176,7 @@ def _secret_refs_for_addresses(address_names: list[str]) -> set[str]:
     return secret_refs_for_addresses(address_names)
 
 
-def secret_refs_for_addresses(address_names: list[str]) -> set[str]:  # noqa: D103
+def secret_refs_for_addresses(address_names: list[str]) -> set[str]:
     from ovid2.drivers.collector import (
         secret_refs_for_addresses as _impl,
     )
@@ -207,7 +207,7 @@ def _scoped_secret_mounts(args: Any, host_xdg_config: Path) -> list[str]:
     # import) to keep this module import-cheap and to let tests patch it.
     try:
         refs = _secret_refs_for_addresses(_addresses_for_args(args))
-    except Exception:  # noqa: BLE001 — fail safe: expose nothing.
+    except Exception:
         logger.warning(
             "Could not compute scoped secret refs; shadowing all secrets.",
         )
@@ -229,7 +229,9 @@ def _scoped_secret_mounts(args: Any, host_xdg_config: Path) -> list[str]:
         else:
             logger.warning(
                 "Secret ref %r referenced by this run has no file at %s; "
-                "the executor will fail loudly if it needs it.", ref, src,
+                "the executor will fail loudly if it needs it.",
+                ref,
+                src,
             )
     return mounts
 
@@ -265,13 +267,11 @@ def build_docker_command(args: Any, instance: OvidInstance) -> list[str]:
     for key, value in SPARK_CONFIG.items():
         spark_conf_args.extend(["--conf", f"{key}={value}"])
 
-    if SPARK_MODE == "cluster":
+    if SPARK_MODE == "cluster" and not getattr(args, "no_spark_cluster", False):
         master_url = instance.spark_master_url()
-        deploy_mode_args = ["--deploy-mode", "client"]
         network_args = ["--network", instance.network_name]
     else:
         master_url = f"local[{SPARK_CORES}]"
-        deploy_mode_args = []
         network_args = []
 
     # ``ovid2 etl`` doesn't define ``--master`` / ``--conf`` / ``--deploy-mode``
@@ -316,9 +316,7 @@ def build_docker_command(args: Any, instance: OvidInstance) -> list[str]:
     # observed before this change was in place. We mount at a fixed
     # container path (``/ovid2-user-config``) so the value of
     # ``XDG_CONFIG_HOME`` is deterministic across hosts.
-    host_xdg_config = Path(
-        os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")
-    )
+    host_xdg_config = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
     xdg_env: list[str] = [
         "-e",
         "XDG_CONFIG_HOME=/ovid2-user-config",
@@ -520,12 +518,19 @@ def _build_ovid2_argv(args: Any) -> list[str]:
     """
     command = getattr(args, "command", "etl")
     if command in ("tools copy", "copy"):
-        return _build_tools_copy_argv(args)
-    if command in ("tools move", "move"):
-        return _build_tools_move_argv(args)
-    if command in ("health", "dq_checks"):
-        return _build_health_argv(args)
-    return _build_etl_argv(args, command)
+        tokens = _build_tools_copy_argv(args)
+    elif command in ("tools move", "move"):
+        tokens = _build_tools_move_argv(args)
+    elif command in ("health", "dq_checks"):
+        tokens = _build_health_argv(args)
+    else:
+        tokens = _build_etl_argv(args, command)
+    # The address is the exact write location: an operator-confirmed
+    # overwrite must survive the host → container hop, otherwise the
+    # in-container overwrite gate would refuse the run.
+    if getattr(args, "overwrite", False):
+        tokens.append("--overwrite")
+    return tokens
 
 
 def _build_etl_argv(args: Any, command: str) -> list[str]:
@@ -715,6 +720,58 @@ def stop_driver_container(instance_id: str, *, timeout: int = 35) -> None:
         )
 
 
+def engine_needs_spark_cluster(engine: Any) -> bool:
+    """Return ``True`` when ``engine`` computes on a Spark cluster.
+
+    Non-Spark engines (Snowpark: compute runs inside Snowflake) only
+    need a single driver container — starting a per-invocation Spark
+    master + workers for them is pure overhead. Unknown / ``None``
+    engines default to ``True`` (the historical behaviour).
+    """
+    if engine is None:
+        return True
+    return bool(getattr(engine, "session_is_spark", True))
+
+
+def submit_one_shot(
+    args: Any,
+    instance: OvidInstance,
+    *,
+    spark_cluster: bool,
+    spark_mode: str | None = None,
+) -> int:
+    """Dispatch a one-shot tool (copy / move) to Docker.
+
+    Uses :func:`submit_with_cluster` when ``SPARK_MODE == "cluster"``
+    and ``spark_cluster`` is ``True``; otherwise runs a single driver
+    container via :func:`submit_to_docker`. When the cluster is skipped
+    because the engine is not Spark-family, ``args.no_spark_cluster``
+    is set so :func:`build_docker_command` emits neither the instance
+    network nor the cluster master URL.
+
+    Args:
+        args: Parsed CLI arguments (host-mode shape).
+        instance: The per-invocation isolation context.
+        spark_cluster: Whether the selected engine needs a Spark cluster
+            (see :func:`engine_needs_spark_cluster`).
+        spark_mode: Override for ``settings.SPARK_MODE`` (callers pass
+            the value they read so tests can patch it in one place).
+
+    Returns:
+        The subprocess return code.
+    """
+    mode = SPARK_MODE if spark_mode is None else spark_mode
+    if mode == "cluster" and spark_cluster:
+        return submit_with_cluster(args, instance)
+    if not spark_cluster:
+        args.no_spark_cluster = True
+        print(  # noqa: T201 — host-side CLI is permitted to print
+            f"[ovid2] Engine '{getattr(args, 'engine', '?')}' is not Spark-family; "
+            f"running a single driver container (no Spark cluster, id={instance.instance_id})."
+        )
+    return submit_to_docker(args, instance)
+
+
 def submit_to_docker(args: Any, instance: OvidInstance) -> int:
     """Submit an ETL job to a single Docker container (local Spark mode).
 
@@ -812,9 +869,8 @@ def start_spark_cluster(
     # Lazy import so ``pyyaml`` is only needed on hosts that actually start clusters.
     from ovid2.core.compose import generate_compose_file
 
-    print(  # noqa: T201 — host-side CLI is permitted to print
-        f"[ovid2] Starting Spark cluster ({num_workers} workers, id={instance.instance_id})..."
-    )
+    msg = f"[ovid2] Starting Spark cluster ({num_workers} workers, id={instance.instance_id})..."
+    print(msg)  # noqa: T201 — host-side CLI is permitted to print
     generate_compose_file(
         instance,
         num_workers,

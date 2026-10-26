@@ -281,9 +281,7 @@ class _Harness:
 
 
 @pytest.fixture()
-def make_harness(
-    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
-) -> Iterator[Any]:
+def make_harness(isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     """Factory yielding a configured harness; tears down the client."""
     built: list[_Harness] = []
 

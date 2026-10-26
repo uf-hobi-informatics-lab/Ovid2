@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -14,9 +13,6 @@ from ovid2.drivers.collector import (
     collect_for_addresses,
 )
 from ovid2.drivers.container import (
-    EnvOverlay,
-    ExtraMount,
-    JavaPackage,
     MergedRequirements,
 )
 
@@ -27,10 +23,12 @@ def config_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     xdg = tmp_path / "xdg"
     monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
     monkeypatch.setenv(
-        "OVID2_CONFIGS_DIR", str(xdg / "ovid2" / "configs"),
+        "OVID2_CONFIGS_DIR",
+        str(xdg / "ovid2" / "configs"),
     )
     monkeypatch.setenv(
-        "OVID2_CONNECTIONS_DIR", str(xdg / "ovid2" / "connections"),
+        "OVID2_CONNECTIONS_DIR",
+        str(xdg / "ovid2" / "connections"),
     )
     (xdg / "ovid2" / "configs").mkdir(parents=True)
     (xdg / "ovid2" / "connections").mkdir(parents=True)
@@ -39,13 +37,15 @@ def config_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def _write_conn(xdg: Path, name: str, payload: dict) -> None:
     (xdg / "ovid2" / "connections" / f"{name}.json").write_text(
-        json.dumps(payload), encoding="utf-8",
+        json.dumps(payload),
+        encoding="utf-8",
     )
 
 
 def _write_addr(xdg: Path, name: str, payload: dict) -> None:
     (xdg / "ovid2" / "configs" / f"{name}.json").write_text(
-        json.dumps(payload), encoding="utf-8",
+        json.dumps(payload),
+        encoding="utf-8",
     )
 
 
@@ -59,17 +59,28 @@ class TestCollectForAddresses:
         assert got == MergedRequirements()
 
     def test_w7_disc_produces_extra_mount(
-        self, config_env: Path, tmp_path: Path,
+        self,
+        config_env: Path,
+        tmp_path: Path,
     ) -> None:
         host = tmp_path / "d"
         host.mkdir()
-        _write_conn(config_env, "d_conn", {
-            "type": "disc",
-            "args": {"host_path": str(host), "mount_mode": "rw"},
-        })
-        _write_addr(config_env, "d_addr", {
-            "connection": "d_conn", "location": {"path": "sub"},
-        })
+        _write_conn(
+            config_env,
+            "d_conn",
+            {
+                "type": "disc",
+                "args": {"host_path": str(host), "mount_mode": "rw"},
+            },
+        )
+        _write_addr(
+            config_env,
+            "d_addr",
+            {
+                "connection": "d_conn",
+                "location": {"path": "sub"},
+            },
+        )
         got = collect_for_addresses(["d_addr"])
         assert len(got.mounts) == 1
         assert got.mounts[0].host_path == str(host)
@@ -77,45 +88,68 @@ class TestCollectForAddresses:
         assert got.mounts[0].mode == "rw"
 
     def test_legacy_disc_produces_extra_mount(
-        self, config_env: Path, tmp_path: Path,
+        self,
+        config_env: Path,
+        tmp_path: Path,
     ) -> None:
         host = tmp_path / "legacy"
         host.mkdir()
-        _write_addr(config_env, "d_legacy", {
-            "src_name": "disc",
-            "src_args": {"path": str(host)},
-        })
+        _write_addr(
+            config_env,
+            "d_legacy",
+            {
+                "src_name": "disc",
+                "src_args": {"path": str(host)},
+            },
+        )
         got = collect_for_addresses(["d_legacy"])
         assert len(got.mounts) == 1
         assert got.mounts[0].host_path == str(host)
 
     def test_dedup_same_container_path(
-        self, config_env: Path, tmp_path: Path,
+        self,
+        config_env: Path,
+        tmp_path: Path,
     ) -> None:
         """Two addresses landing on the same mount target dedup to one."""
         host = tmp_path / "shared"
         host.mkdir()
-        _write_conn(config_env, "d_conn", {
-            "type": "disc",
-            "args": {"host_path": str(host)},
-        })
+        _write_conn(
+            config_env,
+            "d_conn",
+            {
+                "type": "disc",
+                "args": {"host_path": str(host)},
+            },
+        )
         _write_addr(config_env, "a1", {"connection": "d_conn", "location": {}})
         _write_addr(config_env, "a2", {"connection": "d_conn", "location": {}})
         got = collect_for_addresses(["a1", "a2"])
         assert len(got.mounts) == 1
 
     def test_explicit_mount_overrides_auto(
-        self, config_env: Path, tmp_path: Path,
+        self,
+        config_env: Path,
+        tmp_path: Path,
     ) -> None:
         host = tmp_path / "d"
         host.mkdir()
-        _write_conn(config_env, "d_conn", {
-            "type": "disc",
-            "args": {"host_path": str(host)},
-        })
-        _write_addr(config_env, "d_addr", {
-            "connection": "d_conn", "location": {},
-        })
+        _write_conn(
+            config_env,
+            "d_conn",
+            {
+                "type": "disc",
+                "args": {"host_path": str(host)},
+            },
+        )
+        _write_addr(
+            config_env,
+            "d_addr",
+            {
+                "connection": "d_conn",
+                "location": {},
+            },
+        )
         got = collect_for_addresses(
             ["d_addr"],
             explicit_container_paths=[str(host)],
@@ -123,42 +157,63 @@ class TestCollectForAddresses:
         assert got.mounts == ()
 
     def test_reserved_container_paths_dropped(
-        self, config_env: Path,
+        self,
+        config_env: Path,
     ) -> None:
         """A driver-declared mount on ``/data`` is silently dropped."""
-        _write_conn(config_env, "d_conn", {
-            "type": "disc",
-            "args": {
-                "host_path": "/data",
-                "container_path": "/data",
-                "mount_mode": "rw",
+        _write_conn(
+            config_env,
+            "d_conn",
+            {
+                "type": "disc",
+                "args": {
+                    "host_path": "/data",
+                    "container_path": "/data",
+                    "mount_mode": "rw",
+                },
             },
-        })
-        _write_addr(config_env, "d_addr", {
-            "connection": "d_conn", "location": {},
-        })
+        )
+        _write_addr(
+            config_env,
+            "d_addr",
+            {
+                "connection": "d_conn",
+                "location": {},
+            },
+        )
         got = collect_for_addresses(["d_addr"])
         assert got.mounts == ()
 
     def test_forbidden_container_paths_dropped(
-        self, config_env: Path,
+        self,
+        config_env: Path,
     ) -> None:
-        _write_conn(config_env, "d_conn", {
-            "type": "disc",
-            "args": {
-                "host_path": "/",
-                "container_path": "/",
-                "mount_mode": "rw",
+        _write_conn(
+            config_env,
+            "d_conn",
+            {
+                "type": "disc",
+                "args": {
+                    "host_path": "/",
+                    "container_path": "/",
+                    "mount_mode": "rw",
+                },
             },
-        })
-        _write_addr(config_env, "d_addr", {
-            "connection": "d_conn", "location": {},
-        })
+        )
+        _write_addr(
+            config_env,
+            "d_addr",
+            {
+                "connection": "d_conn",
+                "location": {},
+            },
+        )
         got = collect_for_addresses(["d_addr"])
         assert got.mounts == ()
 
     def test_non_disc_type_produces_no_mounts_today(
-        self, config_env: Path,
+        self,
+        config_env: Path,
     ) -> None:
         """Under D2 only disc contributes mounts through the adapter.
 
@@ -166,24 +221,39 @@ class TestCollectForAddresses:
         requirements here. Until then, non-disc addresses contribute
         nothing.
         """
-        _write_conn(config_env, "s_conn", {
-            "type": "s3",
-            "args": {"region": "us-east-1", "bucket_default": "b"},
-        })
-        _write_addr(config_env, "s_addr", {
-            "connection": "s_conn", "location": {"path": "prefix"},
-        })
+        _write_conn(
+            config_env,
+            "s_conn",
+            {
+                "type": "s3",
+                "args": {"region": "us-east-1", "bucket_default": "b"},
+            },
+        )
+        _write_addr(
+            config_env,
+            "s_addr",
+            {
+                "connection": "s_conn",
+                "location": {"path": "prefix"},
+            },
+        )
         got = collect_for_addresses(["s_addr"])
         assert got.mounts == ()
         assert got.java_packages == ()
         assert got.env_overlays == ()
 
     def test_missing_connection_json_is_silent(
-        self, config_env: Path,
+        self,
+        config_env: Path,
     ) -> None:
-        _write_addr(config_env, "orphan", {
-            "connection": "nope", "location": {},
-        })
+        _write_addr(
+            config_env,
+            "orphan",
+            {
+                "connection": "nope",
+                "location": {},
+            },
+        )
         got = collect_for_addresses(["orphan"])
         assert got == MergedRequirements()
 
@@ -192,21 +262,32 @@ class TestCollectForAddresses:
         assert got == MergedRequirements()
 
     def test_relative_container_paths_dropped(
-        self, config_env: Path, tmp_path: Path,
+        self,
+        config_env: Path,
+        tmp_path: Path,
     ) -> None:
         """Container paths must be absolute; relative ones are rejected."""
         host = tmp_path / "d"
         host.mkdir()
-        _write_conn(config_env, "d_conn", {
-            "type": "disc",
-            "args": {
-                "host_path": str(host),
-                "container_path": "relative/path",
+        _write_conn(
+            config_env,
+            "d_conn",
+            {
+                "type": "disc",
+                "args": {
+                    "host_path": str(host),
+                    "container_path": "relative/path",
+                },
             },
-        })
-        _write_addr(config_env, "d_addr", {
-            "connection": "d_conn", "location": {},
-        })
+        )
+        _write_addr(
+            config_env,
+            "d_addr",
+            {
+                "connection": "d_conn",
+                "location": {},
+            },
+        )
         got = collect_for_addresses(["d_addr"])
         assert got.mounts == ()
 
@@ -224,7 +305,7 @@ class TestReservedAndForbiddenSets:
         assert "/proc" in FORBIDDEN_CONTAINER_PATHS
 
     def test_reserved_and_forbidden_are_disjoint(self) -> None:
-        assert RESERVED_CONTAINER_PATHS & FORBIDDEN_CONTAINER_PATHS == set()
+        assert set() == RESERVED_CONTAINER_PATHS & FORBIDDEN_CONTAINER_PATHS
 
 
 class TestSecretRefsForAddresses:
@@ -240,45 +321,64 @@ class TestSecretRefsForAddresses:
 
         assert secret_refs_for_addresses(["nope"]) == set()
 
-    def test_w7_address_returns_connection_secret_ref(
-        self, config_env: Path
-    ) -> None:
+    def test_w7_address_returns_connection_secret_ref(self, config_env: Path) -> None:
         from ovid2.drivers.collector import secret_refs_for_addresses
 
-        _write_conn(config_env, "sf_conn", {
-            "type": "snowflake",
-            "args": {"account": "acct", "user": "u"},
-            "secret_ref": "snowflake_prod",
-        })
-        _write_addr(config_env, "sf_addr", {
-            "connection": "sf_conn",
-            "location": {"database": "DB", "schema": "S"},
-        })
+        _write_conn(
+            config_env,
+            "sf_conn",
+            {
+                "type": "snowflake",
+                "args": {"account": "acct", "user": "u"},
+                "secret_ref": "snowflake_prod",
+            },
+        )
+        _write_addr(
+            config_env,
+            "sf_addr",
+            {
+                "connection": "sf_conn",
+                "location": {"database": "DB", "schema": "S"},
+            },
+        )
         assert secret_refs_for_addresses(["sf_addr"]) == {"snowflake_prod"}
 
     def test_multiple_addresses_union_refs(self, config_env: Path) -> None:
         from ovid2.drivers.collector import secret_refs_for_addresses
 
-        _write_conn(config_env, "a_conn", {
-            "type": "snowflake", "args": {"account": "a", "user": "u"},
-            "secret_ref": "ref_a",
-        })
-        _write_conn(config_env, "b_conn", {
-            "type": "snowflake", "args": {"account": "b", "user": "u"},
-            "secret_ref": "ref_b",
-        })
+        _write_conn(
+            config_env,
+            "a_conn",
+            {
+                "type": "snowflake",
+                "args": {"account": "a", "user": "u"},
+                "secret_ref": "ref_a",
+            },
+        )
+        _write_conn(
+            config_env,
+            "b_conn",
+            {
+                "type": "snowflake",
+                "args": {"account": "b", "user": "u"},
+                "secret_ref": "ref_b",
+            },
+        )
         _write_addr(config_env, "a_addr", {"connection": "a_conn", "location": {}})
         _write_addr(config_env, "b_addr", {"connection": "b_conn", "location": {}})
         got = secret_refs_for_addresses(["a_addr", "b_addr"])
         assert got == {"ref_a", "ref_b"}
 
-    def test_connection_without_secret_ref_contributes_nothing(
-        self, config_env: Path
-    ) -> None:
+    def test_connection_without_secret_ref_contributes_nothing(self, config_env: Path) -> None:
         from ovid2.drivers.collector import secret_refs_for_addresses
 
-        _write_conn(config_env, "no_secret", {
-            "type": "snowflake", "args": {"account": "a", "user": "u"},
-        })
+        _write_conn(
+            config_env,
+            "no_secret",
+            {
+                "type": "snowflake",
+                "args": {"account": "a", "user": "u"},
+            },
+        )
         _write_addr(config_env, "ns_addr", {"connection": "no_secret", "location": {}})
         assert secret_refs_for_addresses(["ns_addr"]) == set()

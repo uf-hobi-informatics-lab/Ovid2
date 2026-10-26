@@ -23,19 +23,19 @@ class _FakeCol:
     def __init__(self, repr_: str) -> None:
         self._repr = repr_
 
-    def isNotNull(self) -> "_FakeCol":  # noqa: N802 — mirror pyspark API
+    def isNotNull(self) -> _FakeCol:
         return _FakeCol(f"isNotNull({self._repr})")
 
-    def __eq__(self, other: Any) -> "_FakeCol":  # type: ignore[override]
+    def __eq__(self, other: Any) -> _FakeCol:  # type: ignore[override]
         return _FakeCol(f"eq({self._repr},{other!r})")
 
-    def __ne__(self, other: Any) -> "_FakeCol":  # type: ignore[override]
+    def __ne__(self, other: Any) -> _FakeCol:  # type: ignore[override]
         return _FakeCol(f"ne({self._repr},{other!r})")
 
-    def __and__(self, other: Any) -> "_FakeCol":
+    def __and__(self, other: Any) -> _FakeCol:
         return _FakeCol(f"and({self._repr},{other!r})")
 
-    def __invert__(self) -> "_FakeCol":
+    def __invert__(self) -> _FakeCol:
         return _FakeCol(f"not({self._repr})")
 
     def __repr__(self) -> str:
@@ -57,7 +57,7 @@ class _FakeDF:
         self.tag = tag
         self.filters: list[Any] = []
 
-    def filter(self, predicate: Any) -> "_FakeDF":
+    def filter(self, predicate: Any) -> _FakeDF:
         child = _FakeDF(f"{self.tag}.filter({predicate!r})")
         return child
 
@@ -140,11 +140,11 @@ def test_spark_engine_uses_spark_path() -> None:
         session_is_spark = True
 
     dedup = Deduplicator("demographic", engine=_SparkishEngine())
-    assert dedup._is_spark is True  # noqa: SLF001
+    assert dedup._is_spark is True
 
 
 @pytest.mark.unit
 def test_no_engine_defaults_to_spark() -> None:
     """No engine attached is treated as Spark for backwards compatibility."""
     dedup = Deduplicator("demographic")
-    assert dedup._is_spark is True  # noqa: SLF001
+    assert dedup._is_spark is True

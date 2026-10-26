@@ -64,61 +64,111 @@ _PROVIDER_ROLES: dict[str, tuple[str, ...]] = {
 }
 
 _COMMON_TUNING: list[dict[str, Any]] = [
-    {"name": "timeout_s", "required": False, "default": "60",
-     "help": "Per-request timeout in seconds."},
-    {"name": "max_tokens", "required": False, "default": "2048",
-     "help": "Upper bound on generated tokens per reply."},
-    {"name": "temperature", "required": False, "default": "0.2",
-     "help": "Sampling temperature (0 = deterministic)."},
-    {"name": "system_prompt", "required": False,
-     "help": "Optional system prompt prepended to every conversation.",
-     "multiline": True},
+    {
+        "name": "timeout_s",
+        "required": False,
+        "default": "60",
+        "help": "Per-request timeout in seconds.",
+    },
+    {
+        "name": "max_tokens",
+        "required": False,
+        "default": "2048",
+        "help": "Upper bound on generated tokens per reply.",
+    },
+    {
+        "name": "temperature",
+        "required": False,
+        "default": "0.2",
+        "help": "Sampling temperature (0 = deterministic).",
+    },
+    {
+        "name": "system_prompt",
+        "required": False,
+        "help": "Optional system prompt prepended to every conversation.",
+        "multiline": True,
+    },
 ]
 
 _FIELD_SPECS: dict[str, dict[str, Any]] = {
     "openai_compatible": {
         "args": [
-            {"name": "base_url", "required": True,
-             "help": "OpenAI-compatible API root (ends in /v1), e.g. "
-                     "https://api.openai.com/v1 or http://localhost:11434/v1."},
-            {"name": "model", "required": True,
-             "help": "Model id exactly as the endpoint lists it "
-                     "(GET /v1/models)."},
+            {
+                "name": "base_url",
+                "required": True,
+                "help": "OpenAI-compatible API root (ends in /v1), e.g. "
+                "https://api.openai.com/v1 or http://localhost:11434/v1.",
+            },
+            {
+                "name": "model",
+                "required": True,
+                "help": "Model id exactly as the endpoint lists it (GET /v1/models).",
+            },
             *_COMMON_TUNING,
-            {"name": "context_window", "required": False, "default": "128000",
-             "help": "Context window in tokens; older turns are trimmed to fit."},
-            {"name": "ca_bundle", "required": False,
-             "help": "Optional path to a CA bundle for TLS-intercepting proxies."},
+            {
+                "name": "context_window",
+                "required": False,
+                "default": "128000",
+                "help": "Context window in tokens; older turns are trimmed to fit.",
+            },
+            {
+                "name": "ca_bundle",
+                "required": False,
+                "help": "Optional path to a CA bundle for TLS-intercepting proxies.",
+            },
         ],
         "secrets": [
-            {"name": "api_key", "required": True,
-             "help": "Endpoint API key (sent as 'Authorization: Bearer ...'). "
-                     "Use a service-account key scoped to this model."},
+            {
+                "name": "api_key",
+                "required": True,
+                "help": "Endpoint API key (sent as 'Authorization: Bearer ...'). "
+                "Use a service-account key scoped to this model.",
+            },
         ],
-        "note": ("Works with any OpenAI-compatible /v1/chat/completions "
-                 "endpoint: OpenAI, vLLM, NIM, LiteLLM, Ollama, or an "
-                 "institutional AI gateway."),
+        "note": (
+            "Works with any OpenAI-compatible /v1/chat/completions "
+            "endpoint: OpenAI, vLLM, NIM, LiteLLM, Ollama, or an "
+            "institutional AI gateway."
+        ),
     },
     "jev": {
         "args": [
-            {"name": "base_url", "required": True,
-             "help": "JEV decision endpoint root (provided when JEV ships)."},
-            {"name": "model", "required": False,
-             "help": "JEV model / policy id, if the endpoint hosts several."},
-            {"name": "confidence_threshold", "required": False, "default": "0.7",
-             "help": "Decisions below this confidence fall back to the "
-                     "general LLM."},
-            {"name": "timeout_s", "required": False, "default": "15",
-             "help": "Per-request timeout in seconds (System 1 should be fast)."},
+            {
+                "name": "base_url",
+                "required": True,
+                "help": "JEV decision endpoint root (provided when JEV ships).",
+            },
+            {
+                "name": "model",
+                "required": False,
+                "help": "JEV model / policy id, if the endpoint hosts several.",
+            },
+            {
+                "name": "confidence_threshold",
+                "required": False,
+                "default": "0.7",
+                "help": "Decisions below this confidence fall back to the general LLM.",
+            },
+            {
+                "name": "timeout_s",
+                "required": False,
+                "default": "15",
+                "help": "Per-request timeout in seconds (System 1 should be fast).",
+            },
         ],
         "secrets": [
-            {"name": "api_key", "required": False,
-             "help": "JEV API key / token (if the endpoint requires one)."},
+            {
+                "name": "api_key",
+                "required": False,
+                "help": "JEV API key / token (if the endpoint requires one).",
+            },
         ],
-        "note": ("JEV (System 1) is not available yet: the connection can be "
-                 "saved now, and probing/chat will report 'not_implemented' "
-                 "until the JEV provider lands. The router then falls back "
-                 "to the general LLM."),
+        "note": (
+            "JEV (System 1) is not available yet: the connection can be "
+            "saved now, and probing/chat will report 'not_implemented' "
+            "until the JEV provider lands. The router then falls back "
+            "to the general LLM."
+        ),
     },
 }
 
@@ -148,8 +198,7 @@ def llm_field_spec(provider: str) -> dict[str, Any]:
     """
     if provider not in _FIELD_SPECS:
         raise KeyError(
-            f"No field spec for LLM provider '{provider}'. "
-            f"Registered: {sorted(_FIELD_SPECS)}."
+            f"No field spec for LLM provider '{provider}'. Registered: {sorted(_FIELD_SPECS)}."
         )
     spec = _FIELD_SPECS[provider]
     return {
@@ -202,8 +251,7 @@ def list_available_llms() -> list[str]:
         if not directory.is_dir():
             continue
         for entry in directory.iterdir():
-            if (entry.is_file() and entry.suffix == ".json"
-                    and not entry.stem.endswith("_sample")):
+            if entry.is_file() and entry.suffix == ".json" and not entry.stem.endswith("_sample"):
                 seen.add(entry.stem)
     return sorted(seen)
 

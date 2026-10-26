@@ -50,7 +50,7 @@ def _volume_mounts(
     *,
     instance: OvidInstance,
     data_rw: bool = False,
-    extra_mounts: list["ExtraMount"] | None = None,
+    extra_mounts: list[ExtraMount] | None = None,
 ) -> list[str]:
     """Return the standard bind-mount list for master + workers.
 
@@ -80,9 +80,7 @@ def _volume_mounts(
     # see the same address configs, secrets, connections, and engine
     # specs as the driver container. Kept read-only — the pipeline
     # never mutates its own config files.
-    host_xdg_config = Path(
-        os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")
-    )
+    host_xdg_config = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
     if host_xdg_config.is_dir():
         mounts.append(f"{host_xdg_config}:/ovid2-user-config:ro")
     # ``LEGACY_CREDENTIALS_DIR`` defaults to ``/ovid_credentials`` which
@@ -135,7 +133,7 @@ def build_compose_dict(
     num_workers: int,
     *,
     data_rw: bool = False,
-    extra_mounts: list["ExtraMount"] | None = None,
+    extra_mounts: list[ExtraMount] | None = None,
 ) -> dict[str, Any]:
     """Construct the docker-compose dictionary for an instance.
 
@@ -308,7 +306,7 @@ def generate_compose_file(
     num_workers: int,
     *,
     data_rw: bool = False,
-    extra_mounts: list["ExtraMount"] | None = None,
+    extra_mounts: list[ExtraMount] | None = None,
 ) -> Path:
     """Write the compose YAML to :attr:`OvidInstance.compose_file`.
 

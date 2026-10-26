@@ -13,7 +13,6 @@ from typing import Any
 from ovid2.transforms.base import BaseTransform, DataFrame, TransformContext
 
 
-
 class RegexReplaceTransform(BaseTransform):
     """Regex-substitute values across one or more columns."""
 
@@ -51,9 +50,7 @@ class RegexReplaceTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with the regex substitution applied."""
         columns = params.get("columns")
         if not isinstance(columns, list) or not columns:
@@ -101,9 +98,7 @@ class StripNonNumericTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with non-digit characters stripped."""
         columns = params.get("columns")
         if not isinstance(columns, list) or not columns:
@@ -146,9 +141,7 @@ class StripNonAlphaTransform(BaseTransform):
             },
         }
 
-    def apply(
-        self, df: "DataFrame", params: dict[str, Any], ctx: TransformContext
-    ) -> "DataFrame":
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` with non-letter characters stripped."""
         columns = params.get("columns")
         if not isinstance(columns, list) or not columns:

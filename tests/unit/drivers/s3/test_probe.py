@@ -21,7 +21,6 @@ import pytest
 from ovid2.drivers.base import ProbeResult
 from ovid2.drivers.s3.probe import probe_auth_from_config
 
-
 # ---------------------------------------------------------------------------
 # boto3 fake
 # ---------------------------------------------------------------------------
@@ -47,7 +46,7 @@ class _FakeClient:
             raise self._head_raises
         return {"ResponseMetadata": {"HTTPStatusCode": 200}}
 
-    def list_buckets(self, *a: Any, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+    def list_buckets(self, *a: Any, **kw: Any) -> dict[str, Any]:
         self.list_calls.append(a)
         if self._list_raises:
             raise self._list_raises
@@ -60,7 +59,7 @@ class _FakeSession:
         self.client_kwargs: dict[str, Any] = {}
         self._client = _FakeClient()
 
-    def client(self, service: str, **kwargs: Any) -> _FakeClient:  # noqa: ARG002
+    def client(self, service: str, **kwargs: Any) -> _FakeClient:
         self.client_kwargs = kwargs
         return self._client
 
@@ -110,7 +109,7 @@ class TestBoto3Missing:
 class TestHeadBucketSuccess:
     """When ``bucket_default`` is set, we probe via HEAD."""
 
-    def test_ok(self, fake_boto3: _FakeBoto3) -> None:  # noqa: ARG002
+    def test_ok(self, fake_boto3: _FakeBoto3) -> None:
         r = probe_auth_from_config(
             {"region": "us-east-1", "bucket_default": "my-bucket"},
             {"aws_access_key_id": "A", "aws_secret_access_key": "S"},
@@ -125,7 +124,7 @@ class TestHeadBucketSuccess:
 class TestListBucketsFallback:
     """No ``bucket_default`` → probe via list_buckets."""
 
-    def test_ok(self, fake_boto3: _FakeBoto3) -> None:  # noqa: ARG002
+    def test_ok(self, fake_boto3: _FakeBoto3) -> None:
         r = probe_auth_from_config(
             {"region": "us-east-1"},
             {"aws_access_key_id": "A", "aws_secret_access_key": "S"},
@@ -143,10 +142,10 @@ class TestHeadBucketFailure:
         boom = RuntimeError("access denied")
 
         class FailingSession:
-            def __init__(self, **kw: Any) -> None:  # noqa: ARG002
+            def __init__(self, **kw: Any) -> None:
                 self._client = _FakeClient(head_raises=boom)
 
-            def client(self, service: str, **kw: Any) -> _FakeClient:  # noqa: ARG002
+            def client(self, service: str, **kw: Any) -> _FakeClient:
                 return self._client
 
         mod = ModuleType("boto3")
@@ -169,7 +168,8 @@ class TestCredentialThreading:
     """The session and client kwargs must match the input triple."""
 
     def test_full_triple_and_endpoint_url(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         # Capture sessions in a shared list so we can inspect kwargs.
         constructed: list[_FakeSession] = []
@@ -210,7 +210,8 @@ class TestCredentialThreading:
         assert sess.client_kwargs == {"endpoint_url": "https://minio.example.com"}
 
     def test_default_chain_omits_credentials(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         constructed: list[_FakeSession] = []
 

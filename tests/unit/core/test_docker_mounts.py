@@ -136,12 +136,12 @@ def test_build_docker_command_mounts_spark_work_and_logs(
     instance = OvidInstance(instance_id="20260101-000000-abcdef")
     cmd = docker_module.build_docker_command(_make_args(), instance)
     joined = " ".join(cmd)
-    assert (
-        f"{instance.spark_work_dir}:/opt/bitnami/spark/work:rw" in joined
-    ), f"missing spark_work_dir bind in argv: {joined!r}"
-    assert (
-        f"{instance.spark_logs_dir}:/opt/bitnami/spark/logs:rw" in joined
-    ), f"missing spark_logs_dir bind in argv: {joined!r}"
+    assert f"{instance.spark_work_dir}:/opt/bitnami/spark/work:rw" in joined, (
+        f"missing spark_work_dir bind in argv: {joined!r}"
+    )
+    assert f"{instance.spark_logs_dir}:/opt/bitnami/spark/logs:rw" in joined, (
+        f"missing spark_logs_dir bind in argv: {joined!r}"
+    )
 
 
 @pytest.mark.unit
@@ -178,16 +178,12 @@ def test_build_docker_command_mounts_work_dir_at_same_absolute_path(
     # Same-path bind mount so instance.event_log resolves identically
     # on host and inside container. Must be rw — the sampler appends
     # every 500ms on the driver side.
-    assert (
-        f"{fake_work}:{fake_work}:rw" in joined
-    ), f"missing WORK_DIR bind in argv: {joined!r}"
+    assert f"{fake_work}:{fake_work}:rw" in joined, f"missing WORK_DIR bind in argv: {joined!r}"
 
     # Env var propagation so config/settings.py:WORK_DIR resolves to
     # the mounted path inside the container (rather than falling back
     # to /tmp/ovid2-<uid>/ovid2/ via _xdg_runtime_dir()).
-    assert (
-        f"OVID2_WORK_DIR={fake_work}" in cmd
-    ), f"missing OVID2_WORK_DIR env in argv: {cmd!r}"
+    assert f"OVID2_WORK_DIR={fake_work}" in cmd, f"missing OVID2_WORK_DIR env in argv: {cmd!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -515,9 +511,7 @@ def test_submit_to_docker_stops_driver_on_sigterm(
 # ---------------------------------------------------------------------------
 
 
-def _prepare_xdg_secrets(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, refs: list[str]
-) -> Path:
+def _prepare_xdg_secrets(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, refs: list[str]) -> Path:
     """Create an XDG config tree with a secrets.d/ holding ``refs``.json."""
     xdg = tmp_path / "xdg"
     (xdg / "secrets.d").mkdir(parents=True)
@@ -528,9 +522,7 @@ def _prepare_xdg_secrets(
 
 
 @pytest.mark.unit
-def test_secrets_dir_is_shadowed_by_tmpfs(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_secrets_dir_is_shadowed_by_tmpfs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """The whole secrets.d/ is never left readable — it is tmpfs-shadowed."""
     data_dir = tmp_path / "data"
     data_dir.mkdir()
@@ -543,16 +535,13 @@ def test_secrets_dir_is_shadowed_by_tmpfs(
 
     instance = OvidInstance(instance_id="20260101-000000-abcdef")
     cmd = docker_module.build_docker_command(_make_args(), instance)
-    joined = " ".join(cmd)
     # tmpfs shadow present.
     assert "--tmpfs" in cmd
     assert "/ovid2-user-config/secrets.d" in cmd
 
 
 @pytest.mark.unit
-def test_only_referenced_secret_is_bound(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_only_referenced_secret_is_bound(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Only the run's referenced secret file is bound back over the tmpfs."""
     data_dir = tmp_path / "data"
     data_dir.mkdir()
@@ -578,15 +567,13 @@ def test_only_referenced_secret_is_bound(
 
 
 @pytest.mark.unit
-def test_no_refs_binds_no_secrets(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_no_refs_binds_no_secrets(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """With no referenced secrets, the tmpfs shadow exposes nothing."""
     data_dir = tmp_path / "data"
     data_dir.mkdir()
     monkeypatch.setattr(docker_module, "DATA_DIR", data_dir)
     monkeypatch.setattr(docker_module, "LEGACY_CREDENTIALS_DIR", tmp_path / "absent")
-    xdg = _prepare_xdg_secrets(monkeypatch, tmp_path, ["alpha"])
+    _prepare_xdg_secrets(monkeypatch, tmp_path, ["alpha"])
     monkeypatch.setattr(
         docker_module, "secret_refs_for_addresses", lambda names: set(), raising=False
     )

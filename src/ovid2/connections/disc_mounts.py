@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Iterable
+from collections.abc import Iterable
 
 from ovid2.tools.extra_mounts import (
     FORBIDDEN_CONTAINER_PATHS,
@@ -55,6 +55,7 @@ def _connection_type(name: str) -> str | None:
         return None
     try:
         from ovid2.config import connections as _connections
+
         cfg = _connections.load_connection_config(name)
     except (FileNotFoundError, ValueError):
         return None
@@ -93,16 +94,17 @@ def disc_mount_for_connection(connection_name: str) -> ExtraMount | None:
         return None
     if not os.path.isabs(container):
         logger.warning(
-            "disc connection %r has non-absolute container_path %r; "
-            "skipping auto-mount.",
-            connection_name, container,
+            "disc connection %r has non-absolute container_path %r; skipping auto-mount.",
+            connection_name,
+            container,
         )
         return None
     if container in RESERVED_CONTAINER_PATHS or container in FORBIDDEN_CONTAINER_PATHS:
         logger.warning(
             "disc connection %r targets reserved/forbidden container path %r; "
             "skipping auto-mount (the standard mount set already populates it).",
-            connection_name, container,
+            connection_name,
+            container,
         )
         return None
     if mode not in ("rw", "ro"):
@@ -113,9 +115,9 @@ def disc_mount_for_connection(connection_name: str) -> ExtraMount | None:
         # here would block legitimate cases (host_path exists on a
         # sibling host, disc lives on a temporarily-detached mount).
         logger.warning(
-            "disc connection %r host_path %r does not exist on this host; "
-            "skipping auto-mount.",
-            connection_name, host,
+            "disc connection %r host_path %r does not exist on this host; skipping auto-mount.",
+            connection_name,
+            host,
         )
         return None
     return ExtraMount(host=host, container=container, mode=mode)
@@ -169,9 +171,9 @@ def build_disc_mounts(
             continue
         if mount.container in explicit_set:
             logger.warning(
-                "Explicit --extra-mount overrides auto-mount for address %r "
-                "(container path %s).",
-                address_name, mount.container,
+                "Explicit --extra-mount overrides auto-mount for address %r (container path %s).",
+                address_name,
+                mount.container,
             )
             continue
         if mount.container in seen:
@@ -181,9 +183,7 @@ def build_disc_mounts(
     return mounts
 
 
-def _mount_from_legacy_disc_path(
-    address_name: str, path: str
-) -> ExtraMount | None:
+def _mount_from_legacy_disc_path(address_name: str, path: str) -> ExtraMount | None:
     """Synthesise an auto-mount from a pre-W7 disc address path.
 
     Used for the last-mile of backward compatibility: an address that
@@ -200,15 +200,13 @@ def _mount_from_legacy_disc_path(
         return None
     if not os.path.exists(path):
         logger.warning(
-            "Legacy disc address %r references non-existent path %r; "
-            "skipping auto-mount.",
-            address_name, path,
+            "Legacy disc address %r references non-existent path %r; skipping auto-mount.",
+            address_name,
+            path,
         )
         return None
     return ExtraMount(host=path, container=path, mode="rw")
 
 
 if __name__ == "__main__":  # pragma: no cover
-    raise SystemExit(
-        "This module is imported by ovid2 CLI dispatchers; it is not a script."
-    )
+    raise SystemExit("This module is imported by ovid2 CLI dispatchers; it is not a script.")

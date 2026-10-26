@@ -18,7 +18,7 @@ import importlib.resources as pkg_resources
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -45,11 +45,13 @@ class MapperError(ValueError):
 def _load_schema() -> dict[str, Any]:
     """Return the packaged mapper-spec JSON schema."""
     if "schema" not in _SCHEMA_CACHE:
-        text = pkg_resources.files("ovid2.resources.schemas").joinpath(
-            "mapper_spec.v1.json"
-        ).read_text(encoding="utf-8")
+        text = (
+            pkg_resources.files("ovid2.resources.schemas")
+            .joinpath("mapper_spec.v1.json")
+            .read_text(encoding="utf-8")
+        )
         _SCHEMA_CACHE["schema"] = json.loads(text)
-    return _SCHEMA_CACHE["schema"]
+    return cast(dict[str, Any], _SCHEMA_CACHE["schema"])
 
 
 def _mappers_dir(pipeline: str) -> Path | None:
@@ -184,9 +186,7 @@ def _validate_table_name(table: str) -> None:
     if not table:
         raise MapperError("Table name is required.")
     if not all(c.isalnum() or c in "-_." for c in table):
-        raise MapperError(
-            f"Invalid table name '{table}'. Use letters, digits, '-', '_', '.' only."
-        )
+        raise MapperError(f"Invalid table name '{table}'. Use letters, digits, '-', '_', '.' only.")
     if table.startswith("."):
         raise MapperError(f"Table name '{table}' is reserved.")
 
@@ -222,8 +222,7 @@ def save_mapper(
     py_path = directory / f"{table}.py"
     if py_path.is_file():
         raise MapperError(
-            f"Refusing to overwrite SPEC-dict module {py_path}. "
-            "Edit on disk per AGENTS.md."
+            f"Refusing to overwrite SPEC-dict module {py_path}. Edit on disk per AGENTS.md."
         )
 
     try:
@@ -286,9 +285,7 @@ def delete_mapper(
 
     py_path = directory / f"{table}.py"
     if py_path.is_file():
-        raise MapperError(
-            f"Refusing to delete SPEC-dict module {py_path}. Edit on disk."
-        )
+        raise MapperError(f"Refusing to delete SPEC-dict module {py_path}. Edit on disk.")
 
     target: Path | None = None
     for suffix in (".yaml", ".yml"):

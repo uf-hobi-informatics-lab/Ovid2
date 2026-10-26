@@ -113,6 +113,4 @@ def browse_storage(name: str, prefix: str | None = None) -> StorageBrowseRespons
 
 
 if __name__ == "__main__":  # pragma: no cover
-    raise SystemExit(
-        "This module is imported by the ovid2 web routes; it is not a script."
-    )
+    raise SystemExit("This module is imported by the ovid2 web routes; it is not a script.")

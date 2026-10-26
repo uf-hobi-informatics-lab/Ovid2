@@ -246,9 +246,6 @@ def read_pipeline_file(pipeline: str, relative_path: str) -> tuple[Path, str] | 
         # Truncate — mostly for ``dictionaries.py`` bombs.
         with candidate.open(encoding="utf-8", errors="replace") as fh:
             content = fh.read(MAX_PREVIEW_BYTES)
-        content += (
-            f"\n\n# --- truncated at {MAX_PREVIEW_BYTES} bytes "
-            f"(file is {size} bytes) ---\n"
-        )
+        content += f"\n\n# --- truncated at {MAX_PREVIEW_BYTES} bytes (file is {size} bytes) ---\n"
         return candidate, content
     return candidate, candidate.read_text(encoding="utf-8", errors="replace")

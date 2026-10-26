@@ -43,11 +43,7 @@ def _make_request(
 
 def _set_cookie_lines(response: Response) -> list[str]:
     """Return every ``set-cookie`` header value on ``response``."""
-    return [
-        value.decode("latin-1")
-        for key, value in response.raw_headers
-        if key == b"set-cookie"
-    ]
+    return [value.decode("latin-1") for key, value in response.raw_headers if key == b"set-cookie"]
 
 
 @pytest.fixture(autouse=True)
@@ -83,10 +79,10 @@ def test_tampered_cookie_returns_none(isolated_xdg: Path) -> None:
     jar.load(_set_cookie_lines(response)[0])
     signed_value = jar["ovid2_session"].value
 
-    # Flip the last character to a different one to corrupt the signature.
-    last = signed_value[-1]
-    replacement = "A" if last != "A" else "B"
-    tampered = signed_value[:-1] + replacement
+    # Corrupt the first char of the HMAC segment. (The last char may only
+    # carry base64 padding bits, which made a last-char flip flaky.)
+    head, _, sig = signed_value.rpartition(".")
+    tampered = f"{head}.{'A' if sig[0] != 'A' else 'B'}{sig[1:]}"
     assert tampered != signed_value
 
     request = _make_request(cookies={"ovid2_session": tampered})
@@ -186,13 +182,7 @@ def test_signing_key_persisted_0600_and_survives_restart(isolated_xdg: Path) -> 
     jar.load(_set_cookie_lines(response)[0])
     signed_value = jar["ovid2_session"].value
 
-    secret_path = (
-        isolated_xdg
-        / "config"
-        / "ovid2"
-        / "secrets.d"
-        / "auth_session.json"
-    )
+    secret_path = isolated_xdg / "config" / "ovid2" / "secrets.d" / "auth_session.json"
     assert secret_path.is_file()
     mode = stat.S_IMODE(secret_path.stat().st_mode)
     assert mode == 0o600, f"expected 0600, got {mode:04o}"

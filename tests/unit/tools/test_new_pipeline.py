@@ -18,7 +18,6 @@ from ovid2.tools.new_pipeline import (
 )
 from ovid2.tools.templates import get_template, list_templates
 
-
 # ---------------------------------------------------------------------------
 # Catalogue
 # ---------------------------------------------------------------------------
@@ -43,8 +42,12 @@ def test_templates_with_missing_source_are_hidden(monkeypatch: pytest.MonkeyPatc
     from ovid2.tools import templates as tmod
 
     ghost = tmod.PipelineTemplate(
-        id="ghost", source_pipeline="no_such_pipeline_pkg", cdm="pcornet_7_0",
-        kind="etl", label="Ghost", description="",
+        id="ghost",
+        source_pipeline="no_such_pipeline_pkg",
+        cdm="pcornet_7_0",
+        kind="etl",
+        label="Ghost",
+        description="",
     )
     monkeypatch.setitem(tmod.TEMPLATES, "ghost", ghost)
     assert "ghost" not in {t.id for t in list_templates()}
@@ -142,16 +145,17 @@ def test_scaffold_rejects_bad_name(tmp_path: Path, bad: str) -> None:
 def test_scaffold_rejects_same_name_as_source(tmp_path: Path) -> None:
     with pytest.raises(NewPipelineError, match="must differ"):
         scaffold_pipeline(
-            "example_pcornet", source_pipeline="example_pcornet", cdm="pcornet_7_0", pipelines_root=tmp_path
+            "example_pcornet",
+            source_pipeline="example_pcornet",
+            cdm="pcornet_7_0",
+            pipelines_root=tmp_path,
         )
 
 
 @pytest.mark.unit
 def test_scaffold_unknown_source(tmp_path: Path) -> None:
     with pytest.raises(NewPipelineError, match="not installed"):
-        scaffold_pipeline(
-            "x", source_pipeline="nope", cdm="pcornet_7_0", pipelines_root=tmp_path
-        )
+        scaffold_pipeline("x", source_pipeline="nope", cdm="pcornet_7_0", pipelines_root=tmp_path)
 
 
 @pytest.mark.unit

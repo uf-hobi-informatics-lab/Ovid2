@@ -35,18 +35,10 @@ def isolated_xdg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Pa
     monkeypatch.setenv("OVID2_WORK_DIR", str(tmp_path / "runtime" / "ovid2"))
     monkeypatch.setenv("OVID2_SCHEDULER_DB", str(tmp_path / "state" / "ovid2" / "scheduler.db"))
     monkeypatch.setenv("OVID2_CONFIGS_DIR", str(tmp_path / "config" / "ovid2" / "configs"))
-    monkeypatch.setenv(
-        "OVID2_CONNECTIONS_DIR", str(tmp_path / "config" / "ovid2" / "connections")
-    )
-    monkeypatch.setenv(
-        "OVID2_ROUTES_DIR", str(tmp_path / "config" / "ovid2" / "routes")
-    )
-    monkeypatch.setenv(
-        "OVID2_ENGINES_DIR", str(tmp_path / "config" / "ovid2" / "engines")
-    )
-    monkeypatch.setenv(
-        "OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json")
-    )
+    monkeypatch.setenv("OVID2_CONNECTIONS_DIR", str(tmp_path / "config" / "ovid2" / "connections"))
+    monkeypatch.setenv("OVID2_ROUTES_DIR", str(tmp_path / "config" / "ovid2" / "routes"))
+    monkeypatch.setenv("OVID2_ENGINES_DIR", str(tmp_path / "config" / "ovid2" / "engines"))
+    monkeypatch.setenv("OVID2_SETTINGS_FILE", str(tmp_path / "config" / "ovid2" / "settings.json"))
     (tmp_path / "config" / "ovid2" / "configs").mkdir(parents=True, exist_ok=True)
     (tmp_path / "config" / "ovid2" / "connections").mkdir(parents=True, exist_ok=True)
     (tmp_path / "config" / "ovid2" / "routes").mkdir(parents=True, exist_ok=True)
@@ -67,10 +59,10 @@ def isolated_xdg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Pa
 def web_client(isolated_xdg: Path) -> Iterator[object]:
     """Return a ``TestClient`` bound to a freshly-created FastAPI app."""
     pytest.importorskip("fastapi")
-    from fastapi.testclient import TestClient
-
     # Reload web modules to pick up patched env vars.
     import importlib
+
+    from fastapi.testclient import TestClient
 
     import ovid2.web.app as _app_module
     import ovid2.web.settings as _web_settings
@@ -91,3 +83,15 @@ def sample_address(isolated_xdg: Path) -> Path:
         encoding="utf-8",
     )
     return path
+
+
+@pytest.fixture(autouse=True)
+def _stub_overwrite_probe(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default the overwrite pre-flight to "occupancy unknown" (no subprocess).
+
+    Tests that exercise the overwrite gate call
+    :func:`tests.helpers.output_probe.set_output_tables` to override.
+    """
+    from tests.helpers.output_probe import stub_output_probe
+
+    stub_output_probe(monkeypatch)

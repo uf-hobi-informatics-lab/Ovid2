@@ -104,9 +104,7 @@ def summarise(records: Iterable[Mapping[str, Any]]) -> list[BatchSummary]:
         instance_id = str(record.get("instance_id") or "")
 
         if kind == "table.completed":
-            _get(pipeline, batch_id, instance_id).tables_ok.append(
-                str(record.get("table") or "")
-            )
+            _get(pipeline, batch_id, instance_id).tables_ok.append(str(record.get("table") or ""))
         elif kind == "table.failed":
             summary = _get(pipeline, batch_id, instance_id)
             summary.tables_failed.append(
@@ -133,13 +131,9 @@ def summarise(records: Iterable[Mapping[str, Any]]) -> list[BatchSummary]:
         elif kind == "fix.failed":
             _get(pipeline, batch_id, instance_id).fixes_failed += 1
         elif kind == "warning":
-            _get(pipeline, batch_id, instance_id).warnings.append(
-                str(record.get("message") or "")
-            )
+            _get(pipeline, batch_id, instance_id).warnings.append(str(record.get("message") or ""))
         elif kind == "error":
-            _get(pipeline, batch_id, instance_id).errors.append(
-                str(record.get("message") or "")
-            )
+            _get(pipeline, batch_id, instance_id).errors.append(str(record.get("message") or ""))
 
     # Pass 2: attach instance-level metadata to every summary of the instance.
     for record in records:

@@ -30,9 +30,7 @@ def test_payload_drops_none_fields() -> None:
 
 def test_payload_drops_empty_custom_dict() -> None:
     """The default empty ``custom={}`` must not appear in the payload."""
-    sample = EngineMetricsSample(
-        t_ms=1, wall_iso="t", engine_family="spark"
-    )
+    sample = EngineMetricsSample(t_ms=1, wall_iso="t", engine_family="spark")
     payload = sample.to_payload()
     assert "custom" not in payload
 

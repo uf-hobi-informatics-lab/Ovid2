@@ -48,12 +48,14 @@ def _manifest() -> dict:
 def test_readmes_are_generated_from_fragments() -> None:
     proc = subprocess.run(
         [sys.executable, str(_PUBLIC / "build_readme.py"), "--check"],
-        cwd=_ROOT, capture_output=True, text=True, check=False,
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert proc.returncode == 0, (
         "README.md or scripts/public/overlay/README.md is stale — edit "
-        "scripts/public/readme/*.md and run scripts/public/build_readme.py\n"
-        + proc.stdout
+        "scripts/public/readme/*.md and run scripts/public/build_readme.py\n" + proc.stdout
     )
 
 
@@ -87,8 +89,7 @@ def test_every_pipeline_is_excluded_or_public() -> None:
     gate = set(_manifest()["leak_gate"]["deny_pipeline_imports"])
     not_gated = sorted(excluded - gate)
     assert not not_gated, (
-        "Excluded pipelines must also be listed in [leak_gate] "
-        f"deny_pipeline_imports: {not_gated}"
+        f"Excluded pipelines must also be listed in [leak_gate] deny_pipeline_imports: {not_gated}"
     )
 
 

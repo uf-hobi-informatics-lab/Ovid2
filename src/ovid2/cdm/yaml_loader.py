@@ -29,7 +29,7 @@ import logging
 import os
 from importlib import resources
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
@@ -44,9 +44,9 @@ __all__ = [
     "CdmYamlError",
     "cdm_yaml_dir",
     "cdm_yaml_root",
+    "iter_valueset_docs",
     "load_cdm",
     "load_table_fields_from_yaml",
-    "iter_valueset_docs",
 ]
 
 
@@ -61,9 +61,7 @@ class CdmYamlError(ValueError):
 
 def cdm_yaml_root() -> Path:
     """Return the packaged root under ``src/ovid2/resources/cdms/``."""
-    with resources.as_file(
-        resources.files("ovid2.resources").joinpath("cdms")
-    ) as path:
+    with resources.as_file(resources.files("ovid2.resources").joinpath("cdms")) as path:
         return Path(path)
 
 
@@ -177,8 +175,7 @@ def _parse_shared_views(raw: list[Any] | None) -> tuple[SharedViewSpec, ...]:
             address = source.get("address")
             if not address:
                 raise CdmYamlError(
-                    f"shared_views[{view_name!r}]: 'source.address' is required "
-                    "for kind='address'."
+                    f"shared_views[{view_name!r}]: 'source.address' is required for kind='address'."
                 )
             result.append(
                 SharedViewSpec(
@@ -232,7 +229,8 @@ def _parse_composite_keys(
         if not path.is_file():
             logger.warning(
                 "CDM table YAML missing at %s; skipping composite key for '%s'.",
-                path, table,
+                path,
+                table,
             )
             continue
         payload = _load_yaml(path)
@@ -287,7 +285,7 @@ def _parse_valuesets(cdm_name: str, cdm_dir: Path) -> dict[str, dict[str, tuple[
 # ---------------------------------------------------------------------------
 
 
-def load_table_fields_from_yaml(cdm_name: str, table: str) -> list["CdmField"]:
+def load_table_fields_from_yaml(cdm_name: str, table: str) -> list[CdmField]:
     """Return the ordered :class:`CdmField` rows for ``(cdm_name, table)``.
 
     Reads ``resources/cdms/<cdm>/tables/<table>.yaml`` fresh — callers
@@ -382,9 +380,7 @@ def load_cdm(cdm_name: str) -> CdmHandle:
     root = _load_yaml(root_path)
 
     if root.get("name") != cdm_name:
-        raise CdmYamlError(
-            f"{root_path}: 'name' is {root.get('name')!r}, expected {cdm_name!r}."
-        )
+        raise CdmYamlError(f"{root_path}: 'name' is {root.get('name')!r}, expected {cdm_name!r}.")
 
     version = str(root.get("version") or "")
     tables_raw = root.get("tables") or []
@@ -392,9 +388,7 @@ def load_cdm(cdm_name: str) -> CdmHandle:
         raise CdmYamlError(f"{root_path}: 'tables' must be a non-empty list.")
     tables = [str(t) for t in tables_raw]
 
-    reference_tables = frozenset(
-        str(t) for t in (root.get("reference_tables") or [])
-    )
+    reference_tables = frozenset(str(t) for t in (root.get("reference_tables") or []))
     flavour_of_null = _parse_flavour_of_null(root.get("flavour_of_null"))
     id_columns = _parse_id_columns(root.get("id_columns") or {})
     shared_views = _parse_shared_views(root.get("shared_views"))
@@ -442,8 +436,8 @@ def _populate_schema_cache(cdm_name: str, tables: list[str]) -> None:
     """Prime the module-level cache in :mod:`ovid2.schema.cdm` from YAML."""
     from ovid2.schema import cdm as _schema_cdm  # local: avoids cycle
 
-    rows: list["CdmField"] = []
+    rows: list[CdmField] = []
     for table in tables:
         rows.extend(load_table_fields_from_yaml(cdm_name, table))
     if rows:
-        _schema_cdm._CDM_CACHE[cdm_name] = rows  # type: ignore[attr-defined]
+        _schema_cdm._CDM_CACHE[cdm_name] = rows

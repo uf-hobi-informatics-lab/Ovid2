@@ -35,11 +35,9 @@ import json
 import logging
 import sys
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from ovid2.config import addresses as _addresses
-from ovid2.config import connections as _connections
 from ovid2.config import paths as _paths
 
 logger = logging.getLogger(__name__)
@@ -53,8 +51,10 @@ logger = logging.getLogger(__name__)
 #: it into the connection is the whole point of the migration, so it
 #: becomes ``host_path`` on the connection side (widened schema from
 #: the disc-mount / path-picker phase) and the address is left with
-#: an empty location (pipelines already scope by
-#: ``{pipeline}/{batch_id}`` under the root at read time).
+#: an empty location. Since 2026-10 an address is the *exact* location
+#: of the data (no ``{pipeline}/{batch_id}`` is appended at read time),
+#: so a migrated root-level address reads files directly under the root;
+#: point ``location.path`` at the batch folder to read a specific batch.
 _SPLIT: dict[str, tuple[frozenset[str], frozenset[str], frozenset[str]]] = {
     "disc": (
         frozenset({"host_path"}),
@@ -160,9 +160,7 @@ def _plan_one(address_name: str) -> MigrationPlan | None:
     src_name = str(cfg.get("src_name") or "")
     src_args = dict(cfg.get("src_args") or {})
     if src_name not in _SPLIT:
-        logger.warning(
-            "Skipping '%s': unknown legacy src_name '%s'.", address_name, src_name
-        )
+        logger.warning("Skipping '%s': unknown legacy src_name '%s'.", address_name, src_name)
         return None
     conn_args, secret_values, location = _split_src_args(src_name, src_args)
     conn_name = _connection_name(address_name, src_name, conn_args)
@@ -207,7 +205,7 @@ def _diff(name: str, before: dict[str, Any], after: dict[str, Any]) -> str:
 
 def _redact_secret(payload: dict[str, Any]) -> dict[str, Any]:
     """Mask every value in a secret dict for stdout printing."""
-    return {k: "***" for k in payload}
+    return dict.fromkeys(payload, "***")
 
 
 def _apply(plan: MigrationPlan) -> None:
@@ -225,9 +223,7 @@ def _apply(plan: MigrationPlan) -> None:
                 actor="migrate-addresses",
             )
         except secrets_svc.SecretError as exc:
-            raise SystemExit(
-                f"Refusing to migrate {plan.address_name}: {exc}"
-            ) from exc
+            raise SystemExit(f"Refusing to migrate {plan.address_name}: {exc}") from exc
 
     # 2. Connection file.
     conn_payload = ConnectionWrite(
@@ -243,9 +239,7 @@ def _apply(plan: MigrationPlan) -> None:
             actor="migrate-addresses",
         )
     except connections_svc.ConnectionError as exc:
-        raise SystemExit(
-            f"Refusing to migrate {plan.address_name}: {exc}"
-        ) from exc
+        raise SystemExit(f"Refusing to migrate {plan.address_name}: {exc}") from exc
 
     # 3. Address file — write directly (not via addresses_svc.write_address
     # which enforces a stricter schema). The address JSON lands in the

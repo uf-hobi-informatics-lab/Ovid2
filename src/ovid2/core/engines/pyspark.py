@@ -8,9 +8,11 @@ with no args) and also the only engine that may import from
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import tempfile
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ovid2.core.engines.base import BaseEngine, EngineTestResult
@@ -65,6 +67,60 @@ def _missing_jdk_result(extra_detail: dict[str, Any] | None = None) -> EngineTes
             "PySpark requires a JDK to launch its JVM gateway."
         ),
         detail=detail,
+    )
+
+
+@dataclass(frozen=True)
+class _TrackerSnapshot:
+    """Plain values read from a Spark ``StatusTracker`` (no jobs triggered)."""
+
+    active_stage_ids: list[int]
+    tasks_active: int
+    tasks_completed: int
+    tasks_failed: int
+    current_stage: str | None
+    executors_total: int | None
+    executors_active: int | None
+
+
+def read_status_tracker(sc: Any) -> _TrackerSnapshot:
+    """Read a cheap live snapshot from ``sc.statusTracker()``.
+
+    ``pyspark.status.SparkStageInfo`` is a *namedtuple* — its counters are
+    fields, not methods (calling ``info.numActiveTasks()`` raises
+    ``TypeError``). Executor info is not on the Python tracker at all; it
+    is read from the JVM tracker and degrades to ``None`` when the JVM
+    handle is unavailable (e.g. Databricks Connect thin client).
+
+    Args:
+        sc: A ``SparkContext``.
+
+    Returns:
+        The snapshot. Never raises for a missing executor view.
+    """
+    tracker = sc.statusTracker()
+    active_stage_ids = [int(sid) for sid in tracker.getActiveStageIds()]
+    infos = [
+        info for info in (tracker.getStageInfo(sid) for sid in active_stage_ids) if info is not None
+    ]
+    executors_total: int | None = None
+    executors_active: int | None = None
+    try:
+        executor_infos = list(sc._jsc.sc().statusTracker().getExecutorInfos())
+        executors_total = len(executor_infos)
+        executors_active = sum(1 for e in executor_infos if int(e.numRunningTasks()) > 0)
+    except Exception:  # noqa: S110 — no JVM view (thin client); leave unknown
+        pass
+    return _TrackerSnapshot(
+        active_stage_ids=active_stage_ids,
+        tasks_active=sum(int(i.numActiveTasks) for i in infos),
+        tasks_completed=sum(int(i.numCompletedTasks) for i in infos),
+        tasks_failed=sum(int(i.numFailedTasks) for i in infos),
+        # Newest active stage wins — most recently submitted is what the
+        # operator sees "cooking" right now.
+        current_stage=str(infos[-1].name) if infos else None,
+        executors_total=executors_total,
+        executors_active=executors_active,
     )
 
 
@@ -159,9 +215,7 @@ class _SparkFunctions:
     def max(self, c: Any) -> Any:
         return self._F.max(c)  # noqa: OVID2001 aggregate function reference, not an eager action
 
-    def map_from_dict(
-        self, mapping: dict[str, Any], key_col: Any, default: Any = None
-    ) -> Any:
+    def map_from_dict(self, mapping: dict[str, Any], key_col: Any, default: Any = None) -> Any:
         """Emit a chained ``when(...).otherwise(...)`` mapping.
 
         Portable replacement for the Spark ``create_map(...)[key]``
@@ -197,9 +251,9 @@ class _SparkFunctions:
         still yields a stable id.
         """
         parts = [self._F.coalesce(c.cast("string"), self._F.lit("")) for c in cols]
-        return (
-            self._F.xxhash64(*parts).bitwiseAND(self._F.lit(0x7FFF_FFFF_FFFF_FFFF))
-        ).cast("string")
+        return (self._F.xxhash64(*parts).bitwiseAND(self._F.lit(0x7FFF_FFFF_FFFF_FFFF))).cast(
+            "string"
+        )
 
     def rand(self, seed: int | None = None) -> Any:
         if seed is None:
@@ -342,22 +396,18 @@ class PySparkEngine(BaseEngine):
         try:
             try:
                 saved_stderr_fd = os.dup(2)
-                tmp = tempfile.NamedTemporaryFile(
+                with tempfile.NamedTemporaryFile(
                     prefix="ovid2-engine-probe-",
                     suffix=".stderr",
                     delete=False,
-                )
-                captured_path = tmp.name
-                tmp_fd = tmp.file.fileno()
-                os.dup2(tmp_fd, 2)
-                tmp.close()
+                ) as tmp:
+                    captured_path = tmp.name
+                    os.dup2(tmp.file.fileno(), 2)
             except OSError:
                 # Redirection is best-effort; if it fails, run without.
                 if saved_stderr_fd is not None:
-                    try:
+                    with contextlib.suppress(OSError):
                         os.close(saved_stderr_fd)
-                    except OSError:
-                        pass
                 saved_stderr_fd = None
                 captured_path = None
 
@@ -366,14 +416,10 @@ class PySparkEngine(BaseEngine):
                 row = session.sql("SELECT 1 AS ok").collect()  # noqa: OVID2001
             finally:
                 if saved_stderr_fd is not None:
-                    try:
+                    with contextlib.suppress(OSError):
                         os.dup2(saved_stderr_fd, 2)
-                    except OSError:
-                        pass
-                    try:
+                    with contextlib.suppress(OSError):
                         os.close(saved_stderr_fd)
-                    except OSError:
-                        pass
                 if captured_path is not None:
                     try:
                         with open(captured_path, "rb") as fh:
@@ -383,10 +429,8 @@ class PySparkEngine(BaseEngine):
                             stderr_tail = fh.read().decode("utf-8", errors="replace")
                     except OSError:
                         stderr_tail = ""
-                    try:
+                    with contextlib.suppress(OSError):
                         os.unlink(captured_path)
-                    except OSError:
-                        pass
 
             if row and row[0][0] == 1:
                 return EngineTestResult(
@@ -398,7 +442,7 @@ class PySparkEngine(BaseEngine):
                 message="SELECT 1 returned unexpected result",
                 detail={"row": str(row)},
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             exc_message = str(exc)
             detail: dict[str, Any] = {
                 "exception_type": type(exc).__name__,
@@ -459,7 +503,7 @@ class PySparkEngine(BaseEngine):
             if self._session is None:
                 return
             sc = self._session.sparkContext
-            jvm = sc._jvm  # type: ignore[attr-defined]
+            jvm = sc._jvm
             if jvm is None:  # pragma: no cover — defensive
                 return
 
@@ -470,8 +514,9 @@ class PySparkEngine(BaseEngine):
             class _OvidMetricsListener:  # pragma: no cover — JVM-side callback
                 """Row-count accumulator wired into Spark's listener bus."""
 
-                def onTaskEnd(self, taskEnd: Any) -> None:  # noqa: N802,N803
-                    try:
+                def onTaskEnd(self, taskEnd: Any) -> None:  # noqa: N803
+                    # Never let a listener bug surface to Spark.
+                    with contextlib.suppress(Exception):
                         tm = taskEnd.taskMetrics()
                         if tm is None:
                             return
@@ -479,46 +524,86 @@ class PySparkEngine(BaseEngine):
                         if om is None:
                             return
                         engine._rows_written_counter += int(om.recordsWritten())
-                    except Exception:
-                        # Never let a listener bug surface to Spark.
-                        pass
 
                 # These methods are optional but must exist for py4j
                 # ``implements`` to satisfy the interface.
-                def onStageCompleted(self, _e: Any) -> None: pass  # noqa: N802, E704
-                def onStageSubmitted(self, _e: Any) -> None: pass  # noqa: N802, E704
-                def onTaskStart(self, _e: Any) -> None: pass  # noqa: N802, E704
-                def onTaskGettingResult(self, _e: Any) -> None: pass  # noqa: N802, E704
-                def onJobStart(self, _e: Any) -> None: pass  # noqa: N802, E704
-                def onJobEnd(self, _e: Any) -> None: pass  # noqa: N802, E704
-                def onEnvironmentUpdate(self, _e: Any) -> None: pass  # noqa: N802, E704
-                def onBlockManagerAdded(self, _e: Any) -> None: pass  # noqa: N802, E704
-                def onBlockManagerRemoved(self, _e: Any) -> None: pass  # noqa: N802, E704
-                def onUnpersistRDD(self, _e: Any) -> None: pass  # noqa: N802, E704
-                def onApplicationStart(self, _e: Any) -> None: pass  # noqa: N802, E704
-                def onApplicationEnd(self, _e: Any) -> None: pass  # noqa: N802, E704
-                def onExecutorMetricsUpdate(self, _e: Any) -> None: pass  # noqa: N802, E704
-                def onExecutorAdded(self, _e: Any) -> None: pass  # noqa: N802, E704
-                def onExecutorRemoved(self, _e: Any) -> None: pass  # noqa: N802, E704
-                def onExecutorBlacklisted(self, _e: Any) -> None: pass  # noqa: N802, E704
-                def onExecutorUnblacklisted(self, _e: Any) -> None: pass  # noqa: N802, E704
-                def onNodeBlacklisted(self, _e: Any) -> None: pass  # noqa: N802, E704
-                def onNodeUnblacklisted(self, _e: Any) -> None: pass  # noqa: N802, E704
-                def onBlockUpdated(self, _e: Any) -> None: pass  # noqa: N802, E704
-                def onSpeculativeTaskSubmitted(self, _e: Any) -> None: pass  # noqa: N802, E704
-                def onOtherEvent(self, _e: Any) -> None: pass  # noqa: N802, E704
+                def onStageCompleted(self, _e: Any) -> None:
+                    pass
+
+                def onStageSubmitted(self, _e: Any) -> None:
+                    pass
+
+                def onTaskStart(self, _e: Any) -> None:
+                    pass
+
+                def onTaskGettingResult(self, _e: Any) -> None:
+                    pass
+
+                def onJobStart(self, _e: Any) -> None:
+                    pass
+
+                def onJobEnd(self, _e: Any) -> None:
+                    pass
+
+                def onEnvironmentUpdate(self, _e: Any) -> None:
+                    pass
+
+                def onBlockManagerAdded(self, _e: Any) -> None:
+                    pass
+
+                def onBlockManagerRemoved(self, _e: Any) -> None:
+                    pass
+
+                def onUnpersistRDD(self, _e: Any) -> None:
+                    pass
+
+                def onApplicationStart(self, _e: Any) -> None:
+                    pass
+
+                def onApplicationEnd(self, _e: Any) -> None:
+                    pass
+
+                def onExecutorMetricsUpdate(self, _e: Any) -> None:
+                    pass
+
+                def onExecutorAdded(self, _e: Any) -> None:
+                    pass
+
+                def onExecutorRemoved(self, _e: Any) -> None:
+                    pass
+
+                def onExecutorBlacklisted(self, _e: Any) -> None:
+                    pass
+
+                def onExecutorUnblacklisted(self, _e: Any) -> None:
+                    pass
+
+                def onNodeBlacklisted(self, _e: Any) -> None:
+                    pass
+
+                def onNodeUnblacklisted(self, _e: Any) -> None:
+                    pass
+
+                def onBlockUpdated(self, _e: Any) -> None:
+                    pass
+
+                def onSpeculativeTaskSubmitted(self, _e: Any) -> None:
+                    pass
+
+                def onOtherEvent(self, _e: Any) -> None:
+                    pass
 
                 class Java:
                     implements = ["org.apache.spark.scheduler.SparkListenerInterface"]
 
-            self._metrics_listener_impl = _OvidMetricsListener()
-            sc._jsc.sc().addSparkListener(self._metrics_listener_impl)  # type: ignore[attr-defined]
+            self._metrics_listener_impl: object | None = _OvidMetricsListener()
+            sc._jsc.sc().addSparkListener(self._metrics_listener_impl)
         except Exception:
             # Listener attach is best-effort. Metrics still work without
             # rows_written; the tile just reads "—" for rows.
             self._metrics_listener_impl = None
 
-    def get_metrics(self) -> "EngineMetricsSample":
+    def get_metrics(self) -> EngineMetricsSample:
         """Read a cheap live snapshot from the Spark ``StatusTracker``.
 
         Returns an :class:`EngineMetricsSample` with:
@@ -549,50 +634,22 @@ class PySparkEngine(BaseEngine):
         # No session yet → return a bare "alive" sample so the pulse
         # can still show engine_family. Not an error.
         if self._session is None:
-            return EngineMetricsSample(
-                t_ms=now_ms, wall_iso=wall, engine_family=self.family.value
-            )
+            return EngineMetricsSample(t_ms=now_ms, wall_iso=wall, engine_family=self.family.value)
 
         try:
             self._ensure_metrics_listener()
-            sc = self._session.sparkContext
-            tracker = sc.statusTracker()
-
-            active_stage_ids = list(tracker.getActiveStageIds())
-            active_stage_infos = [
-                info
-                for info in (tracker.getStageInfo(sid) for sid in active_stage_ids)
-                if info is not None
-            ]
-            tasks_active = sum(int(info.numActiveTasks()) for info in active_stage_infos)
-            tasks_completed = sum(
-                int(info.numCompletedTasks()) for info in active_stage_infos
-            )
-            tasks_failed = sum(
-                int(info.numFailedTasks()) for info in active_stage_infos
-            )
-            current_stage_name: str | None = None
-            if active_stage_infos:
-                # Newest active stage wins — most recently-submitted is
-                # what the operator actually sees "cooking" right now.
-                current_stage_name = str(active_stage_infos[-1].name())
-
-            executor_infos = list(tracker.getExecutorInfos())
-            executors_total = len(executor_infos)
-            executors_active = sum(
-                1 for e in executor_infos if int(e.numRunningTasks()) > 0
-            )
-
-            # Cumulative input/output bytes are per-stage on the
-            # tracker; sum across the whole run.
+            snap = read_status_tracker(self._session.sparkContext)
+            active_stage_ids = snap.active_stage_ids
+            tasks_active = snap.tasks_active
+            tasks_completed = snap.tasks_completed
+            tasks_failed = snap.tasks_failed
+            current_stage_name = snap.current_stage
+            executors_total = snap.executors_total
+            executors_active = snap.executors_active
+            # The Python ``StatusTracker`` exposes no per-stage byte
+            # counters; the bytes tiles stay "—" until a listener feeds them.
             input_bytes = 0
             output_bytes = 0
-            for info in active_stage_infos:
-                try:
-                    input_bytes += int(info.numInputBytes())
-                    output_bytes += int(info.numOutputBytes())
-                except Exception:
-                    pass
 
             return EngineMetricsSample(
                 t_ms=now_ms,
@@ -608,16 +665,12 @@ class PySparkEngine(BaseEngine):
                 current_stage=current_stage_name,
                 input_bytes_total=input_bytes or None,
                 output_bytes_total=output_bytes or None,
-                rows_written_total=(
-                    int(getattr(self, "_rows_written_counter", 0)) or None
-                ),
+                rows_written_total=(int(getattr(self, "_rows_written_counter", 0)) or None),
             )
         except Exception:
             # Any hiccup (JVM disconnected, tracker unavailable) →
             # return a bare sample. Never blow up the sampler.
-            return EngineMetricsSample(
-                t_ms=now_ms, wall_iso=wall, engine_family=self.family.value
-            )
+            return EngineMetricsSample(t_ms=now_ms, wall_iso=wall, engine_family=self.family.value)
 
 
 def spark_functions() -> EngineFunctions:
@@ -631,4 +684,4 @@ def spark_functions() -> EngineFunctions:
     return _SparkFunctions()
 
 
-__all__ = ["PySparkEngine", "spark_functions"]
+__all__ = ["PySparkEngine", "read_status_tracker", "spark_functions"]

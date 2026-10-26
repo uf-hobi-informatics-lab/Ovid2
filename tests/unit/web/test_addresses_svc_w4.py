@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
-import stat
 from pathlib import Path
 
 import pytest
@@ -128,9 +126,7 @@ def test_update_replaces_password(isolated_xdg: Path) -> None:
 def test_rejects_invalid_src_name(isolated_xdg: Path) -> None:
     """An unknown ``src_name`` is rejected."""
     with pytest.raises(addresses_svc.AddressError):
-        addresses_svc.write_address(
-            "bad", AddressWrite(src_name="ftp", src_args={"path": "/x"})
-        )
+        addresses_svc.write_address("bad", AddressWrite(src_name="ftp", src_args={"path": "/x"}))
 
 
 @pytest.mark.unit
@@ -138,9 +134,7 @@ def test_rejects_traversal_name(isolated_xdg: Path) -> None:
     """Path-traversal-ish names are rejected."""
     for bad in ("../evil", "with/slash", " space", "", ".", ".hidden"):
         with pytest.raises(addresses_svc.AddressError):
-            addresses_svc.write_address(
-                bad, AddressWrite(src_name="disc", src_args={"path": "/x"})
-            )
+            addresses_svc.write_address(bad, AddressWrite(src_name="disc", src_args={"path": "/x"}))
 
 
 @pytest.mark.unit

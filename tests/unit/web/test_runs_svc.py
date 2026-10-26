@@ -28,8 +28,7 @@ def _seed_data_batch(rows: list[tuple[str, str, str, str]]) -> None:
         "status TEXT, priority TEXT, processing_start TEXT, processing_end TEXT)"
     )
     conn.executemany(
-        "INSERT INTO data_batch (batch_id, path, received_time, status) "
-        "VALUES (?, ?, ?, ?)",
+        "INSERT INTO data_batch (batch_id, path, received_time, status) VALUES (?, ?, ?, ?)",
         rows,
     )
     conn.commit()
@@ -196,9 +195,7 @@ def test_pagination_offset_and_limit(isolated_xdg: Path) -> None:
         ("cancelled", "CANCELLED"),
     ],
 )
-def test_status_from_web_status_maps_cancelled_distinctly(
-    web_status: str, expected: str
-) -> None:
+def test_status_from_web_status_maps_cancelled_distinctly(web_status: str, expected: str) -> None:
     """A cancelled job maps to its own label, not ``ERROR``.
 
     Regression guard: cancelling a run used to collapse into ``ERROR``,

@@ -5,18 +5,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 
-
-def _configure_picker(
-    isolated_xdg: Path, roots: list[str], enabled: bool = True
-) -> None:
+def _configure_picker(isolated_xdg: Path, roots: list[str], enabled: bool = True) -> None:
     settings_path = isolated_xdg / "config" / "ovid2" / "settings.json"
     settings_path.write_text(
         json.dumps({"fs_picker": {"enabled": enabled, "roots": roots}}),
         encoding="utf-8",
     )
     from ovid2.web.services import settings_svc
+
     settings_svc.invalidate_cache()
 
 
@@ -33,9 +30,7 @@ class TestFsListEndpoint:
         names = [e["name"] for e in body["entries"]]
         assert "child" in names
 
-    def test_list_outside_allowlist_returns_403(
-        self, isolated_xdg: Path, web_client
-    ) -> None:
+    def test_list_outside_allowlist_returns_403(self, isolated_xdg: Path, web_client) -> None:
         allowed = isolated_xdg / "allowed"
         allowed.mkdir()
         outside = isolated_xdg / "outside"
@@ -44,18 +39,12 @@ class TestFsListEndpoint:
         response = web_client.get("/api/v1/fs/list", params={"path": str(outside)})
         assert response.status_code == 403
 
-    def test_list_missing_path_returns_404(
-        self, isolated_xdg: Path, web_client
-    ) -> None:
+    def test_list_missing_path_returns_404(self, isolated_xdg: Path, web_client) -> None:
         _configure_picker(isolated_xdg, [str(isolated_xdg)])
-        response = web_client.get(
-            "/api/v1/fs/list", params={"path": str(isolated_xdg / "nope")}
-        )
+        response = web_client.get("/api/v1/fs/list", params={"path": str(isolated_xdg / "nope")})
         assert response.status_code == 404
 
-    def test_list_disabled_returns_404(
-        self, isolated_xdg: Path, web_client
-    ) -> None:
+    def test_list_disabled_returns_404(self, isolated_xdg: Path, web_client) -> None:
         _configure_picker(isolated_xdg, ["/"], enabled=False)
         response = web_client.get("/api/v1/fs/list", params={"path": "/"})
         assert response.status_code == 404
@@ -94,9 +83,7 @@ class TestFsPickerPartial:
         assert "Choose this directory" in response.text
         assert "kid" in response.text
 
-    def test_picker_partial_shows_error_on_403(
-        self, isolated_xdg: Path, web_client
-    ) -> None:
+    def test_picker_partial_shows_error_on_403(self, isolated_xdg: Path, web_client) -> None:
         allowed = isolated_xdg / "allowed"
         allowed.mkdir()
         outside = isolated_xdg / "outside"

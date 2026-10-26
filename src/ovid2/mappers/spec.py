@@ -25,7 +25,7 @@ import logging
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 _SCHEMA_CACHE: dict[str, Any] = {}
 _DEPRECATION_LOGGER = logging.getLogger("ovid2.mappers.deprecations")
@@ -97,7 +97,7 @@ def _schema() -> dict[str, Any]:
         ref = resources.files("ovid2.resources.schemas") / "mapper_spec.v1.json"
         with ref.open("r", encoding="utf-8") as fh:
             _SCHEMA_CACHE["mapper"] = json.load(fh)
-    return _SCHEMA_CACHE["mapper"]
+    return cast("dict[str, Any]", _SCHEMA_CACHE["mapper"])
 
 
 def _validate_raw(raw: dict[str, Any], *, origin: str) -> None:
@@ -151,7 +151,9 @@ def load_from_yaml(path: Path, *, pipeline: str) -> MapperSpec:
     with path.open("r", encoding="utf-8") as fh:
         raw = yaml.safe_load(fh) or {}
     if not isinstance(raw, dict):
-        raise MapperSpecValidationError(f"Mapper spec at {path} must be a mapping at the top level.")
+        raise MapperSpecValidationError(
+            f"Mapper spec at {path} must be a mapping at the top level."
+        )
     _validate_raw(raw, origin=str(path))
     return _build(raw, pipeline=pipeline, source_path=path)
 
@@ -198,10 +200,10 @@ def load_spec(pipeline: str, table: str) -> MapperSpec:
     module_name = f"ovid2_pipelines.{pipeline}.mappers.{table}"
     try:
         module = importlib.import_module(module_name)
-    except ModuleNotFoundError:
+    except ModuleNotFoundError as exc:
         raise MapperSpecNotFoundError(
             f"No mapper spec found for pipeline '{pipeline}', table '{table}'."
-        )
+        ) from exc
     raw = getattr(module, "SPEC", None)
     if not isinstance(raw, dict):
         raise MapperSpecValidationError(

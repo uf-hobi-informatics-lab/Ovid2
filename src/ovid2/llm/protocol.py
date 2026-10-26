@@ -47,9 +47,21 @@ ChatMessage = dict[str, Any]
 LlmEvent = dict[str, Any]
 
 EVENT_TYPES: frozenset[str] = frozenset(
-    {"meta", "notice", "decision", "reasoning", "delta", "usage", "error", "done",
-     "tool_call", "tool_result", "proposal", "open_draft",
-     "ui_action"}
+    {
+        "meta",
+        "notice",
+        "decision",
+        "reasoning",
+        "delta",
+        "usage",
+        "error",
+        "done",
+        "tool_call",
+        "tool_result",
+        "proposal",
+        "open_draft",
+        "ui_action",
+    }
 )
 
 
@@ -104,8 +116,12 @@ class ProbeResult:
 
     def to_dict(self) -> dict[str, Any]:
         """Return the JSON-serialisable form."""
-        return {"ok": self.ok, "code": self.code, "message": self.message,
-                "detail": dict(self.detail)}
+        return {
+            "ok": self.ok,
+            "code": self.code,
+            "message": self.message,
+            "detail": dict(self.detail),
+        }
 
 
 class Provider(abc.ABC):
@@ -135,8 +151,9 @@ class Provider(abc.ABC):
     def probe(self) -> ProbeResult:
         """Run a cheap authenticated round-trip."""
 
-    def chat_stream(self, messages: list[ChatMessage],
-                    tools: list[dict[str, Any]] | None = None) -> Iterator[LlmEvent]:
+    def chat_stream(
+        self, messages: list[ChatMessage], tools: list[dict[str, Any]] | None = None
+    ) -> Iterator[LlmEvent]:
         """Stream a general answer as ``reasoning`` / ``delta`` / ``usage`` events.
 
         When ``tools`` (OpenAI function-calling schema) is given and the

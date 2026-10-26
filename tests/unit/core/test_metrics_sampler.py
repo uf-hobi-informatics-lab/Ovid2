@@ -29,7 +29,7 @@ class _RecordingBus:
     def __init__(self) -> None:
         self.events: list[Event] = []
 
-    def emit(self, event: Event) -> None:  # noqa: D401 — protocol
+    def emit(self, event: Event) -> None:
         self.events.append(event)
 
 
@@ -79,6 +79,7 @@ class _ThrowingEngine(_StubEngine):
 def test_sampler_emits_events(monkeypatch: pytest.MonkeyPatch) -> None:
     """Runs one tick with a very short period and stops."""
     import ovid2.config.settings as s
+
     monkeypatch.setattr(s, "ENGINE_METRICS_ENABLED", True)
     engine = _StubEngine()
     bus = _RecordingBus()
@@ -105,6 +106,7 @@ def test_sampler_never_fails_on_engine_exception(
 ) -> None:
     """A raising ``get_metrics`` must not fail the sampler."""
     import ovid2.config.settings as s
+
     monkeypatch.setattr(s, "ENGINE_METRICS_ENABLED", True)
     engine = _ThrowingEngine()
     bus = _RecordingBus()
@@ -128,6 +130,7 @@ def test_sampler_disabled_returns_stopped_handle(
 ) -> None:
     """``ENGINE_METRICS_ENABLED=False`` short-circuits without emitting."""
     import ovid2.config.settings as s
+
     monkeypatch.setattr(s, "ENGINE_METRICS_ENABLED", False)
     engine = _StubEngine()
     bus = _RecordingBus()
@@ -143,6 +146,7 @@ def test_sampler_active_ms_zero_disables(
 ) -> None:
     """``active_ms=0`` should also short-circuit."""
     import ovid2.config.settings as s
+
     monkeypatch.setattr(s, "ENGINE_METRICS_ENABLED", True)
     engine = _StubEngine()
     bus = _RecordingBus()
@@ -160,10 +164,9 @@ def test_active_period_when_tasks_running(
 ) -> None:
     """A stream of ``tasks_active > 0`` samples keeps the active rate."""
     import ovid2.config.settings as s
+
     monkeypatch.setattr(s, "ENGINE_METRICS_ENABLED", True)
-    busy = EngineMetricsSample(
-        t_ms=0, wall_iso="t", engine_family="spark", tasks_active=5
-    )
+    busy = EngineMetricsSample(t_ms=0, wall_iso="t", engine_family="spark", tasks_active=5)
     engine = _StubEngine(samples=[busy] * 20)
     bus = _RecordingBus()
     handle = run_sampler(
@@ -184,11 +187,10 @@ def test_active_period_when_tasks_running(
 def test_sampler_stop_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
     """Calling ``stop`` twice must not blow up."""
     import ovid2.config.settings as s
+
     monkeypatch.setattr(s, "ENGINE_METRICS_ENABLED", True)
     engine = _StubEngine()
-    handle = run_sampler(
-        instance_id="iid", engine=engine, bus=_RecordingBus(), active_ms=50
-    )
+    handle = run_sampler(instance_id="iid", engine=engine, bus=_RecordingBus(), active_ms=50)
     handle.stop()
     handle.stop()  # no exception
 
@@ -203,6 +205,7 @@ def test_snowpark_family_uses_snowpark_default_rate(
     crash on a Snowpark-family engine.
     """
     import ovid2.config.settings as s
+
     monkeypatch.setattr(s, "ENGINE_METRICS_ENABLED", True)
     monkeypatch.setattr(s, "ENGINE_METRICS_SNOWPARK_MS", 50)
     monkeypatch.setattr(s, "ENGINE_METRICS_SPARK_MS", 10_000)

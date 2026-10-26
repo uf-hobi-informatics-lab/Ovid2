@@ -40,9 +40,7 @@ def _install_auth(
     silent_recheck: bool = True,
 ) -> None:
     """Enable auth with the given silent-recheck toggle."""
-    settings = GlobalSettings(
-        auth=SettingsAuth(enabled=enabled, silent_recheck=silent_recheck)
-    )
+    settings = GlobalSettings(auth=SettingsAuth(enabled=enabled, silent_recheck=silent_recheck))
     monkeypatch.setattr(settings_svc, "get_settings", lambda: settings)
 
 
@@ -64,9 +62,7 @@ def _signed(session_id: str) -> str:
     response = Response()
     cookie_mod.issue_cookie(response, session_id)
     line = next(
-        value.decode("latin-1")
-        for key, value in response.raw_headers
-        if key == b"set-cookie"
+        value.decode("latin-1") for key, value in response.raw_headers if key == b"set-cookie"
     )
     jar: SimpleCookie[str] = SimpleCookie()
     jar.load(line)

@@ -44,8 +44,7 @@ def test_location_spec_shape_is_stable() -> None:
     for type_name in sorted(CONNECTION_TYPE_MAP):
         spec = location_field_spec(type_name)
         assert isinstance(spec, list), (
-            f"location_field_spec('{type_name}') must return a list, "
-            f"got {type(spec).__name__}."
+            f"location_field_spec('{type_name}') must return a list, got {type(spec).__name__}."
         )
         for field in spec:
             assert isinstance(field, dict), (
@@ -69,11 +68,19 @@ def test_location_spec_shape_is_stable() -> None:
 def test_no_sensitive_keys_in_location_spec() -> None:
     """Locations must not carry credentials — those live on the connection."""
     forbidden = {
-        "password", "passwd", "token", "secret",
-        "private_key", "private_key_passphrase",
-        "aws_secret_access_key", "aws_access_key_id",
-        "service_account_json", "connection_string",
-        "account_key", "sas_token", "client_secret",
+        "password",
+        "passwd",
+        "token",
+        "secret",
+        "private_key",
+        "private_key_passphrase",
+        "aws_secret_access_key",
+        "aws_access_key_id",
+        "service_account_json",
+        "connection_string",
+        "account_key",
+        "sas_token",
+        "client_secret",
     }
     for type_name in sorted(CONNECTION_TYPE_MAP):
         for field in location_field_spec(type_name):

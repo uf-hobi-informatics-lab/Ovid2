@@ -67,6 +67,7 @@ def _mk_args(**overrides: Any) -> argparse.Namespace:
 def _instance() -> Any:
     """Build a stand-in OvidInstance object without touching the filesystem."""
     from ovid2.core.isolation import OvidInstance
+
     with mock.patch("ovid2.core.isolation.OvidInstance.ensure_directories"):
         return OvidInstance(instance_id="20260101-000000-testtt")
 
@@ -74,6 +75,7 @@ def _instance() -> Any:
 def _empty_merged() -> Any:
     """Return an empty :class:`MergedRequirements`."""
     from ovid2.drivers.container import MergedRequirements
+
     return MergedRequirements()
 
 
@@ -94,13 +96,16 @@ class TestCollectorIntegration:
         args = _mk_args()
         args.extra_mounts = None
 
-        with mock.patch("ovid2.core.docker.is_inside_docker", return_value=False), \
-             mock.patch("ovid2.core.isolation.cleanup_stale_instances"), \
-             mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.SPARK_MODE", "local"), \
-             mock.patch("ovid2.drivers.collector.collect_for_addresses",
-                        return_value=_empty_merged()) as m_col, \
-             mock.patch("ovid2.core.docker.submit_to_docker", return_value=0):
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=False),
+            mock.patch("ovid2.core.isolation.cleanup_stale_instances"),
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.SPARK_MODE", "local"),
+            mock.patch(
+                "ovid2.drivers.collector.collect_for_addresses", return_value=_empty_merged()
+            ) as m_col,
+            mock.patch("ovid2.core.docker.submit_to_docker", return_value=0),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             copy_module.main(args)
         m_col.assert_called_once()
@@ -113,14 +118,17 @@ class TestCollectorIntegration:
         args = _mk_args()
         args.extra_mounts = None
 
-        with mock.patch("ovid2.core.docker.is_inside_docker", return_value=False), \
-             mock.patch("ovid2.core.isolation.cleanup_stale_instances"), \
-             mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.SPARK_MODE", "local"), \
-             mock.patch("ovid2.drivers.collector.collect_for_addresses",
-                        return_value=_empty_merged()), \
-             mock.patch("ovid2.connections.disc_mounts.build_disc_mounts") as m_bdm, \
-             mock.patch("ovid2.core.docker.submit_to_docker", return_value=0):
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=False),
+            mock.patch("ovid2.core.isolation.cleanup_stale_instances"),
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.SPARK_MODE", "local"),
+            mock.patch(
+                "ovid2.drivers.collector.collect_for_addresses", return_value=_empty_merged()
+            ),
+            mock.patch("ovid2.connections.disc_mounts.build_disc_mounts") as m_bdm,
+            mock.patch("ovid2.core.docker.submit_to_docker", return_value=0),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             copy_module.main(args)
         m_bdm.assert_not_called()
@@ -130,20 +138,24 @@ class TestCollectorIntegration:
         (tmp_path / "a").mkdir()
         args = _mk_args(extra_mounts=[f"{tmp_path / 'a'}:/explicit"])
 
-        with mock.patch("ovid2.core.docker.is_inside_docker", return_value=False), \
-             mock.patch("ovid2.core.isolation.cleanup_stale_instances"), \
-             mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.SPARK_MODE", "local"), \
-             mock.patch("ovid2.drivers.collector.collect_for_addresses",
-                        return_value=_empty_merged()) as m_col, \
-             mock.patch("ovid2.core.docker.submit_to_docker", return_value=0):
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=False),
+            mock.patch("ovid2.core.isolation.cleanup_stale_instances"),
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.SPARK_MODE", "local"),
+            mock.patch(
+                "ovid2.drivers.collector.collect_for_addresses", return_value=_empty_merged()
+            ) as m_col,
+            mock.patch("ovid2.core.docker.submit_to_docker", return_value=0),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             copy_module.main(args)
         _, kwargs = m_col.call_args
         assert kwargs["explicit_container_paths"] == ["/explicit"]
 
     def test_collector_mounts_reach_parsed_extra_mounts(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """Driver-side :class:`ExtraMount` values are reshaped to the tools shape.
 
@@ -153,6 +165,8 @@ class TestCollectorIntegration:
         """
         from ovid2.drivers.container import (
             ExtraMount as DriverMount,
+        )
+        from ovid2.drivers.container import (
             MergedRequirements,
         )
 
@@ -169,13 +183,14 @@ class TestCollectorIntegration:
         args = _mk_args()
         args.extra_mounts = None
 
-        with mock.patch("ovid2.core.docker.is_inside_docker", return_value=False), \
-             mock.patch("ovid2.core.isolation.cleanup_stale_instances"), \
-             mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.SPARK_MODE", "local"), \
-             mock.patch("ovid2.drivers.collector.collect_for_addresses",
-                        return_value=merged), \
-             mock.patch("ovid2.core.docker.submit_to_docker", return_value=0):
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=False),
+            mock.patch("ovid2.core.isolation.cleanup_stale_instances"),
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.SPARK_MODE", "local"),
+            mock.patch("ovid2.drivers.collector.collect_for_addresses", return_value=merged),
+            mock.patch("ovid2.core.docker.submit_to_docker", return_value=0),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             copy_module.main(args)
         assert len(args.parsed_extra_mounts) == 1
@@ -198,14 +213,14 @@ class TestRunHostModeAttributeBackfill:
         args = _mk_args()
         assert not hasattr(args, "workers")
 
-        with mock.patch("ovid2.core.docker.is_inside_docker", return_value=False), \
-             mock.patch("ovid2.core.isolation.cleanup_stale_instances"), \
-             mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.SPARK_MODE", "cluster"), \
-             mock.patch("ovid2.core.docker.submit_with_cluster",
-                        return_value=0) as m_swc, \
-             mock.patch("ovid2.core.docker.submit_to_docker",
-                        return_value=0) as m_std:
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=False),
+            mock.patch("ovid2.core.isolation.cleanup_stale_instances"),
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.SPARK_MODE", "cluster"),
+            mock.patch("ovid2.core.docker.submit_with_cluster", return_value=0) as m_swc,
+            mock.patch("ovid2.core.docker.submit_to_docker", return_value=0) as m_std,
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             rc = copy_module.main(args)
 
@@ -215,27 +230,34 @@ class TestRunHostModeAttributeBackfill:
         # The Namespace passed to submit_with_cluster must expose
         # workers — even though the copy argparse never defined it.
         passed_args = m_swc.call_args.args[0]
-        assert hasattr(passed_args, "workers"), \
+        assert hasattr(passed_args, "workers"), (
             "workers must be back-filled before submit_with_cluster"
-        assert passed_args.workers == 25, \
-            "default worker count must match the etl parser default"
+        )
+        assert passed_args.workers == 25, "default worker count must match the etl parser default"
 
     def test_backfills_all_etl_shape_attributes(self) -> None:
         """Every attribute ``build_docker_command`` reads must be set."""
         args = _mk_args()
         # None of these are set by the copy argparse.
-        for attr in ("workers", "transformations", "sf_database",
-                     "sf_account", "sf_schema", "input_address",
-                     "output_address"):
+        for attr in (
+            "workers",
+            "transformations",
+            "sf_database",
+            "sf_account",
+            "sf_schema",
+            "input_address",
+            "output_address",
+        ):
             assert not hasattr(args, attr), f"pre-condition: {attr} unset"
 
-        with mock.patch("ovid2.core.docker.is_inside_docker", return_value=False), \
-             mock.patch("ovid2.core.isolation.cleanup_stale_instances"), \
-             mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.SPARK_MODE", "cluster"), \
-             mock.patch("ovid2.core.docker.submit_with_cluster",
-                        return_value=0) as m_swc, \
-             mock.patch("ovid2.core.docker.submit_to_docker", return_value=0):
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=False),
+            mock.patch("ovid2.core.isolation.cleanup_stale_instances"),
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.SPARK_MODE", "cluster"),
+            mock.patch("ovid2.core.docker.submit_with_cluster", return_value=0) as m_swc,
+            mock.patch("ovid2.core.docker.submit_to_docker", return_value=0),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             copy_module.main(args)
 
@@ -255,13 +277,14 @@ class TestRunHostModeAttributeBackfill:
         """Non-cluster mode uses ``submit_to_docker`` — same contract."""
         args = _mk_args()
 
-        with mock.patch("ovid2.core.docker.is_inside_docker", return_value=False), \
-             mock.patch("ovid2.core.isolation.cleanup_stale_instances"), \
-             mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.SPARK_MODE", "local"), \
-             mock.patch("ovid2.core.docker.submit_with_cluster") as m_swc, \
-             mock.patch("ovid2.core.docker.submit_to_docker",
-                        return_value=0) as m_std:
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=False),
+            mock.patch("ovid2.core.isolation.cleanup_stale_instances"),
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.SPARK_MODE", "local"),
+            mock.patch("ovid2.core.docker.submit_with_cluster") as m_swc,
+            mock.patch("ovid2.core.docker.submit_to_docker", return_value=0) as m_std,
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             copy_module.main(args)
 
@@ -280,13 +303,14 @@ class TestRunHostModeAttributeBackfill:
         """
         args = _mk_args(workers=42)
 
-        with mock.patch("ovid2.core.docker.is_inside_docker", return_value=False), \
-             mock.patch("ovid2.core.isolation.cleanup_stale_instances"), \
-             mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.SPARK_MODE", "cluster"), \
-             mock.patch("ovid2.core.docker.submit_with_cluster",
-                        return_value=0) as m_swc, \
-             mock.patch("ovid2.core.docker.submit_to_docker", return_value=0):
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=False),
+            mock.patch("ovid2.core.isolation.cleanup_stale_instances"),
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.SPARK_MODE", "cluster"),
+            mock.patch("ovid2.core.docker.submit_with_cluster", return_value=0) as m_swc,
+            mock.patch("ovid2.core.docker.submit_to_docker", return_value=0),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             copy_module.main(args)
 
@@ -305,34 +329,71 @@ class TestExtraMountArgparseHook:
     def test_flag_is_repeatable(self, tmp_path: Path) -> None:
         (tmp_path / "a").mkdir()
         (tmp_path / "b").mkdir()
-        ns = self._parse([
-            "copy", "--from", "src", "--to", "dst",
-            "--pipeline", "p", "--batch_id", "1",
-            "--tables", "t1",
-            "--extra-mount", f"{tmp_path / 'a'}:/mnt_a",
-            "--extra-mount", f"{tmp_path / 'b'}:/mnt_b:ro",
-        ])
+        ns = self._parse(
+            [
+                "copy",
+                "--from",
+                "src",
+                "--to",
+                "dst",
+                "--pipeline",
+                "p",
+                "--batch_id",
+                "1",
+                "--tables",
+                "t1",
+                "--extra-mount",
+                f"{tmp_path / 'a'}:/mnt_a",
+                "--extra-mount",
+                f"{tmp_path / 'b'}:/mnt_b:ro",
+            ]
+        )
         assert ns.extra_mounts == [
             f"{tmp_path / 'a'}:/mnt_a",
             f"{tmp_path / 'b'}:/mnt_b:ro",
         ]
 
     def test_absent_flag_defaults_to_none(self) -> None:
-        ns = self._parse([
-            "copy", "--from", "src", "--to", "dst",
-            "--pipeline", "p", "--batch_id", "1", "--tables", "t1",
-        ])
+        ns = self._parse(
+            [
+                "copy",
+                "--from",
+                "src",
+                "--to",
+                "dst",
+                "--pipeline",
+                "p",
+                "--batch_id",
+                "1",
+                "--tables",
+                "t1",
+            ]
+        )
         assert ns.extra_mounts is None
 
     def test_main_parses_valid_specs_into_namespace(self, tmp_path: Path) -> None:
         (tmp_path / "out").mkdir()
-        ns = self._parse([
-            "copy", "--from", "src", "--to", "dst",
-            "--pipeline", "p", "--batch_id", "1", "--tables", "t1",
-            "--extra-mount", f"{tmp_path / 'out'}:/copy_out",
-        ])
-        with mock.patch("ovid2.core.docker.is_inside_docker", return_value=False), \
-             mock.patch.object(copy_module, "_run_host_mode", return_value=0):
+        ns = self._parse(
+            [
+                "copy",
+                "--from",
+                "src",
+                "--to",
+                "dst",
+                "--pipeline",
+                "p",
+                "--batch_id",
+                "1",
+                "--tables",
+                "t1",
+                "--extra-mount",
+                f"{tmp_path / 'out'}:/copy_out",
+            ]
+        )
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=False),
+            mock.patch.object(copy_module, "_run_host_mode", return_value=0),
+        ):
             rc = copy_module.main(ns)
         assert rc == 0
         assert len(ns.parsed_extra_mounts) == 1
@@ -340,33 +401,61 @@ class TestExtraMountArgparseHook:
         assert ns.parsed_extra_mounts[0].mode == "rw"
 
     def test_main_rejects_reserved_container_path(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
-        ns = self._parse([
-            "copy", "--from", "src", "--to", "dst",
-            "--pipeline", "p", "--batch_id", "1", "--tables", "t1",
-            "--extra-mount", f"{tmp_path}:/data",
-        ])
+        ns = self._parse(
+            [
+                "copy",
+                "--from",
+                "src",
+                "--to",
+                "dst",
+                "--pipeline",
+                "p",
+                "--batch_id",
+                "1",
+                "--tables",
+                "t1",
+                "--extra-mount",
+                f"{tmp_path}:/data",
+            ]
+        )
         with mock.patch("ovid2.core.docker.is_inside_docker", return_value=False):
             rc = copy_module.main(ns)
         assert rc == 2
         assert "reserved" in capsys.readouterr().err
 
     def test_main_rejects_missing_host_path(
-        self, capsys: pytest.CaptureFixture[str],
+        self,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
-        ns = self._parse([
-            "copy", "--from", "src", "--to", "dst",
-            "--pipeline", "p", "--batch_id", "1", "--tables", "t1",
-            "--extra-mount", "/definitely/does/not/exist:/copy_out",
-        ])
+        ns = self._parse(
+            [
+                "copy",
+                "--from",
+                "src",
+                "--to",
+                "dst",
+                "--pipeline",
+                "p",
+                "--batch_id",
+                "1",
+                "--tables",
+                "t1",
+                "--extra-mount",
+                "/definitely/does/not/exist:/copy_out",
+            ]
+        )
         with mock.patch("ovid2.core.docker.is_inside_docker", return_value=False):
             rc = copy_module.main(ns)
         assert rc == 2
         assert "does not exist" in capsys.readouterr().err
 
     def test_container_mode_skips_host_validation(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """Inside the container the mount is already applied — don't re-validate.
 
@@ -375,14 +464,27 @@ class TestExtraMountArgparseHook:
         container (the whole point is that the operator supplied a
         host path that the ETL image can't see).
         """
-        ns = self._parse([
-            "copy", "--from", "src", "--to", "dst",
-            "--pipeline", "p", "--batch_id", "1", "--tables", "t1",
-            "--extra-mount", "/host-only-path:/copy_out",
-        ])
-        with mock.patch("ovid2.core.docker.is_inside_docker", return_value=True), \
-             mock.patch.object(copy_module, "_run_container_mode",
-                               return_value=0) as m_cm:
+        ns = self._parse(
+            [
+                "copy",
+                "--from",
+                "src",
+                "--to",
+                "dst",
+                "--pipeline",
+                "p",
+                "--batch_id",
+                "1",
+                "--tables",
+                "t1",
+                "--extra-mount",
+                "/host-only-path:/copy_out",
+            ]
+        )
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=True),
+            mock.patch.object(copy_module, "_run_container_mode", return_value=0) as m_cm,
+        ):
             rc = copy_module.main(ns)
         assert rc == 0
         m_cm.assert_called_once()
@@ -405,8 +507,7 @@ class TestExtraMountDockerEmission:
         with mock.patch("ovid2.core.docker.SPARK_MODE", "local"):
             cmd = build_docker_command(args, _instance())
 
-        assert f"{tmp_path}:/copy_out:rw" in cmd, \
-            f"extra mount missing from docker argv: {cmd}"
+        assert f"{tmp_path}:/copy_out:rw" in cmd, f"extra mount missing from docker argv: {cmd}"
         # Sanity: the standard mounts are still there.
         assert any(":/data:rw" in tok for tok in cmd)
         assert any(":/app" in tok for tok in cmd)
@@ -445,8 +546,9 @@ class TestExtraMountDockerEmission:
             cmd = build_docker_command(args, _instance())
 
         # Auto-mount now applied to ETL too.
-        assert any(":/auto_mount:rw" in tok for tok in cmd), \
+        assert any(":/auto_mount:rw" in tok for tok in cmd), (
             f"ETL must honour parsed_extra_mounts for disc auto-mount: {cmd}"
+        )
         # But /data is still :ro on the etl path — the read-only
         # invariant is preserved.
         data_mounts = [tok for tok in cmd if ":/data:" in tok]
@@ -488,13 +590,16 @@ class TestTableSpecWiring:
         args = _mk_args(tables=["HASH_TOKEN=*datavant_person_tokens*"])
         args.extra_mounts = None
 
-        with mock.patch("ovid2.core.docker.is_inside_docker", return_value=False), \
-             mock.patch("ovid2.core.isolation.cleanup_stale_instances"), \
-             mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.SPARK_MODE", "local"), \
-             mock.patch("ovid2.drivers.collector.collect_for_addresses",
-                        return_value=_empty_merged()), \
-             mock.patch("ovid2.core.docker.submit_to_docker", return_value=0):
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=False),
+            mock.patch("ovid2.core.isolation.cleanup_stale_instances"),
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.SPARK_MODE", "local"),
+            mock.patch(
+                "ovid2.drivers.collector.collect_for_addresses", return_value=_empty_merged()
+            ),
+            mock.patch("ovid2.core.docker.submit_to_docker", return_value=0),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             copy_module.main(args)
 
@@ -504,7 +609,8 @@ class TestTableSpecWiring:
         assert spec.file_name == "*datavant_person_tokens*"
 
     def test_main_rejects_malformed_spec(
-        self, capsys: pytest.CaptureFixture[str],
+        self,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         args = _mk_args(tables=["HASH_TOKEN=", "OK"])
         args.extra_mounts = None
@@ -516,19 +622,23 @@ class TestTableSpecWiring:
         assert "empty SOURCE" in capsys.readouterr().err
 
     def test_container_mode_read_uses_file_name_write_uses_table_name(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """Read side must receive ``file_name``; write side ``table_name``."""
         args = _mk_args(tables=["HASH_TOKEN=*datavant_person_tokens*"])
         # Populate ``_resolved_tables`` the way ``main`` would.
         from ovid2.tools.table_specs import parse_table_specs
+
         args._resolved_tables = parse_table_specs(args.tables)
 
-        with mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.WORK_DIR", tmp_path), \
-             mock.patch("ovid2.drivers.registry.driver_from_address") as m_df, \
-             mock.patch("ovid2.core.loaders.load_engine") as m_engine, \
-             mock.patch("ovid2.display.bus.JsonlEventBus"):
+        with (
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.WORK_DIR", tmp_path),
+            mock.patch("ovid2.drivers.registry.driver_from_address") as m_df,
+            mock.patch("ovid2.core.loaders.load_engine") as m_engine,
+            mock.patch("ovid2.display.bus.JsonlEventBus"),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             src = mock.MagicMock()
             src.type_name = "disc"
@@ -540,6 +650,7 @@ class TestTableSpecWiring:
             # Route through the real SparkEngineStager so pass-through
             # semantics are exercised (as they would be in production).
             from ovid2.core.engines.stager import SparkEngineStager
+
             m_engine.return_value.get_stager.return_value = SparkEngineStager(
                 m_engine.return_value,
             )
@@ -556,18 +667,22 @@ class TestTableSpecWiring:
         assert write_args[4] == "HASH_TOKEN"
 
     def test_container_mode_bare_name_defaults_source_to_logical(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """Legacy invocation (single-field --tables entries) unchanged."""
         args = _mk_args(tables=["DEMOGRAPHIC"])
         from ovid2.tools.table_specs import parse_table_specs
+
         args._resolved_tables = parse_table_specs(args.tables)
 
-        with mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.WORK_DIR", tmp_path), \
-             mock.patch("ovid2.drivers.registry.driver_from_address") as m_df, \
-             mock.patch("ovid2.core.loaders.load_engine") as m_engine, \
-             mock.patch("ovid2.display.bus.JsonlEventBus"):
+        with (
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.WORK_DIR", tmp_path),
+            mock.patch("ovid2.drivers.registry.driver_from_address") as m_df,
+            mock.patch("ovid2.core.loaders.load_engine") as m_engine,
+            mock.patch("ovid2.display.bus.JsonlEventBus"),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             src = mock.MagicMock()
             src.type_name = "disc"
@@ -577,6 +692,7 @@ class TestTableSpecWiring:
             m_df.side_effect = [src, dst]
             m_engine.return_value.get_session.return_value = "session"
             from ovid2.core.engines.stager import SparkEngineStager
+
             m_engine.return_value.get_stager.return_value = SparkEngineStager(
                 m_engine.return_value,
             )
@@ -589,17 +705,21 @@ class TestTableSpecWiring:
         assert write_args[4] == "DEMOGRAPHIC"
 
     def test_container_mode_case_preserved_both_sides(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         args = _mk_args(tables=["hash_token=HASH_TOKEN.csv", "ENCOUNTER"])
         from ovid2.tools.table_specs import parse_table_specs
+
         args._resolved_tables = parse_table_specs(args.tables)
 
-        with mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.WORK_DIR", tmp_path), \
-             mock.patch("ovid2.drivers.registry.driver_from_address") as m_df, \
-             mock.patch("ovid2.core.loaders.load_engine") as m_engine, \
-             mock.patch("ovid2.display.bus.JsonlEventBus"):
+        with (
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.WORK_DIR", tmp_path),
+            mock.patch("ovid2.drivers.registry.driver_from_address") as m_df,
+            mock.patch("ovid2.core.loaders.load_engine") as m_engine,
+            mock.patch("ovid2.display.bus.JsonlEventBus"),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             src = mock.MagicMock()
             src.type_name = "disc"
@@ -609,6 +729,7 @@ class TestTableSpecWiring:
             m_df.side_effect = [src, dst]
             m_engine.return_value.get_session.return_value = "session"
             from ovid2.core.engines.stager import SparkEngineStager
+
             m_engine.return_value.get_stager.return_value = SparkEngineStager(
                 m_engine.return_value,
             )
@@ -625,18 +746,21 @@ class TestTableSpecWiring:
         assert sorted(read_files) == sorted(["HASH_TOKEN.csv", "ENCOUNTER"])
 
     def test_container_mode_expands_all_for_expandable_source(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """``--tables all`` expands via ``source.expand_all_tables()``."""
         args = _mk_args(tables=["all"])
         # ``main`` leaves ``_resolved_tables`` None for the sentinel.
         args._resolved_tables = None
 
-        with mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.WORK_DIR", tmp_path), \
-             mock.patch("ovid2.drivers.registry.driver_from_address") as m_df, \
-             mock.patch("ovid2.core.loaders.load_engine") as m_engine, \
-             mock.patch("ovid2.display.bus.JsonlEventBus"):
+        with (
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.WORK_DIR", tmp_path),
+            mock.patch("ovid2.drivers.registry.driver_from_address") as m_df,
+            mock.patch("ovid2.core.loaders.load_engine") as m_engine,
+            mock.patch("ovid2.display.bus.JsonlEventBus"),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             src = mock.MagicMock()
             src.type_name = "access"
@@ -647,6 +771,7 @@ class TestTableSpecWiring:
             m_df.side_effect = [src, dst]
             m_engine.return_value.get_session.return_value = "session"
             from ovid2.core.engines.stager import SparkEngineStager
+
             m_engine.return_value.get_stager.return_value = SparkEngineStager(
                 m_engine.return_value,
             )
@@ -661,17 +786,20 @@ class TestTableSpecWiring:
         assert sorted(write_names) == sorted(["Drugs", "Ndc", "Rxcui"])
 
     def test_container_mode_all_rejected_when_source_cannot_expand(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """A non-expandable source + ``all`` raises rather than copying nothing."""
         args = _mk_args(tables=["all"])
         args._resolved_tables = None
 
-        with mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.WORK_DIR", tmp_path), \
-             mock.patch("ovid2.drivers.registry.driver_from_address") as m_df, \
-             mock.patch("ovid2.core.loaders.load_engine") as m_engine, \
-             mock.patch("ovid2.display.bus.JsonlEventBus"):
+        with (
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.WORK_DIR", tmp_path),
+            mock.patch("ovid2.drivers.registry.driver_from_address") as m_df,
+            mock.patch("ovid2.core.loaders.load_engine") as m_engine,
+            mock.patch("ovid2.display.bus.JsonlEventBus"),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             src = mock.MagicMock()
             src.type_name = "disc"
@@ -681,6 +809,7 @@ class TestTableSpecWiring:
             m_df.side_effect = [src, dst]
             m_engine.return_value.get_session.return_value = "session"
             from ovid2.core.engines.stager import SparkEngineStager
+
             m_engine.return_value.get_stager.return_value = SparkEngineStager(
                 m_engine.return_value,
             )
@@ -708,10 +837,12 @@ class TestConcurrentCopy:
 
     def _specs(self, names: list[str]) -> Any:
         from ovid2.tools.table_specs import TableSpec
+
         return [TableSpec(table_name=n, file_name=n) for n in names]
 
     def test_all_tables_copied_under_concurrency(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "4")
         stager = self._stager()
@@ -721,7 +852,11 @@ class TestConcurrentCopy:
         args = _mk_args()
 
         failures = copy_module._copy_tables_concurrently(
-            specs, stager, src, dst, args,
+            specs,
+            stager,
+            src,
+            dst,
+            args,
         )
 
         assert failures == 0
@@ -732,14 +867,21 @@ class TestConcurrentCopy:
         assert persisted == {f"t{i}" for i in range(20)}
 
     def test_concurrent_failures_are_counted_not_fatal(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """A failing table increments the count; others still copy."""
         monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "4")
         stager = self._stager()
 
-        def _persist(df: Any, driver: Any, pipeline: str, batch_id: str,
-                     table_name: str, delimiter: Any = None) -> None:
+        def _persist(
+            df: Any,
+            driver: Any,
+            pipeline: str,
+            batch_id: str,
+            table_name: str,
+            delimiter: Any = None,
+        ) -> None:
             if table_name in {"t3", "t7"}:
                 raise RuntimeError(f"boom {table_name}")
 
@@ -750,7 +892,11 @@ class TestConcurrentCopy:
         args = _mk_args()
 
         failures = copy_module._copy_tables_concurrently(
-            specs, stager, src, dst, args,
+            specs,
+            stager,
+            src,
+            dst,
+            args,
         )
 
         assert failures == 2
@@ -758,7 +904,8 @@ class TestConcurrentCopy:
         assert stager.persist.call_count == 10
 
     def test_concurrency_one_uses_serial_path(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Concurrency 1 keeps the original thread-free serial behaviour."""
         monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "1")
@@ -770,7 +917,11 @@ class TestConcurrentCopy:
 
         with mock.patch("ovid2.tools.copy.ThreadPoolExecutor") as m_pool:
             failures = copy_module._copy_tables_concurrently(
-                specs, stager, src, dst, args,
+                specs,
+                stager,
+                src,
+                dst,
+                args,
             )
 
         assert failures == 0
@@ -781,7 +932,8 @@ class TestConcurrentCopy:
         assert persisted == ["a", "b", "c"]
 
     def test_concurrency_capped_at_table_count(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """A single table caps concurrency to 1 → serial, no pool built."""
         monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "32")
@@ -796,26 +948,22 @@ class TestConcurrentCopy:
         m_pool.assert_not_called()
 
     def test_env_override_parsing(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """The concurrency knob honours the env var and clamps sanely."""
         monkeypatch.delenv("OVID2_COPY_TABLE_CONCURRENCY", raising=False)
-        assert (
-            copy_module._copy_table_concurrency()
-            == copy_module._DEFAULT_COPY_TABLE_CONCURRENCY
-        )
+        assert copy_module._copy_table_concurrency() == copy_module._DEFAULT_COPY_TABLE_CONCURRENCY
         monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "16")
         assert copy_module._copy_table_concurrency() == 16
         monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "0")
         assert copy_module._copy_table_concurrency() == 1
         monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "not-a-number")
-        assert (
-            copy_module._copy_table_concurrency()
-            == copy_module._DEFAULT_COPY_TABLE_CONCURRENCY
-        )
+        assert copy_module._copy_table_concurrency() == copy_module._DEFAULT_COPY_TABLE_CONCURRENCY
 
     def test_emits_per_table_events_for_live_console(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Each copied table must emit table.started + table.completed.
 
@@ -827,8 +975,14 @@ class TestConcurrentCopy:
         monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "4")
         stager = self._stager()
 
-        def _persist(df: Any, driver: Any, pipeline: str, batch_id: str,
-                     table_name: str, delimiter: Any = None) -> None:
+        def _persist(
+            df: Any,
+            driver: Any,
+            pipeline: str,
+            batch_id: str,
+            table_name: str,
+            delimiter: Any = None,
+        ) -> None:
             if table_name == "t2":
                 raise RuntimeError("boom t2")
 
@@ -843,7 +997,13 @@ class TestConcurrentCopy:
         bus.emit.side_effect = lambda ev: events.append(ev)
 
         failures = copy_module._copy_tables_concurrently(
-            specs, stager, src, dst, args, bus=bus, instance_id="inst-1",
+            specs,
+            stager,
+            src,
+            dst,
+            args,
+            bus=bus,
+            instance_id="inst-1",
         )
 
         assert failures == 1
@@ -857,7 +1017,8 @@ class TestConcurrentCopy:
         assert by_kind.get("table.failed") == {"t2"}
 
     def test_no_bus_means_no_events(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Omitting the bus keeps the loop event-free (back-compat)."""
         monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "2")
@@ -865,10 +1026,154 @@ class TestConcurrentCopy:
         specs = self._specs(["a", "b"])
         # Should not raise despite no bus.
         failures = copy_module._copy_tables_concurrently(
-            specs, stager, mock.MagicMock(), mock.MagicMock(), _mk_args(),
+            specs,
+            stager,
+            mock.MagicMock(),
+            mock.MagicMock(),
+            _mk_args(),
         )
         assert failures == 0
 
 
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])
+
+
+class TestLargestFirstAndFolderExpansion:
+    """2026-10-23: largest-first scheduling + folder-source ``all`` expansion."""
+
+    def _run(
+        self,
+        tmp_path: Path,
+        src: Any,
+        args: argparse.Namespace,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> tuple[int, Any]:
+        monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "1")  # deterministic order
+        monkeypatch.delenv("OVID2_COPY_ORDER", raising=False)
+        with (
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.WORK_DIR", tmp_path),
+            mock.patch("ovid2.drivers.registry.driver_from_address") as m_df,
+            mock.patch("ovid2.core.loaders.load_engine") as m_engine,
+            mock.patch("ovid2.display.bus.JsonlEventBus"),
+        ):
+            m_inst.return_value.instance_id = "20261023-000000-abcdef"
+            dst = mock.MagicMock()
+            dst.type_name = "disc"
+            m_df.side_effect = [src, dst]
+            from ovid2.core.engines.stager import SparkEngineStager
+
+            m_engine.return_value.get_stager.return_value = SparkEngineStager(
+                m_engine.return_value,
+            )
+            rc = copy_module._run_container_mode(args)
+        return rc, dst
+
+    def test_tables_start_largest_first(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        args = _mk_args(tables=["demographic", "harvest", "lab_result_cm", "obs_clin"])
+        args._resolved_tables = None
+        src = mock.MagicMock()
+        src.type_name = "snowflake"
+        src.table_sizes.return_value = {"demographic": 10, "lab_result_cm": 900, "obs_clin": 400}
+        rc, _dst = self._run(tmp_path, src, args, monkeypatch)
+        assert rc == 0
+        read_order = [c.args[3] for c in src.read.call_args_list]
+        assert read_order == ["lab_result_cm", "obs_clin", "demographic", "harvest"]
+
+    def test_as_given_env_keeps_order(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        args = _mk_args(tables=["a", "b"])
+        args._resolved_tables = None
+        src = mock.MagicMock()
+        src.type_name = "snowflake"
+        src.table_sizes.return_value = {"b": 99}
+        monkeypatch.setenv("OVID2_COPY_ORDER", "as_given")
+        with mock.patch.dict("os.environ", {"OVID2_COPY_ORDER": "as_given"}):
+            monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "1")
+            with (
+                mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+                mock.patch("ovid2.config.settings.WORK_DIR", tmp_path),
+                mock.patch("ovid2.drivers.registry.driver_from_address") as m_df,
+                mock.patch("ovid2.core.loaders.load_engine") as m_engine,
+                mock.patch("ovid2.display.bus.JsonlEventBus"),
+            ):
+                m_inst.return_value.instance_id = "20261023-000000-abcdef"
+                m_df.side_effect = [src, mock.MagicMock()]
+                from ovid2.core.engines.stager import SparkEngineStager
+
+                m_engine.return_value.get_stager.return_value = SparkEngineStager(
+                    m_engine.return_value,
+                )
+                copy_module._run_container_mode(args)
+        assert [c.args[3] for c in src.read.call_args_list] == ["a", "b"]
+        src.table_sizes.assert_not_called()
+
+    def test_folder_all_expansion_splits_logical_and_source(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Folder sources return ``stem=file`` specs → write stem, read file."""
+        args = _mk_args(tables=["all"])
+        args._resolved_tables = None
+        src = mock.MagicMock()
+        src.type_name = "disc"
+        src.expand_all_tables.return_value = ["demographic=demographic.csv", "vital=vital.csv"]
+        src.table_sizes.return_value = {"vital.csv": 50, "demographic.csv": 5}
+        rc, dst = self._run(tmp_path, src, args, monkeypatch)
+        assert rc == 0
+        src.expand_all_tables.assert_called_once_with(pipeline="demo", batch_id="20260610")
+        assert [c.args[3] for c in src.read.call_args_list] == ["vital.csv", "demographic.csv"]
+        assert [c.args[4] for c in dst.write.call_args_list] == ["vital", "demographic"]
+
+
+class TestSnowparkSkipsSparkCluster:
+    """A non-Spark engine (Snowpark) runs one driver container, no cluster."""
+
+    def _run(self, engine_obj: Any, spark_mode: str = "cluster") -> tuple[Any, Any]:
+        args = _mk_args(engine="snowpark")
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=False),
+            mock.patch("ovid2.core.isolation.cleanup_stale_instances"),
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.SPARK_MODE", spark_mode),
+            mock.patch("ovid2.core.loaders.load_engine", return_value=engine_obj),
+            mock.patch("ovid2.drivers.engine_compat.assert_engine_supports_drivers"),
+            mock.patch(
+                "ovid2.drivers.collector.collect_for_addresses", return_value=_empty_merged()
+            ),
+            mock.patch("ovid2.core.docker.submit_with_cluster", return_value=0) as m_swc,
+            mock.patch("ovid2.core.docker.submit_to_docker", return_value=0) as m_std,
+        ):
+            m_inst.return_value.instance_id = "20261023-000000-abcdef"
+            assert copy_module.main(args) == 0
+        return m_swc, m_std
+
+    def test_snowpark_engine_never_starts_cluster(self) -> None:
+        m_swc, m_std = self._run(mock.Mock(session_is_spark=False))
+        m_swc.assert_not_called()
+        m_std.assert_called_once()
+        assert m_std.call_args.args[0].no_spark_cluster is True
+
+    def test_spark_engine_still_uses_cluster(self) -> None:
+        m_swc, m_std = self._run(mock.Mock(session_is_spark=True))
+        m_swc.assert_called_once()
+        m_std.assert_not_called()
+
+    def test_docker_argv_has_no_cluster_network_for_snowpark(self) -> None:
+        """The generated ``docker run`` argv must not join a Spark network."""
+        from ovid2.core.docker import build_docker_command
+
+        args = _mk_args(engine="snowpark")
+        args.command = "tools copy"
+        args.input_address = args.from_address
+        args.output_address = args.to_address
+        args.no_spark_cluster = True
+        inst = _instance()
+        with mock.patch("ovid2.core.docker.SPARK_MODE", "cluster"):
+            cmd = build_docker_command(args, inst)
+        assert "--network" not in cmd
+        assert not any("spark://" in tok for tok in cmd)
+        assert cmd[-cmd[::-1].index("--engine") :][0] == "snowpark"

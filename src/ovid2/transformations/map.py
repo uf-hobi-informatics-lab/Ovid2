@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import importlib
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ovid2.mappers.engine import run as run_spec
 from ovid2.mappers.spec import MapperSpecNotFoundError, load_spec
@@ -43,7 +43,7 @@ _LEGACY_MAPPER_TYPE_MODULES: dict[str, str] = {
 class MapTransformer(BaseTransformer):
     """Apply the declarative mapper spec (or a legacy mapper class)."""
 
-    def transform(self, df: "DataFrame", context: dict[str, Any]) -> "DataFrame":
+    def transform(self, df: DataFrame, context: dict[str, Any]) -> DataFrame:
         """Apply the mapper for ``context['table_name']``.
 
         Args:
@@ -75,7 +75,7 @@ class MapTransformer(BaseTransformer):
         legacy = self._load_legacy_mapper(table_name, pipeline)
         if legacy is not None:
             mapper, dictionaries = legacy
-            return mapper.map(df, dictionaries, pipeline)
+            return cast("DataFrame", mapper.map(df, dictionaries, pipeline))
 
         # 3) No mapper — leave the DataFrame untouched.
         logger.info(

@@ -160,14 +160,12 @@ def test_delete_removes_config(isolated_xdg: Path) -> None:
 def test_delete_refuses_when_referenced_by_settings(isolated_xdg: Path) -> None:
     from ovid2.web.services import engines_svc, settings_svc
 
-    engines_svc.write_engine(
-        "referenced", EngineWrite(type="pyspark", args={}, secrets={})
-    )
+    engines_svc.write_engine("referenced", EngineWrite(type="pyspark", args={}, secrets={}))
     settings = settings_svc.get_settings()
     settings.defaults.engine = "referenced"
     settings_svc.save_settings(settings)
 
-    with pytest.raises(engines_svc.EngineError, match="settings.defaults.engine"):
+    with pytest.raises(engines_svc.EngineError, match=r"settings\.defaults\.engine"):
         engines_svc.delete_engine("referenced")
 
 
@@ -250,9 +248,7 @@ def test_test_engine_dispatches_pyspark_to_docker(
     """The ``pyspark`` engine is probed inside the Docker image, not on the host."""
     from ovid2.web.services import engines_svc
 
-    engines_svc.write_engine(
-        "prod_pyspark", EngineWrite(type="pyspark", args={}, secrets={})
-    )
+    engines_svc.write_engine("prod_pyspark", EngineWrite(type="pyspark", args={}, secrets={}))
 
     calls: list[list[str]] = []
 
@@ -321,8 +317,7 @@ def test_test_engine_dispatches_snowpark_to_host(
     def _script(argv, **_kwargs):
         calls.append(list(argv))
         return (
-            '{"ok": true, "code": "ok", "message": "Snowpark session responded", '
-            '"detail": {}}\n',
+            '{"ok": true, "code": "ok", "message": "Snowpark session responded", "detail": {}}\n',
             "",
             0,
         )
@@ -387,9 +382,7 @@ def test_test_engine_returns_no_image_when_image_missing_locally(
     """
     from ovid2.web.services import engines_svc
 
-    engines_svc.write_engine(
-        "prod_pyspark", EngineWrite(type="pyspark", args={}, secrets={})
-    )
+    engines_svc.write_engine("prod_pyspark", EngineWrite(type="pyspark", args={}, secrets={}))
 
     ran: list[list[str]] = []
 
@@ -420,9 +413,7 @@ def test_test_engine_returns_no_image_when_docker_missing(
     """Same clean error when Docker itself is not installed on the host."""
     from ovid2.web.services import engines_svc
 
-    engines_svc.write_engine(
-        "prod_pyspark", EngineWrite(type="pyspark", args={}, secrets={})
-    )
+    engines_svc.write_engine("prod_pyspark", EngineWrite(type="pyspark", args={}, secrets={}))
 
     def _script(argv, **_kwargs):  # pragma: no cover — should not be called
         raise AssertionError(f"subprocess.run should not run; argv={argv!r}")
@@ -522,9 +513,7 @@ def test_test_engine_timeout_returns_timeout_code(
 
     from ovid2.web.services import engines_svc
 
-    engines_svc.write_engine(
-        "prod_pyspark", EngineWrite(type="pyspark", args={}, secrets={})
-    )
+    engines_svc.write_engine("prod_pyspark", EngineWrite(type="pyspark", args={}, secrets={}))
 
     calls: list[list[str]] = []
 

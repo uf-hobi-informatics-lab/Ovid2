@@ -32,8 +32,7 @@ class Args(BaseModel):
     show_hidden: bool | None = Field(
         default=None,
         description=(
-            "Include dot-entries. Falls back to "
-            "``settings.fs_picker.show_hidden`` when omitted."
+            "Include dot-entries. Falls back to ``settings.fs_picker.show_hidden`` when omitted."
         ),
     )
 

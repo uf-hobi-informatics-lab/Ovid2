@@ -45,8 +45,13 @@ LLM_PRINCIPAL_PREFIX = "llm:"
 #: Token prefix — lets :func:`lookup` skip unrelated bearer tokens cheaply.
 _TOKEN_PREFIX = "ovllm_"  # noqa: S105 - public prefix, not a secret
 
-_RANK = {Role.PENDING: 0, Role.GUEST: 1, Role.VIEWER: 2,
-         Role.PIPELINE_OPERATOR: 3, Role.SYSTEM_ADMIN: 4}
+_RANK = {
+    Role.PENDING: 0,
+    Role.GUEST: 1,
+    Role.VIEWER: 2,
+    Role.PIPELINE_OPERATOR: 3,
+    Role.SYSTEM_ADMIN: 4,
+}
 
 _LOCK = threading.Lock()
 _GRANTS: dict[str, LlmGrant] = {}
@@ -96,8 +101,12 @@ def mint(user_id: str, role: Role, *, email: str | None, ttl_seconds: float) -> 
     """
     token = _TOKEN_PREFIX + secrets.token_urlsafe(32)
     now = time.monotonic()
-    grant = LlmGrant(user_id=user_id, role=cap_role(role), email=email,
-                     expires_at=now + max(1.0, float(ttl_seconds)))
+    grant = LlmGrant(
+        user_id=user_id,
+        role=cap_role(role),
+        email=email,
+        expires_at=now + max(1.0, float(ttl_seconds)),
+    )
     with _LOCK:
         _purge(now)
         _GRANTS[_digest(token)] = grant

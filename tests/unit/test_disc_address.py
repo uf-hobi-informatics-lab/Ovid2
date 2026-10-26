@@ -48,11 +48,8 @@ def test_read_csv_sets_quote_and_whitespace_options(tmp_path: Path) -> None:
     ``AnalysisException: Column 'patid' does not exist`` because the
     real column is ``" patid"`` or ``"\\"patid\\""``.
     """
-    csv_file = tmp_path / "pipeline" / "20260610" / "external_meds.csv"
-    csv_file.parent.mkdir(parents=True)
-    csv_file.write_text(
-        '"externalmedid", "patid"\n1, p1\n', encoding="utf-8"
-    )
+    csv_file = tmp_path / "external_meds.csv"
+    csv_file.write_text('"externalmedid", "patid"\n1, p1\n', encoding="utf-8")
     addr = DiscAddress({"path": str(tmp_path), "format": "csv"})
 
     spark, reader, _ = _make_spark()
@@ -69,8 +66,7 @@ def test_read_csv_sets_quote_and_whitespace_options(tmp_path: Path) -> None:
 @pytest.mark.unit
 def test_read_csv_passes_detected_delimiter(tmp_path: Path) -> None:
     """The delimiter option is populated from either the caller or auto-detect."""
-    csv_file = tmp_path / "pipeline" / "20260610" / "sample.csv"
-    csv_file.parent.mkdir(parents=True)
+    csv_file = tmp_path / "sample.csv"
     csv_file.write_text("a|b|c\n1|2|3\n", encoding="utf-8")
     addr = DiscAddress({"path": str(tmp_path), "format": "csv"})
 
@@ -84,8 +80,7 @@ def test_read_csv_passes_detected_delimiter(tmp_path: Path) -> None:
 @pytest.mark.unit
 def test_read_parquet_skips_csv_options(tmp_path: Path) -> None:
     """Parquet reads do not need quote/whitespace options."""
-    parquet_path = tmp_path / "pipeline" / "20260610" / "sample.parquet"
-    parquet_path.parent.mkdir(parents=True)
+    parquet_path = tmp_path / "sample.parquet"
     parquet_path.write_bytes(b"PAR1")  # not a real parquet, but the read path is mocked
     addr = DiscAddress({"path": str(tmp_path), "format": "parquet"})
 
@@ -99,153 +94,71 @@ def test_read_parquet_skips_csv_options(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------
-# resolve_read_path — layout resolution (pipelined + flat fallback, Option 1)
+# resolve_read_path — the address is the exact location (no pipeline/batch)
 # --------------------------------------------------------------------------
 
 
 @pytest.mark.unit
-def test_resolve_read_path_pipelined_layout_wins(tmp_path: Path) -> None:
-    """The primary ``{root}/{pipeline}/{batch}`` layout resolves first."""
-    from ovid2.drivers.disc.spark import resolve_read_path
-
-    target = tmp_path / "acme_from_disc" / "20260610" / "person.csv"
-    target.parent.mkdir(parents=True)
-    target.write_text("a\n1\n", encoding="utf-8")
-
-    resolved = resolve_read_path(
-        str(tmp_path), "acme_from_disc", "20260610", "person.csv"
-    )
-    assert resolved == str(target)
-
-
-@pytest.mark.unit
-def test_resolve_read_path_case_insensitive_pipeline_dir(tmp_path: Path) -> None:
-    """Upper-cased partner dir matches a lower-cased pipeline name."""
-    from ovid2.drivers.disc.spark import resolve_read_path
-
-    target = tmp_path / "ACME" / "20260610" / "person.csv"
-    target.parent.mkdir(parents=True)
-    target.write_text("a\n1\n", encoding="utf-8")
-
-    resolved = resolve_read_path(str(tmp_path), "acme", "20260610", "person.csv")
-    assert resolved == str(target)
-
-
-@pytest.mark.unit
-def test_resolve_read_path_flat_fallback(tmp_path: Path) -> None:
-    """When no pipeline-name dir matches, fall back to ``{root}/{batch}``.
-
-    Regression: ACME 20260610 was delivered directly under
-    ``/data/inboxarchive/ACME/20260610/`` (the disc root already points at
-    the partner dir ``ACME``) while the pipeline is named ``acme_from_disc``.
-    The pipelined layout ``.../ACME/acme_from_disc/20260610/`` does not
-    exist, so resolution must fall back to the flat batch dir.
-    """
-    from ovid2.drivers.disc.spark import resolve_read_path
-
-    target = tmp_path / "20260610" / "person.csv"
-    target.parent.mkdir(parents=True)
-    target.write_text("a\n1\n", encoding="utf-8")
-
-    resolved = resolve_read_path(
-        str(tmp_path), "acme_from_disc", "20260610", "person.csv"
-    )
-    assert resolved == str(target)
-
-
-@pytest.mark.unit
-def test_resolve_read_path_flat_fallback_glob(tmp_path: Path) -> None:
-    """The flat fallback honours glob patterns just like the primary layout."""
-    from ovid2.drivers.disc.spark import resolve_read_path
-
-    target = tmp_path / "20260610" / "datavant_person_tokens"
-    target.parent.mkdir(parents=True)
-    target.write_text("a\n1\n", encoding="utf-8")
-
-    resolved = resolve_read_path(
-        str(tmp_path), "acme_from_disc", "20260610", "*datavant_person_tokens*"
-    )
-    assert resolved == str(target)
-
-
-@pytest.mark.unit
-def test_resolve_read_path_empty_pipeline_synthetic(tmp_path: Path) -> None:
-    """Empty pipeline/batch collapse to ``{root}/{basename}`` (stager path).
-
-    ``core.pipeline`` builds a synthetic disc driver rooted at a file's
-    parent and calls ``resolve_read_path(parent, "", "", basename)``. The
-    flat fallback must not regress this: an empty pipeline segment already
-    collapses via ``os.path.join``.
-    """
+def test_resolve_read_path_reads_directly_under_address(tmp_path: Path) -> None:
+    """Files resolve directly under the address directory."""
     from ovid2.drivers.disc.spark import resolve_read_path
 
     target = tmp_path / "person.csv"
     target.write_text("a\n1\n", encoding="utf-8")
 
-    resolved = resolve_read_path(str(tmp_path), "", "", "person.csv")
-    assert resolved == str(target)
+    assert resolve_read_path(str(tmp_path), "person.csv") == str(target)
 
 
 @pytest.mark.unit
-def test_resolve_read_path_missing_raises_naming_both_layouts(tmp_path: Path) -> None:
-    """Both layouts missing → FileNotFoundError naming both attempts."""
+def test_resolve_read_path_never_descends_into_pipeline_or_batch(tmp_path: Path) -> None:
+    """A ``{pipeline}/{batch}`` sub-tree is NOT searched — the address is exact."""
     from ovid2.drivers.disc.spark import resolve_read_path
 
-    with pytest.raises(FileNotFoundError) as excinfo:
-        resolve_read_path(str(tmp_path), "acme_from_disc", "20260610", "person.csv")
+    nested = tmp_path / "acme" / "20260610" / "person.csv"
+    nested.parent.mkdir(parents=True)
+    nested.write_text("a\n1\n", encoding="utf-8")
 
-    message = str(excinfo.value)
-    assert "acme_from_disc" in message
-    assert "flat layout" in message
-    assert f"{tmp_path}/20260610/" in message
+    with pytest.raises(FileNotFoundError):
+        resolve_read_path(str(tmp_path), "person.csv")
+    # Pointing the address at the batch folder itself is how it is read.
+    assert resolve_read_path(str(nested.parent), "person.csv") == str(nested)
 
 
 @pytest.mark.unit
-def test_resolve_read_path_root_direct_batch_baked_in(tmp_path: Path) -> None:
-    """Batch id baked into the root → files resolve directly under it.
-
-    Regression (web-submitted ACME 20260610): the address was configured
-    as ``location.path: "20260610"`` on top of a connection whose
-    ``host_path`` is the partner dir, so ``root_path`` already ends in the
-    batch id (``/data/inboxarchive/ACME/20260610``) and the CSVs sit
-    directly beneath it. The pipelined and flat layouts double-apply the
-    batch (``.../20260610/acme/20260610/``), so resolution must fall back
-    to the root-direct layout ``{root_path}/{file_pattern}``.
-    """
+def test_resolve_read_path_glob_prefers_files(tmp_path: Path) -> None:
+    """Globs prefer a file match over a directory match."""
     from ovid2.drivers.disc.spark import resolve_read_path
 
-    # root_path already IS the batch dir; file sits directly inside it.
-    target = tmp_path / "person.csv"
+    (tmp_path / "a_datavant_person_tokens_dir").mkdir()
+    target = tmp_path / "b_datavant_person_tokens.csv"
     target.write_text("a\n1\n", encoding="utf-8")
 
-    resolved = resolve_read_path(str(tmp_path), "acme", "20260610", "*person.csv")
-    assert resolved == str(target)
+    assert resolve_read_path(str(tmp_path), "*datavant_person_tokens*") == str(target)
 
 
 @pytest.mark.unit
-def test_resolve_read_path_root_direct_never_shadows_pipelined(tmp_path: Path) -> None:
-    """Root-direct is tried last: a correctly-scoped layout always wins."""
+def test_resolve_read_path_glob_falls_back_to_directory(tmp_path: Path) -> None:
+    """A glob matching only a directory resolves to it (Spark reads dirs)."""
     from ovid2.drivers.disc.spark import resolve_read_path
 
-    # A stray file directly under the root must NOT win over the proper
-    # pipelined layout when the latter exists.
-    (tmp_path / "person.csv").write_text("root\n", encoding="utf-8")
-    proper = tmp_path / "acme" / "20260610" / "person.csv"
-    proper.parent.mkdir(parents=True)
-    proper.write_text("scoped\n", encoding="utf-8")
+    target = tmp_path / "demographic.csv"
+    target.mkdir()
 
-    resolved = resolve_read_path(str(tmp_path), "acme", "20260610", "person.csv")
-    assert resolved == str(proper)
+    assert resolve_read_path(str(tmp_path), "demographic*") == str(target)
 
 
 @pytest.mark.unit
-def test_resolve_read_path_missing_names_root_direct_layout(tmp_path: Path) -> None:
-    """The 'not found' error names all three attempted layouts."""
+def test_resolve_read_path_missing_raises_naming_address(tmp_path: Path) -> None:
+    """Missing file → FileNotFoundError naming the exact address directory."""
     from ovid2.drivers.disc.spark import resolve_read_path
 
     with pytest.raises(FileNotFoundError) as excinfo:
-        resolve_read_path(str(tmp_path), "acme_from_disc", "20260610", "person.csv")
+        resolve_read_path(str(tmp_path), "person.csv")
+    assert str(tmp_path) in str(excinfo.value)
 
-    message = str(excinfo.value)
-    assert "flat layout" in message
-    assert "root-direct layout" in message
+
+@pytest.mark.unit
+def test_write_path_is_address_directory(tmp_path: Path) -> None:
+    """``_get_write_path`` ignores pipeline / batch — the address is exact."""
+    addr = DiscAddress({"path": str(tmp_path / "out")})
+    assert addr._get_write_path("demo", "20260101") == str(tmp_path / "out")

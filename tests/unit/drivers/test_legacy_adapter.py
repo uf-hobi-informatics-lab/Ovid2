@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 import os
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -20,9 +18,7 @@ class TestRegistryPopulation:
         from ovid2.connections.registry import CONNECTION_TYPE_MAP
 
         for type_name in CONNECTION_TYPE_MAP:
-            assert type_name in DRIVERS, (
-                f"Legacy type '{type_name}' missing from DRIVERS."
-            )
+            assert type_name in DRIVERS, f"Legacy type '{type_name}' missing from DRIVERS."
 
     def test_loaded_class_is_driver_subclass(self) -> None:
         for type_name in list_types():
@@ -32,19 +28,37 @@ class TestRegistryPopulation:
 
 
 class TestLegacyMetadataBridge:
-    @pytest.mark.parametrize("type_name", [
-        "disc", "s3", "azure_blob", "snowflake",
-        "databricks", "postgres", "mssql", "gcs",
-    ])
+    @pytest.mark.parametrize(
+        "type_name",
+        [
+            "disc",
+            "s3",
+            "azure_blob",
+            "snowflake",
+            "databricks",
+            "postgres",
+            "mssql",
+            "gcs",
+        ],
+    )
     def test_connection_fields_produces_spec(self, type_name: str) -> None:
         cls = load_class(type_name)
         spec = cls.connection_fields()
         assert isinstance(spec, ConnectionFieldSpec)
 
-    @pytest.mark.parametrize("type_name", [
-        "disc", "s3", "azure_blob", "snowflake",
-        "databricks", "postgres", "mssql", "gcs",
-    ])
+    @pytest.mark.parametrize(
+        "type_name",
+        [
+            "disc",
+            "s3",
+            "azure_blob",
+            "snowflake",
+            "databricks",
+            "postgres",
+            "mssql",
+            "gcs",
+        ],
+    )
     def test_location_fields_produces_tuple(self, type_name: str) -> None:
         cls = load_class(type_name)
         fields = cls.location_fields()
@@ -59,8 +73,7 @@ class TestLegacyMetadataBridge:
         legacy = connection_field_spec("disc")
         adapter = load_class("disc").connection_fields().to_dict()
         # Note: ``help`` strings must survive verbatim.
-        assert [f["name"] for f in adapter["args"]] == \
-               [f["name"] for f in legacy["args"]]
+        assert [f["name"] for f in adapter["args"]] == [f["name"] for f in legacy["args"]]
         assert adapter["secrets"] == legacy["secrets"]
         assert adapter.get("note") == legacy.get("note")
 
@@ -117,11 +130,14 @@ class TestLegacyContainerReqs:
         assert mount.mode == "rw"
 
     def test_disc_with_container_path_override(self, tmp_path: Path) -> None:
-        d = instantiate("disc", args={
-            "host_path": str(tmp_path),
-            "container_path": "/inside",
-            "mount_mode": "ro",
-        })
+        d = instantiate(
+            "disc",
+            args={
+                "host_path": str(tmp_path),
+                "container_path": "/inside",
+                "mount_mode": "ro",
+            },
+        )
         reqs = d.container_requirements_for({})
         assert reqs[0].host_path == str(tmp_path)
         assert reqs[0].container_path == "/inside"

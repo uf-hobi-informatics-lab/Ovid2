@@ -8,9 +8,7 @@ import pytest
 
 
 @pytest.mark.unit
-def test_api_list_cdms_returns_typed_summaries(
-    web_client, isolated_xdg: Path
-) -> None:
+def test_api_list_cdms_returns_typed_summaries(web_client, isolated_xdg: Path) -> None:
     """``GET /api/v1/cdms`` returns typed summary objects."""
     r = web_client.get("/api/v1/cdms")
     assert r.status_code == 200

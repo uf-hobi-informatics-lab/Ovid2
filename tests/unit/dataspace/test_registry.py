@@ -49,9 +49,7 @@ class TestDimensionForAddress:
         )
         assert reg.dimension_for_address("sf_out") == "snowflake"
 
-    def test_connection_shape(
-        self, configs_dir: Path, connections_dir: Path
-    ) -> None:
+    def test_connection_shape(self, configs_dir: Path, connections_dir: Path) -> None:
         _write_json(
             connections_dir / "disc_prod.json",
             {"type": "disc", "args": {"host_path": "/data"}},

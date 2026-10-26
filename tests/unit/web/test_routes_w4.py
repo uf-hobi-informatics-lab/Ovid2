@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import stat
 import sys
 from pathlib import Path
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Address REST endpoints
@@ -39,9 +37,7 @@ def test_api_create_address(web_client: object, isolated_xdg: Path) -> None:
 
 
 @pytest.mark.unit
-def test_api_create_refuses_legacy_shape(
-    web_client: object, isolated_xdg: Path
-) -> None:
+def test_api_create_refuses_legacy_shape(web_client: object, isolated_xdg: Path) -> None:
     """After the W7 flip, legacy-shape POSTs return HTTP 400."""
     response = web_client.post(  # type: ignore[attr-defined]
         "/api/v1/addresses/legacy_new",
@@ -138,9 +134,7 @@ def test_api_create_secret(web_client: object, isolated_xdg: Path) -> None:
 
 
 @pytest.mark.unit
-def test_api_list_secrets_never_returns_values(
-    web_client: object, isolated_xdg: Path
-) -> None:
+def test_api_list_secrets_never_returns_values(web_client: object, isolated_xdg: Path) -> None:
     """``GET /api/v1/secrets`` returns key names but no values."""
     web_client.post(  # type: ignore[attr-defined]
         "/api/v1/secrets/sf",
@@ -186,9 +180,7 @@ def test_html_secrets_index(web_client: object) -> None:
 
 
 @pytest.fixture()
-def pipeline_on_disk(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_xdg: Path
-) -> str:
+def pipeline_on_disk(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_xdg: Path) -> str:
     """Register a minimal pipeline on ``sys.path`` for the duration of the test."""
     root = tmp_path / "pipelines_root"
     pkg = root / "ovid2_pipelines" / "tp_route"

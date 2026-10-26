@@ -182,6 +182,18 @@ _WEB_SESSIONS_INDEXES = [
 ]
 
 
+# Per-user cosmetic preferences (Appearance panel: theme slug, quick
+# colours, per-component overrides, saved named themes). One JSON blob per
+# principal id; validated by ``services.prefs_svc`` before it is written.
+_WEB_USER_PREFS_DDL = """
+CREATE TABLE IF NOT EXISTS web_user_prefs (
+    user_id         TEXT PRIMARY KEY,
+    appearance_json TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
+)
+"""
+
+
 def ensure_schema() -> None:
     """Create web-tier tables and indexes if they do not already exist."""
     path = web_db_path()
@@ -210,6 +222,7 @@ def ensure_schema() -> None:
         conn.execute(_WEB_SESSIONS_DDL)
         for stmt in _WEB_SESSIONS_INDEXES:
             conn.execute(stmt)
+        conn.execute(_WEB_USER_PREFS_DDL)
     finally:
         conn.close()
     logger.info("Ovid2 web-tier schema ensured at %s", path)

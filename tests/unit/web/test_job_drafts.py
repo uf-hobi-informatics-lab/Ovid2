@@ -23,8 +23,7 @@ def draft_env(isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     pkg = root / "ovid2_pipelines" / "tp_draft"
     pkg.mkdir(parents=True)
     (pkg / "__init__.py").write_text("", encoding="utf-8")
-    (pkg / "pipeline_settings.py").write_text("mappers_type='pcornet_mappers'\n",
-                                              encoding="utf-8")
+    (pkg / "pipeline_settings.py").write_text("mappers_type='pcornet_mappers'\n", encoding="utf-8")
     monkeypatch.syspath_prepend(str(root))
     for mod in list(sys.modules):
         if mod == "ovid2_pipelines" or mod.startswith("ovid2_pipelines."):
@@ -32,8 +31,8 @@ def draft_env(isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     configs = Path(os.environ["OVID2_CONFIGS_DIR"])
     for name in ("in_test", "out_test"):
         (configs / f"{name}.json").write_text(
-            json.dumps({"src_name": "disc", "src_args": {"path": f"/tmp/{name}"}}),
-            encoding="utf-8")
+            json.dumps({"src_name": "disc", "src_args": {"path": f"/tmp/{name}"}}), encoding="utf-8"
+        )
     yield "tp_draft"
     for mod in list(sys.modules):
         if mod == "ovid2_pipelines" or mod.startswith("ovid2_pipelines."):
@@ -41,9 +40,14 @@ def draft_env(isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
 
 def _draft_payload(pipeline: str) -> dict[str, object]:
-    return {"kind": "dq_checks", "pipeline": pipeline, "batch_id": "20261020",
-            "input_address": "in_test", "output_address": "out_test",
-            "packages": ["dcq_v7_03"]}
+    return {
+        "kind": "dq_checks",
+        "pipeline": pipeline,
+        "batch_id": "20261020",
+        "input_address": "in_test",
+        "output_address": "out_test",
+        "packages": ["dcq_v7_03"],
+    }
 
 
 @pytest.mark.unit
@@ -59,8 +63,8 @@ def test_create_draft_api_and_run_page(web_client: object, draft_env: str) -> No
     # Breathing ▶ launch control + discard + populated run details.
     assert 'data-action="launch"' in text
     assert "run-ready" in text
-    assert f'/jobs/{body["job_id"]}/launch' in text
-    assert f'/jobs/{body["job_id"]}/discard' in text
+    assert f"/jobs/{body['job_id']}/launch" in text
+    assert f"/jobs/{body['job_id']}/discard" in text
     assert 'data-status="draft"' in text
     assert "dq_checks" in text and "dcq_v7_03" in text
     # No cancel/stop control for a draft.
@@ -83,12 +87,17 @@ def test_launch_html_fetch_returns_json_and_form_redirects(
     web_client: object, draft_env: str
 ) -> None:
     a = web_client.post("/api/v1/job-drafts", json=_draft_payload(draft_env)).json()  # type: ignore[attr-defined]
-    r = web_client.post(f"/jobs/{a['job_id']}/launch",  # type: ignore[attr-defined]
-                        headers={"X-Requested-With": "fetch"}, follow_redirects=False)
+    r = web_client.post(
+        f"/jobs/{a['job_id']}/launch",  # type: ignore[attr-defined]
+        headers={"X-Requested-With": "fetch"},
+        follow_redirects=False,
+    )
     assert r.status_code == 200 and r.json()["instance_id"] == a["instance_id"]
     page = web_client.get(f"/runs/{a['instance_id']}")  # type: ignore[attr-defined]
-    assert 'data-action="cancel"' in page.text and "run-ready" not in page.text.split(
-        'class="terminal-pane')[1]
+    assert (
+        'data-action="cancel"' in page.text
+        and "run-ready" not in page.text.split('class="terminal-pane')[1]
+    )
 
     b = web_client.post("/api/v1/job-drafts", json=_draft_payload(draft_env)).json()  # type: ignore[attr-defined]
     r2 = web_client.post(f"/jobs/{b['job_id']}/launch", follow_redirects=False)  # type: ignore[attr-defined]
@@ -119,35 +128,64 @@ def test_run_pipeline_config_binds_open_sides_and_drafts(
     """An open-input dq_checks config runs with address overrides (A) or as a draft."""
     pipelines = Path(os.environ["XDG_CONFIG_HOME"]) / "ovid2" / "pipelines"
     pipelines.mkdir(parents=True, exist_ok=True)
-    (pipelines / "DCX.json").write_text(json.dumps({
-        "kind": "dq_checks", "cdm": None, "pipeline": "DCX", "input_address": "",
-        "output_address": "", "tables": ["all"], "transformations": [],
-        "packages": ["dcq_v7_03"], "engine": "pyspark", "workers": 25,
-        "enabled": True, "trigger": {"type": "manual"}}), encoding="utf-8")
+    (pipelines / "DCX.json").write_text(
+        json.dumps(
+            {
+                "kind": "dq_checks",
+                "cdm": None,
+                "pipeline": "DCX",
+                "input_address": "",
+                "output_address": "",
+                "tables": ["all"],
+                "transformations": [],
+                "packages": ["dcq_v7_03"],
+                "engine": "pyspark",
+                "workers": 25,
+                "enabled": True,
+                "trigger": {"type": "manual"},
+            }
+        ),
+        encoding="utf-8",
+    )
 
     open_run = web_client.post("/api/v1/pipelines/DCX/run", json={})  # type: ignore[attr-defined]
     assert open_run.status_code == 400 and "open" in open_run.json()["detail"]
 
-    resp = web_client.post("/api/v1/pipelines/DCX/run", json={  # type: ignore[attr-defined]
-        "input_address": "in_test", "output_address": "out_test", "draft": True})
+    resp = web_client.post(
+        "/api/v1/pipelines/DCX/run",
+        json={  # type: ignore[attr-defined]
+            "input_address": "in_test",
+            "output_address": "out_test",
+            "draft": True,
+        },
+    )
     assert resp.status_code == 201, resp.text
     assert resp.json()["status"] == "draft"
     job = web_client.get(f"/api/v1/jobs/{resp.json()['job_id']}").json()  # type: ignore[attr-defined]
     assert job["input_address"] == "in_test" and job["output_address"] == "out_test"
     assert job["extra_args"]["packages"] == ["dcq_v7_03"]
 
-    queued = web_client.post("/api/v1/pipelines/DCX/run", json={  # type: ignore[attr-defined]
-        "input_address": "in_test", "output_address": "out_test"})
+    queued = web_client.post(
+        "/api/v1/pipelines/DCX/run",
+        json={  # type: ignore[attr-defined]
+            "input_address": "in_test",
+            "output_address": "out_test",
+        },
+    )
     assert queued.status_code == 201 and queued.json()["status"] == "queued"
 
 
 @pytest.mark.unit
 def test_draft_rejects_json_location(web_client: object, draft_env: str) -> None:
     """A model passing a JSON blob as *_location gets a clean 400, no junk address."""
-    payload = {"kind": "dq_checks", "pipeline": draft_env, "batch_id": "1",
-               "input_connection": "anything",
-               "input_location": '{"database": "CHAR_ACME", "schema": "PUBLIC"}',
-               "output_address": "out_test"}
+    payload = {
+        "kind": "dq_checks",
+        "pipeline": draft_env,
+        "batch_id": "1",
+        "input_connection": "anything",
+        "input_location": '{"database": "CHAR_ACME", "schema": "PUBLIC"}',
+        "output_address": "out_test",
+    }
     resp = web_client.post("/api/v1/job-drafts", json=payload)  # type: ignore[attr-defined]
     assert resp.status_code == 400 and "plain path" in resp.json()["detail"]
 
@@ -157,14 +195,32 @@ def test_draft_pipeline_config_route(web_client: object, draft_env: str) -> None
     """``POST /pipelines/{name}/draft`` fills open sides and always drafts."""
     pipelines = Path(os.environ["XDG_CONFIG_HOME"]) / "ovid2" / "pipelines"
     pipelines.mkdir(parents=True, exist_ok=True)
-    (pipelines / "DCY.json").write_text(json.dumps({
-        "kind": "dq_checks", "cdm": None, "pipeline": "DCY", "input_address": "",
-        "output_address": "out_test", "tables": ["all"], "transformations": [],
-        "packages": ["dcq_v7_03"], "engine": "pyspark", "workers": 25,
-        "enabled": True, "trigger": {"type": "manual"}}), encoding="utf-8")
+    (pipelines / "DCY.json").write_text(
+        json.dumps(
+            {
+                "kind": "dq_checks",
+                "cdm": None,
+                "pipeline": "DCY",
+                "input_address": "",
+                "output_address": "out_test",
+                "tables": ["all"],
+                "transformations": [],
+                "packages": ["dcq_v7_03"],
+                "engine": "pyspark",
+                "workers": 25,
+                "enabled": True,
+                "trigger": {"type": "manual"},
+            }
+        ),
+        encoding="utf-8",
+    )
     assert web_client.post("/api/v1/pipelines/DCY/draft", json={}).status_code == 400  # type: ignore[attr-defined]
-    resp = web_client.post("/api/v1/pipelines/DCY/draft", json={  # type: ignore[attr-defined]
-        "input_address": "in_test"})
+    resp = web_client.post(
+        "/api/v1/pipelines/DCY/draft",
+        json={  # type: ignore[attr-defined]
+            "input_address": "in_test"
+        },
+    )
     assert resp.status_code == 201 and resp.json()["status"] == "draft"
     from ovid2.web.services import jobs_svc
 

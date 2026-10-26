@@ -26,15 +26,21 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from ovid2.drivers._table_listing import PrefixTableListingMixin
 from ovid2.drivers.azure_blob.metadata import (
     build_address_config,
-    connection_fields as _connection_fields,
-    location_fields as _location_fields,
     resolve_address_auth_mode,
     resolve_connection_auth_mode,
 )
+from ovid2.drivers.azure_blob.metadata import (
+    connection_fields as _connection_fields,
+)
+from ovid2.drivers.azure_blob.metadata import (
+    location_fields as _location_fields,
+)
 from ovid2.drivers.azure_blob.probe import (
     list_dir_from_config,
+    list_tables_from_config,
     probe_auth_from_config,
 )
 from ovid2.drivers.base import (
@@ -50,7 +56,7 @@ if TYPE_CHECKING:
     from ovid2.drivers.azure_blob.spark import AzureBlobIO
 
 
-class AzureBlobDriver(Driver):
+class AzureBlobDriver(PrefixTableListingMixin, Driver):
     """Native driver for the ``azure_blob`` peripheral.
 
     Constructor keeps the uniform ``(args, secrets, location)`` shape
@@ -94,6 +100,12 @@ class AzureBlobDriver(Driver):
         """
         return list_dir_from_config(
             dict(self.args), dict(self.secrets), dict(self.location), prefix
+        )
+
+    def _list_tables(self, sub_prefix: str) -> list[StorageEntry]:
+        """Size-aggregated listing under ``sub_prefix`` (see :class:`PrefixTableListingMixin`)."""
+        return list_tables_from_config(
+            dict(self.args), dict(self.secrets), dict(self.location), sub_prefix
         )
 
     # ------------------------------------------------------------------
@@ -148,7 +160,9 @@ class AzureBlobDriver(Driver):
         driver refactor.
         """
         merged = build_address_config(
-            dict(self.args), dict(self.secrets), dict(self.location),
+            dict(self.args),
+            dict(self.secrets),
+            dict(self.location),
         )
         return "azure_blob", merged
 
@@ -198,7 +212,7 @@ class AzureBlobDriver(Driver):
         table_name: str,
         delimiter: str | None = None,
     ) -> None:
-        """Materialise ``df`` under ``{prefix}/{pipeline}/{batch_id}/``."""
+        """Materialise ``df`` directly under the address location ``{prefix}/``."""
         io = self._build_io()
         io.write(df, session, pipeline, batch_id, table_name, delimiter)  # type: ignore[arg-type]
 

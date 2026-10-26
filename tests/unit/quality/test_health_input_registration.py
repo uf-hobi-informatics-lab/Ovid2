@@ -42,7 +42,7 @@ class _FakeDataFrame:
         self._name = name
         self.registered_as: str | None = None
 
-    def createOrReplaceTempView(self, name: str) -> None:  # noqa: N802
+    def createOrReplaceTempView(self, name: str) -> None:
         self.registered_as = name
 
 
@@ -102,9 +102,7 @@ def test_register_empty_candidates_returns_empty_without_raising() -> None:
 def test_register_returns_available_when_reads_succeed() -> None:
     bus = _CapturingBus()
     runner = _runner(bus)
-    available = runner.register_input_tables(
-        _WorkingAddress(), ["DEMOGRAPHIC", "ENCOUNTER"]
-    )
+    available = runner.register_input_tables(_WorkingAddress(), ["DEMOGRAPHIC", "ENCOUNTER"])
     assert available == frozenset({"DEMOGRAPHIC", "ENCOUNTER"})
     assert not [e for e in bus.events if e.kind == "warning"]
 
@@ -148,7 +146,7 @@ def _register_stub_operator(name: str, returns_exception: bool) -> None:
     from ovid2.transformations.quality.ops import MetricRow, operator
 
     @operator(name)
-    def _stub(ctx: Any, spec: Any) -> list[MetricRow]:  # noqa: ANN401
+    def _stub(ctx: Any, spec: Any) -> list[MetricRow]:
         return [
             MetricRow(
                 check_id=spec.id,

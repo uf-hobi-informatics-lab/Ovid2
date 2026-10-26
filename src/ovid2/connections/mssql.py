@@ -16,15 +16,18 @@ class MssqlConnection(BaseConnection):
         """Probe with a ``SELECT 1`` via ``pymssql`` or ``pyodbc``."""
         try:
             import pymssql  # type: ignore[import-not-found]
+
             return self._probe_pymssql(pymssql)
         except ImportError:
             pass
         try:
             import pyodbc  # type: ignore[import-not-found]
+
             return self._probe_pyodbc(pyodbc)
         except ImportError:
             return ConnectionTestResult(
-                ok=False, code="skipped",
+                ok=False,
+                code="skipped",
                 message="Neither pymssql nor pyodbc is installed on this host.",
             )
 
@@ -37,26 +40,32 @@ class MssqlConnection(BaseConnection):
         password = str(self.secrets.get("password") or "")
         if not (host and database and user):
             return ConnectionTestResult(
-                ok=False, code="config",
+                ok=False,
+                code="config",
                 message="host, database, and user are all required.",
             )
         try:
             conn = pymssql.connect(
-                server=host, port=port, user=user,
-                password=password, database=database,
+                server=host,
+                port=port,
+                user=user,
+                password=password,
+                database=database,
             )
             cursor = conn.cursor()
             cursor.execute("SELECT 1")
             cursor.fetchone()
             cursor.close()
             conn.close()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return ConnectionTestResult(
-                ok=False, code="unreachable",
+                ok=False,
+                code="unreachable",
                 message=f"MSSQL connect/query failed: {exc}",
             )
         return ConnectionTestResult(
-            ok=True, code="ok",
+            ok=True,
+            code="ok",
             message="MSSQL SELECT 1 succeeded (pymssql).",
         )
 
@@ -81,13 +90,15 @@ class MssqlConnection(BaseConnection):
             cursor.fetchone()
             cursor.close()
             conn.close()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return ConnectionTestResult(
-                ok=False, code="unreachable",
+                ok=False,
+                code="unreachable",
                 message=f"MSSQL connect/query failed: {exc}",
             )
         return ConnectionTestResult(
-            ok=True, code="ok",
+            ok=True,
+            code="ok",
             message="MSSQL SELECT 1 succeeded (pyodbc).",
         )
 

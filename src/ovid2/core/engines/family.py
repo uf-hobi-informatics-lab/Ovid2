@@ -60,9 +60,9 @@ def assert_pipeline_engine_compatible(engine: BaseEngine, pipeline: str) -> None
     required = resolve_pipeline_family(pipeline)
     if required is None:
         return
-    engine_family = engine.family.value if isinstance(
-        engine.family, EngineFamily
-    ) else str(engine.family)
+    engine_family = (
+        engine.family.value if isinstance(engine.family, EngineFamily) else str(engine.family)
+    )
     if required != engine_family:
         raise RuntimeError(
             f"Pipeline '{pipeline}' requires engine family '{required}' "

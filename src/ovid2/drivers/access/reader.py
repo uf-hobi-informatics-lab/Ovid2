@@ -33,9 +33,8 @@ SYSTEM_TABLE_PREFIXES: tuple[str, ...] = ("msys", "~", "f_")
 
 #: HSQLDB schemas UCanAccess exposes that must never be surfaced as
 #: user tables.
-SYSTEM_SCHEMAS: frozenset[str] = frozenset(
-    {"information_schema", "system_lobs", "public"}
-)
+SYSTEM_SCHEMAS: frozenset[str] = frozenset({"information_schema", "system_lobs", "public"})
+
 
 #: Default container / image path where the UCanAccess jars are baked.
 #: Derived from ``$SPARK_HOME`` (the Bitnami base image sets it) rather
@@ -188,7 +187,10 @@ def list_tables_no_spark(file_path: str) -> list[str]:
     connection = None
     try:
         connection = jaydebeapi.connect(
-            UCANACCESS_DRIVER, jdbc_url(file_path), [], jars,
+            UCANACCESS_DRIVER,
+            jdbc_url(file_path),
+            [],
+            jars,
         )
         jconn = connection.jconn  # underlying java.sql.Connection
         metadata = jconn.getMetaData()
@@ -205,9 +207,7 @@ def list_tables_no_spark(file_path: str) -> list[str]:
     except NotImplementedError:
         raise
     except Exception as exc:
-        raise RuntimeError(
-            f"Failed to enumerate Access tables in {file_path!r}: {exc}"
-        ) from exc
+        raise RuntimeError(f"Failed to enumerate Access tables in {file_path!r}: {exc}") from exc
     finally:
         if connection is not None:
             with contextlib.suppress(Exception):

@@ -89,9 +89,9 @@ def _copy_table_concurrency() -> int:
         value = int(raw)
     except ValueError:
         logger.warning(
-            "Ignoring non-integer OVID2_COPY_TABLE_CONCURRENCY=%r; "
-            "falling back to %d.",
-            raw, _DEFAULT_COPY_TABLE_CONCURRENCY,
+            "Ignoring non-integer OVID2_COPY_TABLE_CONCURRENCY=%r; falling back to %d.",
+            raw,
+            _DEFAULT_COPY_TABLE_CONCURRENCY,
         )
         return _DEFAULT_COPY_TABLE_CONCURRENCY
     return max(1, value)
@@ -104,26 +104,44 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Copy tables from one address to another (one-shot, no CDM).",
         description=__doc__,
     )
-    parser.add_argument("--from", dest="from_address", required=True,
-                        help="Name of the source address config.")
-    parser.add_argument("--to", dest="to_address", required=True,
-                        help="Name of the destination address config.")
+    parser.add_argument(
+        "--from", dest="from_address", required=True, help="Name of the source address config."
+    )
+    parser.add_argument(
+        "--to", dest="to_address", required=True, help="Name of the destination address config."
+    )
     parser.add_argument("--pipeline", required=True, help="Pipeline name.")
-    parser.add_argument("--batch_id", required=True, help="Batch identifier.")
-    parser.add_argument("--tables", nargs="+", required=True,
-                        help=(
-                            "Table specs to copy. Each entry is either "
-                            "'LOGICAL' (source basename equals logical "
-                            "name) or 'LOGICAL=SOURCE' (LOGICAL is the "
-                            "destination file stem; SOURCE is the "
-                            "source-side lookup key, e.g. a disc glob "
-                            "'*datavant_person_tokens*' or a "
-                            "Snowflake dbtable). LOGICAL is always "
-                            "used verbatim as the destination file "
-                            "stem — case preserved."
-                        ))
-    parser.add_argument("--engine", default="pyspark",
-                        help="Compute engine (default: pyspark).")
+    parser.add_argument(
+        "--batch_id",
+        required=True,
+        help="Batch id — the complete Data Space path of the input location (<connection>/<path>); a run label, never appended to an address.",
+    )
+    parser.add_argument(
+        "--tables",
+        nargs="+",
+        required=True,
+        help=(
+            "Table specs to copy. Each entry is either "
+            "'LOGICAL' (source basename equals logical "
+            "name) or 'LOGICAL=SOURCE' (LOGICAL is the "
+            "destination file stem; SOURCE is the "
+            "source-side lookup key, e.g. a disc glob "
+            "'*datavant_person_tokens*' or a "
+            "Snowflake dbtable). LOGICAL is always "
+            "used verbatim as the destination file "
+            "stem — case preserved."
+        ),
+    )
+    parser.add_argument("--engine", default="pyspark", help="Compute engine (default: pyspark).")
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help=(
+            "Allow writing into an output location that already holds tables "
+            "(the address is the exact write location; without this flag the "
+            "run refuses to overwrite existing data)."
+        ),
+    )
     parser.add_argument(
         "--extra-mount",
         dest="extra_mounts",
@@ -189,14 +207,22 @@ def main(args: argparse.Namespace) -> int:
     # cluster-start cost; the container-side call is belt+suspenders
     # for direct-in-container invocations.
     from ovid2.core.loaders import load_engine
+
     try:
         engine = load_engine(args.engine)
         assert_engine_supports_drivers(
-            engine, [args.from_address, args.to_address],
+            engine,
+            [args.from_address, args.to_address],
         )
     except (ValueError, RuntimeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+
+    # Non-Spark engines (Snowpark) compute inside the warehouse — the
+    # host side then runs a single driver container, no Spark cluster.
+    from ovid2.core.docker import engine_needs_spark_cluster
+
+    args._spark_cluster = engine_needs_spark_cluster(engine)
 
     # Validate --extra-mount specs up-front so a bad path fails before
     # we spin up a 25-worker Spark cluster. The parsed list is stashed
@@ -206,9 +232,7 @@ def main(args: argparse.Namespace) -> int:
     # ``docker compose up`` — so we only parse and stash on the host.
     if not is_inside_docker():
         try:
-            explicit_mounts = parse_extra_mounts(
-                getattr(args, "extra_mounts", None)
-            )
+            explicit_mounts = parse_extra_mounts(getattr(args, "extra_mounts", None))
         except ExtraMountError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
@@ -238,7 +262,7 @@ def main(args: argparse.Namespace) -> int:
     return _run_container_mode(args)
 
 
-def _driver_mount_to_tool_mount(m: object) -> "object | None":
+def _driver_mount_to_tool_mount(m: object) -> object | None:
     """Convert a :class:`drivers.container.ExtraMount` → :class:`tools.extra_mounts.ExtraMount`.
 
     The two dataclasses live in separate modules with different
@@ -268,7 +292,8 @@ def _driver_mount_to_tool_mount(m: object) -> "object | None":
     except ExtraMountError as exc:
         logger.warning(
             "Driver auto-mount %r rejected by tools.extra_mounts: %s",
-            spec, exc,
+            spec,
+            exc,
         )
         return None
 
@@ -282,7 +307,7 @@ def _run_host_mode(args: argparse.Namespace) -> int:
     between cluster and local Spark.
     """
     from ovid2.config.settings import SPARK_MODE
-    from ovid2.core.docker import submit_to_docker, submit_with_cluster
+    from ovid2.core.docker import submit_one_shot
     from ovid2.core.isolation import OvidInstance, cleanup_stale_instances
 
     cleanup_stale_instances()
@@ -318,9 +343,12 @@ def _run_host_mode(args: argparse.Namespace) -> int:
     if not hasattr(args, "workers"):
         args.workers = 25
 
-    if SPARK_MODE == "cluster":
-        return submit_with_cluster(args, instance)
-    return submit_to_docker(args, instance)
+    return submit_one_shot(
+        args,
+        instance,
+        spark_cluster=bool(getattr(args, "_spark_cluster", True)),
+        spark_mode=SPARK_MODE,
+    )
 
 
 def _run_container_mode(args: argparse.Namespace) -> int:
@@ -362,7 +390,6 @@ def _run_container_mode(args: argparse.Namespace) -> int:
     # against the source driver, which enumerates every user table in
     # the source (e.g. the tables inside an Access ``.accdb`` file).
     from ovid2.tools.table_specs import (
-        TableSpec,
         is_all_sentinel,
         parse_table_specs,
     )
@@ -377,17 +404,20 @@ def _run_container_mode(args: argparse.Namespace) -> int:
             # ``get_session`` is idempotent (the engine caches it) so
             # this does not double-start the cluster.
             engine.get_session()
-            expanded = input_driver.expand_all_tables()
+            expanded = input_driver.expand_all_tables(
+                pipeline=args.pipeline,
+                batch_id=args.batch_id,
+            )
             if expanded is None:
                 raise ValueError(
                     f"source '{args.from_address}' "
                     f"({input_driver.type_name}) cannot expand `--tables "
                     f"all`; pass an explicit table list."
                 )
-            resolved = [
-                TableSpec(table_name=name, file_name=name)
-                for name in expanded
-            ]
+            # Folder sources return ``LOGICAL=SOURCE`` specs
+            # (``demographic=demographic.csv``); container sources return
+            # bare names. ``parse_table_specs`` handles both.
+            resolved = parse_table_specs(expanded)
             print(
                 f"[ovid2 tools copy] expanded --tables all → "
                 f"{len(resolved)} table(s): {', '.join(t.table_name for t in resolved)}"
@@ -395,11 +425,59 @@ def _run_container_mode(args: argparse.Namespace) -> int:
         else:
             resolved = parse_table_specs(args.tables)
 
+    # Largest-first (LPT) scheduling: start the biggest tables at t=0 so
+    # the run is bounded by the largest table rather than by whichever
+    # large table the list order happened to put last. Metadata-only
+    # size lookup; any failure keeps the given order.
+    from ovid2.tools.table_order import format_size, order_largest_first
+
+    resolved, sizes = order_largest_first(
+        resolved,
+        input_driver,
+        pipeline=args.pipeline,
+        batch_id=args.batch_id,
+    )
+    if sizes:
+        print(
+            "[ovid2 tools copy] largest-first order: "
+            + ", ".join(
+                f"{t.table_name} ({format_size(sizes[t.file_name])})"
+                if t.file_name in sizes
+                else f"{t.table_name} (?)"
+                for t in resolved
+            )
+        )
+
+    # Overwrite gate: the output address is the exact write location. A
+    # table this run would write that already exists there needs an
+    # explicit ``--overwrite``.
+    from ovid2.drivers.overwrite import OutputNotEmptyError, assert_output_writable
+
+    try:
+        assert_output_writable(
+            args.to_address,
+            overwrite=bool(getattr(args, "overwrite", False)),
+            driver=output_driver,
+            only_tables=[t.table_name for t in resolved],
+        )
+    except OutputNotEmptyError as exc:
+        print(f"[ovid2 tools copy] ERROR {exc}", file=sys.stderr)
+        sampler.stop()
+        engine.stop_session()
+        bus.emit(instance_finished(instance_id=instance.instance_id, success=False))
+        bus.close()
+        return 3
+
     failures = 0
     try:
         failures = _copy_tables_concurrently(
-            resolved, stager, input_driver, output_driver, args,
-            bus=bus, instance_id=instance.instance_id,
+            resolved,
+            stager,
+            input_driver,
+            output_driver,
+            args,
+            bus=bus,
+            instance_id=instance.instance_id,
         )
     finally:
         sampler.stop()
@@ -514,10 +592,7 @@ def _copy_tables_concurrently(
                 )
         return failures
 
-    print(
-        f"[ovid2 tools copy] copying {len(resolved)} table(s) "
-        f"with concurrency {concurrency}"
-    )
+    print(f"[ovid2 tools copy] copying {len(resolved)} table(s) with concurrency {concurrency}")
     failures = 0
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
         futures = {pool.submit(_copy_one, spec): spec for spec in resolved}

@@ -67,7 +67,7 @@ Deployment:
 import os
 from typing import Any
 
-from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import DataFrame, Row, SparkSession
 from pyspark.sql.functions import col
 
 from ovid2.config.settings import COMMON_LISTS_DIR
@@ -128,7 +128,7 @@ class PatternsRemoverFixer(BaseFixer):
         # Collect patterns to build regex — patterns lists are small reference
         # data, so this single collect is acceptable. TODO(P4): read patterns
         # via a broadcast join to avoid driver-side materialisation entirely.
-        pattern_rows: list = patterns_df.collect()  # noqa: OVID2001 small reference data
+        pattern_rows: list[Row] = patterns_df.collect()  # noqa: OVID2001 small reference data
         patterns: list[str] = [str(row[0]) for row in pattern_rows if row[0] is not None]
 
         if not patterns:

@@ -84,6 +84,7 @@ session naturally ends.
 from __future__ import annotations
 
 import atexit
+import contextlib
 import logging
 import os
 import re
@@ -139,8 +140,8 @@ class SnowparkS3Strategy(SnowparkStagingStrategy):
 
     def materialise(
         self,
-        session: "EngineSession",
-        driver: "Driver",
+        session: EngineSession,
+        driver: Driver,
         pipeline: str,
         batch_id: str,
         file_name: str,
@@ -193,7 +194,7 @@ class SnowparkS3Strategy(SnowparkStagingStrategy):
         # multiple files under the same pipeline/batch can share a
         # stage. COPY INTO's file-name clause below narrows to the
         # specific object.
-        read_dir_uri = _s3_dir_uri(bucket, prefix, pipeline, batch_id)
+        read_dir_uri = _s3_dir_uri(bucket, prefix)
 
         native = _native_session(session)
         self._maybe_schedule_cleanup(session, instance_id)
@@ -211,7 +212,8 @@ class SnowparkS3Strategy(SnowparkStagingStrategy):
         )
         logger.info(
             "SnowparkS3Strategy: CREATE TEMPORARY STAGE %s URL=%s",
-            stage_name, read_dir_uri,
+            stage_name,
+            read_dir_uri,
         )
         native.sql(create_stage_sql).collect()
         self._register_stage(session, stage_name)
@@ -220,19 +222,21 @@ class SnowparkS3Strategy(SnowparkStagingStrategy):
         # boto3 GET (small — one line).
         columns = _read_header_columns_from_s3(
             bucket=bucket,
-            key=_s3_key(prefix, pipeline, batch_id, file_name),
+            key=_s3_key(prefix, file_name),
             delimiter=delim,
             merged_config=merged,
         )
 
         # Create the transient landing table.
         temp_fqtn = _temp_table_fqtn(
-            staging_schema, instance_id, pipeline, batch_id, table_stem,
+            staging_schema,
+            instance_id,
+            pipeline,
+            batch_id,
+            table_stem,
         )
         col_ddl = ", ".join(f'"{c}" VARCHAR' for c in columns)
-        native.sql(
-            f"CREATE OR REPLACE TRANSIENT TABLE {temp_fqtn} ({col_ddl})"
-        ).collect()
+        native.sql(f"CREATE OR REPLACE TRANSIENT TABLE {temp_fqtn} ({col_ddl})").collect()
         self._register_temp_table(session, temp_fqtn)
 
         # COPY INTO. Snowflake honours S3 auto-compression detection
@@ -250,7 +254,9 @@ class SnowparkS3Strategy(SnowparkStagingStrategy):
         )
         logger.info(
             "SnowparkS3Strategy: COPY INTO %s FROM @%s (file=%s)",
-            temp_fqtn, stage_name, file_name,
+            temp_fqtn,
+            stage_name,
+            file_name,
         )
         native.sql(copy_sql).collect()
 
@@ -258,9 +264,9 @@ class SnowparkS3Strategy(SnowparkStagingStrategy):
 
     def persist(
         self,
-        session: "EngineSession",
+        session: EngineSession,
         df: Any,
-        driver: "Driver",
+        driver: Driver,
         pipeline: str,
         batch_id: str,
         table_name: str,
@@ -270,7 +276,7 @@ class SnowparkS3Strategy(SnowparkStagingStrategy):
 
         No GET step — Snowflake writes directly into the bucket via
         the stage's ``URL='s3://…/'`` and the CSV ends up under
-        ``{prefix}/{pipeline}/{batch_id}/{table_name}/`` (matching the
+        ``{prefix}/{table_name}/`` (matching the
         legacy 15-part-prefix contract when
         ``location.single_file=False``, or as a single file when
         ``True``).
@@ -302,7 +308,7 @@ class SnowparkS3Strategy(SnowparkStagingStrategy):
 
         instance_id = _current_instance_id()
         stage_name = _stage_name(instance_id, pipeline, batch_id, table_name, kind="out")
-        write_dir_uri = _s3_dir_uri(bucket, prefix, pipeline, batch_id)
+        write_dir_uri = _s3_dir_uri(bucket, prefix)
 
         native = _native_session(session)
         self._maybe_schedule_cleanup(session, instance_id)
@@ -315,7 +321,8 @@ class SnowparkS3Strategy(SnowparkStagingStrategy):
         )
         logger.info(
             "SnowparkS3Strategy: CREATE TEMPORARY STAGE %s URL=%s",
-            stage_name, write_dir_uri,
+            stage_name,
+            write_dir_uri,
         )
         native.sql(create_stage_sql).collect()
         self._register_stage(session, stage_name)
@@ -327,7 +334,8 @@ class SnowparkS3Strategy(SnowparkStagingStrategy):
         stage_target = f"@{stage_name}/{table_name}/"
         logger.info(
             "SnowparkS3Strategy: copy_into_location → %s (single=%s)",
-            stage_target, single_file,
+            stage_target,
+            single_file,
         )
         _copy_into_location(
             df,
@@ -341,7 +349,9 @@ class SnowparkS3Strategy(SnowparkStagingStrategy):
     # ------------------------------------------------------------------
 
     def _maybe_schedule_cleanup(
-        self, session: "EngineSession", instance_id: str,
+        self,
+        session: EngineSession,
+        instance_id: str,
     ) -> None:
         """Register an atexit hook that drops the stages + transient tables.
 
@@ -353,7 +363,8 @@ class SnowparkS3Strategy(SnowparkStagingStrategy):
         if SNOWPARK_STAGING_KEEP:
             logger.info(
                 "SnowparkS3Strategy: SNOWPARK_STAGING_KEEP is set; "
-                "skipping atexit cleanup for instance %s", instance_id,
+                "skipping atexit cleanup for instance %s",
+                instance_id,
             )
             return
 
@@ -371,28 +382,31 @@ class SnowparkS3Strategy(SnowparkStagingStrategy):
             for stage in stages_ref:
                 try:
                     native.sql(f"DROP STAGE IF EXISTS {stage}").collect()
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     logger.warning(
                         "SnowparkS3Strategy: DROP STAGE %s failed (%s); "
                         "the stage is temporary and Snowflake will "
-                        "auto-clean at session end.", stage, exc,
+                        "auto-clean at session end.",
+                        stage,
+                        exc,
                     )
             for fqtn in temp_tables_ref:
                 try:
                     native.sql(f"DROP TABLE IF EXISTS {fqtn}").collect()
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     logger.warning(
-                        "SnowparkS3Strategy: DROP TABLE %s failed (%s); "
-                        "clean manually.", fqtn, exc,
+                        "SnowparkS3Strategy: DROP TABLE %s failed (%s); clean manually.",
+                        fqtn,
+                        exc,
                     )
 
         atexit.register(_cleanup)
 
-    def _register_stage(self, session: "EngineSession", stage_name: str) -> None:
+    def _register_stage(self, session: EngineSession, stage_name: str) -> None:
         """Record ``stage_name`` for atexit cleanup on this session."""
         self._stages.setdefault(id(session), []).append(stage_name)
 
-    def _register_temp_table(self, session: "EngineSession", fqtn: str) -> None:
+    def _register_temp_table(self, session: EngineSession, fqtn: str) -> None:
         """Record ``fqtn`` for atexit cleanup on this session."""
         self._temp_tables.setdefault(id(session), []).append(fqtn)
 
@@ -429,11 +443,9 @@ def _merged_config(driver: Any) -> dict[str, Any]:
     ``driver.location`` when neither is present.
     """
     if hasattr(driver, "as_legacy_src_args"):
-        try:
+        with contextlib.suppress(Exception):
             _, merged = driver.as_legacy_src_args()
             return dict(merged)
-        except Exception:  # noqa: BLE001
-            pass
     location = getattr(driver, "location", None) or {}
     return dict(location)
 
@@ -467,15 +479,15 @@ def _require_bucket(merged: dict[str, Any]) -> str:
     return bucket
 
 
-def _s3_key(prefix: str, pipeline: str, batch_id: str, file_name: str) -> str:
-    """Assemble the bucket-relative key ``{prefix}/{pipeline}/{batch}/{file}``."""
-    parts = [p for p in (prefix, pipeline, batch_id, file_name) if p]
+def _s3_key(prefix: str, file_name: str) -> str:
+    """Assemble the bucket-relative key ``{prefix}/{file}`` (address = exact location)."""
+    parts = [p for p in (prefix, file_name) if p]
     return "/".join(parts)
 
 
-def _s3_dir_uri(bucket: str, prefix: str, pipeline: str, batch_id: str) -> str:
-    """Assemble the ``s3://<bucket>/<key-prefix>/`` directory URI."""
-    parts = [p for p in (prefix, pipeline, batch_id) if p]
+def _s3_dir_uri(bucket: str, prefix: str) -> str:
+    """Assemble the ``s3://<bucket>/<key-prefix>/`` directory URI (address = exact location)."""
+    parts = [p for p in (prefix,) if p]
     key = "/".join(parts)
     if key:
         return f"s3://{bucket}/{key}/"
@@ -483,7 +495,12 @@ def _s3_dir_uri(bucket: str, prefix: str, pipeline: str, batch_id: str) -> str:
 
 
 def _stage_name(
-    instance_id: str, pipeline: str, batch_id: str, table: str, *, kind: str,
+    instance_id: str,
+    pipeline: str,
+    batch_id: str,
+    table: str,
+    *,
+    kind: str,
 ) -> str:
     """Return a stage name safe for interpolation into DDL.
 
@@ -495,7 +512,8 @@ def _stage_name(
     ever fails.
     """
     safe = re.sub(
-        r"[^A-Za-z0-9]+", "_",
+        r"[^A-Za-z0-9]+",
+        "_",
         f"{kind}_{instance_id}_{pipeline}_{batch_id}_{table}",
     )
     return f"OVID2_STG_S3_{safe}".upper()
@@ -514,9 +532,7 @@ def _temp_table_fqtn(
     an operator's cleanup query (``SHOW TABLES LIKE 'OVID2_STG_%'``)
     catches both strategies' orphans.
     """
-    safe = re.sub(
-        r"[^A-Za-z0-9]+", "_", f"{instance_id}_{pipeline}_{batch_id}_{stem}"
-    )
+    safe = re.sub(r"[^A-Za-z0-9]+", "_", f"{instance_id}_{pipeline}_{batch_id}_{stem}")
     return f"{staging_schema}.OVID2_STG_S3_{safe}".upper()
 
 
@@ -531,7 +547,7 @@ def _escape_sql(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "''")
 
 
-def _native_session(session: "EngineSession") -> Any:
+def _native_session(session: EngineSession) -> Any:
     """Return the real ``snowflake.snowpark.Session`` from an adapter."""
     native = getattr(session, "native", None)
     if native is None:
@@ -558,30 +574,32 @@ def _ensure_current_database(native: Any) -> None:
     """
     try:
         current_db = native.get_current_database()
-    except Exception:  # noqa: BLE001
+    except Exception:
         current_db = None
     if not current_db:
         try:
             native.sql(f"USE DATABASE {_DEFAULT_STAGE_DATABASE}").collect()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning(
                 "SnowparkS3Strategy: could not USE DATABASE %s (%s)",
-                _DEFAULT_STAGE_DATABASE, exc,
+                _DEFAULT_STAGE_DATABASE,
+                exc,
             )
             return
 
     try:
         current_schema = native.get_current_schema()
-    except Exception:  # noqa: BLE001
+    except Exception:
         current_schema = None
     if current_schema:
         return
     try:
         native.sql(f"USE SCHEMA {_DEFAULT_STAGE_SCHEMA}").collect()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning(
             "SnowparkS3Strategy: could not USE SCHEMA %s (%s)",
-            _DEFAULT_STAGE_SCHEMA, exc,
+            _DEFAULT_STAGE_SCHEMA,
+            exc,
         )
 
 
@@ -610,7 +628,7 @@ def _ensure_writable_staging_schema(native: Any) -> str:
             return override
         try:
             current_db = native.get_current_database()
-        except Exception:  # noqa: BLE001
+        except Exception:
             current_db = None
         if not current_db:
             raise RuntimeError(
@@ -623,7 +641,7 @@ def _ensure_writable_staging_schema(native: Any) -> str:
 
     try:
         current_db = native.get_current_database()
-    except Exception:  # noqa: BLE001
+    except Exception:
         current_db = None
     if not current_db:
         raise RuntimeError(
@@ -637,7 +655,7 @@ def _ensure_writable_staging_schema(native: Any) -> str:
     try:
         native.sql(f"CREATE SCHEMA IF NOT EXISTS {schema_fqn}").collect()
         return schema_fqn
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise RuntimeError(
             f"SnowparkS3Strategy: cannot create staging schema "
             f"{schema_fqn} ({exc}). Grant CREATE SCHEMA on {current_db}, "
@@ -705,8 +723,7 @@ def _build_create_stage_sql(
         )
 
     return (
-        f"CREATE OR REPLACE TEMPORARY STAGE {stage_name} "
-        f"URL = '{_escape_sql(url)}' {auth_clause}"
+        f"CREATE OR REPLACE TEMPORARY STAGE {stage_name} URL = '{_escape_sql(url)}' {auth_clause}"
     )
 
 
@@ -767,10 +784,7 @@ def _read_header_columns_from_s3(
     resp = client.get_object(Bucket=bucket, Key=key, Range="bytes=0-65535")
     body = resp["Body"].read()
     if not body:
-        raise ValueError(
-            f"SnowparkS3Strategy: s3://{bucket}/{key} is empty; "
-            "nothing to stage."
-        )
+        raise ValueError(f"SnowparkS3Strategy: s3://{bucket}/{key} is empty; nothing to stage.")
     # Decode leniently — CSV headers occasionally carry a BOM.
     text = body.decode("utf-8", errors="replace")
     # First line only.

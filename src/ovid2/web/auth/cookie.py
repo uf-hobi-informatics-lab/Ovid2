@@ -136,9 +136,7 @@ def _resolve_signing_key() -> str:
             reloaded = load_secret(SIGNING_KEY_SECRET_NAME)
             raw = reloaded.get(SIGNING_KEY_SECRET_KEY)
             if not isinstance(raw, str) or not raw:
-                raise RuntimeError(
-                    "Session signing key was written but could not be read back."
-                )
+                raise RuntimeError("Session signing key was written but could not be read back.")
             key = raw
 
         _SIGNING_KEY_CACHE = key

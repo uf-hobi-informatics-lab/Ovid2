@@ -29,9 +29,7 @@ class TestNativeRegistration:
     """The registry entry points at the native driver, not an adapter."""
 
     def test_dotted_path_is_native(self) -> None:
-        assert DRIVERS["snowflake"] == (
-            "ovid2.drivers.snowflake.driver.SnowflakeDriver"
-        )
+        assert DRIVERS["snowflake"] == ("ovid2.drivers.snowflake.driver.SnowflakeDriver")
 
     def test_type_name_matches_registry_key(self) -> None:
         assert SnowflakeDriver.type_name == "snowflake"
@@ -41,9 +39,7 @@ class TestDeclaredCdm:
     """The D6.0 advisory type-stamping hook."""
 
     def test_returns_cdm_from_location(self) -> None:
-        assert (
-            SnowflakeDriver.declared_cdm({"cdm": "pcornet_7_0"}) == "pcornet_7_0"
-        )
+        assert SnowflakeDriver.declared_cdm({"cdm": "pcornet_7_0"}) == "pcornet_7_0"
 
     def test_returns_none_when_absent(self) -> None:
         assert SnowflakeDriver.declared_cdm({}) is None
@@ -83,7 +79,8 @@ class TestLegacySrcArgs:
         }
 
     def test_password_bypasses_pem_load_when_credentials_dir_missing(
-        self, tmp_path: Any,
+        self,
+        tmp_path: Any,
     ) -> None:
         driver = SnowflakeDriver(
             args={
@@ -103,12 +100,15 @@ class TestProbeAuth:
     """``probe_auth`` goes through :func:`probe_auth_from_config`."""
 
     def test_returns_skipped_when_driver_absent(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setitem(sys.modules, "snowflake", None)
         monkeypatch.setitem(sys.modules, "snowflake.connector", None)
         driver = SnowflakeDriver(
-            args={"account": "a", "user": "u"}, secrets={}, location={},
+            args={"account": "a", "user": "u"},
+            secrets={},
+            location={},
         )
         result = driver.probe_auth()
         assert result.ok is False
@@ -162,11 +162,19 @@ class TestReadWriteDispatch:
         driver._address_cache = fake_addr
         session = MagicMock(name="EngineSession")
         driver.read(
-            session, "demo", "20260101", "demographic",
-            delimiter=None, table_name="demographic",
+            session,
+            "demo",
+            "20260101",
+            "demographic",
+            delimiter=None,
+            table_name="demographic",
         )
         fake_addr.read.assert_called_once_with(
-            session, "demo", "20260101", "demographic", None,
+            session,
+            "demo",
+            "20260101",
+            "demographic",
+            None,
             table_name="demographic",
         )
 
@@ -182,7 +190,12 @@ class TestReadWriteDispatch:
         df = MagicMock(name="DataFrame")
         driver.write(df, session, "demo", "20260101", "demographic")
         fake_addr.write.assert_called_once_with(
-            df, session, "demo", "20260101", "demographic", None,
+            df,
+            session,
+            "demo",
+            "20260101",
+            "demographic",
+            None,
         )
 
 

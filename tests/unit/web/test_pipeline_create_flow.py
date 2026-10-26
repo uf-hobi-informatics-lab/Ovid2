@@ -38,7 +38,6 @@ def temp_pipelines_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path
     pkg.__path__[:] = original  # type: ignore[attr-defined]
 
 
-
 def _write_disc_connection(xdg: Path, name: str, host_path: str) -> None:
     conndir = xdg / "config" / "ovid2" / "connections"
     conndir.mkdir(parents=True, exist_ok=True)
@@ -109,9 +108,7 @@ def test_create_etl_pipeline_scaffolds_package_named_after_pipeline(
     assert (temp_pipelines_root / "myhosp" / "pipeline_settings.py").is_file()
 
     # The config was written binding pipeline == name, watch trigger.
-    cfg_path = (
-        isolated_xdg / "config" / "ovid2" / "pipelines" / "myhosp.json"
-    )
+    cfg_path = isolated_xdg / "config" / "ovid2" / "pipelines" / "myhosp.json"
     assert cfg_path.is_file()
     doc = json.loads(cfg_path.read_text())
     assert doc["pipeline"] == "myhosp"
@@ -192,12 +189,15 @@ def test_edit_form_exposes_watch_trigger(
     assert 'name="watch_min_wait_minutes"' in body
     # Package field is read-only, submitted as a hidden field.
     assert 'id="pipeline"' in body
-    assert 'readonly' in body
+    assert "readonly" in body
 
 
 @pytest.mark.unit
 def test_run_specific_batch_passes_batch_id(
-    web_client, isolated_xdg: Path, tmp_path: Path, temp_pipelines_root: Path,
+    web_client,
+    isolated_xdg: Path,
+    tmp_path: Path,
+    temp_pipelines_root: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:  # type: ignore[no-untyped-def]
     root = tmp_path / "disc_data3"
@@ -233,6 +233,7 @@ def test_run_specific_batch_passes_batch_id(
         input_address=None,
         output_address=None,
         tables=None,
+        confirm_overwrite=False,
     ):  # type: ignore[no-untyped-def]
         captured["name"] = name
         captured["batch_id"] = batch_id
@@ -287,9 +288,7 @@ def test_create_health_pipeline_without_package(
     assert not (temp_pipelines_root / "EDC_repot").exists()
 
     # The config was written binding pipeline == name, kind == health.
-    cfg_path = (
-        isolated_xdg / "config" / "ovid2" / "pipelines" / "EDC_repot.json"
-    )
+    cfg_path = isolated_xdg / "config" / "ovid2" / "pipelines" / "EDC_repot.json"
     assert cfg_path.is_file()
     doc = json.loads(cfg_path.read_text())
     assert doc["pipeline"] == "EDC_repot"
@@ -381,9 +380,7 @@ def test_dq_checks_pipeline_runs_edc_cycle_package(
     assert r.status_code == 303, r.text
     assert r.headers["location"] == "/pipelines/edc_acme", r.headers["location"]
 
-    cfg_path = (
-        isolated_xdg / "config" / "ovid2" / "pipelines" / "edc_acme.json"
-    )
+    cfg_path = isolated_xdg / "config" / "ovid2" / "pipelines" / "edc_acme.json"
     assert cfg_path.is_file()
     doc = json.loads(cfg_path.read_text())
     assert doc["kind"] == "dq_checks"
@@ -689,11 +686,12 @@ def test_run_now_open_pipeline_with_inline_storage_runs_immediately(
 def test_run_now_open_pipeline_derives_batch_id_from_browsed_location(
     web_client, isolated_xdg: Path, temp_pipelines_root: Path, monkeypatch
 ) -> None:  # type: ignore[no-untyped-def]
-    """No typed batch_id: the browsed folder/schema leaf names the batch.
+    """No typed batch_id: the input is bound *exactly* at the browsed folder.
 
-    The run modal has no free-text batch field — the operator navigates
-    to a folder (filesystem) or schema (warehouse), and its final path
-    segment becomes the batch id. Input side wins over output.
+    The address is the exact location of the data: the browsed input
+    folder becomes the input address's location verbatim (nothing is
+    appended later), and no batch id is invented by the route — jobs_svc
+    derives it from that address as its complete Data Space path.
     """
     _write_disc_connection(isolated_xdg, "in_store", str(isolated_xdg / "in"))
     _write_disc_connection(isolated_xdg, "out_store", str(isolated_xdg / "out"))
@@ -726,8 +724,11 @@ def test_run_now_open_pipeline_derives_batch_id_from_browsed_location(
         input_address=None,
         output_address=None,
         tables=None,
+        confirm_overwrite=False,
     ):  # type: ignore[no-untyped-def]
         captured["batch_id"] = batch_id
+        captured["input_address"] = input_address
+        captured["output_address"] = output_address
         return _Resp()
 
     monkeypatch.setattr(pipelines_svc, "run_now", _fake_run_now)
@@ -744,8 +745,21 @@ def test_run_now_open_pipeline_derives_batch_id_from_browsed_location(
     )
     assert r.status_code == 303, r.text
     assert r.headers["location"].startswith("/runs/")
-    # Input side wins; the final segment of the browsed path names the batch.
-    assert captured["batch_id"] == "2026_03"
+    # No route-side batch id: jobs_svc derives it from the input address.
+    assert captured["batch_id"] is None
+    from ovid2.web.services import addresses_svc, output_probe_svc
+
+    in_addr = addresses_svc.get_address(str(captured["input_address"]))
+    out_addr = addresses_svc.get_address(str(captured["output_address"]))
+    assert in_addr is not None and out_addr is not None
+    # Each side is bound exactly at the browsed folder.
+    assert (in_addr.location or {}).get("path") == "landing/2026_03"
+    assert (out_addr.location or {}).get("path") == "warehouse/omop"
+    # The batch id is the input's complete Data Space path.
+    assert (
+        output_probe_svc.batch_id_for_address(str(captured["input_address"]))
+        == "in_store/landing/2026_03"
+    )
 
 
 @pytest.mark.unit
@@ -774,16 +788,16 @@ def test_pipelines_page_lists_storage_accounts_for_open_rows(
     assert "in_store" in body
 
 
-
 @pytest.mark.unit
 def test_submit_form_preselects_pipeline_and_batch(web_client) -> None:  # type: ignore[no-untyped-def]
     """The Submit GET honours ?pipeline= / ?batch_id= preselect params."""
     r = web_client.get("/submit?pipeline=openrun&batch_id=20260101&engine=snowpark")
     assert r.status_code == 200
     body = r.text
-    # The value is injected as a selected option even if it is not an
-    # installed package / generic label.
-    assert '<option value="openrun" selected>' in body
+    # The value is injected as a pipeline card + the hidden field even if
+    # it is not an installed package / generic label.
+    assert 'name="pipeline" id="pipeline-field" value="openrun"' in body
+    assert 'data-pipeline="openrun"' in body
     assert 'value="20260101"' in body
     assert 'value="snowpark"' in body
 
@@ -805,7 +819,7 @@ def test_new_form_exposes_copy_tables_card(web_client) -> None:  # type: ignore[
     assert 'name="tables_open" value="0"' in body
     assert 'name="tables_open" value="1"' in body
     assert 'name="tables"' in body
-    assert 'data-tables-toggle' in body
+    assert "data-tables-toggle" in body
 
 
 @pytest.mark.unit
@@ -940,6 +954,7 @@ def test_run_modal_tables_field_makes_open_copy_runnable(
         input_address=None,
         output_address=None,
         tables=None,
+        confirm_overwrite=False,
     ):  # type: ignore[no-untyped-def]
         captured["tables"] = tables
         return _Resp()
@@ -989,6 +1004,3 @@ def test_run_modal_shows_tables_field_for_copy_only(
     # modal carries a tables input.
     assert 'data-tables-required="true"' in body
     assert "data-run-tables-input" in body
-
-
-

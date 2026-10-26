@@ -72,9 +72,7 @@ def test_cron_route_populates_next_fire(
 
 
 @pytest.mark.unit
-def test_interval_next_fire(
-    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_interval_next_fire(isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
     pipelines_svc.write_pipeline(
         "r_int",
@@ -92,9 +90,7 @@ def test_interval_next_fire(
 
 
 @pytest.mark.unit
-def test_invalid_cron_rejected(
-    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_invalid_cron_rejected(isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
     with pytest.raises(pipelines_svc.PipelineError, match="cron"):
         pipelines_svc.write_pipeline(
@@ -106,9 +102,7 @@ def test_invalid_cron_rejected(
 
 
 @pytest.mark.unit
-def test_run_now_submits_job(
-    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_run_now_submits_job(isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
     pipelines_svc.write_pipeline("r_manual", _base_payload(), actor="test", create_only=True)
     response = pipelines_svc.run_now("r_manual", actor="test")
@@ -185,9 +179,7 @@ def test_run_now_override_binds_open_side(
         return _Resp()
 
     monkeypatch.setattr(pipelines_svc.jobs_svc, "submit", _fake_submit)
-    pipelines_svc.run_now(
-        "r_open_bind", actor="test", input_address="in", batch_id="sch1"
-    )
+    pipelines_svc.run_now("r_open_bind", actor="test", input_address="in", batch_id="sch1")
     assert captured["input_address"] == "in"
     assert captured["batch_id"] == "sch1"
 
@@ -223,9 +215,7 @@ def test_run_now_tables_override_makes_open_copy_runnable(
         return _Resp()
 
     monkeypatch.setattr(pipelines_svc.jobs_svc, "submit", _fake_submit)
-    pipelines_svc.run_now(
-        "r_copy_tbl", actor="test", tables=["DEMOGRAPHIC", "ENCOUNTER"]
-    )
+    pipelines_svc.run_now("r_copy_tbl", actor="test", tables=["DEMOGRAPHIC", "ENCOUNTER"])
     assert captured["tables"] == ["DEMOGRAPHIC", "ENCOUNTER"]
 
 
@@ -317,9 +307,7 @@ def test_due_pipelines(isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch) -> N
 
 
 @pytest.mark.unit
-def test_delete_route_clears_state(
-    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_delete_route_clears_state(isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
     pipelines_svc.write_pipeline(
         "r_del",
@@ -330,6 +318,7 @@ def test_delete_route_clears_state(
     pipelines_svc.delete_pipeline("r_del", actor="test")
     assert pipelines_svc.get_pipeline("r_del") is None
     from ovid2.web import db as web_db
+
     with web_db.connect() as conn:
         row = conn.execute(
             "SELECT * FROM web_pipelines_state WHERE name = ?", ("r_del",)
@@ -338,9 +327,7 @@ def test_delete_route_clears_state(
 
 
 @pytest.mark.unit
-def test_unknown_pipeline_rejected(
-    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_unknown_pipeline_rejected(isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
     with pytest.raises(pipelines_svc.PipelineError, match="pipeline"):
         pipelines_svc.write_pipeline(
@@ -352,9 +339,7 @@ def test_unknown_pipeline_rejected(
 
 
 @pytest.mark.unit
-def test_unknown_address_rejected(
-    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_unknown_address_rejected(isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
     with pytest.raises(pipelines_svc.PipelineError, match="input_address"):
         pipelines_svc.write_pipeline(
@@ -407,10 +392,17 @@ def test_copy_route_rejects_all_sentinel(
 ) -> None:
     """`tools copy` uses nargs='+' so ['all'] is meaningless — reject at write."""
     _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
+    # A source type that cannot list its own tables (legacy postgres
+    # adapter). disc / s3 / azure_blob / snowflake / access all can.
+    configs_dir = Path(os.environ["OVID2_CONFIGS_DIR"])
+    (configs_dir / "in_pg.json").write_text(
+        '{"src_name": "postgres", "src_args": {"host": "db.example.org"}}',
+        encoding="utf-8",
+    )
     with pytest.raises(pipelines_svc.PipelineError, match="do not support"):
         pipelines_svc.write_pipeline(
             "r_copy_all",
-            _base_payload(kind="copy", tables=["all"]),
+            _base_payload(kind="copy", tables=["all"], input_address="in_pg"),
             actor="test",
             create_only=True,
         )
@@ -469,9 +461,7 @@ def test_copy_route_accepts_all_for_access_source(
 
 
 @pytest.mark.unit
-def test_unknown_kind_rejected(
-    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_unknown_kind_rejected(isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Unknown kinds (e.g. `passthrough`) still fail with a clear message."""
     _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
     with pytest.raises(pipelines_svc.PipelineError, match="Unsupported pipeline kind"):
@@ -479,7 +469,8 @@ def test_unknown_kind_rejected(
             "r_bad_kind",
             _base_payload(kind="passthrough", tables=["t"]),
             actor="test",
-            create_only=True,        )
+            create_only=True,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -524,10 +515,17 @@ def test_move_route_rejects_all_sentinel(
 ) -> None:
     """`tools move` uses nargs='+' so ['all'] is meaningless — parity with copy."""
     _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
+    # A source type that cannot list its own tables (legacy postgres
+    # adapter). disc / s3 / azure_blob / snowflake / access all can.
+    configs_dir = Path(os.environ["OVID2_CONFIGS_DIR"])
+    (configs_dir / "in_pg.json").write_text(
+        '{"src_name": "postgres", "src_args": {"host": "db.example.org"}}',
+        encoding="utf-8",
+    )
     with pytest.raises(pipelines_svc.PipelineError, match="do not support"):
         pipelines_svc.write_pipeline(
             "r_move_all",
-            _base_payload(kind="move", tables=["all"]),
+            _base_payload(kind="move", tables=["all"], input_address="in_pg"),
             actor="test",
             create_only=True,
         )
@@ -624,9 +622,7 @@ def test_package_required_kinds_still_gated(
 ) -> None:
     """etl / analysis still require an installed package."""
     _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
-    with pytest.raises(
-        pipelines_svc.PipelineError, match="is not installed under ovid2_pipelines"
-    ):
+    with pytest.raises(pipelines_svc.PipelineError, match="is not installed under ovid2_pipelines"):
         pipelines_svc.write_pipeline(
             "gated",
             _base_payload(pipeline="not-a-pipeline", kind=kind),
@@ -673,3 +669,103 @@ def test_dq_checks_rejects_unknown_cycle(
             actor="test",
             create_only=True,
         )
+
+
+@pytest.mark.unit
+def test_list_pipelines_surfaces_engine_type_and_description(
+    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The assistant matches "copy A to B using snowpark" on engine_type.
+
+    A bare type (``snowpark``) resolves to itself; a named engine config
+    resolves to the type in its JSON; an unknown name is ``None``.
+    """
+    _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
+    engines_dir = isolated_xdg / "ovid2" / "engines"
+    engines_dir.mkdir(parents=True, exist_ok=True)
+    (engines_dir / "sp_named.json").write_text(
+        '{"type": "snowpark", "args": {"connection": "demo"}}', encoding="utf-8"
+    )
+    monkeypatch.setenv("OVID2_ENGINES_DIR", str(engines_dir))
+    for name, engine in (("c_bare", "snowpark"), ("c_named", "sp_named"), ("c_bad", "nope")):
+        pipelines_svc.write_pipeline(
+            name,
+            PipelineWrite(
+                kind="copy",
+                pipeline="ptr",
+                input_address="",
+                output_address="",
+                tables=[],
+                engine=engine,
+                description=f"copy via {engine}",
+                trigger=PipelineTrigger(type="manual"),
+            ),
+            actor="test",
+            create_only=True,
+        )
+    by_name = {p.name: p for p in pipelines_svc.list_pipelines()}
+    assert by_name["c_bare"].engine_type == "snowpark"
+    assert by_name["c_named"].engine == "sp_named"
+    assert by_name["c_named"].engine_type == "snowpark"
+    assert by_name["c_bad"].engine_type is None
+    assert by_name["c_bare"].description == "copy via snowpark"
+    detail = pipelines_svc.get_pipeline("c_bare")
+    assert detail is not None and detail.description == "copy via snowpark"
+
+
+@pytest.mark.unit
+def test_description_survives_an_update_that_omits_it(
+    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """HTML-form edits and enable/disable don't carry ``description``."""
+    _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
+    pipelines_svc.write_pipeline(
+        "c_desc",
+        PipelineWrite(
+            pipeline="ptr",
+            input_address="in",
+            output_address="out",
+            description="keep me",
+            trigger=PipelineTrigger(type="manual"),
+        ),
+        actor="test",
+        create_only=True,
+    )
+    pipelines_svc.write_pipeline("c_desc", _base_payload(), actor="test")
+    pipelines_svc.set_enabled("c_desc", False, actor="test")
+    detail = pipelines_svc.get_pipeline("c_desc")
+    assert detail is not None and detail.description == "keep me"
+
+
+@pytest.mark.unit
+def test_run_now_open_tables_sends_all_sentinel(
+    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An open-tables copy config (``[]``) with no override → ``['all']``.
+
+    ``jobs_svc`` then expands the source roster at draft / submit time.
+    Regression: the assistant's ``draft_pipeline_config`` of an open copy
+    config sent ``[]`` and was always rejected with HTTP 400.
+    """
+    _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
+    pipelines_svc.write_pipeline(
+        "r_copy_open_all",
+        _base_payload(kind="copy", tables=[]),
+        actor="test",
+        create_only=True,
+    )
+    captured: dict[str, object] = {}
+
+    def _fake_draft(request: object, actor: str = "web") -> object:  # type: ignore[no-untyped-def]
+        captured["tables"] = list(request.tables)  # type: ignore[attr-defined]
+
+        class _Resp:
+            job_id = "job-11"
+            instance_id = "inst-11"
+            status = "draft"
+
+        return _Resp()
+
+    monkeypatch.setattr(pipelines_svc.jobs_svc, "create_draft", _fake_draft)
+    pipelines_svc.run_now("r_copy_open_all", actor="test", draft=True)
+    assert captured["tables"] == ["all"]

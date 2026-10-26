@@ -13,7 +13,7 @@ data-plane behaviour is byte-identical:
   fall-back (see :meth:`SnowflakeAddress.read` docstring).
 - ``write(...)`` — end-to-end schema-create + CDM-typed DataFrame
   rebuild + bounded-retry write to the derived
-  ``OVID_{pipeline}_{batch_id}`` schema. The Spark→Snowflake connector
+  schema named by the address (the exact location). The Spark→Snowflake connector
   derives the target ``CREATE TABLE`` DDL from the *DataFrame schema*
   (it ignores the generic ``createTableColumnTypes`` option), so
   ``write`` re-projects the all-string produced DataFrame through a
@@ -122,10 +122,24 @@ class SnowflakeAddress(BaseAddress):
                 "(3) DEFAULT_PIPELINE_DB_NAME in pipeline_settings.py"
             )
 
-    def _schema_name(self, pipeline: str, batch_id: str) -> str:
-        """Return ``OVID_{pipeline}_{batch_id}`` with path chars sanitized."""
-        sanitized = batch_id.replace("/", "_").replace("\\", "_")
-        return f"OVID_{pipeline}_{sanitized}"
+    def _target_schema(self) -> str:
+        """Return the schema this address writes into (the exact location).
+
+        The address is the exact location of the data: the write target
+        is ``{database}.{schema}`` from the location. ``pipeline`` /
+        ``batch_id`` never contribute (the pre-2026-10 synthetic
+        ``OVID_<pipeline>_<batch>`` schema naming is gone).
+
+        Raises:
+            ValueError: When the address names no schema.
+        """
+        if not self.default_schema:
+            raise ValueError(
+                "Snowflake output address names no schema. The address is the "
+                "exact write location: set location.path to DATABASE/SCHEMA "
+                "(or location.schema)."
+            )
+        return self.default_schema
 
     def _pem_body_from_der(self) -> str | None:
         """Return the base64 body of the PEM key for the Spark connector.
@@ -177,7 +191,7 @@ class SnowflakeAddress(BaseAddress):
         """
         # Local import so hosts without the driver can still import the
         # module (tests, static analysis).
-        import snowflake.connector as sf  # type: ignore[import-not-found]
+        import snowflake.connector as sf
 
         kwargs: dict[str, Any] = {"account": self.account}
         for key, value in (
@@ -199,12 +213,14 @@ class SnowflakeAddress(BaseAddress):
         """Idempotently create ``{database}.{schema_name}``.
 
         Uses the Python connector because the Spark-Snowflake
-        connector's ``query`` option only supports ``SELECT``. Trusted
-        SQL — no user input is interpolated (``schema_name`` is derived
-        from ``pipeline`` + ``batch_id`` which are already validated by
-        :mod:`ovid2.core.isolation`).
+        connector's ``query`` option only supports ``SELECT``. Both
+        identifiers come from the address location and are rendered via
+        :func:`ovid2.drivers._layout.sql_ident` (double-quoted when not a
+        plain identifier, e.g. a date-shaped ``20260101`` schema).
         """
-        sql = f"CREATE SCHEMA IF NOT EXISTS {self.database}.{schema_name}"
+        from ovid2.drivers._layout import sql_ident
+
+        sql = f"CREATE SCHEMA IF NOT EXISTS {sql_ident(self.database)}.{sql_ident(schema_name)}"
         conn = self._get_sf_connection()
         try:
             cur = conn.cursor()
@@ -216,11 +232,15 @@ class SnowflakeAddress(BaseAddress):
             conn.close()
         logger.info(
             "Ensured Snowflake schema exists: %s.%s",
-            self.database, schema_name,
+            self.database,
+            schema_name,
         )
 
     def _apply_cdm_schema(
-        self, df: DataFrame, spark: SparkSession, table_name: str,
+        self,
+        df: DataFrame,
+        spark: SparkSession,
+        table_name: str,
     ) -> DataFrame:
         """Return ``df`` rebuilt with the output CDM's typed schema.
 
@@ -258,7 +278,8 @@ class SnowflakeAddress(BaseAddress):
                 "infer column types from the DataFrame. VARCHAR widths "
                 "may not match the harmonised sizes (columns may land as "
                 "VARCHAR(16777216)).",
-                self._cdm_name, table_name.upper(),
+                self._cdm_name,
+                table_name.upper(),
             )
             return df
 
@@ -272,14 +293,10 @@ class SnowflakeAddress(BaseAddress):
                 # connector only creates columns present in the DataFrame.
                 continue
             if kind == "date":
-                typed_df = typed_df.withColumn(
-                    source, to_date(col(source), "yyyy-MM-dd")
-                )
+                typed_df = typed_df.withColumn(source, to_date(col(source), "yyyy-MM-dd"))
                 fields.append(StructField(source, DateType(), True))
             elif kind == "number":
-                typed_df = typed_df.withColumn(
-                    source, col(source).cast(DoubleType())
-                )
+                typed_df = typed_df.withColumn(source, col(source).cast(DoubleType()))
                 fields.append(StructField(source, DoubleType(), True))
             else:
                 # Conform the data to the declared VARCHAR width, not just the
@@ -289,9 +306,7 @@ class SnowflakeAddress(BaseAddress):
                 # RAW_EXT_MED_NAME, or an over-long PRO_TIME). Truncating here
                 # matches Snowflake's own silent right-trim for governed loads
                 # and keeps the write from failing the whole table.
-                typed_df = typed_df.withColumn(
-                    source, substring(col(source), 1, int(width))
-                )
+                typed_df = typed_df.withColumn(source, substring(col(source), 1, int(width)))
                 fields.append(
                     StructField(
                         source,
@@ -325,9 +340,7 @@ class SnowflakeAddress(BaseAddress):
         """
         from ovid2.schema.cdm import build_snowflake_write_schema
 
-        return build_snowflake_write_schema(
-            f"{self._cdm_name}.{table_name.upper()}"
-        )
+        return build_snowflake_write_schema(f"{self._cdm_name}.{table_name.upper()}")
 
     # ------------------------------------------------------------------
     # BaseAddress contract
@@ -346,12 +359,12 @@ class SnowflakeAddress(BaseAddress):
         """Lazily read a Snowflake table into a DataFrame.
 
         Reads ``{database}.{schema}.{resolved_name}`` via the
-        Spark-Snowflake connector. Unlike :meth:`write`, the schema is
-        **not** derived from ``pipeline`` / ``batch_id``: it comes from
-        the address's ``default_schema`` (the ``"schema"`` field on
-        the location JSON). When ``default_schema`` is empty, no
-        ``sfSchema`` option is passed and Snowflake falls back to the
-        connection default (typically ``PUBLIC``).
+        Spark-Snowflake connector. The address is the exact location:
+        the schema is the location's ``schema`` (or the second segment
+        of ``path``), never derived from ``pipeline`` / ``batch_id``.
+        When the address names no schema, no ``sfSchema`` option is
+        passed and Snowflake falls back to the connection default
+        (typically ``PUBLIC``).
 
         Identifier resolution (ease-of-use fall-back)
         ---------------------------------------------
@@ -394,7 +407,9 @@ class SnowflakeAddress(BaseAddress):
 
         dbtable = self._resolve_dbtable(file_name, table_name)
 
-        schema_name = self.default_schema
+        from ovid2.drivers._layout import sql_ident
+
+        schema_name = sql_ident(self.default_schema) if self.default_schema else ""
         options = self._spark_options(schema_name)
         if not schema_name:
             # ``_spark_options`` unconditionally sets ``sfSchema``;
@@ -404,17 +419,16 @@ class SnowflakeAddress(BaseAddress):
         options["dbtable"] = dbtable
         logger.info(
             "Snowflake read: %s.%s.%s",
-            self.database, schema_name or "<default>", dbtable,
+            self.database,
+            schema_name or "<default>",
+            dbtable,
         )
-        return (
-            spark.read
-            .format("snowflake")
-            .options(**options)
-            .load()
-        )
+        return spark.read.format("snowflake").options(**options).load()
 
     def _resolve_dbtable(
-        self, file_name: str, table_name: str | None,
+        self,
+        file_name: str,
+        table_name: str | None,
     ) -> str:
         """Pick the Snowflake identifier for the read.
 
@@ -430,7 +444,8 @@ class SnowflakeAddress(BaseAddress):
                 "identifier; falling back to table_name=%r as dbtable. "
                 "Update the formatter YAML's ``input_file_name`` to the "
                 "real Snowflake table name to silence this message.",
-                file_name, table_name,
+                file_name,
+                table_name,
             )
             return table_name
         raise ValueError(
@@ -451,9 +466,10 @@ class SnowflakeAddress(BaseAddress):
         table_name: str,
         delimiter: str | None = None,
     ) -> None:
-        """Write ``df`` into ``{database}.OVID_{pipeline}_{batch_id}.{table_name}``.
+        """Write ``df`` into ``{database}.{schema}.{table_name}`` (the exact address).
 
-        Creates the target schema when missing and retries transient
+        ``pipeline`` / ``batch_id`` are accepted for interface stability
+        and ignored. Creates the target schema when missing and retries transient
         network failures. VARCHAR widths come from the harmonized-ID
         map + declared CDM ``RDBMS Text(N)`` sizes; the writer does
         NOT scan the DataFrame for actual max lengths (see module
@@ -468,13 +484,14 @@ class SnowflakeAddress(BaseAddress):
         ``VARCHAR(16777216)`` — the connector ignores the generic
         ``createTableColumnTypes`` DataSource option.
         """
-        del delimiter  # unused
+        del delimiter, pipeline, batch_id  # the address is the exact location
+        from ovid2.drivers._layout import sql_ident
 
         self._validate_database()
-        schema_name = self._schema_name(pipeline, batch_id)
+        schema_name = self._target_schema()
         self._create_schema_if_not_exists(schema_name)
 
-        options = self._spark_options(schema_name)
+        options = self._spark_options(sql_ident(schema_name))
         options["dbtable"] = table_name.upper()
 
         write_df = self._apply_cdm_schema(df, spark, table_name)
@@ -487,34 +504,41 @@ class SnowflakeAddress(BaseAddress):
                     .write.format("snowflake")
                     .options(**options)
                     .option("on_error", "CONTINUE")
-                    .option("useSchema", schema_name)
+                    .option("useSchema", sql_ident(schema_name))
                     .mode("overwrite")
                 )
                 writer.save()
                 logger.info(
                     "Snowflake write succeeded: %s.%s.%s",
-                    self.database, schema_name, table_name.upper(),
+                    self.database,
+                    schema_name,
+                    table_name.upper(),
                 )
                 return
-            except Exception as exc:  # noqa: BLE001 — vendor exceptions vary
+            except Exception as exc:
                 message = str(exc)
                 if not _is_transient_error(message):
                     logger.error(
                         "Non-transient error writing %s to Snowflake: %s",
-                        table_name, message,
+                        table_name,
+                        message,
                     )
                     raise
                 if attempt == _MAX_RETRIES:
                     logger.error(
                         "Failed to write %s after %d attempts: %s",
-                        table_name, _MAX_RETRIES, message,
+                        table_name,
+                        _MAX_RETRIES,
+                        message,
                     )
                     raise
                 logger.warning(
-                    "Transient error writing %s (attempt %d/%d), "
-                    "retrying in %ds: %s",
-                    table_name, attempt, _MAX_RETRIES,
-                    backoff_seconds, message,
+                    "Transient error writing %s (attempt %d/%d), retrying in %ds: %s",
+                    table_name,
+                    attempt,
+                    _MAX_RETRIES,
+                    backoff_seconds,
+                    message,
                 )
                 time.sleep(backoff_seconds)
                 backoff_seconds = min(backoff_seconds * 2, _MAX_BACKOFF_SECONDS)

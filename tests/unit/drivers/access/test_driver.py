@@ -126,17 +126,13 @@ class TestTablesToRead:
     def test_allow_list_filters(self, monkeypatch) -> None:
         captured: dict = {}
         _install_fake_spark(monkeypatch, ["Drugs", "Ndc", "Rxcui"], captured)
-        d = AccessDriver(
-            {"host_path": "/h"}, {}, {"path": "v.accdb", "tables": "ndc, rxcui"}
-        )
+        d = AccessDriver({"host_path": "/h"}, {}, {"path": "v.accdb", "tables": "ndc, rxcui"})
         assert d.tables_to_read(object()) == ["Ndc", "Rxcui"]
 
     def test_exclude_list_filters(self, monkeypatch) -> None:
         captured: dict = {}
         _install_fake_spark(monkeypatch, ["Drugs", "Ndc", "Rxcui"], captured)
-        d = AccessDriver(
-            {"host_path": "/h"}, {}, {"path": "v.accdb", "exclude_tables": "Drugs"}
-        )
+        d = AccessDriver({"host_path": "/h"}, {}, {"path": "v.accdb", "exclude_tables": "Drugs"})
         assert d.tables_to_read(object()) == ["Ndc", "Rxcui"]
 
 
@@ -218,25 +214,19 @@ class TestSupportsExpandAll:
     def test_expand_uses_spark_free_reader(self, monkeypatch) -> None:
         captured: dict = {}
         _install_fake_reader(monkeypatch, ["Drugs", "Ndc", "Rxcui"], captured)
-        d = AccessDriver(
-            {"host_path": "/h", "container_path": "/c"}, {}, {"path": "v.accdb"}
-        )
+        d = AccessDriver({"host_path": "/h", "container_path": "/c"}, {}, {"path": "v.accdb"})
         assert d.expand_all_tables() == ["Drugs", "Ndc", "Rxcui"]
         # Enumeration keys on the *host* path (control plane, no mount).
         assert captured["reader_path"] == "/h/v.accdb"
 
     def test_expand_honours_exclude_list(self, monkeypatch) -> None:
         _install_fake_reader(monkeypatch, ["Drugs", "Ndc", "Rxcui"])
-        d = AccessDriver(
-            {"host_path": "/h"}, {}, {"path": "v.accdb", "exclude_tables": "Drugs"}
-        )
+        d = AccessDriver({"host_path": "/h"}, {}, {"path": "v.accdb", "exclude_tables": "Drugs"})
         assert d.expand_all_tables() == ["Ndc", "Rxcui"]
 
     def test_expand_honours_allow_list(self, monkeypatch) -> None:
         _install_fake_reader(monkeypatch, ["Drugs", "Ndc", "Rxcui"])
-        d = AccessDriver(
-            {"host_path": "/h"}, {}, {"path": "v.accdb", "tables": "ndc"}
-        )
+        d = AccessDriver({"host_path": "/h"}, {}, {"path": "v.accdb", "tables": "ndc"})
         assert d.expand_all_tables() == ["Ndc"]
 
     def test_expand_returns_none_when_unavailable(self, monkeypatch) -> None:

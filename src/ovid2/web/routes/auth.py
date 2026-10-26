@@ -502,7 +502,9 @@ async def auth_callback(request: Request, provider: str) -> Response:
         idle_ttl_min=settings.auth.idle_ttl_minutes,
     )
 
-    safe_next = _safe_next(transient.get("next") if isinstance(transient.get("next"), str) else None)
+    safe_next = _safe_next(
+        transient.get("next") if isinstance(transient.get("next"), str) else None
+    )
     response = RedirectResponse(url=safe_next, status_code=302)
     cookie.issue_cookie(response, session.session_id, request)
     _clear_transient(response)

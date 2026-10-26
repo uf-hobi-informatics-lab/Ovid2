@@ -7,7 +7,7 @@ returns a lazy DataFrame with predictable column-name casing.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ovid2.formatters.spec import SourceSpec
 
@@ -28,7 +28,7 @@ def read_source(
     input_address: BaseAddress,
     pipeline: str,
     batch_id: str,
-    engine: "BaseEngine | None" = None,
+    engine: BaseEngine | None = None,
     input_address_name: str | None = None,
 ) -> DataFrame:
     """Read one source block into a lazy DataFrame.
@@ -76,7 +76,10 @@ def read_source(
             )
         else:
             df = input_address.read(
-                spark, pipeline, batch_id, source.glob,
+                spark,
+                pipeline,
+                batch_id,
+                source.glob,
                 table_name=source.name,
             )
     except FileNotFoundError:
@@ -102,13 +105,13 @@ def read_source(
     if source.filter:
         df = df.filter(source.filter)
 
-    return df
+    return cast("DataFrame", df)
 
 
 def _read_via_stager(
     source: SourceSpec,
     *,
-    engine: "BaseEngine",
+    engine: BaseEngine,
     pipeline: str,
     batch_id: str,
     input_address_name: str | None,
@@ -173,8 +176,7 @@ def _apply_exclude_patterns(
         # ``PatternSyntaxException: Unknown inline modifier``.
         regex = _glob_to_java_regex(pattern)
         keep_expression_parts.append(
-            "NOT (lower(reverse(split(reverse(__ovid2_source_file__), '/')[0])) "
-            f"rlike '{regex}')"
+            f"NOT (lower(reverse(split(reverse(__ovid2_source_file__), '/')[0])) rlike '{regex}')"
         )
     predicate = " AND ".join(keep_expression_parts)
     return df_with_source.filter(expr(predicate)).drop("__ovid2_source_file__")

@@ -52,11 +52,11 @@ class AdapterContext:
     input_address: BaseAddress
     pipeline: str
     batch_id: str
-    engine: "BaseEngine | None" = None
+    engine: BaseEngine | None = None
     input_address_name: str | None = None
 
     @property
-    def functions(self) -> "EngineFunctions":
+    def functions(self) -> EngineFunctions:
         """Return the engine's column-expression DSL.
 
         Convenience accessor so engine-portable formatters can write

@@ -39,13 +39,13 @@ def in_memory_pipeline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
         encoding="utf-8",
     )
     (pkg / "formatters" / "demographic.yaml").write_text(
-        'v: 1\nformatter: demographic\nadapter: source_passthrough\n'
+        "v: 1\nformatter: demographic\nadapter: source_passthrough\n"
         'sources:\n  demographic:\n    glob: "*Demographic*"\n'
         'projections:\n  PATID: "patid"\n',
         encoding="utf-8",
     )
     (pkg / "mappers" / "demographic.yaml").write_text(
-        'v: 1\ntable: demographic\nops: []\n',
+        "v: 1\ntable: demographic\nops: []\n",
         encoding="utf-8",
     )
     monkeypatch.syspath_prepend(str(root))
@@ -134,9 +134,7 @@ def test_read_pipeline_file_rejects_non_whitelisted(in_memory_pipeline: str) -> 
 
 
 @pytest.mark.unit
-def test_read_pipeline_file_truncates_large_files(
-    in_memory_pipeline: str, tmp_path: Path
-) -> None:
+def test_read_pipeline_file_truncates_large_files(in_memory_pipeline: str, tmp_path: Path) -> None:
     """Files larger than ``MAX_PREVIEW_BYTES`` are truncated with a marker."""
     pipelines_meta_svc.MAX_PREVIEW_BYTES = 64  # tiny cap for the test
     try:

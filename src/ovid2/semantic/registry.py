@@ -30,7 +30,7 @@ from ovid2.semantic.handle import SemanticHandle, VocabularyHandle
 _REGISTRY: Final[dict[str, dict[str, SemanticHandle]]] = {}
 
 #: (cdm_name, table, column) -> ColumnBinding.
-_BINDINGS: Final[dict[tuple[str, str, str], "ColumnBinding"]] = {}
+_BINDINGS: Final[dict[tuple[str, str, str], ColumnBinding]] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -92,9 +92,7 @@ def register(handle: SemanticHandle, *, overwrite: bool = False) -> None:
     """
     bucket = _REGISTRY.setdefault(handle.kind, {})
     if handle.name in bucket and not overwrite:
-        raise ValueError(
-            f"Semantic handle '{handle.kind}:{handle.name}' is already registered."
-        )
+        raise ValueError(f"Semantic handle '{handle.kind}:{handle.name}' is already registered.")
     bucket[handle.name] = handle
 
 

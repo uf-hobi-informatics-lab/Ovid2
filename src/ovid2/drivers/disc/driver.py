@@ -77,7 +77,8 @@ class DiscDriver(Driver):
         return _location_fields()
 
     def container_requirements_for(
-        self, location: dict[str, Any] | None = None,
+        self,
+        location: dict[str, Any] | None = None,
     ) -> tuple[ContainerRequirement, ...]:
         """Return the auto-mount(s) this disc address contributes.
 
@@ -133,17 +134,13 @@ class DiscDriver(Driver):
         normalised = self._widened()
         root = os.path.realpath(str(normalised["host_path"] or ""))
         if not root or not os.path.isdir(root):
-            raise NotImplementedError(
-                f"disc host_path {root!r} is not a listable directory."
-            )
+            raise NotImplementedError(f"disc host_path {root!r} is not a listable directory.")
         sub = (prefix or "").strip().lstrip("/")
         target = os.path.realpath(os.path.join(root, sub)) if sub else root
         # Confinement: target must be the root or beneath it.
         root_prefix = root.rstrip("/") + "/"
         if target != root and not target.startswith(root_prefix):
-            raise ValueError(
-                f"prefix {prefix!r} escapes the storage-account root."
-            )
+            raise ValueError(f"prefix {prefix!r} escapes the storage-account root.")
         if not os.path.isdir(target):
             raise ValueError(f"prefix {prefix!r} is not a directory.")
 
@@ -154,22 +151,135 @@ class DiscDriver(Driver):
                     continue
                 # Path returned to the caller is relative to the root so
                 # it round-trips as the next ``prefix``.
-                rel = os.path.relpath(
-                    os.path.join(target, entry.name), root
-                )
+                rel = os.path.relpath(os.path.join(target, entry.name), root)
                 try:
                     is_dir = entry.is_dir()
                 except OSError:
                     is_dir = False
+                size: int | None = None
+                if not is_dir:
+                    try:
+                        size = entry.stat().st_size
+                    except OSError:
+                        size = None
                 entries.append(
                     StorageEntry(
                         name=entry.name,
                         kind="dir" if is_dir else "file",
                         path=rel,
+                        size_bytes=size,
                     )
                 )
         entries.sort(key=lambda e: (0 if e.kind == "dir" else 1, e.name.lower()))
         return entries
+
+    # ------------------------------------------------------------------
+    # ``all`` expansion + size hints (control plane, stdlib only)
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def supports_expand_all(cls) -> bool:
+        """A disc batch folder is enumerable, so ``all`` is expandable."""
+        return True
+
+    def _data_root(self, location: dict[str, Any] | None = None) -> str:
+        """Return the address root visible to *this* process.
+
+        Inside the container the ``container_path`` mount exists; on the
+        host (the web tier's executor broker) only ``host_path`` does.
+        The per-address ``location.path`` is appended in both cases.
+        """
+        loc = dict(location if location is not None else self.location)
+        normalised = self._widened()
+        sub = str(loc.get("path") or "")
+        for base in (normalised["container_path"], normalised["host_path"]):
+            if not base:
+                continue
+            candidate = os.path.join(base, sub) if sub else base
+            if os.path.isdir(candidate):
+                return candidate
+        base = normalised["container_path"] or normalised["host_path"]
+        return os.path.join(base, sub) if sub else base
+
+    def _batch_dir(self, location: dict[str, Any] | None = None) -> str | None:
+        """Return the exact directory this address reads from, or ``None``.
+
+        The address *is* the location of the data: no ``{pipeline}`` /
+        ``{batch_id}`` segment is appended. ``None`` when the directory
+        does not exist.
+        """
+        root = self._data_root(location)
+        return root if os.path.isdir(root) else None
+
+    @staticmethod
+    def _list_batch_dir(path: str) -> list[StorageEntry]:
+        """List ``path`` one level deep with sizes (dirs = sum of their files)."""
+        entries: list[StorageEntry] = []
+        with os.scandir(path) as scanner:
+            for entry in scanner:
+                size: int | None
+                try:
+                    is_dir = entry.is_dir()
+                    if is_dir:
+                        size = 0
+                        with os.scandir(entry.path) as inner:
+                            for child in inner:
+                                if child.is_file():
+                                    size += child.stat().st_size
+                    else:
+                        size = entry.stat().st_size
+                except OSError:
+                    is_dir, size = False, None
+                entries.append(
+                    StorageEntry(
+                        name=entry.name,
+                        kind="dir" if is_dir else "file",
+                        path=entry.path,
+                        size_bytes=size,
+                    )
+                )
+        entries.sort(key=lambda e: e.name.lower())
+        return entries
+
+    def expand_all_tables(
+        self,
+        location: dict[str, Any] | None = None,
+        *,
+        pipeline: str | None = None,
+        batch_id: str | None = None,
+    ) -> list[str] | None:
+        """Expand ``all`` to every data file directly in the address folder.
+
+        Returns ``LOGICAL=SOURCE`` specs (``demographic=demographic.csv``)
+        so destination stems drop the extension. ``pipeline`` /
+        ``batch_id`` are ignored — the address is the exact location.
+
+        Raises:
+            FileNotFoundError: When the address folder does not exist.
+        """
+        del pipeline, batch_id
+        from ovid2.drivers._table_listing import entries_to_table_specs
+
+        path = self._batch_dir(location)
+        if path is None:
+            raise FileNotFoundError(f"address folder {self._data_root(location)!r} does not exist")
+        return entries_to_table_specs(self._list_batch_dir(path))
+
+    def table_sizes(
+        self,
+        file_names: list[str],
+        *,
+        pipeline: str,
+        batch_id: str,
+    ) -> dict[str, int]:
+        """Return on-disk sizes for ``file_names`` (globs allowed) via ``stat``."""
+        del pipeline, batch_id
+        from ovid2.drivers._table_listing import sizes_for
+
+        path = self._batch_dir()
+        if path is None:
+            return {}
+        return sizes_for(self._list_batch_dir(path), file_names)
 
     # ------------------------------------------------------------------
     # Legacy bridge
@@ -218,11 +328,10 @@ class DiscDriver(Driver):
         from ovid2.drivers.disc.spark import read_dataframe
 
         merged = self._merged_location_view()
+        del pipeline, batch_id  # the address is the exact location
         return read_dataframe(
             session,  # type: ignore[arg-type]
             merged["root"],
-            pipeline,
-            batch_id,
             file_name,
             delimiter,
             merged["format"],
@@ -238,16 +347,14 @@ class DiscDriver(Driver):
         table_name: str,
         delimiter: str | None = None,
     ) -> None:
-        """Materialise ``df`` under ``{root}/{pipeline}/{batch_id}/``."""
-        del session  # not needed — write_dataframe uses df.write
+        """Materialise ``df`` directly under the address directory."""
+        del session, pipeline, batch_id  # the address is the exact location
         from ovid2.drivers.disc.spark import write_dataframe
 
         merged = self._merged_location_view()
         write_dataframe(
             df,
             merged["root"],
-            pipeline,
-            batch_id,
             table_name,
             delimiter,
             merged["format"],

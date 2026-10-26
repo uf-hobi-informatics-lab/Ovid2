@@ -1,34 +1,33 @@
 """Value object for an Ovid Data Space path.
 
-Grammar (see :doc:the adr-ods-naming-layer design note)::
+Grammar (see :doc:the adr-address-is-exact-location design note)::
 
-    /                                  # root, depth 0
-    /<pipeline>                         # depth 1
-    /<pipeline>/<batch_id>              # depth 2
-    /<pipeline>/<batch_id>/<table>      # depth 3, leaf
+    /                                   # root — every storage account
+    /<connection>                       # a storage account's top level
+    /<connection>/<path>/…/<leaf>       # any folder / schema / table below it
 
-Components:
-
-- ``pipeline`` — a pipeline package name (``demo``, ``example_pcornet``, ``pcornet_to_omop``, …).
-- ``batch_id`` — an opaque batch identifier (typically ``YYYYMMDD``).
-- ``table`` — a CDM table name (``DEMOGRAPHIC``, ``ENCOUNTER``, …).
+Every data space is the same: a tree of plain directories. The first
+segment is the **storage account** (a connection name); the rest is the
+location path under it — folders for disc / s3 / azure_blob / gcs,
+``DATABASE/SCHEMA[/TABLE]`` for warehouses. There is no ``pipeline`` or
+``batch_id`` level: the *complete* path of a folder or schema is what a
+run's ``batch_id`` is, and the address of that folder is the exact
+location its data is read from / written to.
 
 Normalisation:
 
 - Trailing slashes are stripped.
-- Empty components are rejected.
+- Empty components (``//``) are rejected.
 - ``..``, ``.``, wildcards, ``@``, ``#``, ``?`` are rejected.
-- Case is *preserved* in the stored components, but equality is
-  case-insensitive. Rationale: ``DiscAddress._get_read_path`` already
-  probes three case variants of the pipeline name, and downstream
-  CDM code lowercases table names. Preserving the caller's case
-  keeps the URL grep-friendly while making comparison forgiving.
+- Case is preserved in the stored components; equality is
+  case-insensitive (warehouse identifiers are case-insensitive and most
+  operators type folder names inconsistently).
 """
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import ClassVar
 
 __all__ = ["OdsPath", "OdsPathError"]
@@ -38,32 +37,27 @@ class OdsPathError(ValueError):
     """Raised when a path string fails the ODS grammar."""
 
 
-# One consolidated regex is easier to reason about than five small ones.
-# Component charset: alphanumerics, underscore, hyphen, dot. Excludes
-# every character that has structural meaning elsewhere (``/`` is the
-# separator, ``@`` and ``#`` are reserved, ``?`` is query-string in
-# HTTP contexts, ``*`` / ``?`` are wildcards, ``..`` walks parents).
-_COMPONENT_RE: re.Pattern[str] = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._\-]*$")
+# Component charset: alphanumerics, underscore, hyphen, dot, ``$`` (Snowflake
+# identifiers). Excludes every character with structural meaning elsewhere
+# (``/`` separator, ``@`` / ``#`` reserved, ``?`` query, ``*`` wildcard).
+_COMPONENT_RE: re.Pattern[str] = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9._$\-]*$")
 
 
 @dataclass(frozen=True)
 class OdsPath:
-    """A normalised, immutable ODS path.
+    """A normalised, immutable Data Space path.
 
-    Instances are frozen and hashable — use them as ``dict`` keys or
-    ``set`` members. Two paths compare equal case-insensitively via
-    :meth:`__eq__` / :meth:`__hash__` (implemented via
-    :attr:`_canonical`).
+    ``connection`` is the storage account; ``parts`` the location path
+    beneath it. Instances are frozen and hashable; equality is
+    case-insensitive.
     """
 
-    #: Depth 0..3 following the ``/pipeline/batch/table`` grammar.
-    pipeline: str | None = None
-    batch_id: str | None = None
-    table: str | None = None
+    connection: str | None = None
+    parts: tuple[str, ...] = field(default_factory=tuple)
 
-    #: Maximum allowed depth. Depth-4+ (column, partition, stage) is
-    #: intentionally rejected in v1 — see the ADR alternatives.
-    MAX_DEPTH: ClassVar[int] = 3
+    #: Generous ceiling — deep object-store prefixes are legitimate, but an
+    #: unbounded path is almost always a bug (or an attack).
+    MAX_DEPTH: ClassVar[int] = 32
 
     # ------------------------------------------------------------------
     # Construction
@@ -74,51 +68,29 @@ class OdsPath:
         """Parse a POSIX-style string into an :class:`OdsPath`.
 
         Args:
-            path: An absolute POSIX-style path. Must start with ``/``.
-                Trailing slashes are stripped.
-
-        Returns:
-            The normalised path.
+            path: An absolute POSIX-style path (must start with ``/``).
 
         Raises:
-            OdsPathError: When the path violates the ODS grammar.
+            OdsPathError: When the path violates the grammar.
         """
         if not isinstance(path, str):
             raise OdsPathError(f"OdsPath expects a string, got {type(path).__name__}.")
-
         raw = path.strip()
         if not raw:
             raise OdsPathError("OdsPath cannot be empty.")
         if not raw.startswith("/"):
             raise OdsPathError(f"OdsPath must be absolute (start with '/'); got '{path}'.")
-
-        # Strip trailing slashes, then split. A bare "/" yields [""]
-        # so the components list is [] after filtering, which is depth 0.
         stripped = raw.rstrip("/") or "/"
-
-        # Reject double slashes explicitly. ``rstrip('/')`` above already
-        # collapsed trailing runs, so any remaining ``//`` sits in the
-        # middle of the path — always a grammar error.
         if "//" in stripped:
-            raise OdsPathError(
-                f"OdsPath rejects empty components (double slash) in '{path}'."
-            )
-
+            raise OdsPathError(f"OdsPath rejects empty components (double slash) in '{path}'.")
         components = [c for c in stripped.split("/") if c != ""]
-
         if len(components) > cls.MAX_DEPTH:
-            raise OdsPathError(
-                f"OdsPath depth {len(components)} exceeds max {cls.MAX_DEPTH}: '{path}'. "
-                "Column / partition / stage granularity is out of scope in v1."
-            )
-
+            raise OdsPathError(f"OdsPath depth {len(components)} exceeds max {cls.MAX_DEPTH}.")
         for component in components:
             cls._validate_component(component)
-
-        pipeline = components[0] if len(components) >= 1 else None
-        batch_id = components[1] if len(components) >= 2 else None
-        table = components[2] if len(components) >= 3 else None
-        return cls(pipeline=pipeline, batch_id=batch_id, table=table)
+        if not components:
+            return cls()
+        return cls(connection=components[0], parts=tuple(components[1:]))
 
     @classmethod
     def _validate_component(cls, component: str) -> None:
@@ -128,7 +100,7 @@ class OdsPath:
         if not _COMPONENT_RE.match(component):
             raise OdsPathError(
                 f"OdsPath component '{component}' contains invalid characters. "
-                "Allowed: alphanumerics, underscore, dot, hyphen; must start alphanumeric."
+                "Allowed: alphanumerics, underscore, dot, hyphen, '$'."
             )
 
     # ------------------------------------------------------------------
@@ -137,84 +109,67 @@ class OdsPath:
 
     @property
     def depth(self) -> int:
-        """Number of set components (0..3)."""
-        depth = 0
-        if self.pipeline is not None:
-            depth += 1
-        if self.batch_id is not None:
-            depth += 1
-        if self.table is not None:
-            depth += 1
-        return depth
+        """Number of components (0 = root)."""
+        return 0 if self.connection is None else 1 + len(self.parts)
 
     @property
     def is_root(self) -> bool:
         """``True`` when the path is ``/``."""
-        return self.depth == 0
+        return self.connection is None
 
     @property
-    def is_leaf(self) -> bool:
-        """``True`` when the path names a table (depth 3)."""
-        return self.depth == 3
+    def location(self) -> str:
+        """The location path under the storage account (``''`` at its top)."""
+        return "/".join(self.parts)
+
+    @property
+    def name(self) -> str:
+        """The last component (``''`` at the root)."""
+        if self.parts:
+            return self.parts[-1]
+        return self.connection or ""
 
     def as_str(self) -> str:
         """Render the path as an absolute POSIX string."""
-        if self.depth == 0:
+        if self.connection is None:
             return "/"
-        parts: list[str] = []
-        if self.pipeline is not None:
-            parts.append(self.pipeline)
-        if self.batch_id is not None:
-            parts.append(self.batch_id)
-        if self.table is not None:
-            parts.append(self.table)
-        return "/" + "/".join(parts)
+        return "/" + "/".join((self.connection, *self.parts))
+
+    def batch_id(self) -> str:
+        """Return the path as a run ``batch_id`` (``<connection>/<location>``)."""
+        return self.as_str().lstrip("/")
 
     def parent(self) -> OdsPath:
         """Return the parent path (root is its own parent)."""
-        if self.depth == 0:
+        if self.connection is None:
             return self
-        if self.depth == 1:
+        if not self.parts:
             return OdsPath()
-        if self.depth == 2:
-            return OdsPath(pipeline=self.pipeline)
-        return OdsPath(pipeline=self.pipeline, batch_id=self.batch_id)
+        return OdsPath(connection=self.connection, parts=self.parts[:-1])
 
     def child(self, component: str) -> OdsPath:
         """Return a new path with ``component`` appended.
 
-        Args:
-            component: One segment. Validated against the grammar.
-
-        Returns:
-            The extended path.
-
         Raises:
-            OdsPathError: On depth overflow or invalid component.
+            OdsPathError: On depth overflow or an invalid component.
         """
         self._validate_component(component)
         if self.depth >= self.MAX_DEPTH:
-            raise OdsPathError(
-                f"Cannot descend below '{self.as_str()}' — leaf reached at depth {self.MAX_DEPTH}."
-            )
-        if self.depth == 0:
-            return OdsPath(pipeline=component)
-        if self.depth == 1:
-            return OdsPath(pipeline=self.pipeline, batch_id=component)
-        return OdsPath(pipeline=self.pipeline, batch_id=self.batch_id, table=component)
+            raise OdsPathError(f"Cannot descend below '{self.as_str()}' (max depth).")
+        if self.connection is None:
+            return OdsPath(connection=component)
+        return OdsPath(connection=self.connection, parts=(*self.parts, component))
 
     # ------------------------------------------------------------------
     # Equality / hashing (case-insensitive)
     # ------------------------------------------------------------------
 
     @property
-    def _canonical(self) -> tuple[str, str, str]:
+    def _canonical(self) -> tuple[str, ...]:
         """Lowercased tuple used for equality + hashing."""
-        return (
-            (self.pipeline or "").lower(),
-            (self.batch_id or "").lower(),
-            (self.table or "").lower(),
-        )
+        if self.connection is None:
+            return ()
+        return tuple(c.lower() for c in (self.connection, *self.parts))
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, OdsPath):
@@ -229,3 +184,7 @@ class OdsPath:
 
     def __repr__(self) -> str:  # pragma: no cover — debug only
         return f"OdsPath({self.as_str()!r})"
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit("Library module; import it.")

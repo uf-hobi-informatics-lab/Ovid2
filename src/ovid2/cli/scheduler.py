@@ -88,7 +88,7 @@ def _entry(args: argparse.Namespace) -> int:
     event_log = WORK_DIR / f"events-{instance.instance_id}.jsonl"
     jsonl_bus = JsonlEventBus(event_log)
     bus = TeeEventBus(jsonl_bus, PlainLogBus()) if args.stderr_log else jsonl_bus
-    set_default_bus(bus)  # type: ignore[arg-type]
+    set_default_bus(bus)
 
     print(f"[ovid2 scheduler] instance_id={instance.instance_id}")
     print(f"[ovid2 scheduler] event_log={event_log}")

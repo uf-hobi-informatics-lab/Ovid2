@@ -300,7 +300,7 @@ def _yaml_scalar(value: str) -> str:
     if value == "":
         return "''"
     # Quote if the value contains any character that YAML might treat specially.
-    special = set(":#-{}[]&*!|>%@`\",\n\t")
+    special = set(':#-{}[]&*!|>%@`",\n\t')
     if any(ch in special for ch in value) or value != value.strip():
         escaped = value.replace('"', '\\"')
         return f'"{escaped}"'

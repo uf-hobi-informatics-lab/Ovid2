@@ -71,15 +71,10 @@ def access_spark():
     try:
         jvm = session.sparkContext._jvm
         context_cl = jvm.java.lang.Thread.currentThread().getContextClassLoader()
-        jvm.java.lang.Class.forName(
-            "net.ucanaccess.jdbc.UcanaccessDriver", True, context_cl
-        )
-    except Exception:  # noqa: BLE001
+        jvm.java.lang.Class.forName("net.ucanaccess.jdbc.UcanaccessDriver", True, context_cl)
+    except Exception:
         session.stop()
-        pytest.skip(
-            "UCanAccess driver not on the classpath; set "
-            "OVID2_TEST_UCANACCESS_JARS."
-        )
+        pytest.skip("UCanAccess driver not on the classpath; set OVID2_TEST_UCANACCESS_JARS.")
     try:
         yield session
     finally:
@@ -116,9 +111,7 @@ def test_each_table_reads_as_separate_dataframe(access_spark) -> None:
     # large feed; reading the schema (df.columns) is enough to prove the
     # per-table read path works without scanning all 800MB.
     for table in tables[:5]:
-        df = driver.read(
-            access_spark, "multum", "batch", table, table_name=table
-        )
+        df = driver.read(access_spark, "multum", "batch", table, table_name=table)
         assert df.columns, f"table {table} read with no columns"
 
 
@@ -135,12 +128,10 @@ def test_read_forces_every_column_to_string(access_spark) -> None:
     driver = _driver()
     tables = driver.tables_to_read(access_spark)
     for table in tables[:5]:
-        df = driver.read(
-            access_spark, "multum", "batch", table, table_name=table
+        df = driver.read(access_spark, "multum", "batch", table, table_name=table)
+        assert all(isinstance(field.dataType, StringType) for field in df.schema), (
+            f"table {table} has a non-string column after read"
         )
-        assert all(
-            isinstance(field.dataType, StringType) for field in df.schema
-        ), f"table {table} has a non-string column after read"
 
 
 def test_read_returns_values_not_column_names(access_spark) -> None:
@@ -160,9 +151,7 @@ def test_read_returns_values_not_column_names(access_spark) -> None:
     tables = driver.tables_to_read(access_spark)
     checked = 0
     for table in tables:
-        df = driver.read(
-            access_spark, "multum", "batch", table, table_name=table
-        )
+        df = driver.read(access_spark, "multum", "batch", table, table_name=table)
         cols = df.columns
         # Pull a small sample without a full scan; skip genuinely empty
         # tables (no rows to compare against the header).
@@ -177,7 +166,7 @@ def test_read_returns_values_not_column_names(access_spark) -> None:
             # value that is not simply its column's name.
             assert any(
                 (v is None) or (str(v).lower() != c.lower())
-                for c, v in zip(cols, values)
+                for c, v in zip(cols, values, strict=False)
             ), (
                 f"table {table} row {values!r} equals its column names "
                 f"{cols!r} — the UCanAccess header-as-rows corruption is "

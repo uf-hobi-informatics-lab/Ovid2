@@ -26,10 +26,10 @@ class RegexReplaceOp(BaseMapOp):
 
     def apply(
         self,
-        df: "DataFrame",
+        df: DataFrame,
         params: dict[str, Any],
         ctx: MapOpContext,
-    ) -> "DataFrame":
+    ) -> DataFrame:
         """Return ``df`` with the regex substitution applied to the column."""
         from pyspark.sql.functions import col as sf_col
         from pyspark.sql.functions import regexp_replace

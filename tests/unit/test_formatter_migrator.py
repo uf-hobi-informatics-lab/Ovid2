@@ -107,9 +107,7 @@ def test_migrate_file_writes_to_destination(tmp_path: Path) -> None:
     source_path = tmp_path / "condition_formatter.py"
     source_path.write_text(SIMPLE_SOURCE, encoding="utf-8")
 
-    target, analysis = migrate_file(
-        source_path, pipeline="test", destination_dir=tmp_path / "out"
-    )
+    target, analysis = migrate_file(source_path, pipeline="test", destination_dir=tmp_path / "out")
     assert target.name == "condition.yaml"
     assert target.is_file()
     assert analysis.table == "condition"
@@ -119,9 +117,7 @@ def test_migrate_file_writes_to_destination(tmp_path: Path) -> None:
         migrate_file(source_path, pipeline="test", destination_dir=tmp_path / "out")
 
     # ...but --overwrite succeeds.
-    migrate_file(
-        source_path, pipeline="test", destination_dir=tmp_path / "out", overwrite=True
-    )
+    migrate_file(source_path, pipeline="test", destination_dir=tmp_path / "out", overwrite=True)
 
 
 @pytest.mark.unit

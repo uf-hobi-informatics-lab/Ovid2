@@ -99,11 +99,12 @@ ovid2 doctor
 # 3. Build the Spark image (one-time)
 ovid2 image build
 
-# 4. Run one pipeline for one batch
+# 4. Run one pipeline for one batch (each address is the exact folder
+#    read / written; --overwrite to replace an occupied output)
 ovid2 etl \
     --input_address  disc_input \
     --output_address disc_output \
-    --pipeline example_pcornet --batch_id 2024_01 \
+    --pipeline example_pcornet --batch_id inbox/2024_01 \
     --tables all --transformations all
 
 # 5. Watch it live (in another terminal)
@@ -130,12 +131,12 @@ once and the rest of the doc reads cleanly.
 | **Transform** | A CDM-agnostic DataFrame op (`trim`, `dedup`, `unpivot`, `random_sample`, …) composed into named, reusable chains. |
 | **Health check** | A declarative data-quality check (PCORnet EDC `DC x.yy` or an Ovid2-native panel) grouped into report-cycle packages. |
 | **Connection** | *How* to reach a system (credential-heavy, reusable) — e.g. a Snowflake account, an S3 bucket. |
-| **Address** | *Where* in a connection (a cheap view onto it) — e.g. a specific database/schema or bucket prefix. |
+| **Address** | *Where* in a connection — the **exact** folder / bucket prefix / `DATABASE/SCHEMA` the data is read from or written to (nothing is appended to it). |
 | **Engine** | The *compute* backend: `pyspark`, `databricks_spark`, or `snowpark`. |
 | **Driver** | The *storage* backend: `disc`, `s3`, `azure_blob`, `snowflake`, `access`, `gcs`, `databricks`, `postgres`, `mssql`. |
 | **Stager** | The seam that moves data between an engine and a driver (Spark = pass-through; Snowpark = per-backend staging strategy). |
 | **Instance id** | `YYYYMMDD-HHMMSS-<6hex>` — minted once per run and threaded end-to-end; the single correlation key across every tier and the event log. |
-| **ODS (Data Space)** | A POSIX-style `/pipeline/batch/table` namespace layered over connections+addresses; storage vendor is a *dimension* chosen at resolve time. |
+| **ODS (Data Space)** | Every storage account as a tree of plain directories, `/<account>/<path…>`; a folder's full path is the batch id of a run reading it. |
 | **Draft job** | A fully-specified run that is *not* queued until a human presses ▶ (how the assistant hands work to you). |
 
 ## Architecture at a glance
@@ -513,10 +514,11 @@ is browsable at `GET /api/v1/transforms` and via MCP. See
 
 ### Data Space (ODS)
 
-A POSIX-style namespace `/pipeline/batch/table` (`src/ovid2/dataspace/`)
-layered over the connection+address stack; storage vendors are *dimensions*
-chosen at resolution time. Browse it with `ovid2 tools ods {ls,resolve,dimensions}`
-or the web *Data Space* page.
+Every storage account — disc, object store or warehouse — is a tree of plain
+directories, `/<account>/<path…>` (`src/ovid2/dataspace/`). An address is the
+exact location its data is read from / written to; a folder's complete path is
+the batch id of a run that reads it. Browse it with
+`ovid2 tools ods {ls,resolve,dimensions}` or the web *Data Space* page.
 
 ### Per-invocation isolation
 
@@ -598,7 +600,7 @@ ovid2/
     semantic/               Semantic registry (YAML vocabs in resources/semantic/)
     connections/            Reusable endpoints + credentials (9 types)
     drivers/                One class per peripheral; single source in DRIVERS
-    dataspace/              ODS /pipeline/batch/table namespace
+    dataspace/              ODS /<account>/<path…> directory tree
     display/                Event bus, JSONL reader, renderers/
     scheduler/              Legacy in-process scheduler (parked for rollback)
     web/                    FastAPI + HTMX panel, JSON API, worker, static/

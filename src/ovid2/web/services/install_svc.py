@@ -124,9 +124,7 @@ BUILD_RUNNING: str = "running"
 BUILD_SUCCEEDED: str = "succeeded"
 BUILD_FAILED: str = "failed"
 
-_VALID_BUILD_STATUSES: frozenset[str] = frozenset(
-    {BUILD_RUNNING, BUILD_SUCCEEDED, BUILD_FAILED}
-)
+_VALID_BUILD_STATUSES: frozenset[str] = frozenset({BUILD_RUNNING, BUILD_SUCCEEDED, BUILD_FAILED})
 
 
 class InstallError(ValueError):
@@ -192,9 +190,7 @@ def _new_build_id() -> str:
 
 def _hash(payload: dict[str, Any]) -> str:
     """Return a stable content hash for audit rows."""
-    return hashlib.sha256(
-        json.dumps(payload, sort_keys=True).encode("utf-8")
-    ).hexdigest()
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 def _image_build_log_dir() -> Path:
@@ -290,9 +286,7 @@ def save_snowflake_secret(payload: SecretWrite, *, actor: str = "web") -> dict[s
         raise InstallError("Snowflake secret payload must be a JSON object.")
     missing = [k for k in SNOWFLAKE_REQUIRED_KEYS if not payload.values.get(k)]
     if missing:
-        raise InstallError(
-            f"Snowflake secret is missing required keys: {sorted(missing)}."
-        )
+        raise InstallError(f"Snowflake secret is missing required keys: {sorted(missing)}.")
     try:
         result = secrets_svc.write_secret(SNOWFLAKE_SECRET_NAME, payload, actor=actor)
     except secrets_svc.SecretError as exc:
@@ -325,9 +319,7 @@ def _row_to_build_detail(row: dict[str, Any]) -> ImageBuildDetail:
         pid=int(row["pid"]) if row.get("pid") is not None else None,
         started_at=str(row["started_at"]) if row.get("started_at") else None,
         ended_at=str(row["ended_at"]) if row.get("ended_at") else None,
-        exit_code=(
-            int(row["exit_code"]) if row.get("exit_code") is not None else None
-        ),
+        exit_code=(int(row["exit_code"]) if row.get("exit_code") is not None else None),
         error=str(row["error"]) if row.get("error") else None,
     )
 
@@ -495,9 +487,7 @@ def start_image_build(
         )
     docker_bin = shutil.which("docker")
     if docker_bin is None:
-        raise InstallError(
-            "`docker` is not on PATH. Install Docker before building the image."
-        )
+        raise InstallError("`docker` is not on PATH. Install Docker before building the image.")
 
     resolved_tag = tag or DOCKER_IMAGE
     ctx = Path(context).resolve() if context else _default_build_context()
@@ -542,9 +532,7 @@ def start_image_build(
         actor=actor,
         action="install.image_build",
         target=resolved_tag,
-        detail_json=json.dumps(
-            {"build_id": build_id, "context": str(ctx), "dockerfile": str(df)}
-        ),
+        detail_json=json.dumps({"build_id": build_id, "context": str(ctx), "dockerfile": str(df)}),
     )
     logger.info("Image build %s launched (tag=%s)", build_id, resolved_tag)
     return get_image_build(build_id) or ImageBuildDetail(
@@ -570,15 +558,11 @@ def get_image_build(build_id: str) -> ImageBuildDetail | None:
     return _row_to_build_detail(dict(row))
 
 
-def list_image_builds(
-    *, limit: int = 20, offset: int = 0
-) -> ImageBuildListResponse:
+def list_image_builds(*, limit: int = 20, offset: int = 0) -> ImageBuildListResponse:
     """Return a paginated slice of ``web_image_builds``."""
     _ensure_image_builds_schema()
     with web_db.connect() as conn:
-        total = int(
-            conn.execute("SELECT COUNT(*) AS n FROM web_image_builds").fetchone()["n"]
-        )
+        total = int(conn.execute("SELECT COUNT(*) AS n FROM web_image_builds").fetchone()["n"])
         rows = conn.execute(
             "SELECT * FROM web_image_builds ORDER BY submitted_at DESC LIMIT ? OFFSET ?",
             (limit, offset),
@@ -620,12 +604,8 @@ def get_service_command(
     """
     resolved_user = user or getpass.getuser()
     resolved_bin = ovid2_bin or shutil.which("ovid2") or sys.executable
-    command = (
-        f"sudo ovid2 service install --user {resolved_user} --bin {resolved_bin}"
-    )
-    return InstallServiceCommand(
-        command=command, user=resolved_user, ovid2_bin=resolved_bin
-    )
+    command = f"sudo ovid2 service install --user {resolved_user} --bin {resolved_bin}"
+    return InstallServiceCommand(command=command, user=resolved_user, ovid2_bin=resolved_bin)
 
 
 def _systemd_installed() -> bool:

@@ -119,10 +119,7 @@ def _check_allowlist(path: str, allowlist: list[str]) -> None:
     for root in allowlist:
         if _path_within(canonical, root):
             return
-    raise FsAccessError(
-        f"Path {path!r} is outside the fs_picker allowlist "
-        f"(roots={allowlist})."
-    )
+    raise FsAccessError(f"Path {path!r} is outside the fs_picker allowlist (roots={allowlist}).")
 
 
 # ---------------------------------------------------------------------------
@@ -266,9 +263,7 @@ def _connection_roots() -> list[FsRoot]:
         args = normalise_disc_args(dict(cfg.get("args") or {}))
         host = args["host_path"]
         if host and os.path.isabs(host):
-            roots.append(
-                FsRoot(label=f"disc: {name}", path=host, source="connection")
-            )
+            roots.append(FsRoot(label=f"disc: {name}", path=host, source="connection"))
     return roots
 
 
@@ -312,6 +307,4 @@ def list_roots() -> FsRoots:
 
 
 if __name__ == "__main__":  # pragma: no cover
-    raise SystemExit(
-        "This module is imported by the ovid2 web routes; it is not a script."
-    )
+    raise SystemExit("This module is imported by the ovid2 web routes; it is not a script.")

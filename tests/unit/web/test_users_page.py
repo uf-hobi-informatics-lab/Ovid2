@@ -64,9 +64,7 @@ def _signed_cookie_value(session_id: str) -> str:
     response = Response()
     cookie_mod.issue_cookie(response, session_id)
     line = next(
-        value.decode("latin-1")
-        for key, value in response.raw_headers
-        if key == b"set-cookie"
+        value.decode("latin-1") for key, value in response.raw_headers if key == b"set-cookie"
     )
     jar: SimpleCookie[str] = SimpleCookie()
     jar.load(line)
@@ -283,9 +281,7 @@ def test_last_admin_disable_guard_surfaces_error(
     )
     _set_cookie(app_client, _signed_cookie_value(session.session_id))
 
-    response = app_client.post(
-        f"/users/{admin_record['user_id']}/disable", headers=_csrf_headers()
-    )
+    response = app_client.post(f"/users/{admin_record['user_id']}/disable", headers=_csrf_headers())
     assert response.status_code == 303
     assert response.headers["location"].startswith("/users?error=")
     record = users_svc.get_user(str(admin_record["user_id"]))

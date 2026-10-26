@@ -14,9 +14,7 @@ class ListApprovalsArgs(BaseModel):
 
     status: str | None = Field(
         default=None,
-        description=(
-            "Optional status filter: pending / approved / denied / consumed."
-        ),
+        description=("Optional status filter: pending / approved / denied / consumed."),
     )
 
 

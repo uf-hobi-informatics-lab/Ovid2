@@ -44,12 +44,8 @@ def test_pipeline_does_not_import_individual_vocabularies(src_root: Path) -> Non
                 if not isinstance(node, (ast.Import, ast.ImportFrom)):
                     continue
                 target = _module_target(node)
-                if target and (
-                    target == FORBIDDEN_ROOT or target.startswith(FORBIDDEN_ROOT + ".")
-                ):
-                    offenders.append(
-                        f"{py.relative_to(src_root)}:{node.lineno} imports {target}"
-                    )
+                if target and (target == FORBIDDEN_ROOT or target.startswith(FORBIDDEN_ROOT + ".")):
+                    offenders.append(f"{py.relative_to(src_root)}:{node.lineno} imports {target}")
 
     assert not offenders, (
         "Pipeline code must not import individual vocabulary modules "

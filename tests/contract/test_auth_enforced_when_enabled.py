@@ -96,9 +96,7 @@ def test_enabled_unauth_html_redirects_to_login(
 
 
 @pytest.mark.contract
-def test_disabled_unauth_rest_open(
-    monkeypatch: pytest.MonkeyPatch, app_client: TestClient
-) -> None:
+def test_disabled_unauth_rest_open(monkeypatch: pytest.MonkeyPatch, app_client: TestClient) -> None:
     """auth disabled → the same gated REST endpoint is open (no 401)."""
     _set_auth(monkeypatch, enabled=False)
     resp = app_client.get(_GATED_REST_PATH)
@@ -106,9 +104,7 @@ def test_disabled_unauth_rest_open(
 
 
 @pytest.mark.contract
-def test_disabled_unauth_html_open(
-    monkeypatch: pytest.MonkeyPatch, app_client: TestClient
-) -> None:
+def test_disabled_unauth_html_open(monkeypatch: pytest.MonkeyPatch, app_client: TestClient) -> None:
     """auth disabled → the gated HTML page renders without a redirect."""
     _set_auth(monkeypatch, enabled=False)
     resp = app_client.get(_GATED_HTML_PATH)

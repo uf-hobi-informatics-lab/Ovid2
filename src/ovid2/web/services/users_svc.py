@@ -111,9 +111,7 @@ def upsert_from_idp(
             )
 
         # Return the resulting user record
-        row = conn.execute(
-            "SELECT * FROM web_users WHERE user_id = ?", (user_id_out,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM web_users WHERE user_id = ?", (user_id_out,)).fetchone()
         assert row is not None
         return _row_to_record(row)
 
@@ -128,9 +126,7 @@ def get_user(user_id: str) -> dict[str, Any] | None:
         The user record as a dictionary, or None if not found.
     """
     with web_db.connect() as conn:
-        row = conn.execute(
-            "SELECT * FROM web_users WHERE user_id = ?", (user_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM web_users WHERE user_id = ?", (user_id,)).fetchone()
         return _row_to_record(row) if row is not None else None
 
 
@@ -165,9 +161,7 @@ def list_users(status: str | None = None) -> list[dict[str, Any]]:
         if status is None:
             rows = conn.execute("SELECT * FROM web_users").fetchall()
         else:
-            rows = conn.execute(
-                "SELECT * FROM web_users WHERE status = ?", (status,)
-            ).fetchall()
+            rows = conn.execute("SELECT * FROM web_users WHERE status = ?", (status,)).fetchall()
         return [_row_to_record(row) for row in rows]
 
 
@@ -195,9 +189,7 @@ def activate(user_id: str, role: Role, actor: str) -> dict[str, Any]:
 
     with web_db.connect() as conn:
         # Get current user state
-        row = conn.execute(
-            "SELECT * FROM web_users WHERE user_id = ?", (user_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM web_users WHERE user_id = ?", (user_id,)).fetchone()
         if row is None:
             raise UserError(f"User not found: {user_id}")
 
@@ -220,9 +212,7 @@ def activate(user_id: str, role: Role, actor: str) -> dict[str, Any]:
                 (Role.SYSTEM_ADMIN.value, "active"),
             ).fetchone()[0]
             if active_admins <= 1:
-                raise UserError(
-                    "Cannot change role of the last active system administrator"
-                )
+                raise UserError("Cannot change role of the last active system administrator")
 
         # Update user
         now = datetime.now(timezone.utc).isoformat()
@@ -275,9 +265,7 @@ def set_role(user_id: str, role: Role, actor: str) -> dict[str, Any]:
 
     with web_db.connect() as conn:
         # Get current user state
-        row = conn.execute(
-            "SELECT * FROM web_users WHERE user_id = ?", (user_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM web_users WHERE user_id = ?", (user_id,)).fetchone()
         if row is None:
             raise UserError(f"User not found: {user_id}")
 
@@ -300,9 +288,7 @@ def set_role(user_id: str, role: Role, actor: str) -> dict[str, Any]:
                 (Role.SYSTEM_ADMIN.value, "active"),
             ).fetchone()[0]
             if active_admins <= 1:
-                raise UserError(
-                    "Cannot change role of the last active system administrator"
-                )
+                raise UserError("Cannot change role of the last active system administrator")
 
         # Update user
         now = datetime.now(timezone.utc).isoformat()
@@ -350,9 +336,7 @@ def disable(user_id: str, actor: str) -> dict[str, Any]:
     """
     with web_db.connect() as conn:
         # Get current user state
-        row = conn.execute(
-            "SELECT * FROM web_users WHERE user_id = ?", (user_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM web_users WHERE user_id = ?", (user_id,)).fetchone()
         if row is None:
             raise UserError(f"User not found: {user_id}")
 
@@ -370,9 +354,7 @@ def disable(user_id: str, actor: str) -> dict[str, Any]:
                 (Role.SYSTEM_ADMIN.value, "active"),
             ).fetchone()[0]
             if active_admins <= 1:
-                raise UserError(
-                    "Cannot disable the last active system administrator"
-                )
+                raise UserError("Cannot disable the last active system administrator")
 
         # Update user
         now = datetime.now(timezone.utc).isoformat()
@@ -416,9 +398,7 @@ def enable(user_id: str, actor: str) -> dict[str, Any]:
     """
     with web_db.connect() as conn:
         # Get current user state
-        row = conn.execute(
-            "SELECT * FROM web_users WHERE user_id = ?", (user_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM web_users WHERE user_id = ?", (user_id,)).fetchone()
         if row is None:
             raise UserError(f"User not found: {user_id}")
 

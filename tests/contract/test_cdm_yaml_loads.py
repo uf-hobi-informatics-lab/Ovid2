@@ -30,14 +30,12 @@ import yaml
 
 from ovid2.cdm import registered_cdms
 from ovid2.cdm.registry import get_cdm
-from ovid2.cdm.yaml_loader import cdm_yaml_dir, CdmYamlError
+from ovid2.cdm.yaml_loader import CdmYamlError, cdm_yaml_dir
 
 
 def _load_schema(name: str) -> dict:
     """Return one packaged JSON schema."""
-    with resources.as_file(
-        resources.files("ovid2.resources.schemas").joinpath(name)
-    ) as path:
+    with resources.as_file(resources.files("ovid2.resources.schemas").joinpath(name)) as path:
         return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
@@ -72,7 +70,8 @@ def test_every_cdm_yaml_loads() -> None:
                 continue
             if handle.schema_source is None and not any(
                 # Handle has composite_keys but no schema — pipeline-family CDM.
-                handle.load_table_columns(t) for t in handle.tables()
+                handle.load_table_columns(t)
+                for t in handle.tables()
             ):
                 continue
             offenders.append(f"{name}: no YAML directory but handle carries schema")
@@ -161,7 +160,7 @@ def test_cdm_yaml_tables_match_handle_tables() -> None:
         if not root.is_file():
             continue
         payload = yaml.safe_load(root.read_text(encoding="utf-8"))
-        for table in (payload.get("tables") or []):
+        for table in payload.get("tables") or []:
             if not (directory / "tables" / f"{table}.yaml").is_file():
                 offenders.append(f"{name}: tables/{table}.yaml missing")
     assert not offenders, "CDM table YAML gaps:\n  " + "\n  ".join(offenders)
@@ -184,7 +183,5 @@ def test_cdm_yaml_valueset_names_are_dotted() -> None:
             declared = str(payload.get("name") or "")
             parts = declared.split(".")
             if len(parts) != 3 or parts[0] != name:
-                offenders.append(
-                    f"{path}: name={declared!r} — expected `{name}.<table>.<field>`."
-                )
+                offenders.append(f"{path}: name={declared!r} — expected `{name}.<table>.<field>`.")
     assert not offenders, "Valueset naming violations:\n  " + "\n  ".join(offenders)

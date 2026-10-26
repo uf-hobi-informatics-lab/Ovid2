@@ -36,6 +36,4 @@ ARGS_MODEL = StorageBrowseArgs
 
 async def run(client: WebApiClient, args: StorageBrowseArgs) -> Any:
     """Call ``GET /api/v1/storage/{name}/browse``."""
-    return await client.get(
-        f"/api/v1/storage/{args.name}/browse", prefix=args.prefix
-    )
+    return await client.get(f"/api/v1/storage/{args.name}/browse", prefix=args.prefix)

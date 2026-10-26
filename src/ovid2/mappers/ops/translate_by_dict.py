@@ -34,10 +34,10 @@ class TranslateByDictOp(BaseMapOp):
 
     def apply(
         self,
-        df: "DataFrame",
+        df: DataFrame,
         params: dict[str, Any],
         ctx: MapOpContext,
-    ) -> "DataFrame":
+    ) -> DataFrame:
         """Substitute values in ``params['column']`` using the named dict."""
         from pyspark.sql.functions import coalesce, create_map, lit
         from pyspark.sql.functions import col as sf_col
@@ -79,8 +79,7 @@ class TranslateByDictOp(BaseMapOp):
             if keep_null:
                 # Keep true nulls; only apply default for unmatched non-null values.
                 result_expr = (
-                    coalesce(translated, lit(default))
-                    .otherwise(lit(None))
+                    coalesce(translated, lit(default)).otherwise(lit(None))
                     if False
                     else translated  # placeholder; see combined expression below
                 )
@@ -88,9 +87,9 @@ class TranslateByDictOp(BaseMapOp):
                 # unmatched non-null → default.
                 from pyspark.sql.functions import when
 
-                result_expr = when(
-                    sf_col(column).isNull(), lit(None)
-                ).otherwise(coalesce(translated, lit(default)))
+                result_expr = when(sf_col(column).isNull(), lit(None)).otherwise(
+                    coalesce(translated, lit(default))
+                )
             else:
                 result_expr = coalesce(translated, lit(default))
         else:

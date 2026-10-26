@@ -1,15 +1,18 @@
-/* Submit-page interactivity: storage mode toggle + pipeline run plan.
+/* Submit-page option pickers (tables / transformations / checks).
  *
- * Two concerns, both vanilla ES5-ish (no build step):
+ * Vanilla ES5-ish (no build step). Driven by the job builder
+ * (submit_builder.js) through document events:
  *
- * 1. Storage mode toggle — each Input / Output card has a
- *    "Saved address" vs "Browse storage" switch. Flipping it shows the
- *    matching pane and writes the mode into the card's hidden
- *    ``<name>_mode`` input so the POST handler knows how to resolve the
- *    endpoint.
+ *   - ``ovid2:kind-change``     {kind}      — run kind radio changed.
+ *   - ``ovid2:pipeline-change`` {pipeline}  — a pipeline card was chosen.
+ *   - ``ovid2:slot-change``     {role, …}   — a source/target was chosen
+ *     (copy/move re-list the source's own tables).
  *
- * 2. Pipeline run plan — when the pipeline <select> changes, fetch
- *    GET /api/v1/pipelines/{pipeline}/plan and render:
+ * and emits ``ovid2:options-change`` whenever a selection changes so the
+ * graph chips stay in sync.
+ *
+ * Pipeline run plan — when the pipeline changes, fetch
+ *    GET /api/v1/pipeline-packages/{pipeline}/plan and render:
  *      - a checkbox per table (checked when it has a formatter),
  *      - a checkbox per transformation stage (all checked), with the
  *        per-table fixers listed read-only under the "fix" stage,
@@ -31,89 +34,15 @@
   var CHECK =
     '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><polyline points="20 6 9 17 4 12"/></svg>';
 
-  // ------------------------------------------------------------------
-  // 1. Storage mode toggle
-  // ------------------------------------------------------------------
-
-  function bindStorageCards() {
-    var cards = document.querySelectorAll("[data-storage-card]");
-    for (var i = 0; i < cards.length; i++) {
-      (function (card) {
-        var role = card.getAttribute("data-storage-card"); // input | output
-        var modeField = card.querySelector('input[name="' + role + '_mode"]');
-        var btns = card.querySelectorAll(".mode-btn");
-        card.addEventListener("click", function (evt) {
-          var btn = evt.target.closest(".mode-btn");
-          if (!btn) return;
-          evt.preventDefault();
-          var mode = btn.getAttribute("data-mode");
-          for (var j = 0; j < btns.length; j++) {
-            btns[j].classList.toggle("active", btns[j] === btn);
-          }
-          var panes = card.querySelectorAll(".mode-pane");
-          for (var k = 0; k < panes.length; k++) {
-            panes[k].hidden = panes[k].getAttribute("data-pane") !== mode;
-          }
-          if (modeField) modeField.value = mode;
-          // Leaving browse (or re-entering it) clears any stale
-          // validation error; the submit-time check re-evaluates.
-          if (mode !== "browse") {
-            card.classList.remove("invalid");
-            var err = card.querySelector("[data-role=picker-error]");
-            if (err) { err.hidden = true; err.textContent = ""; }
-          }
-        });
-      })(cards[i]);
-    }
+  // Current run kind, read from the job-builder's kind radios.
+  function currentKindValue() {
+    var r = document.querySelector('input[name="kind"]:checked');
+    return (r && r.value) || "etl";
   }
 
-  // ------------------------------------------------------------------
-  // 1b. Storage browse-mode validation (hard block)
-  // ------------------------------------------------------------------
-
-  // When a card is in "Browse storage" mode the operator MUST have
-  // picked a storage account, otherwise the server rejects the submit
-  // ("Pick a storage account to browse before submitting."). Catch that
-  // here first and block the submit with an inline, per-card message so
-  // the operator sees exactly which side is unfinished. Registered
-  // before bindSerialize so an invalid submit never reaches
-  // serialization.
-  function bindStorageValidation() {
-    var form = document.getElementById("submit-form");
-    if (!form) return;
-    form.addEventListener("submit", function (evt) {
-      var cards = document.querySelectorAll("[data-storage-card]");
-      var firstBad = null;
-      for (var i = 0; i < cards.length; i++) {
-        var card = cards[i];
-        var role = card.getAttribute("data-storage-card"); // input | output
-        var modeField = card.querySelector('input[name="' + role + '_mode"]');
-        var connField = card.querySelector('input[name="' + role + '_connection"]');
-        var isBrowse = modeField && modeField.value === "browse";
-        var hasConn = connField && connField.value.trim() !== "";
-        var err = card.querySelector("[data-role=picker-error]");
-        if (isBrowse && !hasConn) {
-          card.classList.add("invalid");
-          if (err) {
-            err.textContent =
-              "Select a storage account for this side, or switch to "
-              + "\u201cSaved address\u201d.";
-            err.hidden = false;
-          }
-          if (!firstBad) firstBad = card;
-        } else {
-          card.classList.remove("invalid");
-          if (err) { err.hidden = true; err.textContent = ""; }
-        }
-      }
-      if (firstBad) {
-        evt.preventDefault();
-        evt.stopImmediatePropagation();
-        if (firstBad.scrollIntoView) {
-          firstBad.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
-      }
-    });
+  // Tell the job builder (graph chips) that a picker changed.
+  function notifyOptions() {
+    document.dispatchEvent(new CustomEvent("ovid2:options-change"));
   }
 
   // ------------------------------------------------------------------
@@ -161,6 +90,7 @@
     var checked = document.querySelectorAll(".table-check:checked");
     badge.textContent = checked.length + " / " + boxes.length + " selected";
     badge.hidden = false;
+    notifyOptions();
   }
 
   function renderTransformations(plan) {
@@ -185,6 +115,7 @@
       html += "</div>";
     }
     list.innerHTML = html;
+    notifyOptions();
   }
 
   function renderFixers(fixers, multi) {
@@ -232,24 +163,19 @@
     return kind === "health" || kind === "dq_checks";
   }
 
-  // Read the resolved input source: either a saved address <select> or
-  // the browse-mode connection + location hidden fields.
+  // Read the resolved input source from the job builder's hidden fields:
+  // either a saved address or a browsed connection + location.
   function currentInputSource() {
-    var card = document.querySelector('[data-storage-card="input"]');
-    if (!card) return null;
-    var modeField = card.querySelector('input[name="input_mode"]');
-    var mode = modeField ? modeField.value : "address";
-    if (mode === "browse") {
-      var conn = card.querySelector('input[name="input_connection"]');
-      var loc = card.querySelector('input[name="input_location"]');
-      var connVal = conn ? conn.value.trim() : "";
-      if (!connVal) return null;
-      return { connection: connVal, location: loc ? loc.value.trim() : "" };
+    function val(name) {
+      var f = document.querySelector('[name="' + name + '"]');
+      return f ? String(f.value || "").trim() : "";
     }
-    var sel = card.querySelector('select[name="input_address"]');
-    var addr = sel ? sel.value.trim() : "";
-    if (!addr) return null;
-    return { address: addr };
+    if (val("input_mode") === "browse") {
+      if (!val("input_connection")) return null;
+      return { connection: val("input_connection"), location: val("input_location") };
+    }
+    var addr = val("input_address");
+    return addr ? { address: addr } : null;
   }
 
   // Fill the Tables picker from a copy/move source's own tables (e.g. an
@@ -310,6 +236,7 @@
           return { name: n, has_formatter: true, source: "source" };
         }) });
       })
+      .then(notifyOptions, notifyOptions)
       .catch(function (err) {
         state.tables = [];
         list.innerHTML =
@@ -358,6 +285,7 @@
     var checked = document.querySelectorAll(".check-check:checked");
     badge.textContent = checked.length + " / " + boxes.length + " selected";
     badge.hidden = false;
+    notifyOptions();
   }
 
   function loadChecks() {
@@ -419,19 +347,16 @@
     }
   }
 
-  // React to the inline kind toggle: pick the right Tables data source
-  // and lazily load the checks catalogue for health kinds.
+  // React to the job builder: kind radio, chosen pipeline, chosen source.
   function bindKindChange() {
     document.addEventListener("ovid2:kind-change", function (evt) {
       applyKind((evt.detail && evt.detail.kind) || "etl");
     });
-    // When the input source changes in copy/move mode, re-list tables.
-    var inputCard = document.querySelector('[data-storage-card="input"]');
-    if (inputCard) {
-      inputCard.addEventListener("change", function () {
-        if (isCopyOrMove(currentKind)) loadSourceTables();
-      });
-    }
+    document.addEventListener("ovid2:slot-change", function (evt) {
+      if (evt.detail && evt.detail.role === "input" && isCopyOrMove(currentKind)) {
+        loadSourceTables();
+      }
+    });
   }
 
   // Apply a run kind: sync ``currentKind`` and populate the picker whose
@@ -445,14 +370,14 @@
     } else if (isCopyOrMove(currentKind)) {
       loadSourceTables();
     } else {
-      var sel = document.getElementById("pipeline-select");
-      if (sel && sel.value) loadPlan(sel.value);
+      var pf = document.getElementById("pipeline-field");
+      loadPlan(pf ? pf.value : "");
     }
   }
 
   function loadPlan(pipeline) {
     var form = document.getElementById("submit-form");
-    var base = (form && form.getAttribute("data-plan-url")) || "/api/v1/pipelines/";
+    var base = (form && form.getAttribute("data-plan-url")) || "/api/v1/pipeline-packages/";
     var tablesList = document.getElementById("tables-list");
     var transList = document.getElementById("transformations-list");
     if (!pipeline) {
@@ -484,17 +409,16 @@
             '<p class="flash-error">Could not load plan: ' + esc(err && err.message) + "</p>";
         }
         if (transList) transList.innerHTML = "";
+        notifyOptions();
       });
   }
 
   function bindPipeline() {
-    var sel = document.getElementById("pipeline-select");
-    if (!sel) return;
-    sel.addEventListener("change", function () {
+    document.addEventListener("ovid2:pipeline-change", function (evt) {
       // For copy/move the Tables picker is driven by the *source*, not
       // the pipeline plan; for health kinds there is no CDM plan.
       if (isCopyOrMove(currentKind) || isHealth(currentKind)) return;
-      loadPlan(sel.value);
+      loadPlan((evt.detail && evt.detail.pipeline) || "");
     });
   }
 
@@ -534,6 +458,12 @@
         }
       });
     }
+    var stages = document.getElementById("transformations-list");
+    if (stages) {
+      stages.addEventListener("change", function (evt) {
+        if (evt.target && evt.target.classList.contains("stage-check")) notifyOptions();
+      });
+    }
   }
 
   // Serialise checked boxes to hidden fields on submit. When every
@@ -543,7 +473,7 @@
     var form = document.getElementById("submit-form");
     if (!form) return;
     form.addEventListener("submit", function () {
-      var kind = (document.getElementById("kind") || {}).value || "etl";
+      var kind = currentKindValue();
       var isCopyOrMove = (kind === "copy" || kind === "move");
 
       var tField = document.getElementById("tables-field");
@@ -609,16 +539,13 @@
   }
 
   function init() {
-    bindStorageCards();
-    bindStorageValidation();
     bindKindChange();
     bindPipeline();
     bindToolbar();
     bindChecksToolbar();
     bindSerialize();
-    // Sync the initial picker to whatever kind the form loaded with (the
-    // inline ovid2_toggle_submit_fields() ran before our listener bound).
-    applyKind((document.getElementById("kind") || {}).value || "etl");
+    // Sync the initial picker to whatever kind the form loaded with.
+    applyKind(currentKindValue());
   }
 
   if (document.readyState === "loading") {

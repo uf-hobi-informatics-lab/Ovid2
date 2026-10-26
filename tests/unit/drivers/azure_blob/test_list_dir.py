@@ -42,12 +42,8 @@ class _FakeContainerClient:
         self._items = items
         self.walk_calls: list[dict[str, Any]] = []
 
-    def walk_blobs(
-        self, name_starts_with: str | None = None, delimiter: str = "/"
-    ) -> list[Any]:
-        self.walk_calls.append(
-            {"name_starts_with": name_starts_with, "delimiter": delimiter}
-        )
+    def walk_blobs(self, name_starts_with: str | None = None, delimiter: str = "/") -> list[Any]:
+        self.walk_calls.append({"name_starts_with": name_starts_with, "delimiter": delimiter})
         return self._items
 
 
@@ -86,9 +82,7 @@ ARGS = {"account_name": "acct", "container_default": "data"}
 SECRETS = {"account_key": "k"}
 
 
-def _patch_build_client(
-    monkeypatch: pytest.MonkeyPatch, service: _FakeServiceClient
-) -> None:
+def _patch_build_client(monkeypatch: pytest.MonkeyPatch, service: _FakeServiceClient) -> None:
     monkeypatch.setattr(
         "ovid2.drivers.azure_blob.probe._build_client",
         lambda mode, args, secrets, url: service,
@@ -123,9 +117,7 @@ def test_list_dir_descends_and_roundtrips(
     _install_fake_azure(monkeypatch)
     cc = _FakeContainerClient([_FakeBlob("demo/20260101/demographic.csv")])
     _patch_build_client(monkeypatch, _FakeServiceClient(cc))
-    entries = list_dir_from_config(
-        ARGS, SECRETS, {"container": "data"}, "demo/20260101"
-    )
+    entries = list_dir_from_config(ARGS, SECRETS, {"container": "data"}, "demo/20260101")
     assert [(e.name, e.kind, e.path) for e in entries] == [
         ("demographic.csv", "file", "demo/20260101/demographic.csv")
     ]
@@ -140,12 +132,8 @@ def test_list_dir_path_relative_to_location_path(
     _install_fake_azure(monkeypatch)
     cc = _FakeContainerClient([_FakeBlobPrefix("root/demo/")])
     _patch_build_client(monkeypatch, _FakeServiceClient(cc))
-    entries = list_dir_from_config(
-        ARGS, SECRETS, {"container": "data", "path": "root"}, None
-    )
-    assert [(e.name, e.kind, e.path) for e in entries] == [
-        ("demo", "dir", "demo")
-    ]
+    entries = list_dir_from_config(ARGS, SECRETS, {"container": "data", "path": "root"}, None)
+    assert [(e.name, e.kind, e.path) for e in entries] == [("demo", "dir", "demo")]
     assert cc.walk_calls[0]["name_starts_with"] == "root/"
 
 
@@ -177,9 +165,7 @@ def test_list_dir_sdk_error_is_value_error(
         def get_container_client(self, name: str) -> Any:
             raise RuntimeError("kaboom")
 
-    _patch_build_client(
-        monkeypatch, _Boom(_FakeContainerClient([]))
-    )
+    _patch_build_client(monkeypatch, _Boom(_FakeContainerClient([])))
     with pytest.raises(ValueError, match="Azure list failed"):
         list_dir_from_config(ARGS, SECRETS, {"container": "data"}, None)
 
@@ -189,9 +175,7 @@ def test_driver_list_dir_delegates(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_fake_azure(monkeypatch)
     cc = _FakeContainerClient([_FakeBlobPrefix("demo/")])
     _patch_build_client(monkeypatch, _FakeServiceClient(cc))
-    driver = AzureBlobDriver(
-        args=ARGS, secrets=SECRETS, location={"container": "data"}
-    )
+    driver = AzureBlobDriver(args=ARGS, secrets=SECRETS, location={"container": "data"})
     entries = driver.list_dir(None)
     assert [(e.name, e.kind) for e in entries] == [("demo", "dir")]
 

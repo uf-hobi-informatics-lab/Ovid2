@@ -32,9 +32,7 @@ async def run(client: WebApiClient, args: InstallImageBuildStatusArgs) -> Any:
     """Fetch the row and, optionally, the log."""
     detail = await client.get(f"/api/v1/install/image/builds/{args.build_id}")
     if args.include_log:
-        log_text = await client.get_text(
-            f"/api/v1/install/image/builds/{args.build_id}/log"
-        )
+        log_text = await client.get_text(f"/api/v1/install/image/builds/{args.build_id}/log")
         # Merge into a single dict for the client's convenience.
         if isinstance(detail, dict):
             detail = dict(detail)

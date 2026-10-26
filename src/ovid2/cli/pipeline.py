@@ -42,9 +42,7 @@ def _load_pipeline_settings(pipeline: str) -> dict[str, object]:
     except ModuleNotFoundError:
         # Back-compat: an un-migrated tree may still carry ``pipeline_settings``.
         try:
-            mod = importlib.import_module(
-                f"ovid2_pipelines.{pipeline}.pipeline_settings"
-            )
+            mod = importlib.import_module(f"ovid2_pipelines.{pipeline}.pipeline_settings")
         except ModuleNotFoundError:
             return {}
     return {
@@ -77,49 +75,46 @@ def _iter_pipeline_spec_names(pipeline: str) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def _add_actions(
-    parser: argparse.ArgumentParser, *, command: str
-) -> None:
+def _add_actions(parser: argparse.ArgumentParser, *, command: str) -> None:
     """Attach the shared list/validate/tables actions under ``parser``.
 
     ``command`` is the dispatch key stored in ``_command`` (``pipeline`` for
-    the canonical command, ``pipeline`` for the deprecated alias).
+    the canonical command, ``partner`` for the deprecated alias).
     """
     action = parser.add_subparsers(dest="action", metavar="ACTION", required=True)
 
     lst = action.add_parser("list", help="List every discoverable pipeline.")
     lst.set_defaults(_command=command, _entry=_entry_list)
 
-    validate = action.add_parser(
-        "validate", help="Load every pipeline's specs and report errors."
-    )
+    validate = action.add_parser("validate", help="Load every pipeline's specs and report errors.")
     validate.add_argument(
         "--pipeline",
-        "--pipeline",
+        "--partner",
         dest="pipeline",
         default=None,
-        help="Restrict to one pipeline. '--pipeline' is a deprecated alias.",
+        help="Restrict to one pipeline. '--partner' is a deprecated alias.",
     )
     validate.set_defaults(_command=command, _entry=_entry_validate)
 
-    tables = action.add_parser(
-        "tables", help="Print the canonical table list for a pipeline."
-    )
+    tables = action.add_parser("tables", help="Print the canonical table list for a pipeline.")
     tables.add_argument("pipeline", help="Pipeline name.")
     tables.set_defaults(_command=command, _entry=_entry_tables)
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    """Register the ``pipeline`` subcommand plus the hidden ``pipeline`` alias."""
-    parser = subparsers.add_parser(
-        "pipeline", help="Inspect and validate pipeline packages."
-    )
+    """Register the ``pipeline`` subcommand plus the hidden ``partner`` alias.
+
+    The alias must keep a *distinct* name: Python 3.11+ ``argparse`` raises
+    ``conflicting subparser`` on a duplicate, which crashed every ``ovid2``
+    invocation on 3.11/3.12 after the partner -> pipeline rename.
+    """
+    parser = subparsers.add_parser("pipeline", help="Inspect and validate pipeline packages.")
     _add_actions(parser, command="pipeline")
 
-    # Deprecated alias: ``ovid2 pipeline`` behaves identically for one release.
+    # Deprecated alias: ``ovid2 partner`` behaves identically for one release.
     # Omitting ``help=`` keeps it out of the top-level command listing.
-    alias = subparsers.add_parser("pipeline")
-    _add_actions(alias, command="pipeline")
+    alias = subparsers.add_parser("partner")
+    _add_actions(alias, command="partner")
 
 
 def _entry_list(_args: argparse.Namespace) -> int:

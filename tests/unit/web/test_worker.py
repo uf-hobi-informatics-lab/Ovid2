@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -17,9 +18,7 @@ from ovid2.web.worker import Worker
 
 
 @pytest.fixture()
-def stub_pipeline(
-    isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> str:
+def stub_pipeline(isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     """Register a stub pipeline + two addresses so submit() succeeds."""
     root = tmp_path / "pipelines_root"
     pkg = root / "ovid2_pipelines" / "tp_worker"
@@ -198,18 +197,14 @@ def test_worker_cancel_stops_driver_container(
     # Clean up the still-running sleep child.
     rec = worker._running.get(job_id)
     if rec is not None:
-        try:
+        with contextlib.suppress(ProcessLookupError):
             rec.process.terminate()
-        except ProcessLookupError:
-            pass
         # Close the worker's per-job log handle so the test does not leak
         # an open file descriptor (the sleep child is never reaped here).
         handle = getattr(rec, "log_handle", None)
         if handle is not None:
-            try:
+            with contextlib.suppress(OSError):
                 handle.close()
-            except OSError:
-                pass
 
 
 @pytest.mark.unit
@@ -255,16 +250,12 @@ def test_worker_cancel_tears_down_cluster(
     # Clean up the still-running sleep child + its log handle.
     rec = worker._running.get(job_id)
     if rec is not None:
-        try:
+        with contextlib.suppress(ProcessLookupError):
             rec.process.terminate()
-        except ProcessLookupError:
-            pass
         handle = getattr(rec, "log_handle", None)
         if handle is not None:
-            try:
+            with contextlib.suppress(OSError):
                 handle.close()
-            except OSError:
-                pass
 
 
 @pytest.mark.unit
@@ -300,10 +291,9 @@ def test_build_argv_includes_all_flags(stub_pipeline: str) -> None:
             transformations=["format", "write"],
             engine="pyspark",
             workers=8,
-            sf_database="DB",
             sf_account="ACCT",
-            sf_schema="SCH",
             stderr_log=True,
+            confirm_overwrite=True,
         )
     )
     detail = jobs_svc.get_job(resp.job_id)
@@ -315,10 +305,14 @@ def test_build_argv_includes_all_flags(stub_pipeline: str) -> None:
     assert "--tables demographic encounter" in argv_str
     assert "--transformations format write" in argv_str
     assert "--workers 8" in argv_str
-    assert "--sf_database DB" in argv_str
+    # sf_database / sf_schema are no longer overrides (the address is the
+    # exact location); only the account override is forwarded.
+    assert "--sf_database" not in argv_str
+    assert "--sf_schema" not in argv_str
     assert "--sf_account ACCT" in argv_str
-    assert "--sf_schema SCH" in argv_str
     assert "--stderr-log" in argv
+    # A confirmed overwrite reaches the executor's gate.
+    assert argv[-1] == "--overwrite"
 
 
 @pytest.mark.unit
@@ -449,7 +443,8 @@ def test_build_argv_copy_rejects_empty_tables(stub_pipeline: str) -> None:
 
 @pytest.mark.unit
 def test_build_argv_copy_forwards_extra_mounts(
-    stub_pipeline: str, tmp_path: Path,
+    stub_pipeline: str,
+    tmp_path: Path,
 ) -> None:
     """kind=copy with extra_mounts emits one ``--extra-mount HOST:CONTAINER[:MODE]`` per entry.
 
@@ -482,8 +477,7 @@ def test_build_argv_copy_forwards_extra_mounts(
     argv = worker._build_argv(detail)
 
     # Two --extra-mount pairs, in order, appended after the base copy argv.
-    hits = [(argv[i], argv[i + 1]) for i, tok in enumerate(argv)
-            if tok == "--extra-mount"]
+    hits = [(argv[i], argv[i + 1]) for i, tok in enumerate(argv) if tok == "--extra-mount"]
     assert hits == [
         ("--extra-mount", mount_a),
         ("--extra-mount", mount_b),
@@ -629,9 +623,7 @@ def test_dispatch_logs_effective_mount_sources(
         time.sleep(0.05)
     _wait_status(job_id, "done")
 
-    dispatch_records = [
-        r for r in caplog.records if "Dispatch mount sources" in r.getMessage()
-    ]
+    dispatch_records = [r for r in caplog.records if "Dispatch mount sources" in r.getMessage()]
     assert dispatch_records, "expected a 'Dispatch mount sources' log record"
     message = dispatch_records[0].getMessage()
     assert f"DATA_DIR={data_dir}" in message
@@ -779,7 +771,8 @@ def test_build_argv_move_rejects_empty_tables(stub_pipeline: str) -> None:
 
 @pytest.mark.unit
 def test_build_argv_move_forwards_extra_mounts(
-    stub_pipeline: str, tmp_path: Path,
+    stub_pipeline: str,
+    tmp_path: Path,
 ) -> None:
     """kind=move with extra_mounts emits one ``--extra-mount HOST:CONTAINER[:MODE]`` per entry."""
     (tmp_path / "a").mkdir()
@@ -803,8 +796,7 @@ def test_build_argv_move_forwards_extra_mounts(
     worker = Worker(ovid2_bin=["ovid2"])
     argv = worker._build_argv(detail)
 
-    hits = [(argv[i], argv[i + 1]) for i, tok in enumerate(argv)
-            if tok == "--extra-mount"]
+    hits = [(argv[i], argv[i + 1]) for i, tok in enumerate(argv) if tok == "--extra-mount"]
     assert hits == [("--extra-mount", mount_a)], argv
 
 
@@ -830,24 +822,29 @@ class TestExtractErrorFromLog:
 
     def test_missing_file_returns_none(self, tmp_path: Path) -> None:
         from ovid2.web.worker import _extract_error_from_log
+
         assert _extract_error_from_log(tmp_path / "nope.log") is None
 
     def test_empty_file_returns_none(self, tmp_path: Path) -> None:
         from ovid2.web.worker import _extract_error_from_log
+
         assert _extract_error_from_log(self._write(tmp_path, "")) is None
 
     def test_whitespace_only_returns_none(self, tmp_path: Path) -> None:
         from ovid2.web.worker import _extract_error_from_log
+
         assert _extract_error_from_log(self._write(tmp_path, "\n\n   \n\n")) is None
 
     def test_returns_last_non_empty_line(self, tmp_path: Path) -> None:
         from ovid2.web.worker import _extract_error_from_log
+
         content = "hello\nworld\nfinal message\n"
         assert _extract_error_from_log(self._write(tmp_path, content)) == "final message"
 
     def test_skips_header_comments(self, tmp_path: Path) -> None:
         """Worker header lines (``# ovid2 web-worker …``) are noise."""
         from ovid2.web.worker import _extract_error_from_log
+
         content = (
             "the real error\n"
             "# ovid2 web-worker — job=abc\n"
@@ -859,9 +856,10 @@ class TestExtractErrorFromLog:
     def test_skips_docker_compose_noise(self, tmp_path: Path) -> None:
         """Container/Network progress lines from ``docker compose up`` are skipped."""
         from ovid2.web.worker import _extract_error_from_log
+
         content = (
             "Traceback (most recent call last):\n"
-            "  File \"/app/foo.py\", line 1\n"
+            '  File "/app/foo.py", line 1\n'
             "RuntimeError: real failure reason\n"
             " Network ovid2-net-20260806-000000-abcdef Removing \n"
             " Network ovid2-net-20260806-000000-abcdef Removed \n"
@@ -874,6 +872,7 @@ class TestExtractErrorFromLog:
     def test_skips_ovid2_lifecycle_lines(self, tmp_path: Path) -> None:
         """``[ovid2] Stopping Spark cluster …`` etc. are trailing noise."""
         from ovid2.web.worker import _extract_error_from_log
+
         content = (
             "error: some plan-time abort\n"
             "[ovid2] Starting Spark cluster (25 workers, id=...)...\n"
@@ -892,6 +891,7 @@ class TestExtractErrorFromLog:
         failure reason, not the generic ``exited with status 2``.
         """
         from ovid2.web.worker import _extract_error_from_log
+
         content = (
             "# ovid2 web-worker — job=3a0e506f\n"
             "# argv=['/usr/bin/python3', '-m', 'ovid2.cli', 'tools', 'copy']\n"
@@ -912,6 +912,7 @@ class TestExtractErrorFromLog:
     def test_returns_only_last_useful_line(self, tmp_path: Path) -> None:
         """When multiple useful lines exist, the LAST one wins."""
         from ovid2.web.worker import _extract_error_from_log
+
         content = (
             "warning: something benign\n"
             "info: another line\n"
@@ -924,6 +925,7 @@ class TestExtractErrorFromLog:
     def test_truncates_very_long_line(self, tmp_path: Path) -> None:
         """Lines longer than the cap are truncated with an ellipsis."""
         from ovid2.web.worker import _LOG_SUMMARY_MAX, _extract_error_from_log
+
         long_line = "x" * (_LOG_SUMMARY_MAX + 200)
         got = _extract_error_from_log(self._write(tmp_path, long_line + "\n"))
         assert got is not None
@@ -932,10 +934,12 @@ class TestExtractErrorFromLog:
         assert got[:10] == "x" * 10
 
     def test_only_reads_tail_for_huge_log(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """Multi-megabyte logs must not blow the memory budget."""
         from ovid2.web.worker import _LOG_TAIL_BYTES, _extract_error_from_log
+
         # Fabricate a 2 MB log with a useful line at the very end.
         padding = ("filler line " * 100 + "\n") * 2000  # ~2 MB
         content = padding + "the last useful line\n"
@@ -946,7 +950,8 @@ class TestExtractErrorFromLog:
         assert got == "the last useful line"
 
     def test_partial_first_line_of_window_discarded(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """The (likely partial) first line of the tail window is discarded.
 
@@ -954,6 +959,7 @@ class TestExtractErrorFromLog:
         chopped-off Spark stack frame — messier than useful.
         """
         from ovid2.web.worker import _LOG_TAIL_BYTES, _extract_error_from_log
+
         # Craft a log where the byte at ``size - _LOG_TAIL_BYTES``
         # falls mid-line. The first line after ``seek()`` will be a
         # partial line that must be dropped; the second line is the
@@ -967,6 +973,7 @@ class TestExtractErrorFromLog:
     def test_invalid_utf8_is_replaced_not_fatal(self, tmp_path: Path) -> None:
         """Non-UTF-8 bytes must not crash the helper."""
         from ovid2.web.worker import _extract_error_from_log
+
         p = tmp_path / "job.log"
         # Valid header + invalid UTF-8 (0xff) + trailing valid text.
         p.write_bytes(b"header ok\n\xff\xfe garbage\nreal error line\n")
@@ -974,7 +981,9 @@ class TestExtractErrorFromLog:
         assert got == "real error line"
 
     def test_permission_error_returns_none(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Unreadable log must not propagate an OSError."""
         from ovid2.web import worker as worker_module
@@ -995,16 +1004,14 @@ class TestExtractErrorFromLog:
     def test_only_comment_lines_returns_none(self, tmp_path: Path) -> None:
         """A log that contains only header comments has no summary."""
         from ovid2.web.worker import _extract_error_from_log
-        content = (
-            "# ovid2 web-worker — job=abc\n"
-            "# argv=[...]\n"
-            "# DATA_DIR=/data\n"
-        )
+
+        content = "# ovid2 web-worker — job=abc\n# argv=[...]\n# DATA_DIR=/data\n"
         assert _extract_error_from_log(self._write(tmp_path, content)) is None
 
     def test_only_compose_noise_returns_none(self, tmp_path: Path) -> None:
         """A log containing only compose progress has no summary."""
         from ovid2.web.worker import _extract_error_from_log
+
         content = (
             " Network ovid2-net-x Creating \n"
             " Network ovid2-net-x Created \n"
@@ -1014,7 +1021,8 @@ class TestExtractErrorFromLog:
         assert _extract_error_from_log(self._write(tmp_path, content)) is None
 
     def test_module_not_found_extracted_over_teardown_noise(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """The exact ETL failure from the 2026-08-06 incident.
 
@@ -1026,13 +1034,14 @@ class TestExtractErrorFromLog:
         looks for the exception line directly.
         """
         from ovid2.web.worker import _extract_error_from_log
+
         content = (
             "# ovid2 web-worker — job=647c220e\n"
             "# argv=['/usr/bin/python3', '-m', 'ovid2.cli', 'etl']\n"
             "# DATA_DIR=/data (exists=True)\n"
-            ' Container ovid2-master-20260806-210407-b8f985 Creating \n'
-            ' Container ovid2-master-20260806-210407-b8f985 Created \n'
-            ' Container ovid2-master-20260806-210407-b8f985 Started \n'
+            " Container ovid2-master-20260806-210407-b8f985 Creating \n"
+            " Container ovid2-master-20260806-210407-b8f985 Created \n"
+            " Container ovid2-master-20260806-210407-b8f985 Started \n"
             "Traceback (most recent call last):\n"
             '  File "/opt/bitnami/python/bin/ovid2", line 6, in <module>\n'
             "    sys.exit(main())\n"
@@ -1048,12 +1057,12 @@ class TestExtractErrorFromLog:
             "[ovid2] Starting Spark cluster (25 workers, id=...)...\n"
             "[ovid2] Spark cluster ready.\n"
             "[ovid2] Stopping Spark cluster (id=...)...\n"
-            ' Container ovid2-master-20260806-210407-b8f985 Stopping \n'
-            ' Container ovid2-master-20260806-210407-b8f985 Stopped \n'
-            ' Container ovid2-master-20260806-210407-b8f985 Removing \n'
-            ' Container ovid2-master-20260806-210407-b8f985 Removed \n'
-            ' Network ovid2-net-20260806-210407-b8f985 Removing \n'
-            ' Network ovid2-net-20260806-210407-b8f985 Removed \n'
+            " Container ovid2-master-20260806-210407-b8f985 Stopping \n"
+            " Container ovid2-master-20260806-210407-b8f985 Stopped \n"
+            " Container ovid2-master-20260806-210407-b8f985 Removing \n"
+            " Container ovid2-master-20260806-210407-b8f985 Removed \n"
+            " Network ovid2-net-20260806-210407-b8f985 Removing \n"
+            " Network ovid2-net-20260806-210407-b8f985 Removed \n"
         )
         got = _extract_error_from_log(self._write(tmp_path, content))
         assert got is not None
@@ -1061,10 +1070,12 @@ class TestExtractErrorFromLog:
         assert "snowflake.snowpark" in got
 
     def test_prefers_python_exception_over_generic_line(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """When both an ``error:`` line and a traceback are present, prefer the exception."""
         from ovid2.web.worker import _extract_error_from_log
+
         content = (
             "some info line\n"
             "Traceback (most recent call last):\n"
@@ -1077,6 +1088,7 @@ class TestExtractErrorFromLog:
     def test_recognises_java_style_exception(self, tmp_path: Path) -> None:
         """PySpark surfaces Java exceptions with fully-qualified class names."""
         from ovid2.web.worker import _extract_error_from_log
+
         content = (
             "some info\n"
             "java.lang.IllegalArgumentException: basedir must be absolute: ?/.ivy2/local\n"
@@ -1089,6 +1101,7 @@ class TestExtractErrorFromLog:
     def test_takes_last_exception_when_multiple(self, tmp_path: Path) -> None:
         """A wrapped-exception chain surfaces the innermost final line."""
         from ovid2.web.worker import _extract_error_from_log
+
         content = (
             "Traceback (most recent call last):\n"
             "KeyError: 'missing'\n"
@@ -1104,6 +1117,7 @@ class TestExtractErrorFromLog:
     def test_skips_compose_version_warning(self, tmp_path: Path) -> None:
         """The ``time="…" level=warning …`` line from docker compose is noise."""
         from ovid2.web.worker import _extract_error_from_log
+
         content = (
             "error: some real reason\n"
             'time="2026-08-06T17:04:09-04:00" level=warning msg="version obsolete"\n'
@@ -1113,6 +1127,7 @@ class TestExtractErrorFromLog:
     def test_skips_extra_lifecycle_lines(self, tmp_path: Path) -> None:
         """The ``[ovid2] Cluster not fully ready …`` and ``Shutdown reported …`` are noise."""
         from ovid2.web.worker import _extract_error_from_log
+
         content = (
             "error: actual reason\n"
             "[ovid2] Cluster not fully ready after timeout; proceeding anyway.\n"
@@ -1131,7 +1146,8 @@ class TestFinalizeSurfacesLogSummary:
     """``_finalize`` must consult the worker log for the failure reason."""
 
     def test_nonzero_exit_stashes_log_summary_in_job_error(
-        self, stub_pipeline: str,
+        self,
+        stub_pipeline: str,
     ) -> None:
         """A plan-time abort message reaches ``web_jobs.error``.
 
@@ -1179,7 +1195,8 @@ class TestFinalizeSurfacesLogSummary:
         assert detail.error.startswith("error: Engine 'snowpark'")
 
     def test_nonzero_exit_falls_back_when_log_has_no_summary(
-        self, stub_pipeline: str,
+        self,
+        stub_pipeline: str,
     ) -> None:
         """When the log yields no summary, use the generic message.
 
@@ -1250,7 +1267,9 @@ class TestRunDetailFailureBanner:
     """The run detail page renders ``job.error`` when the job failed."""
 
     def test_failure_reason_appears_on_run_detail_page(
-        self, stub_pipeline: str, web_client: object,
+        self,
+        stub_pipeline: str,
+        web_client: object,
     ) -> None:
         """The compat message reaches the page without a click-through.
 
@@ -1294,12 +1313,13 @@ class TestRunDetailFailureBanner:
         body = response.text
         assert "Failure reason:" in body
         # The exact message survives HTML rendering.
-        assert "Engine &#39;snowpark&#39;" in body or \
-               "Engine 'snowpark'" in body
+        assert "Engine &#39;snowpark&#39;" in body or "Engine 'snowpark'" in body
         assert "S3-Testing" in body
 
     def test_successful_run_has_no_failure_banner(
-        self, stub_pipeline: str, web_client: object,
+        self,
+        stub_pipeline: str,
+        web_client: object,
     ) -> None:
         """The banner is gated on ``job.status == 'failed'``."""
         from unittest import mock
@@ -1330,9 +1350,14 @@ def test_worker_ignores_drafts_until_launched(stub_pipeline: str) -> None:
     """A draft is never dispatched; once launched it runs like any queued job."""
     from ovid2.web.models import JobSubmitRequest
 
-    draft = jobs_svc.create_draft(JobSubmitRequest(
-        pipeline=stub_pipeline, batch_id="B_DRAFT",
-        input_address="in_test", output_address="out_test"))
+    draft = jobs_svc.create_draft(
+        JobSubmitRequest(
+            pipeline=stub_pipeline,
+            batch_id="B_DRAFT",
+            input_address="in_test",
+            output_address="out_test",
+        )
+    )
     worker = Worker(max_parallel=1, poll_seconds=0.01, ovid2_bin=["/usr/bin/true"])
     worker.tick()
     assert not worker._running

@@ -1,4 +1,4 @@
-"""Tests for :mod:`ovid2.dataspace.resolver`."""
+"""Tests for :mod:`ovid2.dataspace.resolver` — the Data Space as plain directories."""
 
 from __future__ import annotations
 
@@ -8,244 +8,88 @@ from pathlib import Path
 
 import pytest
 
-from ovid2.dataspace import resolver
+from ovid2.dataspace import list_children, list_storage_accounts, resolve
 from ovid2.dataspace.path import OdsPath
-from ovid2.dataspace.resolver import OdsResolutionError, resolve
+from ovid2.dataspace.resolver import OdsResolutionError
 
 
 @pytest.fixture()
-def configs_dir(isolated_xdg: Path) -> Path:
-    return Path(os.environ["OVID2_CONFIGS_DIR"])
+def tree(isolated_xdg: Path, tmp_path: Path) -> Path:
+    """A disc storage account ``inbox`` + one exact-location address."""
+    root = tmp_path / "inbox_root"
+    (root / "landing" / "2026_03").mkdir(parents=True)
+    (root / "landing" / "2026_03" / "demographic.csv").write_text("a\n1\n")
+    (root / "landing" / "2026_04").mkdir()
+    conns = Path(os.environ["OVID2_CONNECTIONS_DIR"])
+    (conns / "inbox.json").write_text(
+        json.dumps({"type": "disc", "args": {"host_path": str(root)}}), encoding="utf-8"
+    )
+    configs = Path(os.environ["OVID2_CONFIGS_DIR"])
+    (configs / "march.json").write_text(
+        json.dumps({"connection": "inbox", "location": {"path": "landing/2026_03"}}),
+        encoding="utf-8",
+    )
+    return root
 
 
-def _write_json(path: Path, payload: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload), encoding="utf-8")
+class TestResolve:
+    def test_root(self, tree: Path) -> None:
+        target = resolve("/")
+        assert target.connection is None
 
+    def test_exact_location_and_matching_address(self, tree: Path) -> None:
+        target = resolve("/inbox/landing/2026_03")
+        assert target.connection == "inbox"
+        assert target.type == "disc"
+        assert target.location == "landing/2026_03"
+        assert target.batch_id == "inbox/landing/2026_03"
+        assert target.address_name == "march"
+        assert target.candidates == ("march",)
 
-def _write_settings(payload: dict) -> None:
-    path = Path(os.environ["OVID2_SETTINGS_FILE"])
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload), encoding="utf-8")
-    # Bust the settings_svc mtime cache.
-    from ovid2.web.services import settings_svc
+    def test_case_insensitive_account(self, tree: Path) -> None:
+        assert resolve("/INBOX/landing/2026_03").address_name == "march"
 
-    settings_svc.invalidate_cache()
+    def test_no_matching_address(self, tree: Path) -> None:
+        target = resolve("/inbox/landing/2026_04")
+        assert target.address_name is None
+        assert target.batch_id == "inbox/landing/2026_04"
 
-
-class TestResolveSoleCandidate:
-    def test_single_disc_address_wins(self, configs_dir: Path) -> None:
-        _write_json(
-            configs_dir / "d.json",
-            {"src_name": "disc", "src_args": {"path": "/tmp/d"}},
-        )
-        _write_settings({})
-        target = resolve("/demo/20260316/DEMO", materialise=False)
-        assert target.address_name == "d"
-        assert target.dimension == "disc"
-        assert target.tier == "sole_candidate"
-
-    def test_multiple_candidates_without_default_raises(
-        self, configs_dir: Path
-    ) -> None:
-        _write_json(
-            configs_dir / "d1.json",
-            {"src_name": "disc", "src_args": {"path": "/tmp/1"}},
-        )
-        _write_json(
-            configs_dir / "d2.json",
-            {"src_name": "disc", "src_args": {"path": "/tmp/2"}},
-        )
-        _write_settings({})
+    def test_unknown_account_raises(self, tree: Path) -> None:
         with pytest.raises(OdsResolutionError):
-            resolve("/demo/20260316/DEMO", materialise=False)
+            resolve("/nope/x")
 
-    def test_no_candidate_raises(self, configs_dir: Path) -> None:
-        _write_settings({})
-        with pytest.raises(OdsResolutionError):
-            resolve("/demo", materialise=False)
-
-    def test_root_path_raises(self, configs_dir: Path) -> None:
-        _write_json(
-            configs_dir / "d.json",
-            {"src_name": "disc", "src_args": {"path": "/tmp/d"}},
-        )
-        _write_settings({})
-        with pytest.raises(OdsResolutionError):
-            resolve("/", materialise=False)
+    def test_path_object_accepted(self, tree: Path) -> None:
+        assert resolve(OdsPath.parse("/inbox")).connection == "inbox"
 
 
-class TestResolvePrecedence:
-    def test_dimension_default(self, configs_dir: Path) -> None:
-        _write_json(
-            configs_dir / "d1.json",
-            {"src_name": "disc", "src_args": {"path": "/tmp/1"}},
-        )
-        _write_json(
-            configs_dir / "d2.json",
-            {"src_name": "disc", "src_args": {"path": "/tmp/2"}},
-        )
-        _write_settings({"ods": {"dimension_defaults": {"disc": "d2"}}})
-        target = resolve("/demo", materialise=False)
-        assert target.address_name == "d2"
-        assert target.tier == "dimension_default"
+class TestListing:
+    def test_root_lists_storage_accounts(self, tree: Path) -> None:
+        accounts = list_storage_accounts()
+        assert [(a.name, a.kind, a.path, a.type) for a in accounts] == [
+            ("inbox", "account", "/inbox", "disc")
+        ]
+        supported, entries, _ = list_children("/")
+        assert supported and [e.name for e in entries] == ["inbox"]
 
-    def test_pipeline_route_beats_dimension_default(
-        self, configs_dir: Path
-    ) -> None:
-        _write_json(
-            configs_dir / "d1.json",
-            {"src_name": "disc", "src_args": {"path": "/tmp/1"}},
-        )
-        _write_json(
-            configs_dir / "d2.json",
-            {"src_name": "disc", "src_args": {"path": "/tmp/2"}},
-        )
-        _write_settings(
-            {
-                "ods": {
-                    "dimension_defaults": {"disc": "d1"},
-                    "pipeline_routes": {"demo": {"disc": "d2"}},
-                }
-            }
-        )
-        target = resolve("/demo", materialise=False)
-        assert target.address_name == "d2"
-        assert target.tier == "pipeline_route"
-
-    def test_explicit_wins(self, configs_dir: Path) -> None:
-        _write_json(
-            configs_dir / "d1.json",
-            {"src_name": "disc", "src_args": {"path": "/tmp/1"}},
-        )
-        _write_json(
-            configs_dir / "d2.json",
-            {"src_name": "disc", "src_args": {"path": "/tmp/2"}},
-        )
-        _write_settings(
-            {"ods": {"dimension_defaults": {"disc": "d1"}}}
-        )
-        target = resolve("/demo", address="d2", materialise=False)
-        assert target.address_name == "d2"
-        assert target.tier == "explicit"
-
-    def test_explicit_wrong_dimension_raises(self, configs_dir: Path) -> None:
-        _write_json(
-            configs_dir / "d1.json",
-            {"src_name": "disc", "src_args": {"path": "/tmp/1"}},
-        )
-        _write_json(
-            configs_dir / "sf.json",
-            {"src_name": "snowflake", "src_args": {"account": "a"}},
-        )
-        _write_settings({})
-        with pytest.raises(OdsResolutionError):
-            resolve("/demo", dim="disc", address="sf", materialise=False)
-
-    def test_pipeline_dimension_default(self, configs_dir: Path) -> None:
-        _write_json(
-            configs_dir / "d.json",
-            {"src_name": "disc", "src_args": {"path": "/tmp/d"}},
-        )
-        _write_json(
-            configs_dir / "sf.json",
-            {"src_name": "snowflake", "src_args": {"account": "a"}},
-        )
-        _write_settings(
-            {"ods": {"pipeline_dimensions": {"demo": "snowflake"}}}
-        )
-        target = resolve("/demo", materialise=False)
-        assert target.dimension == "snowflake"
-        assert target.address_name == "sf"
-
-
-class TestResolveDim:
-    def test_unknown_dim(self, configs_dir: Path) -> None:
-        _write_json(
-            configs_dir / "d.json",
-            {"src_name": "disc", "src_args": {"path": "/tmp/d"}},
-        )
-        _write_settings({})
-        with pytest.raises(OdsResolutionError):
-            resolve("/demo", dim="nonsense", materialise=False)
-
-    def test_explicit_dim_used(self, configs_dir: Path) -> None:
-        _write_json(
-            configs_dir / "d.json",
-            {"src_name": "disc", "src_args": {"path": "/tmp/d"}},
-        )
-        _write_settings({"ods": {"default_dimension": "snowflake"}})
-        # pipeline default is snowflake, but explicit dim= overrides.
-        target = resolve("/demo", dim="disc", materialise=False)
-        assert target.dimension == "disc"
-
-
-class TestListPipelinesAndBatches:
-    def test_list_pipelines_walks_disc_root(
-        self, tmp_path: Path, configs_dir: Path
-    ) -> None:
-        # Build a disc tree with two pipeline dirs.
-        root = tmp_path / "disc"
-        (root / "demo" / "20260316").mkdir(parents=True)
-        (root / "ZETA" / "20260101").mkdir(parents=True)
-        _write_json(
-            configs_dir / "d.json",
-            {"src_name": "disc", "src_args": {"path": str(root)}},
-        )
-        _write_settings({})
-        names = resolver.list_pipelines(dim="disc")
-        assert "demo" in names
-        assert "ZETA" in names
-
-    def test_list_batches(self, tmp_path: Path, configs_dir: Path) -> None:
-        root = tmp_path / "disc"
-        (root / "DEMO" / "20260101").mkdir(parents=True)
-        (root / "DEMO" / "20260316").mkdir(parents=True)
-        _write_json(
-            configs_dir / "d.json",
-            {"src_name": "disc", "src_args": {"path": str(root)}},
-        )
-        _write_settings({})
-        assert resolver.list_batches("demo", dim="disc") == [
-            "20260101",
-            "20260316",
+    def test_folders_are_plain_directories(self, tree: Path) -> None:
+        supported, entries, _ = list_children("/inbox/landing")
+        assert supported
+        assert [(e.name, e.kind, e.path) for e in entries] == [
+            ("2026_03", "dir", "/inbox/landing/2026_03"),
+            ("2026_04", "dir", "/inbox/landing/2026_04"),
         ]
 
-    def test_list_tables(self, tmp_path: Path, configs_dir: Path) -> None:
-        root = tmp_path / "disc"
-        batch = root / "DEMO" / "20260316"
-        batch.mkdir(parents=True)
-        (batch / "DEMOGRAPHIC.csv").write_text("a,b\n", encoding="utf-8")
-        (batch / "ENCOUNTER.parquet").write_text("", encoding="utf-8")
-        _write_json(
-            configs_dir / "d.json",
-            {"src_name": "disc", "src_args": {"path": str(root)}},
-        )
-        _write_settings({})
-        assert resolver.list_tables("demo", "20260316", dim="disc") == [
-            "DEMOGRAPHIC",
-            "ENCOUNTER",
-        ]
+    def test_leaf_lists_files(self, tree: Path) -> None:
+        _, entries, _ = list_children("/inbox/landing/2026_03")
+        assert [(e.name, e.kind) for e in entries] == [("demographic.csv", "file")]
 
-    def test_non_disc_dimensions_empty(
-        self, tmp_path: Path, configs_dir: Path
-    ) -> None:
-        _write_json(
-            configs_dir / "sf.json",
-            {"src_name": "snowflake", "src_args": {"account": "a"}},
-        )
-        _write_settings({})
-        assert resolver.list_batches("demo", dim="snowflake") == []
-        assert resolver.list_tables("demo", "20260316", dim="snowflake") == []
+    def test_custom_lister_is_used_for_every_store(self, tree: Path) -> None:
+        calls: list[tuple[str, str | None]] = []
 
+        def _lister(conn: str, prefix: str | None):  # type: ignore[no-untyped-def]
+            calls.append((conn, prefix))
+            return True, [{"name": "S1", "kind": "dir", "path": "DB/S1"}], None
 
-class TestOdsPathIntegration:
-    def test_path_object_accepted(self, configs_dir: Path) -> None:
-        _write_json(
-            configs_dir / "d.json",
-            {"src_name": "disc", "src_args": {"path": "/tmp/d"}},
-        )
-        _write_settings({})
-        target = resolve(OdsPath.parse("/demo"), materialise=False)
-        assert target.path.pipeline == "demo"
-        assert target.address_name == "d"
+        _, entries, _ = list_children("/inbox/DB", lister=_lister)
+        assert calls == [("inbox", "DB")]
+        assert entries[0].path == "/inbox/DB/S1"

@@ -60,9 +60,7 @@ def _signed_cookie_value(session_id: str) -> str:
     response = Response()
     cookie_mod.issue_cookie(response, session_id)
     line = next(
-        value.decode("latin-1")
-        for key, value in response.raw_headers
-        if key == b"set-cookie"
+        value.decode("latin-1") for key, value in response.raw_headers if key == b"set-cookie"
     )
     jar: SimpleCookie[str] = SimpleCookie()
     jar.load(line)
@@ -110,9 +108,7 @@ def _set_cookie(client: TestClient, cookie: str) -> None:
 
 
 @pytest.mark.unit
-def test_admin_lists_users(
-    monkeypatch: pytest.MonkeyPatch, app_client: TestClient
-) -> None:
+def test_admin_lists_users(monkeypatch: pytest.MonkeyPatch, app_client: TestClient) -> None:
     """An admin can list users, and a status filter narrows the set."""
     _enable_auth(monkeypatch)
     admin_id = _make_active_user(Role.SYSTEM_ADMIN, "admin-list")
@@ -157,9 +153,7 @@ def test_admin_activates_pending_user(
     target_id = _make_pending_user("target-activate")
     _set_cookie(app_client, _cookie_for_user(admin_id))
 
-    resp = app_client.post(
-        f"/api/v1/users/{target_id}/activate", json={"role": "viewer"}
-    )
+    resp = app_client.post(f"/api/v1/users/{target_id}/activate", json={"role": "viewer"})
     assert resp.status_code == 200
     body = resp.json()
     assert body["role"] == Role.VIEWER.value
@@ -176,33 +170,25 @@ def test_admin_activate_rejects_pending_role(
     target_id = _make_pending_user("target-activate-bad")
     _set_cookie(app_client, _cookie_for_user(admin_id))
 
-    resp = app_client.post(
-        f"/api/v1/users/{target_id}/activate", json={"role": "pending"}
-    )
+    resp = app_client.post(f"/api/v1/users/{target_id}/activate", json={"role": "pending"})
     assert resp.status_code == 400
 
 
 @pytest.mark.unit
-def test_admin_changes_role(
-    monkeypatch: pytest.MonkeyPatch, app_client: TestClient
-) -> None:
+def test_admin_changes_role(monkeypatch: pytest.MonkeyPatch, app_client: TestClient) -> None:
     """An admin changes an active user's role."""
     _enable_auth(monkeypatch)
     admin_id = _make_active_user(Role.SYSTEM_ADMIN, "admin-role")
     target_id = _make_active_user(Role.VIEWER, "target-role")
     _set_cookie(app_client, _cookie_for_user(admin_id))
 
-    resp = app_client.put(
-        f"/api/v1/users/{target_id}/role", json={"role": "pipeline_operator"}
-    )
+    resp = app_client.put(f"/api/v1/users/{target_id}/role", json={"role": "pipeline_operator"})
     assert resp.status_code == 200
     assert resp.json()["role"] == Role.PIPELINE_OPERATOR.value
 
 
 @pytest.mark.unit
-def test_admin_disables_user(
-    monkeypatch: pytest.MonkeyPatch, app_client: TestClient
-) -> None:
+def test_admin_disables_user(monkeypatch: pytest.MonkeyPatch, app_client: TestClient) -> None:
     """An admin disables a non-admin user."""
     _enable_auth(monkeypatch)
     admin_id = _make_active_user(Role.SYSTEM_ADMIN, "admin-disable")
@@ -228,9 +214,7 @@ def test_disable_last_admin_conflicts(
 
 
 @pytest.mark.unit
-def test_viewer_forbidden(
-    monkeypatch: pytest.MonkeyPatch, app_client: TestClient
-) -> None:
+def test_viewer_forbidden(monkeypatch: pytest.MonkeyPatch, app_client: TestClient) -> None:
     """A viewer lacks MANAGE_USERS → 403 on the users list."""
     _enable_auth(monkeypatch)
     viewer_id = _make_active_user(Role.VIEWER, "viewer-users")

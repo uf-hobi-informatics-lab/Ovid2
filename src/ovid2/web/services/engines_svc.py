@@ -39,6 +39,7 @@ pyspark-free. Dispatch is by engine ``type``:
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import logging
@@ -65,8 +66,8 @@ from ovid2.web.services import secrets_svc
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "EngineError",
     "SENTINEL_MASK",
+    "EngineError",
     "delete_engine",
     "get_engine",
     "list_engine_types",
@@ -94,9 +95,7 @@ def _validate_name(name: str) -> None:
     if not name:
         raise EngineError("Engine name is required.")
     if not all(c.isalnum() or c in "-_." for c in name):
-        raise EngineError(
-            f"Invalid engine name '{name}'. Use letters, digits, '-', '_', '.' only."
-        )
+        raise EngineError(f"Invalid engine name '{name}'. Use letters, digits, '-', '_', '.' only.")
     if name.startswith(".") or name.endswith(_SAMPLE_SUFFIX):
         raise EngineError(f"Engine name '{name}' is reserved.")
 
@@ -110,9 +109,7 @@ def _writable_path(name: str) -> Path:
 
 def _hash(payload: dict[str, Any]) -> str:
     """Return a stable content hash for audit rows."""
-    return hashlib.sha256(
-        json.dumps(payload, sort_keys=True).encode("utf-8")
-    ).hexdigest()
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 def _default_secret_ref(name: str) -> str:
@@ -129,9 +126,7 @@ def _validate_args_against_spec(
     known_secrets = {f["name"] for f in spec["secrets"]}
     for f in spec["args"]:
         if f.get("required") and not args.get(f["name"]):
-            raise EngineError(
-                f"'{type_name}' engines require the '{f['name']}' argument."
-            )
+            raise EngineError(f"'{type_name}' engines require the '{f['name']}' argument.")
     misplaced = sorted(set(args) & known_secrets)
     if misplaced:
         raise EngineError(
@@ -141,14 +136,12 @@ def _validate_args_against_spec(
     unknown_args = sorted(set(args) - known_args)
     if unknown_args:
         raise EngineError(
-            f"Unknown args {unknown_args} for '{type_name}'. "
-            f"Known: {sorted(known_args)}."
+            f"Unknown args {unknown_args} for '{type_name}'. Known: {sorted(known_args)}."
         )
     unknown_secrets = sorted(set(secrets) - known_secrets)
     if unknown_secrets:
         raise EngineError(
-            f"Unknown secrets {unknown_secrets} for '{type_name}'. "
-            f"Known: {sorted(known_secrets)}."
+            f"Unknown secrets {unknown_secrets} for '{type_name}'. Known: {sorted(known_secrets)}."
         )
 
 
@@ -182,8 +175,7 @@ def list_engines() -> list[EngineSummary]:
                 name=name,
                 type=str(payload.get("type", "unknown")),
                 path=str(path),
-                secret_ref=(str(payload.get("secret_ref"))
-                            if payload.get("secret_ref") else None),
+                secret_ref=(str(payload.get("secret_ref")) if payload.get("secret_ref") else None),
             )
         )
     return summaries
@@ -239,9 +231,7 @@ def list_engine_types() -> list[EngineTypeSpec]:
 # ---------------------------------------------------------------------------
 
 
-def _merge_secret_updates(
-    ref: str | None, incoming: dict[str, Any]
-) -> dict[str, Any]:
+def _merge_secret_updates(ref: str | None, incoming: dict[str, Any]) -> dict[str, Any]:
     """Preserve on-disk secret values for keys sent as the mask sentinel."""
     existing: dict[str, Any] = {}
     if ref:
@@ -251,9 +241,7 @@ def _merge_secret_updates(
                 candidate = Path(existing_detail.path)
                 if candidate.is_file():
                     try:
-                        existing = json.loads(
-                            candidate.read_text(encoding="utf-8")
-                        )
+                        existing = json.loads(candidate.read_text(encoding="utf-8"))
                     except (OSError, json.JSONDecodeError):
                         existing = {}
         except Exception:  # pragma: no cover — defensive
@@ -301,8 +289,7 @@ def write_engine(
     type_name = str(payload.type)
     if type_name not in _engines.list_engine_types():
         raise EngineError(
-            f"Unknown engine type '{type_name}'. "
-            f"Registered: {_engines.list_engine_types()}."
+            f"Unknown engine type '{type_name}'. Registered: {_engines.list_engine_types()}."
         )
 
     incoming_args = dict(payload.args or {})
@@ -341,9 +328,11 @@ def write_engine(
         secret_ref = (
             str(payload.secret_ref)
             if payload.secret_ref
-            else (str(existing_raw.get("secret_ref"))
-                  if existing_raw and existing_raw.get("secret_ref")
-                  else None)
+            else (
+                str(existing_raw.get("secret_ref"))
+                if existing_raw and existing_raw.get("secret_ref")
+                else None
+            )
         )
 
     doc: dict[str, Any] = {"type": type_name, "args": incoming_args}
@@ -383,25 +372,21 @@ def _find_references(name: str) -> list[str]:
     references: list[str] = []
 
     # Pipelines.
-    try:
+    with contextlib.suppress(Exception):
         from ovid2.web.services import pipelines_svc
 
         for summary in pipelines_svc.list_pipelines():
             detail = pipelines_svc.get_pipeline(summary.name)
             if detail is not None and detail.engine == name:
                 references.append(f"pipeline '{summary.name}'")
-    except Exception:  # noqa: BLE001 — pipelines optional; be defensive
-        pass
 
     # Settings default.
-    try:
+    with contextlib.suppress(Exception):
         from ovid2.web.services import settings_svc
 
         settings = settings_svc.get_settings()
         if settings.defaults.engine == name:
             references.append("settings.defaults.engine")
-    except Exception:  # noqa: BLE001
-        pass
 
     return references
 
@@ -417,9 +402,7 @@ def delete_engine(name: str, *, actor: str = "web") -> WriteResult:
     _validate_name(name)
     target = _writable_path(name)
     if not target.is_file():
-        raise EngineError(
-            f"Engine '{name}' not found under {_engines.engines_dir()}."
-        )
+        raise EngineError(f"Engine '{name}' not found under {_engines.engines_dir()}.")
 
     refs = _find_references(name)
     if refs:
@@ -543,9 +526,7 @@ def _pyspark_docker_argv(name: str, image: str) -> list[str]:
     after ``<image>`` are already the *subcommand* arguments
     (``tools test-engine <name>``) — do not prepend another ``ovid2``.
     """
-    xdg_home = (
-        os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    ).rstrip("/")
+    xdg_home = (os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")).rstrip("/")
     return [
         "docker",
         "run",

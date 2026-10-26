@@ -23,6 +23,10 @@ import argparse
 import logging
 import os
 import sys
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ovid2.core.addresses.base import BaseAddress
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +45,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser.set_defaults(_command="health", _entry=main)
 
     parser.add_argument("--input_address", help="Input source address name.")
-    parser.add_argument(
-        "--output_address", help="Where to write the results table."
-    )
+    parser.add_argument("--output_address", help="Where to write the results table.")
     parser.add_argument(
         "--input_connection",
         default=None,
@@ -78,7 +80,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "PCORnet database; pass a partner name only if you need its CDM/"
         "default-database behaviour.",
     )
-    parser.add_argument("--batch_id", required=True, help="Batch / refresh identifier.")
+    parser.add_argument(
+        "--batch_id",
+        required=True,
+        help="Batch id — the complete Data Space path of the input location (<connection>/<path>); a run label, never appended to an address.",
+    )
     parser.add_argument(
         "--parts",
         nargs="+",
@@ -112,6 +118,15 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Prior-refresh input address for the freshness / volume-trend panel.",
     )
     parser.add_argument("--engine", default="pyspark", help="Compute engine (default: pyspark).")
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help=(
+            "Allow writing into an output location that already holds tables "
+            "(the address is the exact write location; without this flag the "
+            "run refuses to overwrite existing data)."
+        ),
+    )
     parser.add_argument("--workers", type=int, default=25, help="Workers for an isolated cluster.")
     parser.add_argument("--sf_database", default=None)
     parser.add_argument("--sf_account", default=None)
@@ -170,7 +185,7 @@ def _load_endpoint(
     pipeline: str,
     cdm_name: str,
     role: str,
-):  # -> BaseAddress
+) -> BaseAddress:
     """Resolve one health endpoint from either a saved address or a
     run-time-selected storage account + location.
 
@@ -178,8 +193,8 @@ def _load_endpoint(
     otherwise the saved ``address`` name is loaded. Raises ``ValueError``
     when neither is given.
     """
-    from ovid2.core.loaders import load_address
     from ovid2.config.addresses import load_address_from_connection
+    from ovid2.core.loaders import load_address
 
     if connection_name:
         return load_address_from_connection(
@@ -256,9 +271,13 @@ def _run_host_mode(args: argparse.Namespace) -> int:
     args.command = getattr(args, "command", None) or "health"
     args.parsed_extra_mounts = build_disc_mounts(
         [
-            getattr(args, "input_address", None),
-            getattr(args, "output_address", None),
-            getattr(args, "prev_input_address", None),
+            name
+            for name in (
+                getattr(args, "input_address", None),
+                getattr(args, "output_address", None),
+                getattr(args, "prev_input_address", None),
+            )
+            if name
         ],
     )
 
@@ -271,6 +290,7 @@ def _run_container_mode(args: argparse.Namespace) -> int:
     """Run the health checks directly, inside the Spark container."""
     from ovid2.config.settings import WORK_DIR
     from ovid2.core.events import (
+        EventBus,
         instance_finished,
         instance_started,
         set_default_bus,
@@ -302,13 +322,15 @@ def _run_container_mode(args: argparse.Namespace) -> int:
     WORK_DIR.mkdir(parents=True, exist_ok=True)
     event_log = WORK_DIR / f"events-{instance_id}.jsonl"
     jsonl_bus = JsonlEventBus(event_log)
-    bus: object = TeeEventBus(jsonl_bus, PlainLogBus()) if args.stderr_log else jsonl_bus
-    set_default_bus(bus)  # type: ignore[arg-type]
+    bus: EventBus = TeeEventBus(jsonl_bus, PlainLogBus()) if args.stderr_log else jsonl_bus
+    set_default_bus(bus)
 
     bus.emit(instance_started(instance_id=instance_id, pipeline=pipeline))
 
     engine = load_engine(args.engine)
-    session = engine.get_session()
+    # The Spark-typed legacy ``BaseAddress.write`` takes this session;
+    # ``cli/`` may not import pyspark (even for typing).
+    session: Any = engine.get_session()
     engine.prepare_workspace()
 
     sf_overrides = _sf_overrides(args)
@@ -340,6 +362,36 @@ def _run_container_mode(args: argparse.Namespace) -> int:
         role="output",
     )
 
+    # Overwrite gate: the output is the exact write location. Health only
+    # writes its ``dcq_results`` table (often next to the CDM tables it
+    # reads), so only an existing ``dcq_results`` needs ``--overwrite``.
+    from ovid2.drivers.overwrite import OutputNotEmptyError, assert_output_writable
+
+    try:
+        _out_conn = getattr(args, "output_connection", None)
+        _out_driver = None
+        if _out_conn:
+            from ovid2.drivers.registry import driver_from_connection
+
+            _out_driver = driver_from_connection(
+                _out_conn, _location_from_str(getattr(args, "output_location", None))
+            )
+        assert_output_writable(
+            getattr(args, "output_address", None) or _out_conn,
+            overwrite=bool(getattr(args, "overwrite", False)),
+            driver=_out_driver,
+            pipeline=pipeline,
+            only_tables=["dcq_results"],
+        )
+    except OutputNotEmptyError as exc:
+        print(f"[ovid2] ERROR {exc}", file=sys.stderr)
+        engine.stop_session()
+        bus.emit(instance_finished(instance_id=instance_id, success=False))
+        jsonl_bus.close()
+        return 3
+    except (FileNotFoundError, ValueError) as exc:
+        logger.warning("health: overwrite gate skipped (%s)", exc)
+
     print("[ovid2] Health run")
     print(f"[ovid2]   pipeline={pipeline} batch_id={batch_id}")
     print(f"[ovid2]   checks={[s.id for s in specs]}")
@@ -368,7 +420,7 @@ def _run_container_mode(args: argparse.Namespace) -> int:
         pipeline=pipeline,
         batch_id=batch_id,
         instance_id=instance_id,
-        event_bus=bus,  # type: ignore[arg-type]
+        event_bus=bus,
     )
 
     failures = 0
@@ -384,9 +436,7 @@ def _run_container_mode(args: argparse.Namespace) -> int:
             )
             prior_tables = runner.register_prior_tables(prev_address, candidates)
 
-        outcomes = runner.run(
-            specs, available_tables=available, prior_tables=prior_tables
-        )
+        outcomes = runner.run(specs, available_tables=available, prior_tables=prior_tables)
         failures = sum(1 for o in outcomes if o.status == "error")
 
         # Durable results table -> output storage account.
@@ -394,7 +444,7 @@ def _run_container_mode(args: argparse.Namespace) -> int:
         try:
             results_df = runner.build_results_dataframe(outcomes)
             output_address.write(results_df, session, pipeline, batch_id, "dcq_results")
-            results_uri = f"{output_desc}:{pipeline}/{batch_id}/dcq_results"
+            results_uri = f"{output_desc}:dcq_results"
         except Exception as exc:
             logger.exception("health: results table write failed: %s", exc)
             print(f"[ovid2] WARNING results write failed: {exc}", file=sys.stderr)

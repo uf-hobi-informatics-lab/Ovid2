@@ -72,9 +72,9 @@ def test_apply_exclude_drops_sup_files(spark: SparkSession, tmp_path) -> None:
     from ovid2.formatters.adapters._sources import read_source
     from ovid2.formatters.spec import SourceSpec
 
-    # Write two files under a pipeline/batch layout the DiscAddress understands.
+    # The address is the exact folder holding the files.
     root = tmp_path / "disc"
-    batch_dir = root / "acme" / "20260101"
+    batch_dir = root
     batch_dir.mkdir(parents=True)
     (batch_dir / "provider.csv").write_text("provider_id\n1\n", encoding="utf-8")
     (batch_dir / "provider_sup.csv").write_text("provider_id\n2\n", encoding="utf-8")

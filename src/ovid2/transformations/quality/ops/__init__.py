@@ -364,10 +364,7 @@ def _valueset_membership(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
                     exact.add(code_cmp)
             value_expr = F.upper(F.trim(F.col(column))) if ci else F.trim(F.col(column))
             # Rows with a non-null, non-empty, non-flavour-of-null value.
-            populated = (
-                value_expr.isNotNull()
-                & (F.trim(F.col(column)) != F.lit(""))
-            )
+            populated = value_expr.isNotNull() & (F.trim(F.col(column)) != F.lit(""))
             if fon_cmp:
                 populated = populated & (~value_expr.isin(list(fon_cmp)))
             # Conforming = exact-set member OR matches any wildcard prefix.
@@ -493,8 +490,13 @@ def _orphan_fk(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
         pct = (100.0 * orphan_n / child_total) if child_total else 0.0
         detail = {"child_key": child_key, "parent": parent, "parent_key": parent_key}
         rows.append(
-            _mk(spec, source_table=child, metric="CHILD_ROWS", value_num=float(child_total),
-                details=detail)
+            _mk(
+                spec,
+                source_table=child,
+                metric="CHILD_ROWS",
+                value_num=float(child_total),
+                details=detail,
+            )
         )
         rows.append(
             _mk(
@@ -556,8 +558,8 @@ def _mapping_coverage(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
             continue
         mapped_upper = [str(k).upper() for k in pipeline_dict]
         value_u = F.upper(F.trim(F.col(column)))
-        populated = value_u.isNotNull() & (F.trim(F.col(column)) != F.lit("")) & (
-            ~value_u.isin(list(fon))
+        populated = (
+            value_u.isNotNull() & (F.trim(F.col(column)) != F.lit("")) & (~value_u.isin(list(fon)))
         )
         pop_df = df.filter(populated)
         total = ctx.rows(pop_df)
@@ -569,16 +571,31 @@ def _mapping_coverage(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
         pct = 100.0 * unmapped_rows / total
         detail = {"column": column}
         rows.append(
-            _mk(spec, source_table=table_u, metric="TOTAL_ROWS", value_num=float(total),
-                details=detail)
+            _mk(
+                spec,
+                source_table=table_u,
+                metric="TOTAL_ROWS",
+                value_num=float(total),
+                details=detail,
+            )
         )
         rows.append(
-            _mk(spec, source_table=table_u, metric="UNMAPPED_DISTINCT",
-                value_num=float(unmapped_distinct), details=detail)
+            _mk(
+                spec,
+                source_table=table_u,
+                metric="UNMAPPED_DISTINCT",
+                value_num=float(unmapped_distinct),
+                details=detail,
+            )
         )
         rows.append(
-            _mk(spec, source_table=table_u, metric="UNMAPPED_ROWS",
-                value_num=float(unmapped_rows), details=detail)
+            _mk(
+                spec,
+                source_table=table_u,
+                metric="UNMAPPED_ROWS",
+                value_num=float(unmapped_rows),
+                details=detail,
+            )
         )
         rows.append(
             _mk(
@@ -736,8 +753,13 @@ def _panel_loinc_rate(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
         panel_n = ctx.rows(loinc_rows.filter(value_u.isin(list(panels)))) if panels else 0
         pct = 100.0 * panel_n / total
         rows.append(
-            _mk(spec, source_table=table, metric="LOINC_ROWS", value_num=float(total),
-                details={"column": col_u})
+            _mk(
+                spec,
+                source_table=table,
+                metric="LOINC_ROWS",
+                value_num=float(total),
+                details={"column": col_u},
+            )
         )
         rows.append(
             _mk(
@@ -919,9 +941,7 @@ def _encounter_per_visit(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
         enc_n = ctx.rows(subset)
         if enc_n == 0:
             continue
-        visits = ctx.rows(
-            subset.select("PATID", "ADMIT_DATE", "ENC_TYPE").dropDuplicates()
-        )
+        visits = ctx.rows(subset.select("PATID", "ADMIT_DATE", "ENC_TYPE").dropDuplicates())
         ratio = (enc_n / visits) if visits else 0.0
         rows.append(
             _mk(
@@ -998,7 +1018,6 @@ def _field_completeness(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     lists ``{table, column}`` pairs (the key fields for that EDC table); the
     metric is the missing / flavour-of-null share per field.
     """
-    from pyspark.sql import functions as F
 
     threshold = float(spec.thresholds.get("missing_pct_ge", 10.0))
     fon_upper = {str(v).upper() for v in ctx.cdm.flavour_of_null if v is not None}
@@ -1073,8 +1092,12 @@ def _known_value_coverage(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
                 value_num=round(pct, 4),
                 threshold_num=threshold,
                 exception_flag=pct < threshold,
-                details={"column": column, "require_also": require,
-                         "covered_rows": covered_n, "total_rows": total},
+                details={
+                    "column": column,
+                    "require_also": require,
+                    "covered_rows": covered_n,
+                    "total_rows": total,
+                },
             )
         )
     return rows
@@ -1090,7 +1113,6 @@ def _patient_coverage(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     metric is the covered-patient share. Threshold defaults to 80% (2.09/3.18)
     or 50% (3.04/3.05) per ``thresholds.coverage_pct_lt``.
     """
-    from pyspark.sql import functions as F
 
     threshold = float(spec.thresholds.get("coverage_pct_lt", 80.0))
     denom_table = str(spec.params.get("denominator_table", "DEMOGRAPHIC"))
@@ -1123,8 +1145,11 @@ def _patient_coverage(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
                 value_num=round(pct, 4),
                 threshold_num=threshold,
                 exception_flag=pct < threshold,
-                details={"denominator_table": denom_table, "denominator": denom_n,
-                         "covered_patients": covered_n},
+                details={
+                    "denominator_table": denom_table,
+                    "denominator": denom_n,
+                    "covered_patients": covered_n,
+                },
             )
         )
     return rows
@@ -1226,14 +1251,11 @@ def _monthly_volume_zscore(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     nback = int(spec.params.get("nback", 12))
     nsd = float(spec.params.get("nsd", -7.0))
     lag_avg_floor = float(spec.params.get("lag_avg_floor", 500.0))
-    excluded_months = {
-        str(m) for m in spec.params.get("excluded_months", ["2020-03", "2020-04"])
-    }
+    excluded_months = {str(m) for m in spec.params.get("excluded_months", ["2020-03", "2020-04"])}
     enc_type_tables = {str(t).upper() for t in spec.params.get("enc_type_tables", [])}
     enc_types = {str(e).upper() for e in spec.params.get("enc_types", [])}
     date_columns = {
-        str(k).upper(): str(v).upper()
-        for k, v in spec.params.get("date_columns", {}).items()
+        str(k).upper(): str(v).upper() for k, v in spec.params.get("date_columns", {}).items()
     }
     rows: list[MetricRow] = []
     for table in spec.source_tables:
@@ -1283,13 +1305,13 @@ def _monthly_volume_zscore(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
             counts = [month_counts[m] for m in months]
             for i, month in enumerate(months):
                 # Lagged 12-month window: the up-to-12 months preceding ``month``.
-                window = counts[max(0, i - nback):i]
+                window = counts[max(0, i - nback) : i]
                 if len(window) < 1:
                     continue
                 lag_avg = sum(window) / len(window)
                 mean = lag_avg
                 var = sum((c - mean) ** 2 for c in window) / len(window)
-                lag_std = var ** 0.5
+                lag_std = var**0.5
                 resultn = counts[i]
                 # SAS drop conditions.
                 if lag_avg < lag_avg_floor or lag_std <= 0:
@@ -1357,16 +1379,12 @@ def _refresh_trend(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
         if not ctx.has(table):
             continue
         current = ctx.rows(ctx.table(table))
-        rows.append(
-            _mk(spec, source_table=table, metric="CURRENT_ROWS", value_num=float(current))
-        )
+        rows.append(_mk(spec, source_table=table, metric="CURRENT_ROWS", value_num=float(current)))
         prior_df = prior.get(table.upper())
         if prior_df is None:
             continue
         prior_n = ctx.rows(prior_df)
-        rows.append(
-            _mk(spec, source_table=table, metric="PRIOR_ROWS", value_num=float(prior_n))
-        )
+        rows.append(_mk(spec, source_table=table, metric="PRIOR_ROWS", value_num=float(prior_n)))
         pct = (100.0 * (current - prior_n) / prior_n) if prior_n else 0.0
         dropped_to_zero = current == 0 and prior_n > 0
         exc = dropped_to_zero or (prior_n > 0 and pct < threshold)

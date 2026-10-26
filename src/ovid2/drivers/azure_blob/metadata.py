@@ -50,9 +50,7 @@ _VALID_FORMATS: frozenset[str] = frozenset({"csv", "parquet", "json"})
 
 #: Class name (dotted string) of the Hadoop ClientCredsTokenProvider —
 #: service-principal (client-credentials) OAuth flow against Azure AD.
-_CLIENT_CREDS_PROVIDER: str = (
-    "org.apache.hadoop.fs.azurebfs.oauth2.ClientCredsTokenProvider"
-)
+_CLIENT_CREDS_PROVIDER: str = "org.apache.hadoop.fs.azurebfs.oauth2.ClientCredsTokenProvider"
 
 #: Class name of the Hadoop MsiTokenProvider (managed identity). This
 #: is the default path on the Ovid host: the VM's system-assigned
@@ -63,9 +61,7 @@ _MSI_PROVIDER: str = "org.apache.hadoop.fs.azurebfs.oauth2.MsiTokenProvider"
 #: Class name of the fixed-SAS-token provider — used when a SAS token
 #: is registered directly (rather than derived from a stored account
 #: key).
-_FIXED_SAS_PROVIDER: str = (
-    "org.apache.hadoop.fs.azurebfs.sas.FixedSASTokenProvider"
-)
+_FIXED_SAS_PROVIDER: str = "org.apache.hadoop.fs.azurebfs.sas.FixedSASTokenProvider"
 
 
 def _nonempty(value: Any) -> str | None:
@@ -173,17 +169,13 @@ def connection_fields() -> ConnectionFieldSpec:
                 name="account_name",
                 required=False,
                 help=(
-                    "Storage account name (required unless a "
-                    "connection_string secret is provided)."
+                    "Storage account name (required unless a connection_string secret is provided)."
                 ),
             ),
             FieldSpec(
                 name="container_default",
                 required=False,
-                help=(
-                    "Default container (address may override). Probed "
-                    "by test() when set."
-                ),
+                help=("Default container (address may override). Probed by test() when set."),
             ),
             FieldSpec(
                 name="endpoint_suffix",
@@ -206,10 +198,7 @@ def connection_fields() -> ConnectionFieldSpec:
             FieldSpec(
                 name="account_key",
                 required=False,
-                help=(
-                    "Storage account key. Mutually exclusive with "
-                    "sas_token / SPN."
-                ),
+                help=("Storage account key. Mutually exclusive with sas_token / SPN."),
             ),
             FieldSpec(
                 name="sas_token",
@@ -224,10 +213,7 @@ def connection_fields() -> ConnectionFieldSpec:
             FieldSpec(
                 name="client_id",
                 required=False,
-                help=(
-                    "Azure AD app registration client id (with "
-                    "tenant_id + client_secret)."
-                ),
+                help=("Azure AD app registration client id (with tenant_id + client_secret)."),
             ),
             FieldSpec(
                 name="client_secret",
@@ -256,10 +242,7 @@ def location_fields() -> tuple[LocationField, ...]:
             name="container",
             required=False,
             widget="str",
-            help=(
-                "Container name. Falls back to the connection's "
-                "container_default when blank."
-            ),
+            help=("Container name. Falls back to the connection's container_default when blank."),
         ),
         LocationField(
             name="path",

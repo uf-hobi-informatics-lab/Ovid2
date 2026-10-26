@@ -75,8 +75,8 @@ class TransformContext:
             need secrets; provided for symmetry with the mapper engine.
     """
 
-    session: "EngineSession"
-    functions: "EngineFunctions"
+    session: EngineSession
+    functions: EngineFunctions
     engine_family: str = "spark"
     pipeline: str | None = None
     secrets: dict[str, Any] | None = None
@@ -129,10 +129,10 @@ class BaseTransform(ABC):
     @abstractmethod
     def apply(
         self,
-        df: "DataFrame",
+        df: DataFrame,
         params: dict[str, Any],
         ctx: TransformContext,
-    ) -> "DataFrame":
+    ) -> DataFrame:
         """Apply the transform to ``df`` using ``params`` and ``ctx``.
 
         Args:

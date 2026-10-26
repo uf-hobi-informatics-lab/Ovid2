@@ -118,7 +118,9 @@ def _text_result(payload: Any, *, is_error: bool = False) -> types.CallToolResul
     return types.CallToolResult(content=[content], is_error=is_error)
 
 
-async def _handle_call(registry: _Registry, params: types.CallToolRequestParams) -> types.CallToolResult:
+async def _handle_call(
+    registry: _Registry, params: types.CallToolRequestParams
+) -> types.CallToolResult:
     """Dispatch one ``tools/call`` request."""
     spec = registry.tools.get(params.name)
     if spec is None:

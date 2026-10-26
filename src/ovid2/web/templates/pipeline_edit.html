@@ -86,12 +86,8 @@
     </div>
 
     <div class="form-row" id="sf-row">
-      <label for="sf_database">SF database (opt)</label>
-      <input type="text" id="sf_database" name="sf_database" value="{{ pipeline_config.sf_database or '' }}">
       <label for="sf_account">SF account (opt)</label>
       <input type="text" id="sf_account" name="sf_account" value="{{ pipeline_config.sf_account or '' }}">
-      <label for="sf_schema">SF schema (opt)</label>
-      <input type="text" id="sf_schema" name="sf_schema" value="{{ pipeline_config.sf_schema or '' }}">
     </div>
 
     <div class="form-row" id="flags-row">
@@ -100,6 +96,11 @@
       </label>
       <label id="stderr-log-label">
         <input type="checkbox" name="stderr_log" {% if pipeline_config.stderr_log %}checked{% endif %}> Mirror events to stderr
+      </label>
+      <label id="allow-overwrite-label"
+             title="The output address is the exact write location. Scheduled / watch runs write to the same output, so they need a standing confirmation to replace what is already there.">
+        <input type="checkbox" name="allow_overwrite" {% if pipeline_config.allow_overwrite %}checked{% endif %}>
+        Runs may overwrite existing output data
       </label>
     </div>
 

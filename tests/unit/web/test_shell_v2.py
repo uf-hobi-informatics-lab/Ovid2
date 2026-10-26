@@ -32,7 +32,7 @@ def test_shell_has_drawer_scrim(web_client: object) -> None:
     response = web_client.get("/")  # type: ignore[attr-defined]
     body = response.text
     assert 'class="drawer-scrim"' in body
-    assert 'data-drawer-close' in body
+    assert "data-drawer-close" in body
 
 
 @pytest.mark.unit
@@ -87,9 +87,7 @@ def test_shell_uses_wordmark(web_client: object) -> None:
         ("/health", "/health"),
     ],
 )
-def test_nav_active_marker_matches_route(
-    web_client: object, url: str, expected_href: str
-) -> None:
+def test_nav_active_marker_matches_route(web_client: object, url: str, expected_href: str) -> None:
     """Each top-level route marks its own drawer link as active."""
     response = web_client.get(url)  # type: ignore[attr-defined]
     # Some pages under W-features may 500 without setup; skip those.
@@ -98,10 +96,7 @@ def test_nav_active_marker_matches_route(
     assert response.status_code == 200
     body = response.text
     marker = f'href="{expected_href}" class="nav-item active"'
-    assert marker in body, (
-        f"expected active marker for {url!r} not found; "
-        f"looked for: {marker}"
-    )
+    assert marker in body, f"expected active marker for {url!r} not found; looked for: {marker}"
 
 
 # ---------------------------------------------------------------------------
@@ -204,9 +199,17 @@ def test_prepaint_restores_wide_collapse(web_client: object) -> None:
 
 
 @pytest.mark.unit
-def test_theme_js_updates_aria_label(web_client: object) -> None:
-    """``theme.js`` updates ``aria-label`` so screen readers announce the switch."""
-    response = web_client.get("/static/theme.js")  # type: ignore[attr-defined]
-    body = response.text
-    assert "aria-label" in body
-    assert "ovid2Theme" in body
+def test_theme_controls_are_announced(web_client: object) -> None:
+    """The Appearance trigger is labelled and announces its open state.
+
+    The old day/night button (whose label ``theme.js`` rewrote) was
+    replaced by the Appearance tool; ``appearance.js`` now owns the
+    control and toggles ``aria-expanded`` so screen readers hear it.
+    """
+    page = web_client.get("/").text  # type: ignore[attr-defined]
+    assert 'id="tool-appearance"' in page
+    assert 'aria-label="Appearance"' in page
+    js = web_client.get("/static/appearance.js").text  # type: ignore[attr-defined]
+    assert "aria-expanded" in js
+    theme = web_client.get("/static/theme.js").text  # type: ignore[attr-defined]
+    assert "OVID2_APPEARANCE" in theme

@@ -72,7 +72,7 @@ class _RecordingFormatter:
 class _ViewDataFrame:
     """DataFrame double exposing the Snowpark temp-view API."""
 
-    def create_or_replace_temp_view(self, name: str) -> None:  # noqa: D401
+    def create_or_replace_temp_view(self, name: str) -> None:
         pass
 
 

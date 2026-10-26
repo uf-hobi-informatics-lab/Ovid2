@@ -52,9 +52,7 @@ def test_slugify_empty_is_root() -> None:
 
 @pytest.mark.unit
 def test_normalise_drops_empty() -> None:
-    assert svc._normalise_location({"path": "x", "fmt": None, "e": ""}) == {
-        "path": "x"
-    }
+    assert svc._normalise_location({"path": "x", "fmt": None, "e": ""}) == {"path": "x"}
 
 
 @pytest.mark.unit

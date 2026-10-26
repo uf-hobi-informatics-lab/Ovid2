@@ -32,7 +32,6 @@ import pytest
 
 from ovid2.tools import move as move_module
 
-
 # ---------------------------------------------------------------------------
 # Fixtures + helpers
 # ---------------------------------------------------------------------------
@@ -80,6 +79,7 @@ def _mk_args(**overrides: Any) -> argparse.Namespace:
 def _instance() -> Any:
     """Build a stand-in OvidInstance without touching the filesystem."""
     from ovid2.core.isolation import OvidInstance
+
     with mock.patch("ovid2.core.isolation.OvidInstance.ensure_directories"):
         return OvidInstance(instance_id="20260101-000000-testtt")
 
@@ -96,16 +96,17 @@ class TestRunHostModeAttributeBackfill:
         args = _mk_args()
         assert not hasattr(args, "workers")
 
-        with mock.patch("ovid2.core.docker.is_inside_docker", return_value=False), \
-             mock.patch("ovid2.core.isolation.cleanup_stale_instances"), \
-             mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.SPARK_MODE", "cluster"), \
-             mock.patch("ovid2.drivers.collector.collect_for_addresses",
-                        return_value=_empty_merged()), \
-             mock.patch("ovid2.core.docker.submit_with_cluster",
-                        return_value=0) as m_swc, \
-             mock.patch("ovid2.core.docker.submit_to_docker",
-                        return_value=0) as m_std:
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=False),
+            mock.patch("ovid2.core.isolation.cleanup_stale_instances"),
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.SPARK_MODE", "cluster"),
+            mock.patch(
+                "ovid2.drivers.collector.collect_for_addresses", return_value=_empty_merged()
+            ),
+            mock.patch("ovid2.core.docker.submit_with_cluster", return_value=0) as m_swc,
+            mock.patch("ovid2.core.docker.submit_to_docker", return_value=0) as m_std,
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             rc = move_module.main(args)
 
@@ -121,15 +122,17 @@ class TestRunHostModeAttributeBackfill:
     def test_local_mode_uses_submit_to_docker(self) -> None:
         args = _mk_args()
 
-        with mock.patch("ovid2.core.docker.is_inside_docker", return_value=False), \
-             mock.patch("ovid2.core.isolation.cleanup_stale_instances"), \
-             mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.SPARK_MODE", "local"), \
-             mock.patch("ovid2.drivers.collector.collect_for_addresses",
-                        return_value=_empty_merged()), \
-             mock.patch("ovid2.core.docker.submit_with_cluster") as m_swc, \
-             mock.patch("ovid2.core.docker.submit_to_docker",
-                        return_value=0) as m_std:
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=False),
+            mock.patch("ovid2.core.isolation.cleanup_stale_instances"),
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.SPARK_MODE", "local"),
+            mock.patch(
+                "ovid2.drivers.collector.collect_for_addresses", return_value=_empty_merged()
+            ),
+            mock.patch("ovid2.core.docker.submit_with_cluster") as m_swc,
+            mock.patch("ovid2.core.docker.submit_to_docker", return_value=0) as m_std,
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             move_module.main(args)
         m_std.assert_called_once()
@@ -138,14 +141,16 @@ class TestRunHostModeAttributeBackfill:
     def test_backfills_transformations_and_sf_defaults(self) -> None:
         args = _mk_args()
 
-        with mock.patch("ovid2.core.docker.is_inside_docker", return_value=False), \
-             mock.patch("ovid2.core.isolation.cleanup_stale_instances"), \
-             mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.SPARK_MODE", "local"), \
-             mock.patch("ovid2.drivers.collector.collect_for_addresses",
-                        return_value=_empty_merged()), \
-             mock.patch("ovid2.core.docker.submit_to_docker",
-                        return_value=0) as m_std:
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=False),
+            mock.patch("ovid2.core.isolation.cleanup_stale_instances"),
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.SPARK_MODE", "local"),
+            mock.patch(
+                "ovid2.drivers.collector.collect_for_addresses", return_value=_empty_merged()
+            ),
+            mock.patch("ovid2.core.docker.submit_to_docker", return_value=0) as m_std,
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             move_module.main(args)
         passed = m_std.call_args.args[0]
@@ -158,6 +163,7 @@ class TestRunHostModeAttributeBackfill:
 def _empty_merged() -> Any:
     """Return an empty :class:`MergedRequirements`."""
     from ovid2.drivers.container import MergedRequirements
+
     return MergedRequirements()
 
 
@@ -176,13 +182,16 @@ class TestCollectorIntegration:
     def test_calls_collect_for_addresses(self) -> None:
         args = _mk_args()
 
-        with mock.patch("ovid2.core.docker.is_inside_docker", return_value=False), \
-             mock.patch("ovid2.core.isolation.cleanup_stale_instances"), \
-             mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.SPARK_MODE", "local"), \
-             mock.patch("ovid2.drivers.collector.collect_for_addresses",
-                        return_value=_empty_merged()) as m_col, \
-             mock.patch("ovid2.core.docker.submit_to_docker", return_value=0):
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=False),
+            mock.patch("ovid2.core.isolation.cleanup_stale_instances"),
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.SPARK_MODE", "local"),
+            mock.patch(
+                "ovid2.drivers.collector.collect_for_addresses", return_value=_empty_merged()
+            ) as m_col,
+            mock.patch("ovid2.core.docker.submit_to_docker", return_value=0),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             move_module.main(args)
         m_col.assert_called_once()
@@ -200,24 +209,30 @@ class TestCollectorIntegration:
         (tmp_path / "a").mkdir()
         args = _mk_args(extra_mounts=[f"{tmp_path / 'a'}:/explicit"])
 
-        with mock.patch("ovid2.core.docker.is_inside_docker", return_value=False), \
-             mock.patch("ovid2.core.isolation.cleanup_stale_instances"), \
-             mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.SPARK_MODE", "local"), \
-             mock.patch("ovid2.drivers.collector.collect_for_addresses",
-                        return_value=_empty_merged()) as m_col, \
-             mock.patch("ovid2.core.docker.submit_to_docker", return_value=0):
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=False),
+            mock.patch("ovid2.core.isolation.cleanup_stale_instances"),
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.SPARK_MODE", "local"),
+            mock.patch(
+                "ovid2.drivers.collector.collect_for_addresses", return_value=_empty_merged()
+            ) as m_col,
+            mock.patch("ovid2.core.docker.submit_to_docker", return_value=0),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             move_module.main(args)
         _, kwargs = m_col.call_args
         assert kwargs["explicit_container_paths"] == ["/explicit"]
 
     def test_collector_mounts_reach_parsed_extra_mounts(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """Driver-side :class:`ExtraMount` values are reshaped to the tools shape."""
         from ovid2.drivers.container import (
             ExtraMount as DriverMount,
+        )
+        from ovid2.drivers.container import (
             MergedRequirements,
         )
 
@@ -233,13 +248,14 @@ class TestCollectorIntegration:
         )
         args = _mk_args()
 
-        with mock.patch("ovid2.core.docker.is_inside_docker", return_value=False), \
-             mock.patch("ovid2.core.isolation.cleanup_stale_instances"), \
-             mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.SPARK_MODE", "local"), \
-             mock.patch("ovid2.drivers.collector.collect_for_addresses",
-                        return_value=merged), \
-             mock.patch("ovid2.core.docker.submit_to_docker", return_value=0):
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=False),
+            mock.patch("ovid2.core.isolation.cleanup_stale_instances"),
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.SPARK_MODE", "local"),
+            mock.patch("ovid2.drivers.collector.collect_for_addresses", return_value=merged),
+            mock.patch("ovid2.core.docker.submit_to_docker", return_value=0),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             move_module.main(args)
         assert len(args.parsed_extra_mounts) == 1
@@ -264,10 +280,21 @@ class TestArgparse:
         return parser.parse_args(argv)
 
     def test_required_flags(self) -> None:
-        ns = self._parse([
-            "move", "--from", "src", "--to", "dst",
-            "--pipeline", "p", "--batch_id", "b", "--tables", "t1",
-        ])
+        ns = self._parse(
+            [
+                "move",
+                "--from",
+                "src",
+                "--to",
+                "dst",
+                "--pipeline",
+                "p",
+                "--batch_id",
+                "b",
+                "--tables",
+                "t1",
+            ]
+        )
         assert ns.from_address == "src"
         assert ns.to_address == "dst"
         assert ns.pipeline == "p"
@@ -277,22 +304,46 @@ class TestArgparse:
         assert ns.strict_types is False
 
     def test_strict_types_flag(self) -> None:
-        ns = self._parse([
-            "move", "--from", "src", "--to", "dst",
-            "--pipeline", "p", "--batch_id", "b", "--tables", "t1",
-            "--strict-types",
-        ])
+        ns = self._parse(
+            [
+                "move",
+                "--from",
+                "src",
+                "--to",
+                "dst",
+                "--pipeline",
+                "p",
+                "--batch_id",
+                "b",
+                "--tables",
+                "t1",
+                "--strict-types",
+            ]
+        )
         assert ns.strict_types is True
 
     def test_extra_mount_flag_is_repeatable(self, tmp_path: Path) -> None:
         (tmp_path / "a").mkdir()
         (tmp_path / "b").mkdir()
-        ns = self._parse([
-            "move", "--from", "s", "--to", "d",
-            "--pipeline", "p", "--batch_id", "1", "--tables", "t",
-            "--extra-mount", f"{tmp_path / 'a'}:/mnt_a",
-            "--extra-mount", f"{tmp_path / 'b'}:/mnt_b:ro",
-        ])
+        ns = self._parse(
+            [
+                "move",
+                "--from",
+                "s",
+                "--to",
+                "d",
+                "--pipeline",
+                "p",
+                "--batch_id",
+                "1",
+                "--tables",
+                "t",
+                "--extra-mount",
+                f"{tmp_path / 'a'}:/mnt_a",
+                "--extra-mount",
+                f"{tmp_path / 'b'}:/mnt_b:ro",
+            ]
+        )
         assert ns.extra_mounts == [
             f"{tmp_path / 'a'}:/mnt_a",
             f"{tmp_path / 'b'}:/mnt_b:ro",
@@ -313,40 +364,80 @@ class TestExtraMountValidation:
         return parser.parse_args(argv)
 
     def test_rejects_reserved_container_path(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
-        ns = self._parse([
-            "move", "--from", "s", "--to", "d",
-            "--pipeline", "p", "--batch_id", "1", "--tables", "t",
-            "--extra-mount", f"{tmp_path}:/data",
-        ])
+        ns = self._parse(
+            [
+                "move",
+                "--from",
+                "s",
+                "--to",
+                "d",
+                "--pipeline",
+                "p",
+                "--batch_id",
+                "1",
+                "--tables",
+                "t",
+                "--extra-mount",
+                f"{tmp_path}:/data",
+            ]
+        )
         with mock.patch("ovid2.core.docker.is_inside_docker", return_value=False):
             rc = move_module.main(ns)
         assert rc == 2
         assert "reserved" in capsys.readouterr().err
 
     def test_rejects_missing_host_path(
-        self, capsys: pytest.CaptureFixture[str],
+        self,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
-        ns = self._parse([
-            "move", "--from", "s", "--to", "d",
-            "--pipeline", "p", "--batch_id", "1", "--tables", "t",
-            "--extra-mount", "/nope/nowhere:/copy_out",
-        ])
+        ns = self._parse(
+            [
+                "move",
+                "--from",
+                "s",
+                "--to",
+                "d",
+                "--pipeline",
+                "p",
+                "--batch_id",
+                "1",
+                "--tables",
+                "t",
+                "--extra-mount",
+                "/nope/nowhere:/copy_out",
+            ]
+        )
         with mock.patch("ovid2.core.docker.is_inside_docker", return_value=False):
             rc = move_module.main(ns)
         assert rc == 2
         assert "does not exist" in capsys.readouterr().err
 
     def test_container_mode_skips_host_validation(self) -> None:
-        ns = self._parse([
-            "move", "--from", "s", "--to", "d",
-            "--pipeline", "p", "--batch_id", "1", "--tables", "t",
-            "--extra-mount", "/host-only:/copy_out",
-        ])
-        with mock.patch("ovid2.core.docker.is_inside_docker", return_value=True), \
-             mock.patch.object(move_module, "_run_container_mode",
-                               return_value=0) as m_cm:
+        ns = self._parse(
+            [
+                "move",
+                "--from",
+                "s",
+                "--to",
+                "d",
+                "--pipeline",
+                "p",
+                "--batch_id",
+                "1",
+                "--tables",
+                "t",
+                "--extra-mount",
+                "/host-only:/copy_out",
+            ]
+        )
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=True),
+            mock.patch.object(move_module, "_run_container_mode", return_value=0) as m_cm,
+        ):
             rc = move_module.main(ns)
         assert rc == 0
         m_cm.assert_called_once()
@@ -401,7 +492,8 @@ class TestDockerArgv:
         assert "--strict-types" in tokens
 
     def test_build_tools_move_argv_forwards_extra_mount(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         from ovid2.core.docker import _build_ovid2_argv
         from ovid2.tools.extra_mounts import ExtraMount
@@ -445,7 +537,9 @@ class TestDriverMountReshape:
         from ovid2.drivers.container import ExtraMount as DriverMount
 
         d = DriverMount(
-            host_path="/nope/nowhere", container_path="/x", mode="rw",
+            host_path="/nope/nowhere",
+            container_path="/x",
+            mode="rw",
         )
         assert move_module._driver_mount_to_tool_mount(d) is None
 
@@ -462,13 +556,14 @@ class TestContainerModeDriverResolution:
         """``_run_container_mode`` must call ``driver_from_address`` for each address."""
         args = _mk_args(tables=["T1"])
 
-        with mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.WORK_DIR", tmp_path), \
-             mock.patch("ovid2.drivers.registry.driver_from_address") as m_dfa, \
-             mock.patch("ovid2.drivers.type_stamping.validate_route_types",
-                        return_value=None), \
-             mock.patch("ovid2.core.loaders.load_engine") as m_engine, \
-             mock.patch("ovid2.display.bus.JsonlEventBus"):
+        with (
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.WORK_DIR", tmp_path),
+            mock.patch("ovid2.drivers.registry.driver_from_address") as m_dfa,
+            mock.patch("ovid2.drivers.type_stamping.validate_route_types", return_value=None),
+            mock.patch("ovid2.core.loaders.load_engine") as m_engine,
+            mock.patch("ovid2.display.bus.JsonlEventBus"),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             src = mock.MagicMock()
             src.type_name = "disc"
@@ -478,6 +573,7 @@ class TestContainerModeDriverResolution:
             m_dfa.side_effect = [src, dst]
             m_engine.return_value.get_session.return_value = "session"
             from ovid2.core.engines.stager import SparkEngineStager
+
             m_engine.return_value.get_stager.return_value = SparkEngineStager(
                 m_engine.return_value,
             )
@@ -492,19 +588,25 @@ class TestContainerModeDriverResolution:
     def test_advisory_type_check_called(self, tmp_path: Path) -> None:
         args = _mk_args(tables=["T1"])
 
-        with mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.WORK_DIR", tmp_path), \
-             mock.patch("ovid2.drivers.registry.driver_from_address") as m_dfa, \
-             mock.patch("ovid2.drivers.type_stamping.validate_route_types",
-                        return_value=None) as m_pi, \
-             mock.patch("ovid2.core.loaders.load_engine") as m_engine, \
-             mock.patch("ovid2.display.bus.JsonlEventBus"):
+        with (
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.WORK_DIR", tmp_path),
+            mock.patch("ovid2.drivers.registry.driver_from_address") as m_dfa,
+            mock.patch(
+                "ovid2.drivers.type_stamping.validate_route_types", return_value=None
+            ) as m_pi,
+            mock.patch("ovid2.core.loaders.load_engine") as m_engine,
+            mock.patch("ovid2.display.bus.JsonlEventBus"),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
-            src = mock.MagicMock(); src.type_name = "disc"
-            dst = mock.MagicMock(); dst.type_name = "disc"
+            src = mock.MagicMock()
+            src.type_name = "disc"
+            dst = mock.MagicMock()
+            dst.type_name = "disc"
             m_dfa.side_effect = [src, dst]
             m_engine.return_value.get_session.return_value = "session"
             from ovid2.core.engines.stager import SparkEngineStager
+
             m_engine.return_value.get_stager.return_value = SparkEngineStager(
                 m_engine.return_value,
             )
@@ -520,13 +622,17 @@ class TestContainerModeDriverResolution:
     def test_strict_types_flag_propagates(self, tmp_path: Path) -> None:
         args = _mk_args(tables=["T1"], strict_types=True)
 
-        with mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.WORK_DIR", tmp_path), \
-             mock.patch("ovid2.drivers.registry.driver_from_address") as m_dfa, \
-             mock.patch("ovid2.drivers.type_stamping.validate_route_types",
-                        side_effect=ValueError("mismatch")) as m_pi, \
-             mock.patch("ovid2.core.loaders.load_engine"), \
-             mock.patch("ovid2.display.bus.JsonlEventBus"):
+        with (
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.WORK_DIR", tmp_path),
+            mock.patch("ovid2.drivers.registry.driver_from_address") as m_dfa,
+            mock.patch(
+                "ovid2.drivers.type_stamping.validate_route_types",
+                side_effect=ValueError("mismatch"),
+            ) as m_pi,
+            mock.patch("ovid2.core.loaders.load_engine"),
+            mock.patch("ovid2.display.bus.JsonlEventBus"),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             m_dfa.side_effect = [mock.MagicMock(), mock.MagicMock()]
 
@@ -541,13 +647,14 @@ class TestContainerModeDriverResolution:
         """When a table read/write raises, the loop moves on but the run fails."""
         args = _mk_args(tables=["T1", "T2"])
 
-        with mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.WORK_DIR", tmp_path), \
-             mock.patch("ovid2.drivers.registry.driver_from_address") as m_dfa, \
-             mock.patch("ovid2.drivers.type_stamping.validate_route_types",
-                        return_value=None), \
-             mock.patch("ovid2.core.loaders.load_engine") as m_engine, \
-             mock.patch("ovid2.display.bus.JsonlEventBus"):
+        with (
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.WORK_DIR", tmp_path),
+            mock.patch("ovid2.drivers.registry.driver_from_address") as m_dfa,
+            mock.patch("ovid2.drivers.type_stamping.validate_route_types", return_value=None),
+            mock.patch("ovid2.core.loaders.load_engine") as m_engine,
+            mock.patch("ovid2.display.bus.JsonlEventBus"),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             src = mock.MagicMock()
             src.type_name = "disc"
@@ -557,6 +664,7 @@ class TestContainerModeDriverResolution:
             m_dfa.side_effect = [src, dst]
             m_engine.return_value.get_session.return_value = "session"
             from ovid2.core.engines.stager import SparkEngineStager
+
             m_engine.return_value.get_stager.return_value = SparkEngineStager(
                 m_engine.return_value,
             )
@@ -571,14 +679,16 @@ class TestContainerModeDriverResolution:
         """Missing address → exit 2, no engine touched."""
         args = _mk_args(tables=["T1"])
 
-        with mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.WORK_DIR", tmp_path), \
-             mock.patch("ovid2.drivers.registry.driver_from_address",
-                        side_effect=FileNotFoundError("bad")), \
-             mock.patch("ovid2.drivers.type_stamping.validate_route_types",
-                        return_value=None), \
-             mock.patch("ovid2.core.loaders.load_engine") as m_engine, \
-             mock.patch("ovid2.display.bus.JsonlEventBus"):
+        with (
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.WORK_DIR", tmp_path),
+            mock.patch(
+                "ovid2.drivers.registry.driver_from_address", side_effect=FileNotFoundError("bad")
+            ),
+            mock.patch("ovid2.drivers.type_stamping.validate_route_types", return_value=None),
+            mock.patch("ovid2.core.loaders.load_engine") as m_engine,
+            mock.patch("ovid2.display.bus.JsonlEventBus"),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             rc = move_module._run_container_mode(args)
 
@@ -604,13 +714,16 @@ class TestTableSpecWiring:
     def test_main_stashes_resolved_tables(self) -> None:
         args = _mk_args(tables=["HASH_TOKEN=*datavant_person_tokens*"])
 
-        with mock.patch("ovid2.core.docker.is_inside_docker", return_value=False), \
-             mock.patch("ovid2.core.isolation.cleanup_stale_instances"), \
-             mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.SPARK_MODE", "local"), \
-             mock.patch("ovid2.drivers.collector.collect_for_addresses",
-                        return_value=_empty_merged()), \
-             mock.patch("ovid2.core.docker.submit_to_docker", return_value=0):
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=False),
+            mock.patch("ovid2.core.isolation.cleanup_stale_instances"),
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.SPARK_MODE", "local"),
+            mock.patch(
+                "ovid2.drivers.collector.collect_for_addresses", return_value=_empty_merged()
+            ),
+            mock.patch("ovid2.core.docker.submit_to_docker", return_value=0),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             move_module.main(args)
 
@@ -620,7 +733,8 @@ class TestTableSpecWiring:
         assert spec.file_name == "*datavant_person_tokens*"
 
     def test_main_rejects_malformed_spec(
-        self, capsys: pytest.CaptureFixture[str],
+        self,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         args = _mk_args(tables=["=missing_logical"])
 
@@ -631,21 +745,24 @@ class TestTableSpecWiring:
         assert "empty LOGICAL" in capsys.readouterr().err
 
     def test_container_mode_read_uses_file_name_write_uses_table_name(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """Read side must receive ``file_name``; write side ``table_name``."""
         args = _mk_args(tables=["HASH_TOKEN=*datavant_person_tokens*"])
         # Populate ``_resolved_tables`` the way ``main`` would.
         from ovid2.tools.table_specs import parse_table_specs
+
         args._resolved_tables = parse_table_specs(args.tables)
 
-        with mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.WORK_DIR", tmp_path), \
-             mock.patch("ovid2.drivers.registry.driver_from_address") as m_dfa, \
-             mock.patch("ovid2.drivers.type_stamping.validate_route_types",
-                        return_value=None), \
-             mock.patch("ovid2.core.loaders.load_engine") as m_engine, \
-             mock.patch("ovid2.display.bus.JsonlEventBus"):
+        with (
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.WORK_DIR", tmp_path),
+            mock.patch("ovid2.drivers.registry.driver_from_address") as m_dfa,
+            mock.patch("ovid2.drivers.type_stamping.validate_route_types", return_value=None),
+            mock.patch("ovid2.core.loaders.load_engine") as m_engine,
+            mock.patch("ovid2.display.bus.JsonlEventBus"),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             src = mock.MagicMock()
             src.type_name = "disc"
@@ -655,6 +772,7 @@ class TestTableSpecWiring:
             m_dfa.side_effect = [src, dst]
             m_engine.return_value.get_session.return_value = "session"
             from ovid2.core.engines.stager import SparkEngineStager
+
             m_engine.return_value.get_stager.return_value = SparkEngineStager(
                 m_engine.return_value,
             )
@@ -672,20 +790,23 @@ class TestTableSpecWiring:
         assert write_args[4] == "HASH_TOKEN"
 
     def test_container_mode_bare_name_defaults_source_to_logical(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """Legacy invocation (single field per --tables entry) is untouched."""
         args = _mk_args(tables=["DEMOGRAPHIC"])
         from ovid2.tools.table_specs import parse_table_specs
+
         args._resolved_tables = parse_table_specs(args.tables)
 
-        with mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.WORK_DIR", tmp_path), \
-             mock.patch("ovid2.drivers.registry.driver_from_address") as m_dfa, \
-             mock.patch("ovid2.drivers.type_stamping.validate_route_types",
-                        return_value=None), \
-             mock.patch("ovid2.core.loaders.load_engine") as m_engine, \
-             mock.patch("ovid2.display.bus.JsonlEventBus"):
+        with (
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.WORK_DIR", tmp_path),
+            mock.patch("ovid2.drivers.registry.driver_from_address") as m_dfa,
+            mock.patch("ovid2.drivers.type_stamping.validate_route_types", return_value=None),
+            mock.patch("ovid2.core.loaders.load_engine") as m_engine,
+            mock.patch("ovid2.display.bus.JsonlEventBus"),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             src = mock.MagicMock()
             src.type_name = "disc"
@@ -695,6 +816,7 @@ class TestTableSpecWiring:
             m_dfa.side_effect = [src, dst]
             m_engine.return_value.get_session.return_value = "session"
             from ovid2.core.engines.stager import SparkEngineStager
+
             m_engine.return_value.get_stager.return_value = SparkEngineStager(
                 m_engine.return_value,
             )
@@ -710,15 +832,17 @@ class TestTableSpecWiring:
         """Destination stem case matches LOGICAL verbatim (both directions)."""
         args = _mk_args(tables=["hash_token=HASH_TOKEN.csv", "ENCOUNTER"])
         from ovid2.tools.table_specs import parse_table_specs
+
         args._resolved_tables = parse_table_specs(args.tables)
 
-        with mock.patch("ovid2.core.isolation.OvidInstance") as m_inst, \
-             mock.patch("ovid2.config.settings.WORK_DIR", tmp_path), \
-             mock.patch("ovid2.drivers.registry.driver_from_address") as m_dfa, \
-             mock.patch("ovid2.drivers.type_stamping.validate_route_types",
-                        return_value=None), \
-             mock.patch("ovid2.core.loaders.load_engine") as m_engine, \
-             mock.patch("ovid2.display.bus.JsonlEventBus"):
+        with (
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.WORK_DIR", tmp_path),
+            mock.patch("ovid2.drivers.registry.driver_from_address") as m_dfa,
+            mock.patch("ovid2.drivers.type_stamping.validate_route_types", return_value=None),
+            mock.patch("ovid2.core.loaders.load_engine") as m_engine,
+            mock.patch("ovid2.display.bus.JsonlEventBus"),
+        ):
             m_inst.return_value.instance_id = "20260805-000000-abcdef"
             src = mock.MagicMock()
             src.type_name = "disc"
@@ -728,6 +852,7 @@ class TestTableSpecWiring:
             m_dfa.side_effect = [src, dst]
             m_engine.return_value.get_session.return_value = "session"
             from ovid2.core.engines.stager import SparkEngineStager
+
             m_engine.return_value.get_stager.return_value = SparkEngineStager(
                 m_engine.return_value,
             )
@@ -743,3 +868,33 @@ class TestTableSpecWiring:
 
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])
+
+
+class TestSnowparkSkipsSparkCluster:
+    """``tools move`` with a non-Spark engine runs one container, no cluster."""
+
+    def test_snowpark_engine_never_starts_cluster(self) -> None:
+        from ovid2.drivers.container import MergedRequirements
+
+        args = _mk_args(engine="snowpark")
+        with (
+            mock.patch("ovid2.core.docker.is_inside_docker", return_value=False),
+            mock.patch("ovid2.core.isolation.cleanup_stale_instances"),
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.SPARK_MODE", "cluster"),
+            mock.patch(
+                "ovid2.core.loaders.load_engine",
+                return_value=mock.Mock(session_is_spark=False),
+            ),
+            mock.patch("ovid2.drivers.engine_compat.assert_engine_supports_drivers"),
+            mock.patch(
+                "ovid2.drivers.collector.collect_for_addresses",
+                return_value=MergedRequirements(),
+            ),
+            mock.patch("ovid2.core.docker.submit_with_cluster", return_value=0) as m_swc,
+            mock.patch("ovid2.core.docker.submit_to_docker", return_value=0) as m_std,
+        ):
+            m_inst.return_value.instance_id = "20261023-000000-abcdef"
+            assert move_module.main(args) == 0
+        m_swc.assert_not_called()
+        m_std.assert_called_once()

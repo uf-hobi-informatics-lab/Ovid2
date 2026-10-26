@@ -119,9 +119,7 @@ def load_address_config(address_name: str) -> dict[str, Any]:
     if "connection" in config:
         config.setdefault("location", {})
         if not isinstance(config["location"], dict):
-            raise ValueError(
-                f"Address config '{address_name}' has non-object 'location'."
-            )
+            raise ValueError(f"Address config '{address_name}' has non-object 'location'.")
         config["_shape"] = "connection"
         return config
 
@@ -268,9 +266,26 @@ def _resolve_connection_shape(
     src_args = connection.as_address_config(location)
     logger.debug(
         "Resolved connection-shape address %s via connection=%s type=%s",
-        address_name, connection_name, conn_type,
+        address_name,
+        connection_name,
+        conn_type,
     )
     return src_name, src_args
+
+
+def split_snowflake_path(path: Any) -> tuple[str, str]:
+    """Split a Snowflake ``path`` location into ``(database, schema)``.
+
+    Args:
+        path: ``DATABASE``, ``DATABASE/SCHEMA`` or ``None``.
+
+    Returns:
+        ``(database, schema)``; either element is ``""`` when absent.
+    """
+    parts = [p.strip() for p in str(path or "").split("/") if p.strip()]
+    database = parts[0] if parts else ""
+    schema = parts[1] if len(parts) > 1 else ""
+    return database, schema
 
 
 def _resolve_snowflake_config(
@@ -283,10 +298,24 @@ def _resolve_snowflake_config(
 
     merged: dict[str, Any] = dict(src_args)
 
+    # Tier 2: the address's own location. A ``path`` of the form
+    # ``DATABASE[/SCHEMA]`` (the generic web-UI location shape) names the
+    # database just as an explicit ``database`` key does, so it must win
+    # over the pipeline default below — otherwise ``{"path": "SANDBOX"}``
+    # under ``pipeline=acme`` would silently redirect to ``CHAR_ACME``.
+    # Explicit ``database`` / ``schema`` keys still take precedence.
+    path_db, path_schema = split_snowflake_path(merged.get("path"))
+    if not merged.get("database") and path_db:
+        merged["database"] = path_db
+    if not merged.get("schema") and path_schema:
+        merged["schema"] = path_schema
+
     # Tier 3: pipeline default.
     if not merged.get("database") and pipeline:
         try:
-            settings_module = importlib.import_module(f"ovid2_pipelines.{pipeline}.pipeline_settings")
+            settings_module = importlib.import_module(
+                f"ovid2_pipelines.{pipeline}.pipeline_settings"
+            )
             pipeline_db = getattr(settings_module, "DEFAULT_PIPELINE_DB_NAME", None)
             if pipeline_db:
                 merged["database"] = pipeline_db

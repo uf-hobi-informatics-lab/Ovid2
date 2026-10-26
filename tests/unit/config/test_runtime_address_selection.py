@@ -66,9 +66,7 @@ def test_sf_override_wins() -> None:
 
 
 @pytest.mark.unit
-def test_load_address_from_connection_inline_disc(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_load_address_from_connection_inline_disc(tmp_path: Path, monkeypatch) -> None:
     """An inline connection + location resolves without a saved address JSON."""
     conndir = tmp_path / "connections"
     conndir.mkdir()

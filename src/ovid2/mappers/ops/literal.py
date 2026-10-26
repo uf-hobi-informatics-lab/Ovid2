@@ -28,10 +28,10 @@ class LiteralOp(BaseMapOp):
 
     def apply(
         self,
-        df: "DataFrame",
+        df: DataFrame,
         params: dict[str, Any],
         ctx: MapOpContext,
-    ) -> "DataFrame":
+    ) -> DataFrame:
         """Return ``df`` with the column set to ``params['value']``."""
         from pyspark.sql.functions import lit
 

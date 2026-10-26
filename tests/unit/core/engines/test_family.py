@@ -72,9 +72,7 @@ def test_gate_passes_when_pipeline_is_portable(
 ) -> None:
     """Portable pipeline + Snowpark engine → no exception."""
     _install_pipeline_settings(monkeypatch, "portable_a")
-    assert_pipeline_engine_compatible(
-        _FakeEngine(EngineFamily.SNOWPARK), "portable_a"
-    )
+    assert_pipeline_engine_compatible(_FakeEngine(EngineFamily.SNOWPARK), "portable_a")
 
 
 @pytest.mark.unit

@@ -18,8 +18,7 @@ class UpdateConnectionArgs(BaseModel):
     secrets: dict[str, Any] = Field(
         default_factory=dict,
         description=(
-            "Secret material. Any value of '***' is treated as 'keep the "
-            "existing value on disk'."
+            "Secret material. Any value of '***' is treated as 'keep the existing value on disk'."
         ),
     )
     secret_ref: str | None = Field(None, description="Override the secret filename stem.")

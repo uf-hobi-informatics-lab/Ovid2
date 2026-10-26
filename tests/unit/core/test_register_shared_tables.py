@@ -35,9 +35,7 @@ def _write_concept_csv(tmp_path: Path) -> Path:
     return path
 
 
-def test_concept_view_columns_are_lowercased(
-    spark: "SparkSession", tmp_path: Path
-) -> None:
+def test_concept_view_columns_are_lowercased(spark: SparkSession, tmp_path: Path) -> None:
     """The registered ``concept`` view exposes lowercase column names."""
     concept_path = _write_concept_csv(tmp_path)
     cdm = CdmHandle(
@@ -78,9 +76,7 @@ def test_concept_view_columns_are_lowercased(
     spark.catalog.dropTempView("concept")
 
 
-def test_missing_optional_shared_view_is_skipped(
-    spark: "SparkSession", tmp_path: Path
-) -> None:
+def test_missing_optional_shared_view_is_skipped(spark: SparkSession, tmp_path: Path) -> None:
     """A missing, non-required shared view warns and is skipped (no raise)."""
     cdm = CdmHandle(
         name="test_cdm_missing",
@@ -98,9 +94,7 @@ def test_missing_optional_shared_view_is_skipped(
     assert not spark.catalog.tableExists("concept_absent")
 
 
-def test_missing_required_shared_view_raises(
-    spark: "SparkSession", tmp_path: Path
-) -> None:
+def test_missing_required_shared_view_raises(spark: SparkSession, tmp_path: Path) -> None:
     """A missing, required shared view raises FileNotFoundError."""
     cdm = CdmHandle(
         name="test_cdm_required",
@@ -207,7 +201,11 @@ def test_file_view_on_non_spark_engine_routes_through_stager(
 
     # Must not raise AttributeError('read') — the whole point of the fix.
     register_shared_tables(
-        session, cdm=cdm, engine=engine, pipeline="pcornet_to_omop", batch_id="PUBLIC",
+        session,
+        cdm=cdm,
+        engine=engine,
+        pipeline="pcornet_to_omop",
+        batch_id="PUBLIC",
     )
 
     # Registered via the Snowpark spelling.
@@ -219,7 +217,7 @@ def test_file_view_on_non_spark_engine_routes_through_stager(
     call = stager.calls[0]
     driver = call["driver"]
     assert isinstance(driver, DiscDriver)
-    merged = driver._merged_location_view()  # noqa: SLF001
+    merged = driver._merged_location_view()
     assert merged["root"] == str(concept_path.parent)
     assert call["file_name"] == "CONCEPT.csv"
     assert call["table_name"] == "concept"

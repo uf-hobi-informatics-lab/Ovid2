@@ -6,76 +6,47 @@ import inspect
 
 import pytest
 
+ODS_TOOL_NAMES = frozenset({"ods_list", "ods_list_dimensions", "ods_resolve"})
 
-ODS_TOOL_NAMES = frozenset(
-    {
-        "ods_list_pipelines",
-        "ods_list_dimensions",
-        "ods_list_batches",
-        "ods_list_tables",
-        "ods_resolve",
-    }
-)
+
+def _specs() -> dict[str, object]:
+    from ovid2.mcp import tools as tools_pkg
+
+    return {s.name: s for s in tools_pkg.discover_tools()}
 
 
 @pytest.mark.unit
-def test_all_five_ods_tools_are_discovered() -> None:
-    from ovid2.mcp import tools as tools_pkg
-
-    specs = tools_pkg.discover_tools()
-    names = {s.name for s in specs}
-    missing = ODS_TOOL_NAMES - names
+def test_ods_tools_are_discovered() -> None:
+    specs = _specs()
+    missing = ODS_TOOL_NAMES - set(specs)
     assert not missing, f"missing ODS tools: {missing}"
+    # The pipeline/batch-shaped tools are gone: every store is plain directories.
+    assert not {"ods_list_pipelines", "ods_list_batches", "ods_list_tables"} & set(specs)
 
 
 @pytest.mark.unit
 def test_ods_tools_have_expected_shape() -> None:
-    from ovid2.mcp import tools as tools_pkg
-
-    specs = {s.name: s for s in tools_pkg.discover_tools()}
+    specs = _specs()
     for name in ODS_TOOL_NAMES:
         spec = specs[name]
-        assert spec.description.strip(), f"{name}: empty description"
-        assert callable(spec.run), name
-        assert inspect.iscoroutinefunction(spec.run), f"{name}: run must be async"
+        assert spec.description.strip(), f"{name}: empty description"  # type: ignore[attr-defined]
+        assert inspect.iscoroutinefunction(spec.run), name  # type: ignore[attr-defined]
 
 
 @pytest.mark.unit
-def test_parameterless_tools_have_no_args_model() -> None:
-    from ovid2.mcp import tools as tools_pkg
-
-    specs = {s.name: s for s in tools_pkg.discover_tools()}
-    for name in ("ods_list_pipelines", "ods_list_dimensions"):
-        assert specs[name].args_model is None, name
+def test_ods_list_takes_a_path() -> None:
+    model = _specs()["ods_list"].args_model  # type: ignore[attr-defined]
+    assert model is not None and "path" in model.model_fields
+    assert model().path == "/"
 
 
 @pytest.mark.unit
-def test_list_batches_expects_pipeline() -> None:
-    from ovid2.mcp import tools as tools_pkg
-
-    specs = {s.name: s for s in tools_pkg.discover_tools()}
-    model = specs["ods_list_batches"].args_model
+def test_resolve_expects_path_only() -> None:
+    model = _specs()["ods_resolve"].args_model  # type: ignore[attr-defined]
     assert model is not None
-    assert "pipeline" in model.model_fields
+    assert set(model.model_fields) == {"path"}
 
 
 @pytest.mark.unit
-def test_list_tables_expects_pipeline_and_batch() -> None:
-    from ovid2.mcp import tools as tools_pkg
-
-    specs = {s.name: s for s in tools_pkg.discover_tools()}
-    model = specs["ods_list_tables"].args_model
-    assert model is not None
-    assert "pipeline" in model.model_fields
-    assert "batch_id" in model.model_fields
-
-
-@pytest.mark.unit
-def test_resolve_expects_path() -> None:
-    from ovid2.mcp import tools as tools_pkg
-
-    specs = {s.name: s for s in tools_pkg.discover_tools()}
-    model = specs["ods_resolve"].args_model
-    assert model is not None
-    assert "path" in model.model_fields
-    assert "dim" in model.model_fields
+def test_dimensions_has_no_args() -> None:
+    assert _specs()["ods_list_dimensions"].args_model is None  # type: ignore[attr-defined]

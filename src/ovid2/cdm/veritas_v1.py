@@ -13,6 +13,8 @@ pipelines will fail validation (see ``test_fixer_cdm_scope``).
 
 from __future__ import annotations
 
+import contextlib
+
 from ovid2.cdm.handle import CdmHandle
 from ovid2.cdm.registry import register
 
@@ -31,10 +33,8 @@ VERITAS_V1: CdmHandle = CdmHandle(
 
 def _register_default() -> None:
     """Idempotently register the Veritas handle."""
-    try:
+    with contextlib.suppress(ValueError):
         register(VERITAS_V1)
-    except ValueError:
-        pass
 
 
 _register_default()

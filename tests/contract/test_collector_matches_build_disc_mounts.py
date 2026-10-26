@@ -27,10 +27,12 @@ def isolated_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     xdg = tmp_path / "xdg"
     monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
     monkeypatch.setenv(
-        "OVID2_CONFIGS_DIR", str(xdg / "ovid2" / "configs"),
+        "OVID2_CONFIGS_DIR",
+        str(xdg / "ovid2" / "configs"),
     )
     monkeypatch.setenv(
-        "OVID2_CONNECTIONS_DIR", str(xdg / "ovid2" / "connections"),
+        "OVID2_CONNECTIONS_DIR",
+        str(xdg / "ovid2" / "connections"),
     )
     (xdg / "ovid2" / "configs").mkdir(parents=True)
     (xdg / "ovid2" / "connections").mkdir(parents=True)
@@ -39,13 +41,15 @@ def isolated_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def _write_conn(xdg: Path, name: str, payload: dict) -> None:
     (xdg / "ovid2" / "connections" / f"{name}.json").write_text(
-        json.dumps(payload), encoding="utf-8",
+        json.dumps(payload),
+        encoding="utf-8",
     )
 
 
 def _write_addr(xdg: Path, name: str, payload: dict) -> None:
     (xdg / "ovid2" / "configs" / f"{name}.json").write_text(
-        json.dumps(payload), encoding="utf-8",
+        json.dumps(payload),
+        encoding="utf-8",
     )
 
 
@@ -63,7 +67,8 @@ def _to_triples(mounts) -> set[tuple[str, str, str]]:
 
 
 def test_w7_disc_produces_matching_mounts(
-    isolated_config: Path, tmp_path: Path,
+    isolated_config: Path,
+    tmp_path: Path,
 ) -> None:
     """W7-shape disc addresses match under both collectors."""
     from ovid2.connections.disc_mounts import build_disc_mounts
@@ -71,13 +76,22 @@ def test_w7_disc_produces_matching_mounts(
 
     host = tmp_path / "shared"
     host.mkdir()
-    _write_conn(isolated_config, "d_conn", {
-        "type": "disc",
-        "args": {"host_path": str(host), "mount_mode": "rw"},
-    })
-    _write_addr(isolated_config, "a", {
-        "connection": "d_conn", "location": {"path": "sub"},
-    })
+    _write_conn(
+        isolated_config,
+        "d_conn",
+        {
+            "type": "disc",
+            "args": {"host_path": str(host), "mount_mode": "rw"},
+        },
+    )
+    _write_addr(
+        isolated_config,
+        "a",
+        {
+            "connection": "d_conn",
+            "location": {"path": "sub"},
+        },
+    )
 
     legacy = _to_triples(build_disc_mounts(["a"]))
     driver = _to_triples(collect_for_addresses(["a"]).mounts)
@@ -85,7 +99,8 @@ def test_w7_disc_produces_matching_mounts(
 
 
 def test_legacy_disc_produces_matching_mounts(
-    isolated_config: Path, tmp_path: Path,
+    isolated_config: Path,
+    tmp_path: Path,
 ) -> None:
     """Legacy-shape disc addresses match under both collectors."""
     from ovid2.connections.disc_mounts import build_disc_mounts
@@ -93,10 +108,14 @@ def test_legacy_disc_produces_matching_mounts(
 
     host = tmp_path / "legacy"
     host.mkdir()
-    _write_addr(isolated_config, "legacy_addr", {
-        "src_name": "disc",
-        "src_args": {"path": str(host)},
-    })
+    _write_addr(
+        isolated_config,
+        "legacy_addr",
+        {
+            "src_name": "disc",
+            "src_args": {"path": str(host)},
+        },
+    )
 
     legacy = _to_triples(build_disc_mounts(["legacy_addr"]))
     driver = _to_triples(collect_for_addresses(["legacy_addr"]).mounts)
@@ -104,7 +123,8 @@ def test_legacy_disc_produces_matching_mounts(
 
 
 def test_explicit_mount_override_matches(
-    isolated_config: Path, tmp_path: Path,
+    isolated_config: Path,
+    tmp_path: Path,
 ) -> None:
     """Both collectors drop the auto-mount when the container path collides."""
     from ovid2.connections.disc_mounts import build_disc_mounts
@@ -112,20 +132,35 @@ def test_explicit_mount_override_matches(
 
     host = tmp_path / "d"
     host.mkdir()
-    _write_conn(isolated_config, "d_conn", {
-        "type": "disc",
-        "args": {"host_path": str(host)},
-    })
-    _write_addr(isolated_config, "d_addr", {
-        "connection": "d_conn", "location": {},
-    })
+    _write_conn(
+        isolated_config,
+        "d_conn",
+        {
+            "type": "disc",
+            "args": {"host_path": str(host)},
+        },
+    )
+    _write_addr(
+        isolated_config,
+        "d_addr",
+        {
+            "connection": "d_conn",
+            "location": {},
+        },
+    )
 
-    legacy = _to_triples(build_disc_mounts(
-        ["d_addr"], explicit_container_paths=[str(host)],
-    ))
-    driver = _to_triples(collect_for_addresses(
-        ["d_addr"], explicit_container_paths=[str(host)],
-    ).mounts)
+    legacy = _to_triples(
+        build_disc_mounts(
+            ["d_addr"],
+            explicit_container_paths=[str(host)],
+        )
+    )
+    driver = _to_triples(
+        collect_for_addresses(
+            ["d_addr"],
+            explicit_container_paths=[str(host)],
+        ).mounts
+    )
     assert legacy == driver == set()
 
 
@@ -136,10 +171,14 @@ def test_dedup_matches(isolated_config: Path, tmp_path: Path) -> None:
 
     host = tmp_path / "shared"
     host.mkdir()
-    _write_conn(isolated_config, "d_conn", {
-        "type": "disc",
-        "args": {"host_path": str(host)},
-    })
+    _write_conn(
+        isolated_config,
+        "d_conn",
+        {
+            "type": "disc",
+            "args": {"host_path": str(host)},
+        },
+    )
     _write_addr(isolated_config, "a1", {"connection": "d_conn", "location": {}})
     _write_addr(isolated_config, "a2", {"connection": "d_conn", "location": {}})
 

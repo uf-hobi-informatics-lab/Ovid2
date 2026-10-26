@@ -106,12 +106,8 @@ class AccessAddress(BaseAddress):
         try:
             self.file_path: str = str(config["path"])
         except KeyError as exc:
-            raise ValueError(
-                "AccessAddress config missing required 'path' key"
-            ) from exc
-        self.lowercase_columns: bool = bool(
-            config.get("lowercase_columns", False)
-        )
+            raise ValueError("AccessAddress config missing required 'path' key") from exc
+        self.lowercase_columns: bool = bool(config.get("lowercase_columns", False))
 
     def read(
         self,
@@ -129,11 +125,12 @@ class AccessAddress(BaseAddress):
 
         target_table = table_name or file_name
         if not target_table:
-            raise ValueError(
-                "AccessAddress.read requires a table_name or file_name."
-            )
+            raise ValueError("AccessAddress.read requires a table_name or file_name.")
         return read_table(
-            spark, self.file_path, target_table, self.lowercase_columns,
+            spark,
+            self.file_path,
+            target_table,
+            self.lowercase_columns,
         )
 
     def write(

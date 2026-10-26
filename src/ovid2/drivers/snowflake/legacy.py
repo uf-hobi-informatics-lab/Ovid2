@@ -100,7 +100,9 @@ class SnowflakeConnection(BaseConnection):
     def as_address_config(self, location: dict[str, Any]) -> dict[str, Any]:
         """Return the ``src_args`` dict a legacy Snowflake address expects."""
         return build_address_config(
-            dict(self.args), dict(self.secrets), dict(location),
+            dict(self.args),
+            dict(self.secrets),
+            dict(location),
         )
 
 

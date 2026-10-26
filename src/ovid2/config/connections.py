@@ -95,9 +95,7 @@ def load_connection_config(name: str) -> dict[str, Any]:
             break
     else:
         tried = ", ".join(str(d) for d in _search_paths())
-        raise FileNotFoundError(
-            f"Connection config '{name}.json' not found in any of: {tried}"
-        )
+        raise FileNotFoundError(f"Connection config '{name}.json' not found in any of: {tried}")
 
     if not isinstance(config, dict):
         raise ValueError(f"Connection config '{name}' must be a JSON object.")
@@ -113,9 +111,7 @@ def load_connection_config(name: str) -> dict[str, Any]:
         raise ValueError(f"Connection '{name}' has non-object 'args'.")
     # Refuse inline secrets — the whole point of the split is that the
     # connection file itself never carries credential material.
-    secret_field_names = {
-        f["name"] for f in connection_field_spec(config["type"])["secrets"]
-    }
+    secret_field_names = {f["name"] for f in connection_field_spec(config["type"])["secrets"]}
     inline = sorted(set(config["args"]) & secret_field_names)
     if inline:
         raise ValueError(

@@ -72,8 +72,7 @@ def test_every_driver_produces_a_location_field_tuple() -> None:
         )
         for f in fields:
             assert isinstance(f, (LocationField, dict)), (
-                f"Driver {type_name!r}: location_fields() entry "
-                f"{f!r} is not a LocationField/dict."
+                f"Driver {type_name!r}: location_fields() entry {f!r} is not a LocationField/dict."
             )
 
 

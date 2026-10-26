@@ -20,10 +20,9 @@ class _Completed:
 @pytest.mark.unit
 def test_parses_last_json_line(monkeypatch: pytest.MonkeyPatch) -> None:
     """The last JSON object on stdout is returned; earlier noise ignored."""
-    def _run(argv, **kw):  # noqa: ANN001, ANN003
-        return _Completed(
-            stdout='log noise\nnot json\n{"ok": true, "code": "ok"}\n'
-        )
+
+    def _run(argv, **kw):
+        return _Completed(stdout='log noise\nnot json\n{"ok": true, "code": "ok"}\n')
 
     monkeypatch.setattr(subprocess, "run", _run)
     result = run_tool_json(["probe-connection", "x"])
@@ -35,7 +34,7 @@ def test_argv_shape(monkeypatch: pytest.MonkeyPatch) -> None:
     """The broker invokes ``python -m ovid2 tools <args>``."""
     captured: dict[str, object] = {}
 
-    def _run(argv, **kw):  # noqa: ANN001, ANN003
+    def _run(argv, **kw):
         captured["argv"] = argv
         return _Completed(stdout='{"ok": true}')
 
@@ -47,7 +46,7 @@ def test_argv_shape(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.unit
 def test_timeout_raises_broker_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _run(argv, **kw):  # noqa: ANN001, ANN003
+    def _run(argv, **kw):
         raise subprocess.TimeoutExpired(cmd=argv, timeout=1.0)
 
     monkeypatch.setattr(subprocess, "run", _run)
@@ -57,7 +56,7 @@ def test_timeout_raises_broker_error(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.unit
 def test_launch_failure_raises_broker_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _run(argv, **kw):  # noqa: ANN001, ANN003
+    def _run(argv, **kw):
         raise OSError("no such executable")
 
     monkeypatch.setattr(subprocess, "run", _run)
@@ -67,7 +66,7 @@ def test_launch_failure_raises_broker_error(monkeypatch: pytest.MonkeyPatch) -> 
 
 @pytest.mark.unit
 def test_no_json_raises_broker_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _run(argv, **kw):  # noqa: ANN001, ANN003
+    def _run(argv, **kw):
         return _Completed(stdout="only logs, no json", stderr="boom", returncode=1)
 
     monkeypatch.setattr(subprocess, "run", _run)

@@ -42,9 +42,7 @@ from ovid2.semantic.vocabularies._yaml_loader import (
 
 def _load_schema(name: str) -> dict:
     """Return one packaged JSON schema."""
-    with resources.as_file(
-        resources.files("ovid2.resources.schemas").joinpath(name)
-    ) as path:
+    with resources.as_file(resources.files("ovid2.resources.schemas").joinpath(name)) as path:
         return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
@@ -166,9 +164,8 @@ def test_every_binding_references_registered_vocabulary() -> None:
                     f"{path.name}: {binding.table}.{binding.column} references "
                     f"unregistered vocabulary {binding.vocabulary!r}"
                 )
-    assert not offenders, (
-        "Binding YAMLs reference unregistered vocabularies:\n  "
-        + "\n  ".join(offenders)
+    assert not offenders, "Binding YAMLs reference unregistered vocabularies:\n  " + "\n  ".join(
+        offenders
     )
 
 
@@ -201,16 +198,13 @@ def test_every_binding_targets_a_real_column() -> None:
             try:
                 columns = {c.upper() for c in handle.load_table_columns(binding.table)}
             except (KeyError, ValueError, FileNotFoundError):
-                offenders.append(
-                    f"{path.name}: table {binding.table!r} not on {cdm!r}"
-                )
+                offenders.append(f"{path.name}: table {binding.table!r} not on {cdm!r}")
                 continue
             if binding.column not in columns:
                 offenders.append(
                     f"{path.name}: {binding.table}.{binding.column} not a column "
                     f"of {cdm}.{binding.table}"
                 )
-    assert not offenders, (
-        "Binding YAMLs point at nonexistent CDM columns:\n  "
-        + "\n  ".join(offenders)
+    assert not offenders, "Binding YAMLs point at nonexistent CDM columns:\n  " + "\n  ".join(
+        offenders
     )

@@ -29,7 +29,7 @@ def _over_clause(params: dict[str, Any]) -> str:
     parts: list[str] = []
     partition_by = params.get("partition_by") or []
     if partition_by:
-        cols = ", ".join(f"`{str(c)}`" for c in partition_by)
+        cols = ", ".join(f"`{c!s}`" for c in partition_by)
         parts.append(f"PARTITION BY {cols}")
     order_by = params.get("order_by") or []
     if order_by:
@@ -50,7 +50,7 @@ class _WindowExpr:
     clause into a single ``functions.expr`` call.
     """
 
-    def __init__(self, ctx: "TransformContext", func_sql: str) -> None:
+    def __init__(self, ctx: TransformContext, func_sql: str) -> None:
         self._ctx = ctx
         self._func_sql = func_sql
 
@@ -59,23 +59,23 @@ class _WindowExpr:
         return self._ctx.functions.expr(f"{self._func_sql} OVER ({over_clause})")
 
 
-def build_window(params: dict[str, Any], ctx: "TransformContext") -> str:
+def build_window(params: dict[str, Any], ctx: TransformContext) -> str:
     """Return the ``OVER (...)`` inner clause string for these params."""
     _ = ctx  # signature symmetry with the *_expr helpers
     return _over_clause(params)
 
 
-def row_number_expr(ctx: "TransformContext") -> _WindowExpr:
+def row_number_expr(ctx: TransformContext) -> _WindowExpr:
     """Return a ``row_number()`` window expression builder."""
     return _WindowExpr(ctx, "row_number()")
 
 
-def rank_expr(ctx: "TransformContext") -> _WindowExpr:
+def rank_expr(ctx: TransformContext) -> _WindowExpr:
     """Return a ``rank()`` window expression builder."""
     return _WindowExpr(ctx, "rank()")
 
 
-def dense_rank_expr(ctx: "TransformContext") -> _WindowExpr:
+def dense_rank_expr(ctx: TransformContext) -> _WindowExpr:
     """Return a ``dense_rank()`` window expression builder."""
     return _WindowExpr(ctx, "dense_rank()")
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 
@@ -39,9 +38,7 @@ def test_create_and_get_connection_via_api(web_client, isolated_xdg: Path) -> No
 
 
 @pytest.mark.unit
-def test_create_snowflake_hides_password(
-    web_client, isolated_xdg: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_create_snowflake_hides_password(web_client, isolated_xdg: Path) -> None:  # type: ignore[no-untyped-def]
     response = web_client.post(
         "/api/v1/connections/c_sf",
         json={
@@ -60,9 +57,7 @@ def test_create_snowflake_hides_password(
 
 
 @pytest.mark.unit
-def test_delete_connection_via_api(
-    web_client, isolated_xdg: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_delete_connection_via_api(web_client, isolated_xdg: Path) -> None:  # type: ignore[no-untyped-def]
     web_client.post(
         "/api/v1/connections/c_del",
         json={"type": "disc", "args": {"host_path": str(isolated_xdg)}, "secrets": {}},
@@ -71,18 +66,14 @@ def test_delete_connection_via_api(
     r = web_client.delete("/api/v1/connections/c_del")
     assert r.status_code == 202
     approval_id = r.json()["detail"]["approval_id"]
-    web_client.post(
-        f"/api/v1/approvals/{approval_id}/approve", json={"decided_by": "test"}
-    )
+    web_client.post(f"/api/v1/approvals/{approval_id}/approve", json={"decided_by": "test"})
     r = web_client.delete("/api/v1/connections/c_del")
     assert r.status_code == 200
     assert web_client.get("/api/v1/connections/c_del").status_code == 404
 
 
 @pytest.mark.unit
-def test_test_probe_via_api(
-    web_client, isolated_xdg: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_test_probe_via_api(web_client, isolated_xdg: Path) -> None:  # type: ignore[no-untyped-def]
     web_client.post(
         "/api/v1/connections/c_probe",
         json={"type": "disc", "args": {"host_path": str(isolated_xdg)}, "secrets": {}},
@@ -124,9 +115,7 @@ def test_connections_new_form_switches_fields(web_client) -> None:  # type: igno
 
 
 @pytest.fixture()
-def routes_env(
-    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
-) -> Path:
+def routes_env(isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Preload one pipeline + two disc addresses so route writes succeed."""
     monkeypatch.setattr(
         "ovid2.web.services.pipelines_svc.pipelines_meta_svc.discover_pipelines",
@@ -138,12 +127,8 @@ def routes_env(
     )
     configs = Path(os.environ["OVID2_CONFIGS_DIR"])
     configs.mkdir(parents=True, exist_ok=True)
-    (configs / "in.json").write_text(
-        '{"src_name": "disc", "src_args": {"path": "/tmp/in"}}'
-    )
-    (configs / "out.json").write_text(
-        '{"src_name": "disc", "src_args": {"path": "/tmp/out"}}'
-    )
+    (configs / "in.json").write_text('{"src_name": "disc", "src_args": {"path": "/tmp/in"}}')
+    (configs / "out.json").write_text('{"src_name": "disc", "src_args": {"path": "/tmp/out"}}')
     return isolated_xdg
 
 
@@ -163,9 +148,7 @@ def _base_route_payload() -> dict[str, object]:
 
 
 @pytest.mark.unit
-def test_route_crud_via_api(
-    web_client, routes_env: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_route_crud_via_api(web_client, routes_env: Path) -> None:  # type: ignore[no-untyped-def]
     r = web_client.post("/api/v1/pipelines/r1", json=_base_route_payload())
     assert r.status_code == 201, r.text
     assert web_client.get("/api/v1/pipelines/r1").status_code == 200
@@ -178,17 +161,13 @@ def test_route_crud_via_api(
     r = web_client.delete("/api/v1/pipelines/r1")
     assert r.status_code == 202
     approval_id = r.json()["detail"]["approval_id"]
-    web_client.post(
-        f"/api/v1/approvals/{approval_id}/approve", json={"decided_by": "test"}
-    )
+    web_client.post(f"/api/v1/approvals/{approval_id}/approve", json={"decided_by": "test"})
     assert web_client.delete("/api/v1/pipelines/r1").status_code == 200
     assert web_client.get("/api/v1/pipelines/r1").status_code == 404
 
 
 @pytest.mark.unit
-def test_route_run_now_via_api(
-    web_client, routes_env: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_route_run_now_via_api(web_client, routes_env: Path) -> None:  # type: ignore[no-untyped-def]
     web_client.post("/api/v1/pipelines/r_run", json=_base_route_payload())
     resp = web_client.post("/api/v1/pipelines/r_run/run")
     assert resp.status_code == 201, resp.text
@@ -198,9 +177,7 @@ def test_route_run_now_via_api(
 
 
 @pytest.mark.unit
-def test_route_run_now_copy_needs_tables_via_api(
-    web_client, routes_env: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_route_run_now_copy_needs_tables_via_api(web_client, routes_env: Path) -> None:  # type: ignore[no-untyped-def]
     """A copy pipeline open on tables: 400 without an override, 201 with one.
 
     Regression for the field report — the JSON API run handler now accepts
@@ -229,9 +206,7 @@ def test_route_run_now_copy_needs_tables_via_api(
 
 
 @pytest.mark.unit
-def test_route_enable_disable_via_api(
-    web_client, routes_env: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_route_enable_disable_via_api(web_client, routes_env: Path) -> None:  # type: ignore[no-untyped-def]
     payload = _base_route_payload()
     payload["trigger"] = {"type": "cron", "cron": "0 3 * * *"}
     web_client.post("/api/v1/pipelines/r_toggle", json=payload)
@@ -264,9 +239,7 @@ def test_pipelines_html_index(web_client) -> None:  # type: ignore[no-untyped-de
 
 
 @pytest.mark.unit
-def test_settings_defaults_via_api(
-    web_client, isolated_xdg: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_settings_defaults_via_api(web_client, isolated_xdg: Path) -> None:  # type: ignore[no-untyped-def]
     r = web_client.get("/api/v1/settings")
     assert r.status_code == 200
     body = r.json()
@@ -274,9 +247,7 @@ def test_settings_defaults_via_api(
 
 
 @pytest.mark.unit
-def test_settings_put_persists(
-    web_client, isolated_xdg: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_settings_put_persists(web_client, isolated_xdg: Path) -> None:  # type: ignore[no-untyped-def]
     current = web_client.get("/api/v1/settings").json()
     current["defaults"]["engine"] = "http-eng"
     r = web_client.put("/api/v1/settings", json=current)

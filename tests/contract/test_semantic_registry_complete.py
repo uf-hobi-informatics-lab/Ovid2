@@ -37,8 +37,7 @@ def test_every_semantic_handle_has_a_snake_case_name() -> None:
             if not _DOTTED_LOWERCASE.match(name):
                 offenders.append(f"{kind}:{name}")
     assert not offenders, (
-        "Semantic handle names must be snake_case or dotted-lowercase: "
-        + ", ".join(offenders)
+        "Semantic handle names must be snake_case or dotted-lowercase: " + ", ".join(offenders)
     )
 
 

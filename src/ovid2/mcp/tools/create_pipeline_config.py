@@ -44,16 +44,31 @@ class CreatePipelineConfigArgs(BaseModel):
         ),
     )
     pipeline: str = Field(..., description="Pipeline name.")
-    input_address: str = Field(..., description="Input address stem.")
-    output_address: str = Field(..., description="Output address stem.")
+    input_address: str = Field(
+        ...,
+        description=(
+            "Input address stem. The address is the exact location of the data "
+            "(the folder or DATABASE/SCHEMA read). For a watch trigger it is the "
+            "parent folder whose new sub-folders are the batches."
+        ),
+    )
+    output_address: str = Field(
+        ..., description="Output address stem — the exact location written to."
+    )
     tables: list[str] = Field(default_factory=lambda: ["all"])
     transformations: list[str] = Field(default_factory=lambda: ["all"])
     engine: str = "pyspark"
     workers: int = Field(25, ge=1, le=200)
-    sf_database: str | None = None
     sf_account: str | None = None
-    sf_schema: str | None = None
     stderr_log: bool = False
+    allow_overwrite: bool = Field(
+        False,
+        description=(
+            "Standing permission for this config's runs to overwrite an occupied "
+            "output (scheduled / watch runs reuse one output). Needs a human "
+            "run.overwrite approval when set by an agent."
+        ),
+    )
     enabled: bool = True
     trigger: PipelineConfigTriggerArgs = Field(
         default_factory=lambda: PipelineConfigTriggerArgs(type="manual")

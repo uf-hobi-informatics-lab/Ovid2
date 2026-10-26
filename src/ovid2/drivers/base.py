@@ -52,6 +52,7 @@ if TYPE_CHECKING:
 # Metadata value objects
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class FieldSpec:
     """One input on a driver form (connection or location).
@@ -128,6 +129,7 @@ class ConnectionFieldSpec:
 # Probe result
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class ProbeResult:
     """Structured outcome of a driver probe.
@@ -155,13 +157,17 @@ class ProbeResult:
         from ovid2.connections.base import ConnectionTestResult
 
         return ConnectionTestResult(
-            ok=self.ok, code=self.code, message=self.message, detail=self.detail,
+            ok=self.ok,
+            code=self.code,
+            message=self.message,
+            detail=self.detail,
         )
 
 
 # ---------------------------------------------------------------------------
 # Storage browse value object
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class StorageEntry:
@@ -181,21 +187,30 @@ class StorageEntry:
             to descend into this entry (for ``dir`` kinds) or to
             reference it (for ``file`` / ``table`` kinds). Backend-
             specific but always round-trippable by the same driver.
+        size_bytes: Storage size of a ``file`` / ``table`` leaf when the
+            backend reports it for free in its listing metadata (file
+            ``stat``, blob / object size, Snowflake ``SHOW TABLES``
+            ``bytes``). ``None`` when unknown — never computed by
+            scanning data.
     """
 
     name: str
     kind: str  # ``dir`` | ``file`` | ``table``
     path: str
+    size_bytes: int | None = None
 
-    def to_dict(self) -> dict[str, str]:
-        """Return a JSON-serialisable dict."""
-        return {"name": self.name, "kind": self.kind, "path": self.path}
-
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serialisable dict (``size_bytes`` only when known)."""
+        payload: dict[str, Any] = {"name": self.name, "kind": self.kind, "path": self.path}
+        if self.size_bytes is not None:
+            payload["size_bytes"] = self.size_bytes
+        return payload
 
 
 # ---------------------------------------------------------------------------
 # Driver ABC
 # ---------------------------------------------------------------------------
+
 
 class Driver(ABC):
     """The Ovid2 peripheral driver.
@@ -257,7 +272,8 @@ class Driver(ABC):
         return ()
 
     def container_requirements_for(
-        self, location: dict[str, Any] | None = None,
+        self,
+        location: dict[str, Any] | None = None,
     ) -> tuple[ContainerRequirement, ...]:
         """Return per-instance container requirements.
 
@@ -331,9 +347,7 @@ class Driver(ABC):
         *capability absent* — it emits a ``code='not_implemented'``
         result but does not fail the overall probe.
         """
-        raise NotImplementedError(
-            f"Driver '{self.type_name}' does not implement probe_read."
-        )
+        raise NotImplementedError(f"Driver '{self.type_name}' does not implement probe_read.")
 
     def probe_write(self) -> ProbeResult:
         """Optional: cheap round-trip that validates write access.
@@ -341,9 +355,7 @@ class Driver(ABC):
         Default raises :class:`NotImplementedError`. See
         :meth:`probe_read`.
         """
-        raise NotImplementedError(
-            f"Driver '{self.type_name}' does not implement probe_write."
-        )
+        raise NotImplementedError(f"Driver '{self.type_name}' does not implement probe_write.")
 
     # ------------------------------------------------------------------
     # Data plane
@@ -365,9 +377,7 @@ class Driver(ABC):
         override; the ``LegacyDriverAdapter`` delegates to the
         wrapped :class:`BaseAddress`.
         """
-        raise NotImplementedError(
-            f"Driver '{self.type_name}' does not implement read()."
-        )
+        raise NotImplementedError(f"Driver '{self.type_name}' does not implement read().")
 
     def write(
         self,
@@ -383,12 +393,13 @@ class Driver(ABC):
         The **only** step that materialises the lazy plan. Default
         raises :class:`NotImplementedError`.
         """
-        raise NotImplementedError(
-            f"Driver '{self.type_name}' does not implement write()."
-        )
+        raise NotImplementedError(f"Driver '{self.type_name}' does not implement write().")
 
     def create_complementary_tables(
-        self, session: EngineSession, pipeline: str, batch_id: str,
+        self,
+        session: EngineSession,
+        pipeline: str,
+        batch_id: str,
     ) -> None:
         """Create empty CDM placeholders for tables missing from this run.
 
@@ -401,7 +412,7 @@ class Driver(ABC):
     # Browse (control plane — no engine session required)
     # ------------------------------------------------------------------
 
-    def list_dir(self, prefix: str | None = None) -> list["StorageEntry"]:
+    def list_dir(self, prefix: str | None = None) -> list[StorageEntry]:
         """List the contents of this storage account at ``prefix``.
 
         A control-plane capability used by the web panel to build a
@@ -429,9 +440,7 @@ class Driver(ABC):
         Implementations must load heavy SDKs lazily inside the method
         body so the module import stays web-safe.
         """
-        raise NotImplementedError(
-            f"Driver '{self.type_name}' does not implement list_dir."
-        )
+        raise NotImplementedError(f"Driver '{self.type_name}' does not implement list_dir.")
 
     @classmethod
     def supports_expand_all(cls) -> bool:
@@ -450,32 +459,109 @@ class Driver(ABC):
         return False
 
     def expand_all_tables(
-        self, location: dict[str, Any] | None = None,
+        self,
+        location: dict[str, Any] | None = None,
+        *,
+        pipeline: str | None = None,
+        batch_id: str | None = None,
     ) -> list[str] | None:
         """Return the concrete table list this source expands ``all`` to.
 
         ``copy`` / ``move`` take an *explicit* ``--tables`` list because
         the underlying CLI has no ``all`` sentinel. A driver whose source
-        is a self-describing container (e.g. an Access ``.accdb`` file
-        holding many user tables) can override this to enumerate every
-        table so the web tier may safely accept ``all`` and expand it.
+        can enumerate its own tables (an Access ``.accdb`` file, a
+        Snowflake schema, a disc / object-store batch folder) overrides
+        this so ``all`` can be expanded — by the web tier at draft time
+        (via the ``ovid2 tools list-source-tables`` executor broker) or
+        by the copy executor at run time.
 
         Args:
             location: The per-address location payload (falls back to
                 ``self.location``). Lets a driver honour per-address
                 allow/deny filters when expanding.
+            pipeline: Accepted for interface stability; ignored. The
+                address is the exact location — folder sources list
+                ``{root}/{location.path}/`` the same way :meth:`read`
+                does, warehouses list ``database.schema``.
+            batch_id: Accepted for interface stability; ignored.
 
         Returns:
-            The concrete list of logical table names to copy, or
-            ``None`` when this driver cannot expand ``all`` (the
-            default). ``None`` means the web tier keeps rejecting an
-            ``all`` / empty tables list for this source.
+            The concrete list of ``--tables`` specs to copy. Each entry
+            is a bare logical name or a ``LOGICAL=SOURCE`` split
+            (see :mod:`ovid2.tools.table_specs`) — folder sources return
+            ``demographic=demographic.csv`` so the destination stem
+            drops the extension. ``None`` when this driver cannot expand
+            ``all`` (the default).
+
+        Raises:
+            FileNotFoundError / ValueError: When the source location
+                cannot be listed (missing folder, bad schema). Callers
+                surface the message rather than silently copying
+                nothing.
 
         Implementations must load heavy SDKs lazily inside the method
         body so the module import stays web-safe.
         """
-        del location
+        del location, pipeline, batch_id
         return None
+
+    def existing_tables(self, location: dict[str, Any] | None = None) -> list[str] | None:
+        """Return the tables already present at this address, for the overwrite gate.
+
+        The address is the exact location a run writes to, so a non-empty
+        result means the run would overwrite existing data and needs an
+        explicit confirmation (``--overwrite`` / ``confirm_overwrite``).
+
+        The default derives the answer from :meth:`expand_all_tables`:
+
+        - a missing folder / schema (``FileNotFoundError``) → ``[]``;
+        - a driver that cannot enumerate (``None`` / ``NotImplementedError``)
+          → ``None`` (*unknown* — callers must not block on it).
+
+        Returns:
+            Logical table names already present (``[]`` when empty), or
+            ``None`` when occupancy cannot be determined.
+        """
+        if not type(self).supports_expand_all():
+            return None
+        try:
+            specs = self.expand_all_tables(location)
+        except FileNotFoundError:
+            return []
+        except NotImplementedError:
+            return None
+        if specs is None:
+            return None
+        return sorted({str(s).split("=", 1)[0] for s in specs if str(s).strip()})
+
+    def table_sizes(
+        self,
+        file_names: list[str],
+        *,
+        pipeline: str,
+        batch_id: str,
+    ) -> dict[str, int]:
+        """Return ``{file_name: size_bytes}`` for the tables about to be copied.
+
+        Metadata-only (file ``stat``, blob / object listing, Snowflake
+        ``SHOW TABLES``) — never a data scan, never a Spark action. Used
+        by ``ovid2 tools copy`` to schedule the largest tables first so
+        the longest single table starts at t=0 rather than last
+        (longest-processing-time-first; see
+        :func:`ovid2.tools.copy.order_largest_first`).
+
+        Args:
+            file_names: Source-side lookup keys (``TableSpec.file_name``).
+            pipeline: Ignored (the address is the exact location).
+            batch_id: Ignored (the address is the exact location).
+
+        Returns:
+            A mapping for the names whose size is known. Missing keys
+            mean "unknown" — the caller keeps their original order. The
+            default returns ``{}`` (no size information).
+        """
+        del file_names, pipeline, batch_id
+        return {}
 
     # ------------------------------------------------------------------
     # Legacy bridge

@@ -52,11 +52,19 @@ def probe(name: str, out: TextIO = sys.stdout) -> int:
     try:
         result = build_provider(name).probe().to_dict()
     except (FileNotFoundError, PermissionError, ValueError, KeyError) as exc:
-        result = {"ok": False, "code": "config", "message": str(exc),
-                  "detail": {"exception_type": type(exc).__name__}}
+        result = {
+            "ok": False,
+            "code": "config",
+            "message": str(exc),
+            "detail": {"exception_type": type(exc).__name__},
+        }
     except Exception as exc:
-        result = {"ok": False, "code": "error", "message": str(exc),
-                  "detail": {"exception_type": type(exc).__name__}}
+        result = {
+            "ok": False,
+            "code": "error",
+            "message": str(exc),
+            "detail": {"exception_type": type(exc).__name__},
+        }
     _emit(out, result)
     return 0 if result.get("ok") else 1
 
@@ -82,8 +90,13 @@ def chat(stdin: TextIO = sys.stdin, out: TextIO = sys.stdout) -> int:
     try:
         client = ReadOnlyApiClient.from_env() if route.tools else None
         ui_context = request.get("ui_context")
-        for event in route_chat(messages, route, build_provider, client,
-                                ui_context if isinstance(ui_context, dict) else None):
+        for event in route_chat(
+            messages,
+            route,
+            build_provider,
+            client,
+            ui_context if isinstance(ui_context, dict) else None,
+        ):
             if event.get("type") == "done":
                 ok = bool(event.get("ok"))
             _emit(out, event)
@@ -96,8 +109,7 @@ def chat(stdin: TextIO = sys.stdin, out: TextIO = sys.stdout) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     """Return the ``python -m ovid2.llm`` argument parser."""
-    parser = argparse.ArgumentParser(prog="python -m ovid2.llm",
-                                     description="Ovid2 LLM executor.")
+    parser = argparse.ArgumentParser(prog="python -m ovid2.llm", description="Ovid2 LLM executor.")
     sub = parser.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("probe", help="Probe an LLM connection.")
     p.add_argument("name")
