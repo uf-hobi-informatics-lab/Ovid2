@@ -1888,7 +1888,8 @@
         "description": "Payload for ``POST /api/v1/runs`` \u2014 one ETL invocation.",
         "properties": {
           "batch_id": {
-            "description": "Batch identifier, e.g. ``20260101``.",
+            "default": "",
+            "description": "Run label. Always *derived* server-side from the input: the complete Data Space path of the input location \u2014 storage account followed by the folder path or ``DATABASE/SCHEMA`` (e.g. ``inbox/landing/2026_03``, ``sf_prod/CHAR_DB/SITE_X``). A supplied value is used only when the input has no derivable location (legacy addresses). Never appended to an address: every address is the exact location its data is read from / written to.",
             "title": "Batch Id",
             "type": "string"
           },
@@ -1911,6 +1912,12 @@
             },
             "title": "Checks",
             "type": "array"
+          },
+          "confirm_overwrite": {
+            "default": false,
+            "description": "Confirm writing into an output location that already holds tables. The output address is the exact write location, so an occupied output is overwritten; without this flag the API answers ``409 overwrite_required`` listing the existing tables. Agent principals (MCP / assistant) setting it go through the ``run.overwrite`` human-approval gate.",
+            "title": "Confirm Overwrite",
+            "type": "boolean"
           },
           "engine": {
             "default": "pyspark",
@@ -2022,7 +2029,7 @@
                 "type": "null"
               }
             ],
-            "description": "Snowflake DATABASE override.",
+            "description": "Deprecated. The address is the exact location \u2014 set DATABASE/SCHEMA on the address instead.",
             "title": "Sf Database"
           },
           "sf_schema": {
@@ -2034,7 +2041,7 @@
                 "type": "null"
               }
             ],
-            "description": "Snowflake SCHEMA override.",
+            "description": "Deprecated. The address is the exact location \u2014 set DATABASE/SCHEMA on the address instead.",
             "title": "Sf Schema"
           },
           "stderr_log": {
@@ -2075,8 +2082,7 @@
           }
         },
         "required": [
-          "pipeline",
-          "batch_id"
+          "pipeline"
         ],
         "title": "JobSubmitRequest",
         "type": "object"
@@ -2619,48 +2625,6 @@
         "title": "MapperWrite",
         "type": "object"
       },
-      "OdsBatchListing": {
-        "description": "Response for ``GET /api/v1/dataspace/{pipeline}``.",
-        "properties": {
-          "batches": {
-            "items": {
-              "$ref": "#/components/schemas/OdsBatchSummary"
-            },
-            "title": "Batches",
-            "type": "array"
-          },
-          "pipeline": {
-            "title": "Pipeline",
-            "type": "string"
-          }
-        },
-        "required": [
-          "pipeline"
-        ],
-        "title": "OdsBatchListing",
-        "type": "object"
-      },
-      "OdsBatchSummary": {
-        "description": "One batch under a pipeline.",
-        "properties": {
-          "batch_id": {
-            "title": "Batch Id",
-            "type": "string"
-          },
-          "dimensions": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Dimensions",
-            "type": "array"
-          }
-        },
-        "required": [
-          "batch_id"
-        ],
-        "title": "OdsBatchSummary",
-        "type": "object"
-      },
       "OdsDimensionCatalog": {
         "description": "Response for ``GET /api/v1/dataspace/dimensions``.",
         "properties": {
@@ -2717,50 +2681,53 @@
         "title": "OdsDimensionSummary",
         "type": "object"
       },
-      "OdsPipelineListing": {
-        "description": "Response for ``GET /api/v1/dataspace``.",
+      "OdsEntryModel": {
+        "description": "One child in a Data Space listing (a folder, schema, file or table).",
         "properties": {
-          "pipelines": {
-            "items": {
-              "$ref": "#/components/schemas/OdsPipelineSummary"
-            },
-            "title": "Pipelines",
-            "type": "array"
-          }
-        },
-        "title": "OdsPipelineListing",
-        "type": "object"
-      },
-      "OdsPipelineSummary": {
-        "description": "One row in the root ODS listing.",
-        "properties": {
-          "known_dimensions": {
-            "description": "Dimensions that have at least one address for this pipeline.",
-            "items": {
-              "type": "string"
-            },
-            "title": "Known Dimensions",
-            "type": "array"
+          "kind": {
+            "description": "``account`` | ``dir`` | ``file`` | ``table``.",
+            "title": "Kind",
+            "type": "string"
           },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "path": {
+            "description": "The child's full Data Space path (``/<conn>/<\u2026>``).",
+            "title": "Path",
+            "type": "string"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
+          "type": {
+            "default": "",
+            "description": "Storage type (disc / snowflake / s3 / \u2026).",
+            "title": "Type",
+            "type": "string"
           }
         },
         "required": [
-          "name"
+          "name",
+          "kind",
+          "path"
         ],
-        "title": "OdsPipelineSummary",
+        "title": "OdsEntryModel",
         "type": "object"
       },
-      "OdsResolveResult": {
-        "description": "Response for ``GET /api/v1/dataspace/resolve``.\n\nContains the naming information but never the credentials or the\nconcrete address object \u2014 the web tier deliberately keeps the\npyspark import surface at zero.",
+      "OdsListing": {
+        "description": "Response for ``GET /api/v1/dataspace?path=\u2026``.\n\nEvery data space is the same \u2014 a tree of plain directories rooted at\na storage account. ``/`` lists storage accounts; deeper paths list\nthe folder / schema. ``batch_id`` is what a run reading this location\nis labelled with; ``address_name`` the saved address pointing exactly\nhere (if any).",
         "properties": {
           "address_name": {
-            "title": "Address Name",
-            "type": "string"
-          },
-          "batch_id": {
             "anyOf": [
               {
                 "type": "string"
@@ -2769,110 +2736,150 @@
                 "type": "null"
               }
             ],
-            "title": "Batch Id"
+            "title": "Address Name"
+          },
+          "batch_id": {
+            "default": "",
+            "title": "Batch Id",
+            "type": "string"
+          },
+          "connection": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/OdsEntryModel"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "location": {
+            "default": "",
+            "title": "Location",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "supported": {
+            "default": true,
+            "title": "Supported",
+            "type": "boolean"
+          },
+          "type": {
+            "default": "",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "OdsListing",
+        "type": "object"
+      },
+      "OdsResolveResult": {
+        "description": "Response for ``GET /api/v1/dataspace/resolve``.\n\nNaming information only \u2014 never credentials. The path is\n``/<connection>/<location\u2026>``; ``location`` is the exact folder /\n``DATABASE/SCHEMA`` it names and ``batch_id`` the run label for it.",
+        "properties": {
+          "address_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A saved address pointing exactly at this location, if any.",
+            "title": "Address Name"
+          },
+          "batch_id": {
+            "default": "",
+            "title": "Batch Id",
+            "type": "string"
           },
           "candidates": {
+            "description": "Every saved address on this storage account.",
             "items": {
               "type": "string"
             },
             "title": "Candidates",
             "type": "array"
           },
-          "dimension": {
-            "title": "Dimension",
+          "connection": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection"
+          },
+          "location": {
+            "default": "",
+            "title": "Location",
             "type": "string"
           },
           "path": {
             "title": "Path",
             "type": "string"
           },
-          "pipeline": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pipeline"
-          },
-          "table": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Table"
-          },
-          "tier": {
-            "description": "Which resolution rule fired: 'explicit', 'pipeline_route', 'dimension_default', or 'sole_candidate'.",
-            "title": "Tier",
+          "type": {
+            "default": "",
+            "title": "Type",
             "type": "string"
           }
         },
         "required": [
-          "path",
-          "dimension",
-          "address_name",
-          "tier"
+          "path"
         ],
         "title": "OdsResolveResult",
         "type": "object"
       },
-      "OdsTableListing": {
-        "description": "Response for ``GET /api/v1/dataspace/{pipeline}/{batch}``.",
+      "OverwriteConfirm": {
+        "description": "Optional body for ``POST /jobs/{job_id}/rerun`` and ``/launch``.",
         "properties": {
-          "batch_id": {
-            "title": "Batch Id",
-            "type": "string"
-          },
-          "pipeline": {
-            "title": "Pipeline",
-            "type": "string"
-          },
-          "tables": {
-            "items": {
-              "$ref": "#/components/schemas/OdsTableSummary"
-            },
-            "title": "Tables",
-            "type": "array"
+          "confirm_overwrite": {
+            "default": false,
+            "description": "Confirm overwriting the occupied output location (the output address is the exact write location).",
+            "title": "Confirm Overwrite",
+            "type": "boolean"
           }
         },
-        "required": [
-          "pipeline",
-          "batch_id"
-        ],
-        "title": "OdsTableListing",
-        "type": "object"
-      },
-      "OdsTableSummary": {
-        "description": "One table under a batch.",
-        "properties": {
-          "dimensions": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Dimensions",
-            "type": "array"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "OdsTableSummary",
+        "title": "OverwriteConfirm",
         "type": "object"
       },
       "PipelineConfigDetail": {
         "description": "One pipeline config stored under ``$XDG_CONFIG_HOME/ovid2/pipelines/``.",
         "properties": {
+          "allow_overwrite": {
+            "default": false,
+            "description": "Standing confirmation that this pipeline's runs may overwrite an occupied output location (needed for unattended watch / scheduled runs, whose output address is fixed).",
+            "title": "Allow Overwrite",
+            "type": "boolean"
+          },
           "cdm": {
             "anyOf": [
               {
@@ -3377,8 +3384,14 @@
                 "type": "null"
               }
             ],
-            "description": "Override the synthesised timestamp batch id for this run.",
+            "description": "Ignored when the input has a derivable location \u2014 the batch id is always the complete Data Space path of the input location. Used only as the label for legacy (connectionless) inputs.",
             "title": "Batch Id"
+          },
+          "confirm_overwrite": {
+            "default": false,
+            "description": "Confirm overwriting an occupied output location for this run (see ``JobSubmitRequest.confirm_overwrite``).",
+            "title": "Confirm Overwrite",
+            "type": "boolean"
           },
           "draft": {
             "default": false,
@@ -3590,6 +3603,12 @@
       "PipelineWrite": {
         "description": "Payload for creating or updating a pipeline config.",
         "properties": {
+          "allow_overwrite": {
+            "default": false,
+            "description": "Standing confirmation that runs of this pipeline may overwrite an occupied output location. Set by an agent principal it requires the ``run.overwrite`` human approval.",
+            "title": "Allow Overwrite",
+            "type": "boolean"
+          },
           "cdm": {
             "anyOf": [
               {
@@ -5991,21 +6010,45 @@
     },
     "/api/v1/dataspace": {
       "get": {
-        "description": "Return every pipeline and the dimensions they are known in.",
-        "operationId": "api_ods_list_pipelines_api_v1_dataspace_get",
+        "description": "List the children of a Data Space path (storage accounts / folders / schemas).",
+        "operationId": "api_ods_list_api_v1_dataspace_get",
+        "parameters": [
+          {
+            "description": "Data Space path: '/' lists storage accounts, '/<account>/<folder\u2026>' lists a folder or DATABASE/SCHEMA. Every data space is a tree of plain directories.",
+            "in": "query",
+            "name": "path",
+            "required": false,
+            "schema": {
+              "default": "/",
+              "description": "Data Space path: '/' lists storage accounts, '/<account>/<folder\u2026>' lists a folder or DATABASE/SCHEMA. Every data space is a tree of plain directories.",
+              "title": "Path",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OdsPipelineListing"
+                  "$ref": "#/components/schemas/OdsListing"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
-        "summary": "List every pipeline in the Ovid Data Space",
+        "summary": "List one level of the Ovid Data Space",
         "tags": [
           "v1"
         ]
@@ -6013,7 +6056,7 @@
     },
     "/api/v1/dataspace/dimensions": {
       "get": {
-        "description": "Return the dimension catalogue and the deployment's routing defaults.",
+        "description": "Return the storage types and how many addresses use each.",
         "operationId": "api_ods_dimensions_api_v1_dataspace_dimensions_get",
         "responses": {
           "200": {
@@ -6027,7 +6070,7 @@
             "description": "Successful Response"
           }
         },
-        "summary": "List every ODS dimension + resolution defaults",
+        "summary": "List every storage type (dimension) in the Data Space",
         "tags": [
           "v1"
         ]
@@ -6035,36 +6078,18 @@
     },
     "/api/v1/dataspace/resolve": {
       "get": {
-        "description": "Return the address that would serve ``(path, dim)`` without doing I/O.",
+        "description": "Return the storage account, exact location, batch id and matching address.",
         "operationId": "api_ods_resolve_api_v1_dataspace_resolve_get",
         "parameters": [
           {
-            "description": "ODS path (e.g. /demo/20260316/DEMOGRAPHIC).",
+            "description": "Data Space path, e.g. /inbox/landing/2026_03.",
             "in": "query",
             "name": "path",
             "required": true,
             "schema": {
-              "description": "ODS path (e.g. /demo/20260316/DEMOGRAPHIC).",
+              "description": "Data Space path, e.g. /inbox/landing/2026_03.",
               "title": "Path",
               "type": "string"
-            }
-          },
-          {
-            "description": "Optional dimension name (disc, snowflake, s3, ...).",
-            "in": "query",
-            "name": "dim",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional dimension name (disc, snowflake, s3, ...).",
-              "title": "Dim"
             }
           }
         ],
@@ -6090,102 +6115,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Resolve an ODS path + dimension to an address",
-        "tags": [
-          "v1"
-        ]
-      }
-    },
-    "/api/v1/dataspace/{pipeline}": {
-      "get": {
-        "description": "Return the batches under ``/{pipeline}``.",
-        "operationId": "api_ods_list_batches_api_v1_dataspace__pipeline__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "pipeline",
-            "required": true,
-            "schema": {
-              "title": "Pipeline",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OdsBatchListing"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List every batch under a pipeline",
-        "tags": [
-          "v1"
-        ]
-      }
-    },
-    "/api/v1/dataspace/{pipeline}/{batch_id}": {
-      "get": {
-        "description": "Return the tables under ``/{pipeline}/{batch_id}``.",
-        "operationId": "api_ods_list_tables_api_v1_dataspace__pipeline___batch_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "pipeline",
-            "required": true,
-            "schema": {
-              "title": "Pipeline",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "batch_id",
-            "required": true,
-            "schema": {
-              "title": "Batch Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OdsTableListing"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List every table under a pipeline batch",
+        "summary": "Resolve a Data Space path to its storage account + exact location",
         "tags": [
           "v1"
         ]
@@ -7306,7 +7236,7 @@
     },
     "/api/v1/jobs/{job_id}/launch": {
       "post": {
-        "description": "Promote a draft job to ``queued`` so the worker runs it.",
+        "description": "Promote a draft job to ``queued`` so the worker runs it.\n\nRuns the overwrite gate: ``409 overwrite_required`` when the output is\noccupied and ``confirm_overwrite`` is not set.",
         "operationId": "api_launch_job_api_v1_jobs__job_id__launch_post",
         "parameters": [
           {
@@ -7317,8 +7247,37 @@
               "title": "Job Id",
               "type": "string"
             }
+          },
+          {
+            "description": "Confirm overwriting the (occupied) output location.",
+            "in": "query",
+            "name": "confirm_overwrite",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Confirm overwriting the (occupied) output location.",
+              "title": "Confirm Overwrite",
+              "type": "boolean"
+            }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/OverwriteConfirm"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -7392,7 +7351,7 @@
     },
     "/api/v1/jobs/{job_id}/rerun": {
       "post": {
-        "description": "Enqueue a byte-identical retry of a finished job.",
+        "description": "Enqueue a retry of a finished job (same input, output, tables).\n\nA rerun writes to the same exact output location, so it answers\n``409 overwrite_required`` until ``confirm_overwrite=true``.",
         "operationId": "api_rerun_job_api_v1_jobs__job_id__rerun_post",
         "parameters": [
           {
@@ -7403,8 +7362,37 @@
               "title": "Job Id",
               "type": "string"
             }
+          },
+          {
+            "description": "Confirm overwriting the (occupied) output location.",
+            "in": "query",
+            "name": "confirm_overwrite",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Confirm overwriting the (occupied) output location.",
+              "title": "Confirm Overwrite",
+              "type": "boolean"
+            }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/OverwriteConfirm"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "content": {
@@ -9075,7 +9063,7 @@
         ]
       },
       "post": {
-        "description": "Enqueue an ETL job. The worker will spawn ``ovid2 etl`` shortly.",
+        "description": "Enqueue a job. The worker spawns the matching ``ovid2`` subcommand shortly.\n\nThe output address is the exact write location: an output that\nalready holds tables answers ``409 overwrite_required`` until the\ncaller re-submits with ``confirm_overwrite=true`` (agent principals\nthen go through the ``run.overwrite`` human approval \u2192 ``202``).",
         "operationId": "api_submit_run_api_v1_runs_post",
         "requestBody": {
           "content": {
@@ -9117,7 +9105,7 @@
     },
     "/api/v1/runs/{batch_id}": {
       "get": {
-        "description": "Return the run row for one ``batch_id``.",
+        "description": "Return the run row for one ``batch_id`` (or ``instance_id``).\n\nA batch id is a Data Space path (``conn/folder/leaf``); send it URL-\nencoded (``%2F``) or use the slash-tolerant twin registered below.",
         "operationId": "api_get_run_api_v1_runs__batch_id__get",
         "parameters": [
           {

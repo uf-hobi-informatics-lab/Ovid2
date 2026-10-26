@@ -591,9 +591,8 @@ def _register_shared_view_from_local_file(
 
     try:
         # Synthetic disc driver rooted at the file's parent directory.
-        # ``resolve_read_path(parent, "", "", basename)`` resolves to
-        # ``<parent>/<basename>`` (empty pipeline/batch collapse away),
-        # so the stager finds the exact file.
+        # The address is the exact location, so ``resolve_read_path(parent,
+        # basename)`` resolves to ``<parent>/<basename>``.
         driver = DiscDriver(
             args={"host_path": parent, "container_path": parent},
             secrets={},

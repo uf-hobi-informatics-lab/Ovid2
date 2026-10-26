@@ -180,7 +180,7 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
                 "--engine pyspark."
             )
 
-        file_path = resolve_read_path(root, pipeline, batch_id, file_name)
+        file_path = resolve_read_path(root, file_name)
         if os.path.isdir(file_path):
             # Disc supports directory reads (Spark loads the whole
             # dir); Snowpark can too via a stage prefix, but the
@@ -331,7 +331,7 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
                 (or by a :meth:`session.table` / SQL read).
             driver: A :class:`~ovid2.drivers.disc.driver.DiscDriver`
                 pointing at the target disc address. The strategy
-                writes under ``{root}/{pipeline}/{batch_id}/``.
+                writes directly under the address directory ``{root}/``.
             pipeline: Pipeline name.
             batch_id: Batch identifier.
             table_name: File stem — the final artefact is
@@ -361,7 +361,7 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
 
         # Ensure the output directory exists on the container-side
         # disc so the GET step has a place to land.
-        output_dir = os.path.join(root, pipeline, batch_id)
+        output_dir = root  # the address is the exact location
         os.makedirs(output_dir, exist_ok=True)
 
         # Instance-scoped stage subdirectory. One subdirectory per

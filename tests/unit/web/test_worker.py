@@ -291,10 +291,9 @@ def test_build_argv_includes_all_flags(stub_pipeline: str) -> None:
             transformations=["format", "write"],
             engine="pyspark",
             workers=8,
-            sf_database="DB",
             sf_account="ACCT",
-            sf_schema="SCH",
             stderr_log=True,
+            confirm_overwrite=True,
         )
     )
     detail = jobs_svc.get_job(resp.job_id)
@@ -306,10 +305,14 @@ def test_build_argv_includes_all_flags(stub_pipeline: str) -> None:
     assert "--tables demographic encounter" in argv_str
     assert "--transformations format write" in argv_str
     assert "--workers 8" in argv_str
-    assert "--sf_database DB" in argv_str
+    # sf_database / sf_schema are no longer overrides (the address is the
+    # exact location); only the account override is forwarded.
+    assert "--sf_database" not in argv_str
+    assert "--sf_schema" not in argv_str
     assert "--sf_account ACCT" in argv_str
-    assert "--sf_schema SCH" in argv_str
     assert "--stderr-log" in argv
+    # A confirmed overwrite reaches the executor's gate.
+    assert argv[-1] == "--overwrite"
 
 
 @pytest.mark.unit

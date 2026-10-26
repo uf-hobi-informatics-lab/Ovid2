@@ -50,100 +50,39 @@ if TYPE_CHECKING:
 _DELIMITER_CANDIDATES: tuple[str, ...] = (",", "\t", "|", "~", ";")
 
 
-def resolve_read_path(
-    root_path: str,
-    pipeline: str,
-    batch_id: str,
-    file_pattern: str,
-) -> str:
-    """Resolve a pipeline-scoped read path (case-insensitive, glob-aware).
+def resolve_read_path(root_path: str, file_pattern: str) -> str:
+    """Resolve a read path *exactly* under the address location.
 
-    Primary structure: ``{root_path}/{pipeline}/{batch_id}/{file_pattern}``,
-    tried case-insensitively over the pipeline segment (``pipeline``,
-    ``pipeline.lower()``, ``pipeline.upper()``).
-
-    Flat fallback: when *none* of the pipeline-scoped layouts match,
-    the pipeline segment is dropped and ``{root_path}/{batch_id}/
-    {file_pattern}`` is tried. This supports drops where the disc
-    address root already points at the partner directory and the batch
-    dir sits directly beneath it (e.g. ``inbox_demo__root`` →
-    ``/data/inbox/DEMO/20260610/`` for pipeline ``demo``).
-    The fallback is a strict superset of the primary resolution: the
-    pipelined layout always wins when it exists, so no existing pipeline
-    is affected.
-
-    Root-direct fallback: when neither the pipelined nor the flat
-    layout matches, ``{root_path}/{file_pattern}`` is tried last. This
-    catches the common operator misconfiguration where the batch id is
-    *baked into the address root* (``location.path: "20260610"`` on top
-    of a connection whose ``host_path`` is the partner dir), so
-    ``root_path`` is already ``/data/inboxarchive/ACME/20260610`` and the
-    files sit directly beneath it. Without this, such an address
-    double-applies the batch id (``…/20260610/demo/20260610/``) and every
-    table fails with a confusing "file not found". Tried last, so it can
-    never shadow a correctly-scoped layout.
-
-    Falls back to a directory match when the glob resolves to a folder
-    (Spark reads directories natively).
+    The address is the exact location of the data (see
+    the adr-address-is-exact-location design note): the
+    files live directly under ``root_path`` — no ``{pipeline}`` or
+    ``{batch_id}`` segment is ever appended. ``file_pattern`` may be a
+    plain name or a glob; a glob that matches only directories resolves
+    to the first directory (Spark reads directories natively), files are
+    preferred otherwise.
 
     Args:
-        root_path: The disc address's root directory.
-        pipeline: Pipeline name.
-        batch_id: Batch identifier.
+        root_path: The address's exact directory (connection root plus
+            ``location.path``).
         file_pattern: File name or glob (e.g. ``'*Demographic*'``).
 
     Returns:
         Resolved file or directory path.
 
     Raises:
-        FileNotFoundError: If no path matches under either layout.
+        FileNotFoundError: If nothing under ``root_path`` matches.
     """
-    pipeline_variations = (pipeline, pipeline.lower(), pipeline.upper())
-    first_directory_match: str | None = None
-
-    # De-duplicate the base paths while preserving order: the pipelined
-    # layouts first (primary), then the flat ``{root}/{batch_id}`` layout
-    # (fallback). ``os.path.join(root, "", batch_id)`` already collapses an
-    # empty pipeline segment, so the synthetic empty-pipeline caller in
-    # ``core.pipeline`` degenerates to the flat layout without a second pass.
-    base_paths: list[str] = []
-    for pipeline_name in pipeline_variations:
-        base_path = os.path.join(root_path, pipeline_name, batch_id)
-        if base_path not in base_paths:
-            base_paths.append(base_path)
-    flat_base = os.path.join(root_path, batch_id)
-    if flat_base not in base_paths:
-        base_paths.append(flat_base)
-    # Root-direct layout (tried last): the batch id is already baked into
-    # ``root_path`` and the files sit directly beneath it. Catches the
-    # ``location.path: "<batch_id>"`` misconfiguration without shadowing
-    # any correctly-scoped layout above.
-    if root_path not in base_paths:
-        base_paths.append(root_path)
-
-    for base_path in base_paths:
-        full_pattern = os.path.join(base_path, file_pattern)
-
-        if "*" in file_pattern or "?" in file_pattern:
-            matches = glob.glob(full_pattern)
-            if matches:
-                file_matches = [m for m in matches if os.path.isfile(m)]
-                if file_matches:
-                    return file_matches[0]
-                if first_directory_match is None:
-                    first_directory_match = matches[0]
-        elif os.path.exists(full_pattern):
-            return full_pattern
-
-    if first_directory_match is not None:
-        return first_directory_match
-
-    raise FileNotFoundError(
-        f"No files found matching pattern '{file_pattern}' in "
-        f"{root_path}/[{pipeline}|{pipeline.upper()}]/{batch_id}/, "
-        f"the flat layout {root_path}/{batch_id}/, "
-        f"or the root-direct layout {root_path}/"
-    )
+    full_pattern = os.path.join(root_path, file_pattern)
+    if "*" in file_pattern or "?" in file_pattern:
+        matches = sorted(glob.glob(full_pattern))
+        file_matches = [m for m in matches if os.path.isfile(m)]
+        if file_matches:
+            return file_matches[0]
+        if matches:
+            return matches[0]
+    elif os.path.exists(full_pattern):
+        return full_pattern
+    raise FileNotFoundError(f"No files found matching pattern '{file_pattern}' in {root_path}/")
 
 
 def detect_delimiter(file_path: str) -> str:
@@ -176,8 +115,6 @@ def detect_delimiter(file_path: str) -> str:
 def read_dataframe(
     spark: SparkSession,
     root_path: str,
-    pipeline: str,
-    batch_id: str,
     file_name: str,
     delimiter: str | None,
     fmt: str,
@@ -190,7 +127,7 @@ def read_dataframe(
     ACME 20260610 ``"externalmedid", "patid"`` whitespace-padded
     headers are preserved verbatim.
     """
-    file_path = resolve_read_path(root_path, pipeline, batch_id, file_name)
+    file_path = resolve_read_path(root_path, file_name)
 
     if fmt == "csv":
         detected_delimiter = delimiter or detect_delimiter(file_path)
@@ -218,21 +155,17 @@ def read_dataframe(
 def write_dataframe(
     df: DataFrame,
     root_path: str,
-    pipeline: str,
-    batch_id: str,
     table_name: str,
     delimiter: str | None,
     fmt: str,
     *,
     single_file: bool = True,
 ) -> None:
-    """Write a DataFrame under ``{root_path}/{pipeline}/{batch_id}/``.
+    """Write a DataFrame directly under the address directory ``root_path``.
 
     Args:
         df: Lazy Spark DataFrame to materialise.
-        root_path: Address root.
-        pipeline: Pipeline name (sub-directory).
-        batch_id: Batch id (sub-directory).
+        root_path: The address's exact output directory.
         table_name: File stem — the final artefact is
             ``{table_name}.{fmt}``.
         delimiter: CSV field separator. Defaults to
@@ -244,7 +177,7 @@ def write_dataframe(
             and JSON writes always take the Spark-native shape —
             ``single_file`` is ignored for those formats.
     """
-    output_dir = os.path.join(root_path, pipeline, batch_id)
+    output_dir = root_path
     output_file_name = f"{table_name}.{fmt}"
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 

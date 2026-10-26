@@ -580,7 +580,7 @@ class TestS3IOWriteChain:
         assert names[0] == "format"
         assert ("format", ("csv",)) in df.log
         assert ("mode", ("overwrite",)) in df.log
-        assert ("save", ("s3a://b/demo/20260101/table.csv",)) in df.log
+        assert ("save", ("s3a://b/table.csv",)) in df.log
 
     def test_single_file_true_uses_finalize_path(
         self,
@@ -614,13 +614,13 @@ class TestS3IOWriteChain:
         io.write(df, _FakeSparkSession(), "p", "b", "t")  # type: ignore[arg-type]
         # parquet path: df.write.mode('overwrite').parquet(target)
         assert ("mode", ("overwrite",)) in df.log
-        assert ("parquet", ("s3a://b/p/b/t.parquet",)) in df.log
+        assert ("parquet", ("s3a://b/t.parquet",)) in df.log
 
     def test_json_write_unchanged(self) -> None:
         io = self._make(format="json")
         df = _FakeDF()
         io.write(df, _FakeSparkSession(), "p", "b", "t")  # type: ignore[arg-type]
-        assert ("json", ("s3a://b/p/b/t.json",)) in df.log
+        assert ("json", ("s3a://b/t.json",)) in df.log
 
     def test_unknown_format_raises(self) -> None:
         io = self._make(format="avro")

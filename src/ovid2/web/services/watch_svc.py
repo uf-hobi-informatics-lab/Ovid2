@@ -7,10 +7,14 @@ and then :func:`record_seen` advances the pipeline's cursor so the same
 folder is never re-submitted.
 
 Cursors live in the additive ``web_watch_cursors`` table (Phase A),
-keyed by ``(pipeline, input_address)``. "New" is defined by lexical
-ordering of the top-level folder names under the pipeline's input
-storage account: any directory entry whose name sorts strictly after
-the stored ``last_seen_batch`` is unseen. Batch folders in Ovid2 are
+keyed by ``(pipeline, input_address)``. Every address is the exact
+location of its data, so a watch pipeline's input address names the
+*parent* folder (or warehouse database) being watched; each child folder
+(or schema) is one batch. "New" is defined by lexical ordering of those
+child names: any directory entry whose name sorts strictly after the
+stored ``last_seen_batch`` is unseen. Each new batch runs against a
+child address pointing exactly at that folder / schema
+(:func:`batch_input_address`). Batch folders in Ovid2 are
 date-shaped (``2024_01`` / ``20240115``) and therefore lexically
 monotonic, so this is a total order without parsing.
 
@@ -32,7 +36,13 @@ from ovid2.web.services import addresses_svc, storage_browse_svc
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["last_checked_at", "last_seen", "record_seen", "scan_for_new_batches"]
+__all__ = [
+    "batch_input_address",
+    "last_checked_at",
+    "last_seen",
+    "record_seen",
+    "scan_for_new_batches",
+]
 
 
 def _now_iso() -> str:
@@ -108,10 +118,47 @@ def _touch_checked(pipeline: str, input_address: str) -> None:
         )
 
 
-def scan_for_new_batches(detail: PipelineConfigDetail) -> list[str]:
-    """Return the unseen top-level batch folders under a pipeline's input.
+def _watched_prefix(address: object) -> str:
+    """Return the location path a watch input address points at."""
+    from ovid2.drivers._layout import location_path
 
-    Lists one level of the pipeline's input storage account and returns
+    connection = str(getattr(address, "connection", "") or "")
+    warehouse = addresses_svc.is_warehouse_connection(connection)
+    return location_path(getattr(address, "location", None) or {}, warehouse=warehouse)
+
+
+def batch_input_address(detail: PipelineConfigDetail, folder: str, *, actor: str) -> str:
+    """Return (resolving or creating) the address for one watched batch.
+
+    The watched input address names the parent location; the batch's
+    address points exactly at ``<parent>/<folder>`` on the same storage
+    account.
+
+    Raises:
+        addresses_svc.AddressError: When the parent address is not a
+            connection-shape address or the child cannot be created.
+    """
+    address = addresses_svc.get_address(detail.input_address)
+    if address is None or not address.connection:
+        raise addresses_svc.AddressError(
+            f"watch input '{detail.input_address}' is not a connection-shape address."
+        )
+    parent = _watched_prefix(address)
+    child_path = "/".join(p for p in (parent, folder.strip("/")) if p)
+    location = {
+        k: v
+        for k, v in (address.location or {}).items()
+        if k not in ("path", "database", "catalog", "schema")
+    }
+    location["path"] = child_path
+    return addresses_svc.resolve_or_create_address(address.connection, location, actor=actor)
+
+
+def scan_for_new_batches(detail: PipelineConfigDetail) -> list[str]:
+    """Return the unseen batch folders directly under a pipeline's input location.
+
+    Lists one level of the pipeline's input *location* (the input
+    address is the exact watched folder / database) and returns
     every ``dir`` entry whose name sorts strictly after the stored
     ``last_seen_batch`` cursor, ascending. When no cursor exists yet
     every present folder is unseen (a freshly-enabled watch pipeline
@@ -133,7 +180,9 @@ def scan_for_new_batches(detail: PipelineConfigDetail) -> list[str]:
         )
         return []
     try:
-        response = storage_browse_svc.browse_storage(address.connection)
+        response = storage_browse_svc.browse_storage(
+            address.connection, _watched_prefix(address) or None
+        )
     except storage_browse_svc.StorageBrowseError as exc:
         logger.warning("watch pipeline %s: browse failed: %s", detail.name, exc)
         return []

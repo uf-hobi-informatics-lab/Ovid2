@@ -991,16 +991,21 @@ class TestNativeSnowparkPathLocation:
             (["SANDBOX", "PUBLIC", "DEMOGRAPHIC"], {"mode": "overwrite"}),
         ]
 
-    def test_persist_database_only_path_uses_ovid_schema(self) -> None:
-        """``{"path": "SANDBOX"}`` → ``SANDBOX.OVID_<pipeline>_<batch>``."""
+    def test_persist_database_only_path_is_rejected(self) -> None:
+        """``{"path": "SANDBOX"}`` names no schema → rejected (no ``OVID_*`` fallback)."""
         engine = _FakeEngine()
         stager = SnowparkEngineStager(engine)
         driver = _FakeDriverWithLocation("snowflake", {"path": "SANDBOX"})
         df = _FakeSnowparkDataFrame()
-        stager.persist(df, driver, "COPY_SNOWPARK", "20261023", "demographic", None)
-        assert "CREATE SCHEMA IF NOT EXISTS SANDBOX.OVID_COPY_SNOWPARK_20261023" in (
-            engine._session.sql_calls
-        )
-        assert df.write.save_as_table_calls == [
-            (["SANDBOX", "OVID_COPY_SNOWPARK_20261023", "DEMOGRAPHIC"], {"mode": "overwrite"}),
-        ]
+        with pytest.raises(ValueError, match="DATABASE/SCHEMA"):
+            stager.persist(df, driver, "COPY_SNOWPARK", "20261023", "demographic", None)
+        assert df.write.save_as_table_calls == []
+
+    def test_persist_date_shaped_schema_is_quoted(self) -> None:
+        """A date-shaped schema (``SANDBOX/20261023``) is double-quoted in DDL."""
+        engine = _FakeEngine()
+        stager = SnowparkEngineStager(engine)
+        driver = _FakeDriverWithLocation("snowflake", {"path": "SANDBOX/20261023"})
+        df = _FakeSnowparkDataFrame()
+        stager.persist(df, driver, "demo", "SANDBOX/20261023", "demographic", None)
+        assert 'CREATE SCHEMA IF NOT EXISTS SANDBOX."20261023"' in engine._session.sql_calls

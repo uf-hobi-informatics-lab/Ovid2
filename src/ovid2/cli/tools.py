@@ -148,6 +148,23 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     list_src.add_argument("--batch_id", required=True, help="Batch identifier.")
     list_src.set_defaults(_entry=_list_source_tables_entry, _tool="list-source-tables")
 
+    # ``ovid2 tools probe-output <address>`` — the overwrite gate's
+    # pre-flight: does the output location already hold tables? The
+    # address is the exact write location, so the web tier asks the
+    # operator to confirm before a run overwrites existing data.
+    probe_out = tool_subparsers.add_parser(
+        "probe-output",
+        help="List the tables already present at an output address, print JSON.",
+        description=(
+            "Resolves the named output address (secrets included) and lists "
+            "the tables already at its exact location. Prints one JSON object "
+            '{"ok", "known", "type", "tables": [name...], "message"} on the '
+            "last line of stdout. Metadata only — no data is read."
+        ),
+    )
+    probe_out.add_argument("address", help="Output address config name.")
+    probe_out.set_defaults(_entry=_probe_output_entry, _tool="probe-output")
+
     # ``ovid2 tools test-llm <name>`` / ``ovid2 tools llm-chat`` — LLM
     # executor commands (L1). The web tier uses the faster
     # ``python -m ovid2.llm`` entry; these are the operator-facing twins.
@@ -257,7 +274,12 @@ def _raw_upload_entry(args: argparse.Namespace) -> int:
 
 
 def _discover_batch_files(input_address: object, pipeline: str, batch_id: str) -> list[str]:
-    """Return the file names inside a disc-address batch directory."""
+    """Return the file names directly inside a disc address directory.
+
+    The address is the exact location of the data; ``pipeline`` /
+    ``batch_id`` do not contribute path segments.
+    """
+    del pipeline, batch_id
     from ovid2.drivers.disc import DiscAddress
 
     if not isinstance(input_address, DiscAddress):
@@ -265,7 +287,7 @@ def _discover_batch_files(input_address: object, pipeline: str, batch_id: str) -
             "raw_upload requires --file when the input address is not a DiscAddress."
         )
 
-    batch_dir = Path(input_address.root_path) / pipeline / batch_id
+    batch_dir = Path(input_address.root_path)
     if not batch_dir.is_dir():
         raise FileNotFoundError(f"Batch directory not found: {batch_dir}")
     return [entry.name for entry in sorted(batch_dir.iterdir()) if entry.is_file()]
@@ -492,6 +514,50 @@ def _browse_storage_entry(args: argparse.Namespace) -> int:
     return 0 if result.get("ok") else 1
 
 
+def _probe_output_entry(args: argparse.Namespace) -> int:
+    """List the tables already at an output address, emit JSON.
+
+    Executor-domain counterpart of the web tier's overwrite pre-flight
+    (:mod:`ovid2.web.services.output_probe_svc`). JSON schema::
+
+        {"ok": bool, "known": bool, "type": str, "tables": [str, ...],
+         "message": str|None}
+
+    ``known=False`` means occupancy cannot be determined for this
+    driver / host (the executor's own gate still runs at run time).
+    """
+    import json as _json
+
+    from ovid2.drivers.overwrite import probe_output_tables
+    from ovid2.drivers.registry import driver_from_address
+
+    result: dict[str, object] = {
+        "ok": False,
+        "known": False,
+        "type": "",
+        "tables": [],
+        "message": None,
+    }
+    try:
+        driver = driver_from_address(args.address)
+        result["type"] = driver.type_name
+        tables = probe_output_tables(driver)
+        result["ok"] = True
+        if tables is None:
+            result["message"] = "occupancy cannot be determined for this output."
+        else:
+            result["known"] = True
+            result["tables"] = tables
+    except (FileNotFoundError, PermissionError, ValueError, KeyError) as exc:
+        result["message"] = str(exc)
+    except Exception as exc:
+        result["message"] = f"probe failed: {exc}"
+
+    sys.stdout.write(_json.dumps(result) + "\n")
+    sys.stdout.flush()
+    return 0 if result.get("ok") else 1
+
+
 def _list_source_tables_entry(args: argparse.Namespace) -> int:
     """Expand a copy/move source to concrete ``--tables`` specs, emit JSON.
 
@@ -584,51 +650,35 @@ def _register_ods(
         "ods",
         help="Ovid Data Space helpers (list, resolve, dimensions).",
         description=(
-            "Read-only utilities that walk the Ovid Data Space (a "
-            "POSIX-style /pipeline/batch/table namespace over the "
-            "configured connections). Output is JSON on stdout so the "
-            "commands compose with other tools."
+            "Read-only utilities over the Ovid Data Space: every storage "
+            "account is a tree of plain directories, /<account>/<path…>. "
+            "Output is JSON on stdout so the commands compose with other tools."
         ),
     )
     ods_subparsers = ods.add_subparsers(dest="ods_command", metavar="COMMAND")
 
     ls = ods_subparsers.add_parser(
         "ls",
-        help="List children of an ODS path.",
+        help="List children of a Data Space path.",
         description=(
-            "List the direct children of an ODS path. '/' lists "
-            "pipelines, '/<pipeline>' lists batches, '/<pipeline>/"
-            "<batch>' lists tables."
+            "List the direct children of a Data Space path. '/' lists storage "
+            "accounts; '/<account>/<folder…>' lists that folder or "
+            "DATABASE/SCHEMA."
         ),
     )
-    ls.add_argument(
-        "path",
-        nargs="?",
-        default="/",
-        help="ODS path to list (default '/').",
-    )
-    ls.add_argument(
-        "--dim",
-        default=None,
-        help="Dimension filter (disc, snowflake, s3, ...). Defaults to disc.",
-    )
+    ls.add_argument("path", nargs="?", default="/", help="Data Space path (default '/').")
     ls.set_defaults(_entry=_ods_ls_entry, _tool="ods.ls")
 
     resolve = ods_subparsers.add_parser(
         "resolve",
-        help="Resolve an ODS path + dimension to an address.",
+        help="Resolve a Data Space path to its storage account + exact location.",
     )
-    resolve.add_argument("path", help="ODS path (e.g. /demo/20260316/DEMOGRAPHIC).")
-    resolve.add_argument(
-        "--dim",
-        default=None,
-        help="Optional dimension override.",
-    )
+    resolve.add_argument("path", help="Data Space path (e.g. /inbox/landing/2026_03).")
     resolve.set_defaults(_entry=_ods_resolve_entry, _tool="ods.resolve")
 
     dims = ods_subparsers.add_parser(
         "dimensions",
-        help="List every registered dimension + resolution defaults.",
+        help="List every storage type and the addresses using it.",
     )
     dims.set_defaults(_entry=_ods_dimensions_entry, _tool="ods.dimensions")
 
@@ -640,41 +690,7 @@ def _register_ods(
 
 
 def _ods_ls_entry(args: argparse.Namespace) -> int:
-    """Print children of an ODS path as a JSON list."""
-    import json as _json
-
-    from ovid2 import dataspace
-    from ovid2.dataspace.path import OdsPath, OdsPathError
-
-    try:
-        ods_path = OdsPath.parse(args.path)
-    except OdsPathError as exc:
-        print(_json.dumps({"error": str(exc)}), file=sys.stderr)
-        return 2
-
-    try:
-        if ods_path.is_root:
-            children = dataspace.list_pipelines(dim=args.dim)
-        elif ods_path.depth == 1:
-            children = dataspace.list_batches(ods_path.pipeline or "", dim=args.dim)
-        elif ods_path.depth == 2:
-            children = dataspace.list_tables(
-                ods_path.pipeline or "",
-                ods_path.batch_id or "",
-                dim=args.dim,
-            )
-        else:
-            children = []
-    except (OdsPathError, ValueError) as exc:
-        print(_json.dumps({"error": str(exc)}), file=sys.stderr)
-        return 2
-
-    sys.stdout.write(_json.dumps({"path": ods_path.as_str(), "children": children}) + "\n")
-    return 0
-
-
-def _ods_resolve_entry(args: argparse.Namespace) -> int:
-    """Print the resolution of an ODS path as JSON."""
+    """Print the children of a Data Space path as JSON."""
     import json as _json
 
     from ovid2 import dataspace
@@ -682,19 +698,42 @@ def _ods_resolve_entry(args: argparse.Namespace) -> int:
     from ovid2.dataspace.resolver import OdsResolutionError
 
     try:
-        target = dataspace.resolve(args.path, dim=args.dim, materialise=False)
+        supported, entries, message = dataspace.list_children(args.path)
+    except (OdsPathError, OdsResolutionError, FileNotFoundError, ValueError) as exc:
+        print(_json.dumps({"error": str(exc)}), file=sys.stderr)
+        return 2
+    payload = {
+        "path": args.path,
+        "supported": supported,
+        "message": message,
+        "children": [
+            {"name": e.name, "kind": e.kind, "path": e.path, "type": e.type} for e in entries
+        ],
+    }
+    sys.stdout.write(_json.dumps(payload) + "\n")
+    return 0
+
+
+def _ods_resolve_entry(args: argparse.Namespace) -> int:
+    """Print the resolution of a Data Space path as JSON."""
+    import json as _json
+
+    from ovid2 import dataspace
+    from ovid2.dataspace.path import OdsPathError
+    from ovid2.dataspace.resolver import OdsResolutionError
+
+    try:
+        target = dataspace.resolve(args.path)
     except (OdsPathError, OdsResolutionError) as exc:
         print(_json.dumps({"error": str(exc)}), file=sys.stderr)
         return 2
-
     payload = {
         "path": target.path.as_str(),
-        "pipeline": target.path.pipeline,
-        "batch_id": target.path.batch_id,
-        "table": target.path.table,
-        "dimension": target.dimension,
+        "connection": target.connection,
+        "type": target.type,
+        "location": target.location,
+        "batch_id": target.batch_id,
         "address_name": target.address_name,
-        "tier": target.tier,
         "candidates": list(target.candidates),
     }
     sys.stdout.write(_json.dumps(payload) + "\n")

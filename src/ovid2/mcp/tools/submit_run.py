@@ -32,7 +32,16 @@ class SubmitRunArgs(BaseModel):
         description="CDM name (only honoured when kind=etl).",
     )
     pipeline: str = Field(..., description="Pipeline name (must exist under ovid2_pipelines).")
-    batch_id: str = Field(..., description="Batch identifier (e.g. 20260101).")
+    batch_id: str = Field(
+        "",
+        description=(
+            "Optional label. Ignored when the input has a location: the batch id is "
+            "always derived as the complete Data Space path of the input "
+            "(storage account + folder / DATABASE/SCHEMA). Every address is the "
+            "exact location its data is read from / written to — nothing is "
+            "appended to it."
+        ),
+    )
     input_address: str = Field(..., description="Filename stem of the input address config.")
     output_address: str = Field(..., description="Filename stem of the output address config.")
     tables: list[str] = Field(
@@ -56,14 +65,8 @@ class SubmitRunArgs(BaseModel):
     workers: int = Field(
         25, ge=1, le=200, description="Spark worker count. Ignored for kind=copy or kind=move."
     )
-    sf_database: str | None = Field(
-        None, description="Snowflake DATABASE override. Ignored for kind=copy or kind=move."
-    )
     sf_account: str | None = Field(
         None, description="Snowflake ACCOUNT override. Ignored for kind=copy or kind=move."
-    )
-    sf_schema: str | None = Field(
-        None, description="Snowflake SCHEMA override. Ignored for kind=copy or kind=move."
     )
     stderr_log: bool = Field(
         False,
@@ -89,6 +92,16 @@ class SubmitRunArgs(BaseModel):
             "server-side on every non-move kind."
         ),
     )
+    confirm_overwrite: bool = Field(
+        False,
+        description=(
+            "Set True to let the run overwrite an output location that already "
+            "holds tables. Without it an occupied output answers 409 "
+            "overwrite_required (listing the existing tables). For an agent this "
+            "becomes a run.overwrite approval request (202) a human must approve "
+            "before re-submitting."
+        ),
+    )
 
 
 TOOL_NAME = "submit_run"
@@ -97,7 +110,10 @@ TOOL_DESCRIPTION = (
     "isolated ovid2 subprocess whose subcommand depends on `kind` "
     "(etl→etl, analysis→analysis, dq_checks→dq_checks, copy→tools "
     "copy, move→tools move; the deprecated alias `cdm` maps to `etl`). "
-    "Returns the freshly-created job_id and instance_id."
+    "Every address is the exact location its data is read from / written "
+    "to (pick the DATABASE/SCHEMA or folder as the address); the batch id is "
+    "derived from the input. An output that already holds tables needs "
+    "confirm_overwrite. Returns the freshly-created job_id and instance_id."
 )
 ARGS_MODEL = SubmitRunArgs
 

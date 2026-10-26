@@ -37,8 +37,14 @@ class SubmitMoveArgs(BaseModel):
         description="Pipeline name (must exist under ovid2_pipelines).",
     )
     batch_id: str = Field(
-        ...,
-        description="Batch identifier (e.g. 20260101).",
+        "",
+        description=(
+            "Optional label. Ignored when the input has a location: the batch id is "
+            "always derived as the complete Data Space path of the input "
+            "(storage account + folder / DATABASE/SCHEMA). Every address is the "
+            "exact location its data is read from / written to — nothing is "
+            "appended to it."
+        ),
     )
     input_address: str = Field(
         ...,
@@ -90,6 +96,16 @@ class SubmitMoveArgs(BaseModel):
             "(default) or 'ro'. Container path must not shadow the "
             "standard mount set (/app, /data, /ovid2-user-config, "
             "/ovid_credentials, /usr/include/rsa)."
+        ),
+    )
+    confirm_overwrite: bool = Field(
+        False,
+        description=(
+            "Set True to let the run overwrite an output location that already "
+            "holds tables. Without it an occupied output answers 409 "
+            "overwrite_required (listing the existing tables). For an agent this "
+            "becomes a run.overwrite approval request (202) a human must approve "
+            "before re-submitting."
         ),
     )
 

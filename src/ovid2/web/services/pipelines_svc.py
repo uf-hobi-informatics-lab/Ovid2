@@ -89,6 +89,20 @@ class PipelineError(ValueError):
     """Raised when a pipeline payload is invalid or targets a bad name."""
 
 
+class OverwriteRequired(PipelineError):
+    """A pipeline run would overwrite an occupied output location.
+
+    Wraps :class:`jobs_svc.OverwriteRequired` so ``run_now`` callers see
+    one exception family (a :class:`PipelineError`) yet can still map the
+    overwrite case to ``409 overwrite_required``.
+    """
+
+    def __init__(self, inner: jobs_svc.OverwriteRequired) -> None:
+        self.output_address = inner.output_address
+        self.tables = list(inner.tables)
+        super().__init__(str(inner))
+
+
 # ---------------------------------------------------------------------------
 # Path + name helpers
 # ---------------------------------------------------------------------------
@@ -400,6 +414,7 @@ def _row_to_detail(name: str, path: Path, doc: dict[str, Any]) -> PipelineConfig
         sf_account=doc.get("sf_account") or None,
         sf_schema=doc.get("sf_schema") or None,
         stderr_log=bool(doc.get("stderr_log", False)),
+        allow_overwrite=bool(doc.get("allow_overwrite", False)),
         enabled=bool(state.get("enabled", doc.get("enabled", True))),
         trigger=trigger,
         last_fired_at=(str(state["last_fired_at"]) if state.get("last_fired_at") else None),
@@ -598,6 +613,15 @@ def _validate_kind(payload: PipelineWrite) -> None:
         payload.sf_schema = None
         # ``workers`` stays a hint but is not forwarded to `tools {copy,move}`.
 
+    # ``sf_database`` / ``sf_schema`` are no longer overrides — every address
+    # is the exact location of its data, so the schema belongs on the
+    # address. Reject them on write so a config cannot silently diverge.
+    if (payload.sf_database or "").strip() or (payload.sf_schema or "").strip():
+        raise PipelineError(
+            "sf_database / sf_schema are no longer supported: the address is the "
+            "exact location — point the input / output address at DATABASE/SCHEMA."
+        )
+
     # Health-shaped kinds carry a report-cycle package selection.
     if spec.health_selection:
         payload.packages = [p.strip() for p in (payload.packages or []) if p.strip()]
@@ -691,6 +715,7 @@ def write_pipeline(
         "sf_account": payload.sf_account,
         "sf_schema": payload.sf_schema,
         "stderr_log": bool(payload.stderr_log),
+        "allow_overwrite": bool(payload.allow_overwrite),
         "enabled": bool(payload.enabled),
         "trigger": payload.trigger.model_dump(exclude_none=True),
         "created_at": (existing_raw or {}).get("created_at", now_iso),
@@ -783,6 +808,7 @@ def set_enabled(name: str, enabled: bool, *, actor: str = "web") -> PipelineConf
         sf_account=detail.sf_account,
         sf_schema=detail.sf_schema,
         stderr_log=detail.stderr_log,
+        allow_overwrite=detail.allow_overwrite,
         enabled=enabled,
         trigger=detail.trigger,
     )
@@ -809,12 +835,17 @@ def _to_submit_request(
     input_address: str | None = None,
     output_address: str | None = None,
     tables: list[str] | None = None,
+    confirm_overwrite: bool = False,
 ) -> JobSubmitRequest:
     """Convert a pipeline detail into a :class:`JobSubmitRequest`.
 
-    When ``batch_id`` is provided (the watch path passes the detected
-    folder name) it is used verbatim; otherwise a timestamp batch id is
-    synthesised (the manual / cron / interval paths).
+    The batch id is *derived* by :func:`jobs_svc.submit` from the input
+    location (its complete Data Space path). ``batch_id`` here is only a
+    fallback label for legacy (connectionless) inputs; a timestamp is
+    synthesised when neither is available.
+
+    ``confirm_overwrite`` (or the config's standing ``allow_overwrite``)
+    lets the run write into an occupied output location.
 
     ``input_address`` / ``output_address`` override the config's stored
     address for that side — used when the operator binds an *open*
@@ -851,10 +882,12 @@ def _to_submit_request(
         packages=list(detail.packages),
         engine=detail.engine,
         workers=detail.workers,
-        sf_database=detail.sf_database,
+        # ``sf_database`` / ``sf_schema`` are not forwarded: the address is
+        # the exact location (a stored legacy override is ignored with a
+        # warning at write time — see ``_validate_kind``).
         sf_account=detail.sf_account,
-        sf_schema=detail.sf_schema,
         stderr_log=detail.stderr_log,
+        confirm_overwrite=bool(confirm_overwrite or detail.allow_overwrite),
     )
 
 
@@ -867,6 +900,7 @@ def run_now(
     output_address: str | None = None,
     tables: list[str] | None = None,
     draft: bool = False,
+    confirm_overwrite: bool = False,
 ) -> JobSubmitResponse:
     """Submit the pipeline as a job right now, regardless of trigger.
 
@@ -916,6 +950,7 @@ def run_now(
         input_address=resolved_input,
         output_address=resolved_output,
         tables=tables,
+        confirm_overwrite=confirm_overwrite,
     )
     # ``jobs_svc.submit`` runs the same submit-time validation as the
     # /submit form (e.g. copy/move jobs reject ``['all']`` tables). It
@@ -929,6 +964,8 @@ def run_now(
         if draft:
             return jobs_svc.create_draft(request, actor=actor)
         response = jobs_svc.submit(request, actor=actor)
+    except jobs_svc.OverwriteRequired as exc:
+        raise OverwriteRequired(exc) from exc
     except jobs_svc.SubmitError as exc:
         raise PipelineError(str(exc)) from exc
     record_dispatch(name, job_id=response.job_id)

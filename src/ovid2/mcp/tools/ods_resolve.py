@@ -1,4 +1,4 @@
-"""``ods_resolve`` — turn an ODS path + dimension into an address name."""
+"""``ods_resolve`` — map a Data Space path to its storage account + exact location."""
 
 from __future__ import annotations
 
@@ -14,31 +14,21 @@ class OdsResolveArgs(BaseModel):
 
     path: str = Field(
         ...,
-        description="ODS path (e.g. '/demo/20260316/DEMOGRAPHIC').",
-    )
-    dim: str | None = Field(
-        None,
-        description=(
-            "Optional dimension name (disc, snowflake, s3, azure_blob, "
-            "gcs, databricks, postgres, mssql). Falls back to "
-            "settings.ods.default_dimension when omitted."
-        ),
+        description="Data Space path (e.g. '/inbox/landing/2026_03' or '/sf_prod/CHAR_DB/SITE_X').",
     )
 
 
 TOOL_NAME = "ods_resolve"
 TOOL_DESCRIPTION = (
-    "Resolve an Ovid Data Space path + dimension to the address "
-    "config that would serve it. No I/O is performed. Response shape: "
-    "OdsResolveResult { path, pipeline, batch_id, table, dimension, "
-    "address_name, tier, candidates }."
+    "Resolve an Ovid Data Space path to its storage account, the exact location "
+    "under it, the batch id a run reading it gets, and the saved address that "
+    "points exactly there (if any). No I/O is performed. Response shape: "
+    "OdsResolveResult { path, connection, type, location, batch_id, "
+    "address_name, candidates }."
 )
 ARGS_MODEL = OdsResolveArgs
 
 
 async def run(client: WebApiClient, args: OdsResolveArgs) -> Any:
     """Call ``GET /api/v1/dataspace/resolve``."""
-    kwargs: dict[str, Any] = {"path": args.path}
-    if args.dim:
-        kwargs["dim"] = args.dim
-    return await client.get("/api/v1/dataspace/resolve", **kwargs)
+    return await client.get("/api/v1/dataspace/resolve", path=args.path)

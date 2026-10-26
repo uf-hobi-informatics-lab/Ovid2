@@ -138,23 +138,22 @@ class TestPathResolution:
         a = S3Address({"bucket": "b", "prefix": "out"})
         assert (
             a._resolve_read_path("acme", "20260610", "HASH_TOKEN.csv")
-            == "s3a://b/out/acme/20260610/HASH_TOKEN.csv"
+            == "s3a://b/out/HASH_TOKEN.csv"
         )
 
     def test_read_path_without_prefix(self) -> None:
         a = S3Address({"bucket": "b"})
         assert (
-            a._resolve_read_path("acme", "20260610", "HASH_TOKEN.csv")
-            == "s3a://b/acme/20260610/HASH_TOKEN.csv"
+            a._resolve_read_path("acme", "20260610", "HASH_TOKEN.csv") == "s3a://b/HASH_TOKEN.csv"
         )
 
     def test_write_dir_without_prefix(self) -> None:
         a = S3Address({"bucket": "b"})
-        assert a._resolve_write_dir("acme", "20260610") == "s3a://b/acme/20260610"
+        assert a._resolve_write_dir("acme", "20260610") == "s3a://b"
 
     def test_write_dir_with_multi_segment_prefix(self) -> None:
         a = S3Address({"bucket": "b", "prefix": "region1/out"})
-        assert a._resolve_write_dir("acme", "20260610") == "s3a://b/region1/out/acme/20260610"
+        assert a._resolve_write_dir("acme", "20260610") == "s3a://b/region1/out"
 
 
 # ---------------------------------------------------------------------------
@@ -319,7 +318,7 @@ class TestRead:
         a.read(spark, "acme", "20260610", "HASH_TOKEN.csv")  # type: ignore[arg-type]
         call_names = [c[0] for c in spark.read_calls]
         assert call_names[-1] == "csv"
-        assert spark.read_calls[-1][1] == ("s3a://b/acme/20260610/HASH_TOKEN.csv",)
+        assert spark.read_calls[-1][1] == ("s3a://b/HASH_TOKEN.csv",)
         # And the auth conf was pushed.
         assert "fs.s3a.aws.credentials.provider" in spark.conf.entries
 
@@ -328,14 +327,14 @@ class TestRead:
         spark = _RecordingReadSpark()
         a.read(spark, "acme", "20260610", "HASH_TOKEN")  # type: ignore[arg-type]
         parquet_calls = [c for c in spark.read_calls if c[0] == "parquet"]
-        assert parquet_calls == [("parquet", ("s3a://b/acme/20260610/HASH_TOKEN",))]
+        assert parquet_calls == [("parquet", ("s3a://b/HASH_TOKEN",))]
 
     def test_read_json(self) -> None:
         a = S3Address({"bucket": "b", "format": "json"})
         spark = _RecordingReadSpark()
         a.read(spark, "acme", "20260610", "HASH_TOKEN")  # type: ignore[arg-type]
         json_calls = [c for c in spark.read_calls if c[0] == "json"]
-        assert json_calls == [("json", ("s3a://b/acme/20260610/HASH_TOKEN",))]
+        assert json_calls == [("json", ("s3a://b/HASH_TOKEN",))]
 
     def test_read_unknown_format(self) -> None:
         a = S3Address({"bucket": "b", "format": "avro"})
@@ -374,7 +373,7 @@ class TestWrite:
         modes = [c for c in calls if c[0] == "mode"]
         saves = [c for c in calls if c[0] == "save"]
         assert modes == [("mode", ("overwrite",))]
-        assert saves == [("save", ("s3a://b/acme/20260610/HASH_TOKEN.csv",))]
+        assert saves == [("save", ("s3a://b/HASH_TOKEN.csv",))]
 
     def test_write_parquet(self) -> None:
         a = S3Address({"bucket": "b", "format": "parquet"})
@@ -384,7 +383,7 @@ class TestWrite:
         a.write(df, spark, "acme", "20260610", "HASH_TOKEN")  # type: ignore[arg-type]
         # parquet path: df.write.mode('overwrite').parquet(target)
         assert ("mode", ("overwrite",)) in calls
-        assert ("parquet", ("s3a://b/acme/20260610/HASH_TOKEN.parquet",)) in calls
+        assert ("parquet", ("s3a://b/HASH_TOKEN.parquet",)) in calls
 
     def test_write_json(self) -> None:
         a = S3Address({"bucket": "b", "format": "json"})
@@ -392,7 +391,7 @@ class TestWrite:
         calls: list[tuple[str, tuple[Any, ...]]] = []
         df = _FakeDF(calls)
         a.write(df, spark, "acme", "20260610", "HASH_TOKEN")  # type: ignore[arg-type]
-        assert ("json", ("s3a://b/acme/20260610/HASH_TOKEN.json",)) in calls
+        assert ("json", ("s3a://b/HASH_TOKEN.json",)) in calls
 
     def test_write_unknown_format(self) -> None:
         a = S3Address({"bucket": "b", "format": "avro"})

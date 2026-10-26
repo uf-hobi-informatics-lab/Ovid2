@@ -119,13 +119,16 @@ def test_list_source_tables_disc_largest_first(
     xdg: Path, configs: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     root = tmp_path / "feed"
-    batch = root / "demo" / "b1"
+    batch = root / "landing" / "b1"
     batch.mkdir(parents=True)
     (batch / "demographic.csv").write_text("x" * 10)
     (batch / "lab_result_cm.csv").write_text("x" * 1000)
     (batch / "harvest.csv").write_text("x")
     _write_disc_conn(xdg, "feed", root)
-    (configs / "feed_addr.json").write_text(json.dumps({"connection": "feed", "location": {}}))
+    # The address is the exact location of the data.
+    (configs / "feed_addr.json").write_text(
+        json.dumps({"connection": "feed", "location": {"path": "landing/b1"}})
+    )
 
     rc = tools_cli._list_source_tables_entry(_list_src("feed_addr"))
     payload = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
@@ -149,7 +152,7 @@ def test_list_source_tables_missing_batch_is_error(
     payload = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert rc == 1
     assert payload["code"] == "error" and payload["supported"] is True
-    assert "no batch folder" in payload["message"]
+    assert "does not exist" in payload["message"]
 
 
 @pytest.mark.unit

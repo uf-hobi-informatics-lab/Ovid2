@@ -274,11 +274,9 @@ class TestHelpers:
     def test_gcs_dir_uri_composition(self) -> None:
         from ovid2.drivers.snowflake.staging.gcs import _gcs_dir_uri
 
-        assert _gcs_dir_uri("bucket", "prefix", "demo", "20260101") == (
-            "gcs://bucket/prefix/demo/20260101/"
-        )
-        assert _gcs_dir_uri("bucket", "", "demo", "20260101") == ("gcs://bucket/demo/20260101/")
-        assert _gcs_dir_uri("bucket", "", "", "") == "gcs://bucket/"
+        assert _gcs_dir_uri("bucket", "prefix") == ("gcs://bucket/prefix/")
+        assert _gcs_dir_uri("bucket", "") == ("gcs://bucket/")
+        assert _gcs_dir_uri("bucket", "") == "gcs://bucket/"
 
     def test_gcs_dir_uri_uses_gcs_scheme(self) -> None:
         """Snowflake accepts ``gcs://`` in ``CREATE STAGE URL='…'``.
@@ -288,17 +286,15 @@ class TestHelpers:
         """
         from ovid2.drivers.snowflake.staging.gcs import _gcs_dir_uri
 
-        uri = _gcs_dir_uri("b", "p", "demo", "20260101")
+        uri = _gcs_dir_uri("b", "p")
         assert uri.startswith("gcs://")
         assert not uri.startswith("gs://")
 
     def test_gcs_key_composition(self) -> None:
         from ovid2.drivers.snowflake.staging.gcs import _gcs_key
 
-        assert _gcs_key("prefix", "demo", "20260101", "file.csv") == (
-            "prefix/demo/20260101/file.csv"
-        )
-        assert _gcs_key("", "demo", "20260101", "file.csv") == ("demo/20260101/file.csv")
+        assert _gcs_key("prefix", "file.csv") == ("prefix/file.csv")
+        assert _gcs_key("", "file.csv") == ("file.csv")
 
     def test_escape_sql_doubles_single_quotes(self) -> None:
         from ovid2.drivers.snowflake.staging.gcs import _escape_sql
@@ -606,7 +602,7 @@ class TestMaterialise:
         assert len(copy_into) == 1
 
         # Stage URL points at the directory (with gcs:// scheme).
-        assert "gcs://mybucket/raw/demo/20260101/" in create_stage[0]
+        assert "gcs://mybucket/raw/" in create_stage[0]
         assert "STORAGE_INTEGRATION = MY_GCS_INT" in create_stage[0]
         # Column names appear in the transient-table DDL.
         assert '"COL_A" VARCHAR' in create_table[0]
@@ -754,7 +750,7 @@ class TestPersist:
             q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TEMPORARY STAGE")
         ]
         assert len(create_stage) == 1
-        assert "gcs://outbucket/cooked/demo/20260101/" in create_stage[0]
+        assert "gcs://outbucket/cooked/" in create_stage[0]
         assert "STORAGE_INTEGRATION = MY_GCS_INT" in create_stage[0]
 
         # No GET step — the write is server-side via

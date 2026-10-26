@@ -60,7 +60,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "--output_address", required=True, help="Name of the output address config."
     )
     parser.add_argument("--pipeline", required=True, help="Pipeline name (e.g. 'demo').")
-    parser.add_argument("--batch_id", required=True, help="Batch identifier (e.g. '20260101').")
+    parser.add_argument(
+        "--batch_id",
+        required=True,
+        help="Batch id — the complete Data Space path of the input location (<connection>/<path>); a run label, never appended to an address.",
+    )
     parser.add_argument(
         "--tables",
         nargs="+",
@@ -75,15 +79,32 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     parser.add_argument("--engine", default="pyspark", help="Compute engine (default: pyspark).")
     parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help=(
+            "Allow writing into an output location that already holds tables "
+            "(the address is the exact write location; without this flag the "
+            "run refuses to overwrite existing data)."
+        ),
+    )
+    parser.add_argument(
         "--workers",
         type=int,
         default=25,
         help="Number of Spark workers when starting an isolated cluster.",
     )
     # Snowflake overrides (highest tier of the four-tier resolution).
-    parser.add_argument("--sf_database", default=None, help="Snowflake DATABASE override.")
+    parser.add_argument(
+        "--sf_database",
+        default=None,
+        help="Deprecated: replaces the Snowflake address DATABASE (prefer an address naming DATABASE/SCHEMA).",
+    )
     parser.add_argument("--sf_account", default=None, help="Snowflake ACCOUNT override.")
-    parser.add_argument("--sf_schema", default=None, help="Snowflake SCHEMA override.")
+    parser.add_argument(
+        "--sf_schema",
+        default=None,
+        help="Deprecated: replaces the Snowflake address SCHEMA (prefer an address naming DATABASE/SCHEMA).",
+    )
     parser.add_argument(
         "--cdm",
         default=None,
@@ -330,6 +351,25 @@ def _run_container_mode(args: argparse.Namespace) -> int:
         pipeline=pipeline,
         cdm_name=cdm_name,
     )
+    # Overwrite gate: the output address is the exact write location, so a
+    # non-empty output needs an explicit ``--overwrite``. Fail before any
+    # table work starts.
+    from ovid2.drivers.overwrite import OutputNotEmptyError, assert_output_writable
+
+    try:
+        assert_output_writable(
+            args.output_address,
+            overwrite=bool(getattr(args, "overwrite", False)),
+            pipeline=pipeline,
+        )
+    except OutputNotEmptyError as exc:
+        print(f"[ovid2] ERROR {exc}", file=sys.stderr)
+        _signal.signal(_signal.SIGTERM, _prev_sigterm)
+        _signal.signal(_signal.SIGINT, _prev_sigint)
+        engine.stop_session()
+        bus.emit(instance_finished(instance_id=instance_id, success=False))
+        jsonl_bus.close()
+        return 3
 
     register_shared_tables(
         spark,

@@ -1,8 +1,8 @@
 """Shared helpers for turning a storage listing into copy/move table specs.
 
 Folder-shaped sources (disc, s3, azure_blob) hold one file (or one
-Spark-written ``<table>.csv/`` directory) per table under
-``{root}/{pipeline}/{batch_id}/``. These helpers convert a
+Spark-written ``<table>.csv/`` directory) per table directly under the
+address location (the address is the exact location of the data). These helpers convert a
 :class:`~ovid2.drivers.base.StorageEntry` listing of that folder into
 the ``LOGICAL=SOURCE`` specs ``ovid2 tools copy --tables`` accepts
 (:mod:`ovid2.tools.table_specs`), and look up per-table sizes for the
@@ -118,8 +118,8 @@ def sizes_for(
 class PrefixTableListingMixin:
     """``all`` expansion + size hints for prefix-keyed object stores.
 
-    For drivers whose read path is ``{location.path}/{pipeline}/{batch}/{file}``
-    with no layout fallback (s3, azure_blob). The concrete driver
+    For drivers whose read path is ``{location.path}/{file}`` — the
+    address is the exact location of the data (s3, azure_blob). The concrete driver
     supplies :meth:`_list_tables` (a recursive, size-aggregating listing
     under a sub-prefix); this mixin turns it into the
     :meth:`Driver.expand_all_tables` / :meth:`Driver.table_sizes`
@@ -131,9 +131,14 @@ class PrefixTableListingMixin:
         raise NotImplementedError
 
     @staticmethod
-    def _batch_prefix(pipeline: str, batch_id: str) -> str:
-        """Return ``pipeline/batch_id`` with empty segments dropped (matches ``read``)."""
-        return "/".join(p for p in (pipeline, batch_id) if p)
+    def _batch_prefix(pipeline: str | None = None, batch_id: str | None = None) -> str:
+        """Return the sub-prefix under ``location.path`` — always empty.
+
+        The address is the exact location, so neither ``pipeline`` nor
+        ``batch_id`` contributes a path segment (matches ``read``).
+        """
+        del pipeline, batch_id
+        return ""
 
     @classmethod
     def supports_expand_all(cls) -> bool:
@@ -147,18 +152,16 @@ class PrefixTableListingMixin:
         pipeline: str | None = None,
         batch_id: str | None = None,
     ) -> list[str] | None:
-        """Expand ``all`` to every table object under the batch prefix.
+        """Expand ``all`` to every table object directly under the address prefix.
 
         Raises:
             FileNotFoundError: When the prefix holds no objects.
         """
         del location  # the driver's own location is what ``read`` uses
-        if not pipeline or not batch_id:
-            return None
         sub = self._batch_prefix(pipeline, batch_id)
         entries = self._list_tables(sub)
         if not entries:
-            raise FileNotFoundError(f"no objects under prefix {sub!r}")
+            raise FileNotFoundError("no objects under the address location")
         return entries_to_table_specs(entries)
 
     def table_sizes(
@@ -168,7 +171,7 @@ class PrefixTableListingMixin:
         pipeline: str,
         batch_id: str,
     ) -> dict[str, int]:
-        """Return summed object sizes for ``file_names`` under the batch prefix."""
+        """Return summed object sizes for ``file_names`` under the address prefix."""
         return sizes_for(self._list_tables(self._batch_prefix(pipeline, batch_id)), file_names)
 
 

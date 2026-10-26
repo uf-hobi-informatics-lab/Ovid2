@@ -13,7 +13,7 @@ The one-shot copy/move commands accept a list of table specs of the form
   :meth:`Driver.read`. On disc it may be a file name or a glob
   (``*datavant_person_tokens*``); on Snowflake it is a ``dbtable``
   identifier; on S3 / Azure Blob it is a key or key-glob under
-  ``{prefix}/{pipeline}/{batch_id}/``. When omitted, ``SOURCE`` defaults
+  the address prefix (the exact location). When omitted, ``SOURCE`` defaults
   to ``LOGICAL`` — the common case where source basename equals logical
   name.
 

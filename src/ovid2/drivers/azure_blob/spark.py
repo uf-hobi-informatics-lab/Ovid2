@@ -144,33 +144,33 @@ class AzureBlobIO:
         """Assemble the fully-qualified read path.
 
         Args:
-            pipeline: Pipeline name (case-sensitive — the driver does
-                not offer the glob-based case-insensitive fallback the
-                :class:`DiscAddress` uses).
-            batch_id: Batch identifier.
+            pipeline: Ignored — the address is the exact location.
+            batch_id: Ignored — the address is the exact location.
             file_name: File name; may itself contain wildcards accepted
                 by the Hadoop path resolver (``*``, ``?``, ``[…]``).
 
         Returns:
             An ``abfss://…`` URI suitable for ``spark.read`` methods.
         """
-        parts = [p for p in (self.prefix, pipeline, batch_id, file_name) if p]
+        del pipeline, batch_id  # the address is the exact location
+        parts = [p for p in (self.prefix, file_name) if p]
         return self._base_uri() + "/".join(parts)
 
     def _resolve_write_dir(self, pipeline: str, batch_id: str) -> str:
-        """Return the write directory URI (no trailing file name)."""
-        parts = [p for p in (self.prefix, pipeline, batch_id) if p]
-        return self._base_uri() + "/".join(parts)
+        """Return the write directory URI — the address location itself."""
+        del pipeline, batch_id  # the address is the exact location
+        # No trailing slash: callers append ``/{table}.{fmt}``.
+        return (self._base_uri() + self.prefix).rstrip("/")
 
     def _write_blob_prefix(self, pipeline: str, batch_id: str) -> str:
-        """Return the container-relative prefix ``{prefix}/{pipeline}/{batch}``.
+        """Return the container-relative prefix ``{prefix}`` (the exact address location).
 
         Used by the ``azure-storage-blob``-based finalize step. Never
         carries a leading slash so it composes with
         ``<container>/<blob>``.
         """
-        parts = [p for p in (self.prefix, pipeline, batch_id) if p]
-        return "/".join(parts)
+        del pipeline, batch_id  # the address is the exact location
+        return self.prefix.strip("/")
 
     # -------------------------------------------------- Spark session config
 
@@ -283,7 +283,7 @@ class AzureBlobIO:
         table_name: str,
         delimiter: str | None = None,
     ) -> None:
-        """Write a DataFrame under ``{prefix}/{pipeline}/{batch_id}/``.
+        """Write a DataFrame directly under the address location ``{prefix}/``.
 
         Behaviour depends on ``single_file`` (address location field,
         default ``False``):

@@ -70,6 +70,30 @@ class SubmitError(ValueError):
     """Raised when a submit request fails validation."""
 
 
+class OverwriteRequired(SubmitError):
+    """Raised when the output location already holds tables and no overwrite was confirmed.
+
+    The output address is the exact write location (see
+    ``adr-address-is-exact-location.md``), so writing into an occupied
+    output replaces existing data. HTTP surfaces map this to
+    ``409 overwrite_required`` and re-submit with ``confirm_overwrite``.
+
+    Attributes:
+        output_address: The occupied output address.
+        tables: The tables already present there.
+    """
+
+    def __init__(self, output_address: str, tables: list[str]) -> None:
+        self.output_address = output_address
+        self.tables = list(tables)
+        preview = ", ".join(self.tables[:10]) + (" …" if len(self.tables) > 10 else "")
+        super().__init__(
+            f"Output '{output_address}' already contains {len(self.tables)} table(s) "
+            f"({preview}). This run would overwrite them — confirm the overwrite "
+            "to proceed."
+        )
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -167,23 +191,54 @@ def create_draft(request: JobSubmitRequest, *, actor: str = "web") -> JobSubmitR
     return _insert_job(request, actor=actor, status=STATUS_DRAFT)
 
 
-def launch_draft(job_id: str, *, actor: str = "web") -> JobDetail:
+def _row_overwrite_gate(row: dict[str, object], *, confirm_overwrite: bool) -> str:
+    """Run the overwrite gate for a stored job row; return its (updated) extra_args JSON.
+
+    Raises:
+        OverwriteRequired: When the output is occupied and the overwrite
+            was neither confirmed now nor at submit time.
+    """
+    extra = json.loads(str(row.get("extra_args_json") or "{}"))
+    confirmed = bool(confirm_overwrite or extra.get("overwrite"))
+    probe_req = JobSubmitRequest(
+        kind=str(extra.get("kind") or "etl"),
+        pipeline=str(row["pipeline"]),
+        batch_id=str(row["batch_id"]),
+        input_address=str(row["input_address"]),
+        output_address=str(row["output_address"]),
+        tables=json.loads(str(row.get("tables_json") or "[]")) or ["all"],
+    )
+    collisions = check_overwrite(str(row["output_address"]), probe_req, confirmed=confirmed)
+    if collisions or confirm_overwrite:
+        extra["overwrite"] = True
+    return json.dumps(extra)
+
+
+def launch_draft(job_id: str, *, actor: str = "web", confirm_overwrite: bool = False) -> JobDetail:
     """Promote a ``draft`` job to ``queued`` so the worker picks it up.
 
     The transition is a single guarded ``UPDATE … WHERE status='draft'``
-    so a double-click cannot launch the same draft twice.
+    so a double-click cannot launch the same draft twice. The overwrite
+    gate runs here (a draft was not checked when stored).
 
     Raises:
         SubmitError: When the job does not exist or is not a draft.
+        OverwriteRequired: When the output is occupied and the
+            overwrite was not confirmed.
     """
     web_db.ensure_schema()
     with web_db.connect() as conn:
         row = _fetchrow(conn, job_id)
-        if row is None:
-            raise SubmitError(f"Job '{job_id}' not found.")
+    if row is None:
+        raise SubmitError(f"Job '{job_id}' not found.")
+    if row["status"] != STATUS_DRAFT:
+        raise SubmitError(f"Job '{job_id}' is {row['status']!s}, not a draft; nothing to launch.")
+    extra_json = _row_overwrite_gate(row, confirm_overwrite=confirm_overwrite)
+    with web_db.connect() as conn:
         cur = conn.execute(
-            "UPDATE web_jobs SET status = ?, submitted_at = ? WHERE job_id = ? AND status = ?",
-            (STATUS_QUEUED, _now_iso(), job_id, STATUS_DRAFT),
+            "UPDATE web_jobs SET status = ?, submitted_at = ?, extra_args_json = ? "
+            "WHERE job_id = ? AND status = ?",
+            (STATUS_QUEUED, _now_iso(), extra_json, job_id, STATUS_DRAFT),
         )
         if cur.rowcount != 1:
             raise SubmitError(
@@ -232,9 +287,15 @@ def discard_draft(job_id: str, *, actor: str = "web") -> None:
 
 def _insert_job(request: JobSubmitRequest, *, actor: str, status: str) -> JobSubmitResponse:
     """Shared validate-and-insert path for :func:`submit` / :func:`create_draft`."""
+    _fold_legacy_sf_location(request)
     _resolve_connection_endpoints(request, actor=actor)
+    _derive_batch_id(request)
     _expand_all_tables(request)
     _validate_submit(request)
+    # A draft is not executed until a human launches it; the overwrite
+    # check runs (again) at launch time against the then-current output.
+    if status != STATUS_DRAFT:
+        check_overwrite(request.output_address, request, confirmed=request.confirm_overwrite)
     web_db.ensure_schema()
     job_id = _new_job_id()
     instance_id = _new_instance_id()
@@ -246,11 +307,13 @@ def _insert_job(request: JobSubmitRequest, *, actor: str, status: str) -> JobSub
         "cdm": request.cdm,
         "engine": request.engine,
         "workers": request.workers,
-        "sf_database": request.sf_database,
         "sf_account": request.sf_account,
-        "sf_schema": request.sf_schema,
         "stderr_log": bool(request.stderr_log),
     }
+    # Operator-confirmed overwrite of an occupied output location; the
+    # worker forwards it as ``--overwrite`` so the executor gate allows it.
+    if request.confirm_overwrite:
+        extra_args["overwrite"] = True
     # ``extra_mounts`` is accepted only on kinds whose spec allows it
     # (copy / move). Persist verbatim so the worker's argv builder can
     # forward each entry through ``--extra-mount``. The CLI re-validates
@@ -321,6 +384,101 @@ def _insert_job(request: JobSubmitRequest, *, actor: str, status: str) -> JobSub
         instance_id,
     )
     return JobSubmitResponse(job_id=job_id, instance_id=instance_id, status=status)
+
+
+def _fold_legacy_sf_location(request: JobSubmitRequest) -> None:
+    """Fold deprecated ``sf_database`` / ``sf_schema`` into the run-time location.
+
+    The address is the exact location; a schema is no longer an
+    override layered on top of it. A legacy caller that still sends
+    ``sf_database`` / ``sf_schema`` together with an ``input_connection``
+    (or ``output_connection``) has them folded into that side's
+    ``DATABASE/SCHEMA`` location. Otherwise they are rejected so the
+    caller learns to put the schema on the address.
+
+    Raises:
+        SubmitError: When the overrides cannot be folded into a location.
+    """
+    db = (request.sf_database or "").strip()
+    schema = (request.sf_schema or "").strip()
+    request.sf_database = None
+    request.sf_schema = None
+    if not db and not schema:
+        return
+    folded = False
+    for side in ("input", "output"):
+        if getattr(request, f"{side}_address").strip():
+            continue
+        if not getattr(request, f"{side}_connection").strip():
+            continue
+        parts = [p for p in getattr(request, f"{side}_location").strip("/").split("/") if p]
+        cur_db = parts[0] if parts else ""
+        cur_schema = parts[1] if len(parts) > 1 else ""
+        new = "/".join(p for p in ((db or cur_db), (schema or cur_schema)) if p)
+        setattr(request, f"{side}_location", new)
+        folded = True
+    if not folded:
+        raise SubmitError(
+            "sf_database / sf_schema are no longer overrides: every address is the "
+            "exact location of its data. Pick the DATABASE/SCHEMA as the address "
+            "(input_connection + input_location, or a saved address)."
+        )
+
+
+def _derive_batch_id(request: JobSubmitRequest) -> None:
+    """Set ``request.batch_id`` to the complete Data Space path of the input.
+
+    The batch id is ``<connection>/<location path>`` of the input
+    address (``inbox/landing/2026_03``, ``sf_prod/CHAR_DB/SITE_X``). It
+    is a label only — no driver appends it to an address. Legacy
+    (connectionless) inputs keep the caller-supplied label.
+    """
+    from ovid2.web.services import output_probe_svc
+
+    derived = output_probe_svc.batch_id_for_address(request.input_address)
+    if derived:
+        request.batch_id = derived
+
+
+def check_overwrite(
+    output_address: str,
+    request: JobSubmitRequest | None = None,
+    *,
+    confirmed: bool,
+) -> list[str]:
+    """Raise :class:`OverwriteRequired` when the output is occupied and not confirmed.
+
+    ``copy`` / ``move`` only count tables they would write; every other
+    kind counts any table at the output (an ETL run replaces the whole
+    CDM table set). ``health`` / ``dq_checks`` only write ``dcq_results``.
+    Occupancy that cannot be determined never blocks — the executor's own
+    ``--overwrite`` gate is the backstop.
+
+    Returns:
+        The colliding tables (``[]`` when none / unknown).
+    """
+    from ovid2.web.services import output_probe_svc
+
+    probe = output_probe_svc.existing_output_tables(output_address)
+    if not probe.occupied:
+        return []
+    tables = list(probe.tables)
+    kind = normalize_kind(request.kind) if request is not None else "etl"
+    spec = get_kind(kind)
+    if request is not None and spec is not None and spec.health_selection:
+        tables = [t for t in tables if t.lower() == "dcq_results"]
+    elif (
+        request is not None
+        and spec is not None
+        and spec.tables_mode == "explicit"
+        and request.tables
+        and request.tables != ["all"]
+    ):
+        wanted = {str(t).split("=", 1)[0].lower() for t in request.tables}
+        tables = [t for t in tables if t.lower() in wanted]
+    if tables and not confirmed:
+        raise OverwriteRequired(output_address, tables)
+    return tables
 
 
 def _resolve_connection_endpoints(request: JobSubmitRequest, *, actor: str) -> None:
@@ -432,7 +590,10 @@ def _validate_submit(request: JobSubmitRequest) -> None:
     if not request.pipeline.strip():
         raise SubmitError("pipeline is required.")
     if not request.batch_id.strip():
-        raise SubmitError("batch_id is required.")
+        raise SubmitError(
+            "batch_id could not be derived: choose an input folder / schema "
+            "(the batch id is its complete Data Space path)."
+        )
     kind = normalize_kind(request.kind)
     # Package-free kinds (health / dq_checks / copy / move) run without an
     # ``ovid2_pipelines.<name>`` package — ``pipeline`` is only a
@@ -549,12 +710,16 @@ def _validate_submit(request: JobSubmitRequest) -> None:
         raise SubmitError(str(exc)) from None
 
 
-def rerun(job_id: str, *, actor: str = "web") -> JobSubmitResponse:
-    """Enqueue a byte-identical retry of an existing job.
+def rerun(job_id: str, *, actor: str = "web", confirm_overwrite: bool = False) -> JobSubmitResponse:
+    """Enqueue a retry of an existing job (same input, output, tables).
+
+    A rerun writes to the same exact output location as the original, so
+    the overwrite gate runs again: the previous run's tables are there.
 
     Args:
         job_id: ID of the source job.
         actor: Origin label recorded on the new row and audit entry.
+        confirm_overwrite: Confirm overwriting the occupied output.
 
     Returns:
         A :class:`JobSubmitResponse` for the *new* job.
@@ -562,6 +727,8 @@ def rerun(job_id: str, *, actor: str = "web") -> JobSubmitResponse:
     Raises:
         SubmitError: When the source job does not exist or is currently
             queued/running (nothing to rerun yet).
+        OverwriteRequired: When the output is occupied and the
+            overwrite was not confirmed.
     """
     web_db.ensure_schema()
     with web_db.connect() as conn:
@@ -573,6 +740,7 @@ def rerun(job_id: str, *, actor: str = "web") -> JobSubmitResponse:
             f"Job '{job_id}' is {row['status']!s}; wait for it to finish or cancel it first."
         )
 
+    extra_json = _row_overwrite_gate(row, confirm_overwrite=confirm_overwrite)
     new_job_id = _new_job_id()
     instance_id = _new_instance_id()
     submitted_at = _now_iso()
@@ -595,7 +763,7 @@ def rerun(job_id: str, *, actor: str = "web") -> JobSubmitResponse:
                 row["output_address"],
                 row["tables_json"],
                 row["transformations_json"],
-                row["extra_args_json"],
+                extra_json,
                 STATUS_QUEUED,
                 instance_id,
             ),

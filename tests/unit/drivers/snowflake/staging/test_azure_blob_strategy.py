@@ -281,18 +281,14 @@ class TestHelpers:
                 "core.windows.net",
                 "container",
                 "prefix",
-                "demo",
-                "20260101",
             )
-            == "azure://acct.blob.core.windows.net/container/prefix/demo/20260101/"
+            == "azure://acct.blob.core.windows.net/container/prefix/"
         )
         assert (
             _azure_dir_url(
                 "acct",
                 "core.windows.net",
                 "container",
-                "",
-                "",
                 "",
             )
             == "azure://acct.blob.core.windows.net/container/"
@@ -301,10 +297,8 @@ class TestHelpers:
     def test_azure_blob_name_composition(self) -> None:
         from ovid2.drivers.snowflake.staging.azure_blob import _azure_blob_name
 
-        assert _azure_blob_name("prefix", "demo", "20260101", "f.csv") == (
-            "prefix/demo/20260101/f.csv"
-        )
-        assert _azure_blob_name("", "demo", "20260101", "f.csv") == ("demo/20260101/f.csv")
+        assert _azure_blob_name("prefix", "f.csv") == ("prefix/f.csv")
+        assert _azure_blob_name("", "f.csv") == ("f.csv")
 
     def test_stage_name_uppercased_and_sanitised(self) -> None:
         from ovid2.drivers.snowflake.staging.azure_blob import _stage_name
@@ -458,7 +452,7 @@ class TestMaterialise:
         assert len(copy_into) == 1
 
         # Stage URL uses the azure:// scheme with .blob. subdomain.
-        assert "azure://acct.blob.core.windows.net/c/raw/demo/20260101/" in create_stage[0]
+        assert "azure://acct.blob.core.windows.net/c/raw/" in create_stage[0]
         # SAS token was inlined.
         assert "AZURE_SAS_TOKEN = 'sig=fake'" in create_stage[0]
         # Columns from the header.
@@ -559,7 +553,7 @@ class TestPersist:
             q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TEMPORARY STAGE")
         ]
         assert len(create_stage) == 1
-        assert "azure://acct.blob.core.windows.net/outc/cooked/demo/20260101/" in create_stage[0]
+        assert "azure://acct.blob.core.windows.net/outc/cooked/" in create_stage[0]
         assert "STORAGE_INTEGRATION = AZ_INT" in create_stage[0]
 
         # No GET step — Snowflake writes directly.

@@ -1,402 +1,259 @@
-"""ODS resolver — turn a path + dimension into an address to read/write with.
+"""ODS resolver — the Data Space as plain directories.
+
+Every data space is the same: a tree of directories rooted at a storage
+account (connection). ``/<connection>/<path…>`` names a folder (disc /
+s3 / azure_blob / gcs) or a ``DATABASE/SCHEMA[/TABLE]`` (warehouses).
 
 Public API:
 
-- :func:`resolve` — the primary entry point.
-- :func:`list_pipelines` / :func:`list_batches` / :func:`list_tables` —
-  read-only listings used by the web tier + CLI + MCP tools.
+- :func:`resolve` — map a path to the storage account + exact location
+  it names, and to the saved address (if any) pointing exactly there.
+- :func:`list_children` — list one level under a path. Callers supply a
+  ``lister(connection, prefix)`` so the web tier can broker the
+  credential-bearing ``list_dir`` to an executor subprocess while the
+  CLI calls the driver directly (:func:`driver_lister`).
+- :func:`list_storage_accounts` — the root listing.
 
-The resolver deliberately does **not** perform any read or write. It
-returns a :class:`ResolvedTarget` whose ``address`` field is a
-:class:`~ovid2.core.addresses.base.BaseAddress` instance the caller
-can then use. This keeps pyspark imports out of the resolver.
+The resolver performs no data I/O and imports no pyspark.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from ovid2.config import addresses as _address_config
-from ovid2.dataspace.path import OdsPath, OdsPathError
-from ovid2.dataspace.registry import (
-    dimension_for_address,
-    list_addresses_by_dimension,
-    list_dimensions,
-)
-
-if TYPE_CHECKING:
-    from ovid2.core.addresses.base import BaseAddress
+from ovid2.config import connections as _connection_config
+from ovid2.dataspace.path import OdsPath
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "OdsEntry",
     "OdsResolutionError",
     "ResolvedTarget",
-    "list_batches",
-    "list_pipelines",
-    "list_tables",
+    "driver_lister",
+    "list_children",
+    "list_storage_accounts",
     "resolve",
 ]
 
+#: Connection types whose location is ``DATABASE/SCHEMA`` (not a folder).
+_WAREHOUSES: frozenset[str] = frozenset({"snowflake", "databricks", "postgres", "mssql"})
+
 
 class OdsResolutionError(ValueError):
-    """Raised when a ``(path, dim)`` pair cannot be routed to an address."""
+    """Raised when a path cannot be mapped to a storage account."""
+
+
+@dataclass(frozen=True)
+class OdsEntry:
+    """One child in a Data Space listing.
+
+    Attributes:
+        name: The component name.
+        kind: ``account`` | ``dir`` | ``file`` | ``table``.
+        path: The child's full Data Space path (``/<conn>/<…>``).
+        type: The storage type (``disc`` / ``snowflake`` / …).
+        size_bytes: Size when the store reports it.
+    """
+
+    name: str
+    kind: str
+    path: str
+    type: str = ""
+    size_bytes: int | None = None
 
 
 @dataclass(frozen=True)
 class ResolvedTarget:
     """The outcome of :func:`resolve`.
 
-    ``address`` is instantiated lazily — pass ``materialise=False`` to
-    :func:`resolve` when only the naming information is needed. The
-    lazy path avoids pulling optional vendor drivers into memory just
-    to answer "which config would handle this?".
+    Attributes:
+        path: The normalised path.
+        connection: The storage account (``None`` for the root).
+        type: The storage type.
+        location: The exact location under the account (``''`` = top).
+        address_name: A saved address pointing *exactly* at this
+            location, when one exists.
+        batch_id: The batch id a run reading this location gets
+            (``<connection>/<location>``).
+        candidates: Every saved address on this storage account.
     """
 
     path: OdsPath
-    dimension: str
-    address_name: str
-    address: BaseAddress | None = None
-    #: Which resolution tier fired: ``"explicit"``, ``"pipeline_route"``,
-    #: ``"dimension_default"``, or ``"sole_candidate"``.
-    tier: str = "sole_candidate"
-    #: The candidate address names that were considered (for diagnostics).
+    connection: str | None
+    type: str
+    location: str
+    address_name: str | None = None
+    batch_id: str = ""
     candidates: tuple[str, ...] = field(default_factory=tuple)
 
 
-def _load_ods_settings() -> dict[str, Any]:
-    """Read the ``settings.ods`` section, tolerating a missing file.
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-    Returns:
-        A dict with keys ``default_dimension`` (str),
-        ``dimension_defaults`` (dict), ``pipeline_routes``
-        (dict[str, dict]), and ``pipeline_dimensions`` (dict).
-        Missing keys are filled with sensible defaults.
-    """
-    # Import here to avoid a hard dep on the web layer from the resolver.
+
+def _connection_type(name: str) -> str | None:
+    """Return the storage type of a connection config, or ``None``."""
     try:
-        from ovid2.web.services import settings_svc
-
-        raw = settings_svc.get_settings().model_dump(mode="python")
-    except Exception:
-        raw = {}
-    section = raw.get("ods") or {}
-    return {
-        "default_dimension": str(section.get("default_dimension") or "disc"),
-        "dimension_defaults": dict(section.get("dimension_defaults") or {}),
-        "pipeline_routes": {
-            str(k): dict(v or {}) for k, v in (section.get("pipeline_routes") or {}).items()
-        },
-        "pipeline_dimensions": dict(section.get("pipeline_dimensions") or {}),
-    }
+        raw = _connection_config.load_connection_config(name)
+    except (FileNotFoundError, ValueError):
+        return None
+    return str(raw.get("type") or "") or None
 
 
-def _pick_dimension(
-    ods_path: OdsPath,
-    dim: str | None,
-    settings: dict[str, Any],
-) -> str:
-    """Choose the dimension for a path.
-
-    Precedence:
-        1. Explicit ``dim=`` argument.
-        2. ``settings.ods.pipeline_dimensions[pipeline]`` (case-insensitive).
-        3. ``settings.ods.default_dimension``.
-    """
-    if dim:
-        if dim not in list_dimensions():
-            raise OdsResolutionError(
-                f"Unknown ODS dimension '{dim}'. Registered: {list_dimensions()}."
-            )
-        return dim
-
-    if ods_path.pipeline is not None:
-        by_pipeline = {k.lower(): v for k, v in settings["pipeline_dimensions"].items()}
-        pipeline_default = by_pipeline.get(ods_path.pipeline.lower())
-        if pipeline_default:
-            if pipeline_default not in list_dimensions():
-                raise OdsResolutionError(
-                    f"Pipeline '{ods_path.pipeline}' maps to unknown dimension "
-                    f"'{pipeline_default}' in settings.ods.pipeline_dimensions."
-                )
-            return str(pipeline_default)
-
-    default = settings["default_dimension"]
-    if default not in list_dimensions():
-        raise OdsResolutionError(
-            f"settings.ods.default_dimension '{default}' is not a registered dimension."
+def list_storage_accounts() -> list[OdsEntry]:
+    """Return every storage account (connection) — the Data Space root."""
+    entries: list[OdsEntry] = []
+    for name in sorted(_connection_config.list_available_connections()):
+        entries.append(
+            OdsEntry(name=name, kind="account", path=f"/{name}", type=_connection_type(name) or "")
         )
-    return str(default)
+    return entries
 
 
-def _pick_address_name(
-    ods_path: OdsPath,
-    dimension: str,
-    explicit_name: str | None,
-    settings: dict[str, Any],
-) -> tuple[str, str, tuple[str, ...]]:
-    """Pick the address that should serve ``(path, dimension)``.
+def _address_location_path(config: dict[str, Any], warehouse: bool) -> str:
+    """Return the canonical location path stored on a connection-shape address."""
+    from ovid2.drivers._layout import location_path
 
-    Returns:
-        ``(address_name, tier, candidates)``.
-
-    Raises:
-        OdsResolutionError: When no rule matches.
-    """
-    candidates = tuple(list_addresses_by_dimension(dimension))
-
-    if explicit_name:
-        # Sanity check — explicit override must exist and match the dimension.
-        actual_dim = dimension_for_address(explicit_name)
-        if actual_dim is None:
-            raise OdsResolutionError(f"Explicit address '{explicit_name}' does not exist.")
-        if actual_dim != dimension:
-            raise OdsResolutionError(
-                f"Explicit address '{explicit_name}' has dimension "
-                f"'{actual_dim}', not '{dimension}'."
-            )
-        return explicit_name, "explicit", candidates
-
-    if ods_path.pipeline is not None:
-        pipeline_routes = {k.lower(): v for k, v in settings["pipeline_routes"].items()}
-        per_pipeline = pipeline_routes.get(ods_path.pipeline.lower(), {})
-        routed = per_pipeline.get(dimension)
-        if routed:
-            if routed not in candidates:
-                raise OdsResolutionError(
-                    f"Pipeline route for '{ods_path.pipeline}'/'{dimension}' points at "
-                    f"address '{routed}' which is not registered under that dimension."
-                )
-            return str(routed), "pipeline_route", candidates
-
-    dim_defaults = settings["dimension_defaults"]
-    default_addr = dim_defaults.get(dimension)
-    if default_addr:
-        if default_addr not in candidates:
-            raise OdsResolutionError(
-                f"settings.ods.dimension_defaults['{dimension}'] points at "
-                f"address '{default_addr}' which is not registered under that dimension."
-            )
-        return str(default_addr), "dimension_default", candidates
-
-    if len(candidates) == 1:
-        return candidates[0], "sole_candidate", candidates
-
-    if not candidates:
-        raise OdsResolutionError(
-            f"No address configs registered under dimension '{dimension}'. "
-            "Create one at /addresses/new (web UI) or via `ovid2 tools migrate-addresses`."
-        )
-
-    raise OdsResolutionError(
-        f"Dimension '{dimension}' has {len(candidates)} candidate address(es): "
-        f"{list(candidates)}. Add a per-pipeline or per-dimension default in "
-        "settings.ods, or pass an explicit address name."
-    )
+    return location_path(dict(config.get("location") or {}), warehouse=warehouse)
 
 
-def resolve(
-    path: str | OdsPath,
-    dim: str | None = None,
-    *,
-    address: str | None = None,
-    pipeline: str | None = None,
-    materialise: bool = True,
-) -> ResolvedTarget:
-    """Resolve an ODS path to a target address.
+def _addresses_on(connection: str) -> list[tuple[str, dict[str, Any]]]:
+    """Return ``(name, config)`` for every connection-shape address on ``connection``."""
+    out: list[tuple[str, dict[str, Any]]] = []
+    for name in _address_config.list_available_addresses():
+        try:
+            cfg = _address_config.load_address_config(name)
+        except (FileNotFoundError, ValueError):
+            continue
+        if cfg.get("_shape") == "connection" and str(cfg.get("connection")) == connection:
+            out.append((name, cfg))
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Resolve
+# ---------------------------------------------------------------------------
+
+
+def resolve(path: str | OdsPath) -> ResolvedTarget:
+    """Map a Data Space path to its storage account + exact location.
 
     Args:
-        path: An :class:`OdsPath` or a POSIX-style string.
-        dim: Optional dimension override. When ``None`` the default
-            resolution (pipeline_dimensions → default_dimension) fires.
-        address: Optional explicit address config name — bypasses the
-            per-pipeline / per-dimension routing rules but still
-            validates that the address's dimension matches ``dim`` (or
-            the resolved default).
-        pipeline: Optional pipeline override, used for Snowflake's
-            four-tier config resolution. Falls back to ``path.pipeline``.
-        materialise: When ``True`` (default) also instantiate the
-            :class:`~ovid2.core.addresses.base.BaseAddress`. Callers
-            that only need naming metadata should pass ``False`` — it
-            avoids pulling optional vendor drivers.
-
-    Returns:
-        A :class:`ResolvedTarget`.
+        path: ``/<connection>/<location…>`` (an :class:`OdsPath` or string).
 
     Raises:
-        OdsPathError: When ``path`` fails the ODS grammar.
-        OdsResolutionError: When no address can be chosen.
+        OdsPathError: When ``path`` fails the grammar.
+        OdsResolutionError: When the storage account does not exist.
     """
     ods_path = path if isinstance(path, OdsPath) else OdsPath.parse(path)
-
-    if ods_path.pipeline is None and address is None:
-        # Root-level resolution has no pipeline and no address to bind to;
-        # the caller most likely wants `list_pipelines()` instead.
-        raise OdsResolutionError(
-            "Cannot resolve the root path — call list_pipelines() to enumerate children."
-        )
-
-    settings = _load_ods_settings()
-    dimension = _pick_dimension(ods_path, dim, settings)
-    address_name, tier, candidates = _pick_address_name(ods_path, dimension, address, settings)
-
-    address_obj: BaseAddress | None = None
-    if materialise:
-        address_obj = _address_config.load_address(
-            address_name,
-            pipeline=pipeline or ods_path.pipeline,
-        )
-
+    if ods_path.connection is None:
+        return ResolvedTarget(path=ods_path, connection=None, type="", location="")
+    conn = ods_path.connection
+    conn_type = _connection_type(conn)
+    if conn_type is None:
+        # Case-insensitive fallback: the path equality is case-insensitive.
+        for candidate in _connection_config.list_available_connections():
+            if candidate.lower() == conn.lower():
+                conn, conn_type = candidate, _connection_type(candidate)
+                break
+    if conn_type is None:
+        raise OdsResolutionError(f"Storage account '{ods_path.connection}' does not exist.")
+    warehouse = conn_type in _WAREHOUSES
+    location = ods_path.location
+    match: str | None = None
+    names: list[str] = []
+    for name, cfg in _addresses_on(conn):
+        names.append(name)
+        if match is None and _address_location_path(cfg, warehouse).lower() == location.lower():
+            match = name
     return ResolvedTarget(
-        path=ods_path,
-        dimension=dimension,
-        address_name=address_name,
-        address=address_obj,
-        tier=tier,
-        candidates=candidates,
+        path=OdsPath(connection=conn, parts=ods_path.parts),
+        connection=conn,
+        type=conn_type,
+        location=location,
+        address_name=match,
+        batch_id=OdsPath(connection=conn, parts=ods_path.parts).batch_id(),
+        candidates=tuple(sorted(names)),
     )
 
 
 # ---------------------------------------------------------------------------
-# Read-only listings
+# Listing
 # ---------------------------------------------------------------------------
 
+#: ``lister(connection, prefix) -> (supported, entries, message)``. Each
+#: entry is a mapping with ``name`` / ``kind`` / ``path`` (path relative to
+#: the storage account) and optional ``size_bytes``.
+Lister = Callable[[str, str | None], tuple[bool, Sequence[dict[str, Any]], str | None]]
 
-def list_pipelines(dim: str | None = None) -> list[str]:
-    """Return every pipeline discoverable under ODS.
 
-    Args:
-        dim: Optional dimension filter. When ``None``, the union of
-            pipelines visible in *every* dimension is returned. When
-            passed, only pipelines visible in that dimension are
-            returned.
+def driver_lister(
+    connection: str, prefix: str | None
+) -> tuple[bool, list[dict[str, Any]], str | None]:
+    """Default :data:`Lister` — call the storage driver's ``list_dir`` directly.
+
+    Executor-tier only (resolves the connection's secrets). The web tier
+    passes a broker-backed lister instead.
+    """
+    from ovid2.drivers.registry import DRIVERS, instantiate
+
+    raw = _connection_config.load_connection_config(connection)
+    type_name = str(raw.get("type") or "")
+    if type_name not in DRIVERS:
+        return False, [], f"storage type '{type_name}' is not registered"
+    driver = instantiate(
+        type_name,
+        args=dict(raw.get("args") or {}),
+        secrets=dict(_connection_config.resolve_secrets(raw)),
+    )
+    try:
+        entries = driver.list_dir(prefix)
+    except NotImplementedError as exc:
+        return False, [], str(exc)
+    return True, [e.to_dict() for e in entries or []], None
+
+
+def list_children(
+    path: str | OdsPath,
+    *,
+    lister: Lister = driver_lister,
+) -> tuple[bool, list[OdsEntry], str | None]:
+    """List one level under a Data Space path.
+
+    ``/`` lists storage accounts; anything deeper lists the folder /
+    schema through the storage account's ``list_dir``.
 
     Returns:
-        Sorted, de-duplicated list of pipeline names. Missing address
-        directories (e.g. the disc root doesn't exist yet on this
-        host) contribute nothing rather than raising.
+        ``(supported, entries, message)``.
+
+    Raises:
+        OdsPathError / OdsResolutionError: On a bad path / unknown account.
     """
-    from ovid2.web.services import pipelines_meta_svc
-
-    # Start with the package-declared pipeline roster — always ground
-    # truth for "what pipelines does this deployment know about".
-    known: set[str] = set(pipelines_meta_svc.discover_pipelines())
-
-    if dim is None or dim == "disc":
-        for address_name in list_addresses_by_dimension("disc"):
-            for name in _list_pipelines_on_disc(address_name):
-                known.add(name)
-    return sorted(known)
-
-
-def _list_pipelines_on_disc(address_name: str) -> list[str]:
-    """Return top-level directory names under a disc address root."""
-    try:
-        target = resolve(
-            OdsPath(pipeline="_placeholder"),
-            dim="disc",
-            address=address_name,
-            materialise=True,
+    target = resolve(path)
+    if target.connection is None:
+        return True, list_storage_accounts(), None
+    supported, raw_entries, message = lister(target.connection, target.location or None)
+    entries: list[OdsEntry] = []
+    for raw in raw_entries:
+        rel = str(raw.get("path") or raw.get("name") or "").strip("/")
+        size = raw.get("size_bytes")
+        entries.append(
+            OdsEntry(
+                name=str(raw.get("name") or rel.rsplit("/", 1)[-1]),
+                kind=str(raw.get("kind") or "dir"),
+                path=f"/{target.connection}/{rel}" if rel else f"/{target.connection}",
+                type=target.type,
+                size_bytes=int(size) if isinstance(size, int) else None,
+            )
         )
-    except OdsResolutionError:
-        return []
-    address = target.address
-    # Late import to keep pyspark out of the resolver's default path.
-    from ovid2.drivers.disc import DiscAddress
-
-    if not isinstance(address, DiscAddress):
-        return []
-    root = Path(address.root_path)
-    if not root.is_dir():
-        return []
-    return [entry.name for entry in sorted(root.iterdir()) if entry.is_dir()]
+    return supported, entries, message
 
 
-def list_batches(pipeline: str, dim: str | None = None) -> list[str]:
-    """Return every batch under a pipeline.
-
-    Non-disc dimensions currently return an empty list — see the ADR's
-    *Follow-up work* section. The disc dimension walks
-    ``{root_path}/{pipeline}/`` (with three-way case fallback matching
-    :meth:`DiscAddress._get_read_path`).
-    """
-    if not pipeline:
-        raise OdsPathError("list_batches requires a pipeline name.")
-
-    dimension = dim or "disc"
-    if dimension != "disc":
-        return []
-
-    from ovid2.drivers.disc import DiscAddress
-
-    seen: set[str] = set()
-    for address_name in list_addresses_by_dimension("disc"):
-        try:
-            target = resolve(
-                OdsPath(pipeline=pipeline),
-                dim="disc",
-                address=address_name,
-                materialise=True,
-            )
-        except OdsResolutionError:
-            continue
-        if not isinstance(target.address, DiscAddress):
-            continue
-        root = Path(target.address.root_path)
-        for variant in (pipeline, pipeline.lower(), pipeline.upper()):
-            candidate = root / variant
-            if candidate.is_dir():
-                for child in candidate.iterdir():
-                    if child.is_dir():
-                        seen.add(child.name)
-                break
-    return sorted(seen)
-
-
-def list_tables(pipeline: str, batch_id: str, dim: str | None = None) -> list[str]:
-    """Return every table under ``/pipeline/batch``.
-
-    Uses the same three-way pipeline case fallback as
-    :meth:`DiscAddress._get_read_path`. Non-disc dimensions return an
-    empty list (see the ADR).
-    """
-    if not pipeline:
-        raise OdsPathError("list_tables requires a pipeline name.")
-    if not batch_id:
-        raise OdsPathError("list_tables requires a batch_id.")
-
-    dimension = dim or "disc"
-    if dimension != "disc":
-        return []
-
-    from ovid2.drivers.disc import DiscAddress
-
-    seen: set[str] = set()
-    for address_name in list_addresses_by_dimension("disc"):
-        try:
-            target = resolve(
-                OdsPath(pipeline=pipeline, batch_id=batch_id),
-                dim="disc",
-                address=address_name,
-                materialise=True,
-            )
-        except OdsResolutionError:
-            continue
-        if not isinstance(target.address, DiscAddress):
-            continue
-        root = Path(target.address.root_path)
-        for variant in (pipeline, pipeline.lower(), pipeline.upper()):
-            candidate = root / variant / batch_id
-            if candidate.is_dir():
-                for entry in candidate.iterdir():
-                    if entry.is_file():
-                        # Strip a single extension so tables look logical.
-                        stem = entry.stem
-                        seen.add(stem)
-                    elif entry.is_dir():
-                        seen.add(entry.name)
-                break
-    return sorted(seen)
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit("Library module; import it.")

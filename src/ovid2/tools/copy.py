@@ -111,7 +111,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "--to", dest="to_address", required=True, help="Name of the destination address config."
     )
     parser.add_argument("--pipeline", required=True, help="Pipeline name.")
-    parser.add_argument("--batch_id", required=True, help="Batch identifier.")
+    parser.add_argument(
+        "--batch_id",
+        required=True,
+        help="Batch id — the complete Data Space path of the input location (<connection>/<path>); a run label, never appended to an address.",
+    )
     parser.add_argument(
         "--tables",
         nargs="+",
@@ -129,6 +133,15 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         ),
     )
     parser.add_argument("--engine", default="pyspark", help="Compute engine (default: pyspark).")
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help=(
+            "Allow writing into an output location that already holds tables "
+            "(the address is the exact write location; without this flag the "
+            "run refuses to overwrite existing data)."
+        ),
+    )
     parser.add_argument(
         "--extra-mount",
         dest="extra_mounts",
@@ -434,6 +447,26 @@ def _run_container_mode(args: argparse.Namespace) -> int:
                 for t in resolved
             )
         )
+
+    # Overwrite gate: the output address is the exact write location. A
+    # table this run would write that already exists there needs an
+    # explicit ``--overwrite``.
+    from ovid2.drivers.overwrite import OutputNotEmptyError, assert_output_writable
+
+    try:
+        assert_output_writable(
+            args.to_address,
+            overwrite=bool(getattr(args, "overwrite", False)),
+            driver=output_driver,
+            only_tables=[t.table_name for t in resolved],
+        )
+    except OutputNotEmptyError as exc:
+        print(f"[ovid2 tools copy] ERROR {exc}", file=sys.stderr)
+        sampler.stop()
+        engine.stop_session()
+        bus.emit(instance_finished(instance_id=instance.instance_id, success=False))
+        bus.close()
+        return 3
 
     failures = 0
     try:

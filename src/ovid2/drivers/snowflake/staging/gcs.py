@@ -206,7 +206,7 @@ class SnowparkGcsStrategy(SnowparkStagingStrategy):
         # multiple files under the same pipeline/batch can share a
         # stage. COPY INTO's FILES clause below narrows to the
         # specific object.
-        read_dir_uri = _gcs_dir_uri(bucket, prefix, pipeline, batch_id)
+        read_dir_uri = _gcs_dir_uri(bucket, prefix)
 
         native = _native_session(session)
         self._maybe_schedule_cleanup(session, instance_id)
@@ -233,7 +233,7 @@ class SnowparkGcsStrategy(SnowparkStagingStrategy):
         # google-cloud-storage ranged download (small — one line).
         columns = _read_header_columns_from_gcs(
             bucket=bucket,
-            key=_gcs_key(prefix, pipeline, batch_id, file_name),
+            key=_gcs_key(prefix, file_name),
             delimiter=delim,
             merged_config=merged,
         )
@@ -287,7 +287,7 @@ class SnowparkGcsStrategy(SnowparkStagingStrategy):
 
         No download step — Snowflake writes directly into the bucket
         via the stage's ``URL='gcs://…/'`` and the CSV ends up under
-        ``{prefix}/{pipeline}/{batch_id}/{table_name}/``. When
+        ``{prefix}/{table_name}/``. When
         ``location.single_file=True``, Snowflake writes one merged
         object; when ``False`` (default), it writes the natural
         part-file prefix downstream consumers expect.
@@ -319,7 +319,7 @@ class SnowparkGcsStrategy(SnowparkStagingStrategy):
 
         instance_id = _current_instance_id()
         stage_name = _stage_name(instance_id, pipeline, batch_id, table_name, kind="out")
-        write_dir_uri = _gcs_dir_uri(bucket, prefix, pipeline, batch_id)
+        write_dir_uri = _gcs_dir_uri(bucket, prefix)
 
         native = _native_session(session)
         self._maybe_schedule_cleanup(session, instance_id)
@@ -490,13 +490,13 @@ def _require_bucket(merged: dict[str, Any]) -> str:
     return bucket
 
 
-def _gcs_key(prefix: str, pipeline: str, batch_id: str, file_name: str) -> str:
-    """Assemble the bucket-relative object name ``{prefix}/{pipeline}/{batch}/{file}``."""
-    parts = [p for p in (prefix, pipeline, batch_id, file_name) if p]
+def _gcs_key(prefix: str, file_name: str) -> str:
+    """Assemble the bucket-relative object name ``{prefix}/{file}`` (address = exact location)."""
+    parts = [p for p in (prefix, file_name) if p]
     return "/".join(parts)
 
 
-def _gcs_dir_uri(bucket: str, prefix: str, pipeline: str, batch_id: str) -> str:
+def _gcs_dir_uri(bucket: str, prefix: str) -> str:
     """Assemble the ``gcs://<bucket>/<key-prefix>/`` directory URI.
 
     Snowflake accepts ``gcs://`` in ``CREATE STAGE URL='…'`` even
@@ -504,7 +504,7 @@ def _gcs_dir_uri(bucket: str, prefix: str, pipeline: str, batch_id: str) -> str:
     verbatim here so the DDL round-trips against a Snowflake
     execution plan without translation.
     """
-    parts = [p for p in (prefix, pipeline, batch_id) if p]
+    parts = [p for p in (prefix,) if p]
     key = "/".join(parts)
     if key:
         return f"gcs://{bucket}/{key}/"

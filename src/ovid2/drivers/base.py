@@ -479,11 +479,11 @@ class Driver(ABC):
             location: The per-address location payload (falls back to
                 ``self.location``). Lets a driver honour per-address
                 allow/deny filters when expanding.
-            pipeline: Pipeline name — folder-shaped sources
-                (disc / s3 / azure_blob) resolve
-                ``{root}/{pipeline}/{batch_id}/`` the same way
-                :meth:`read` does. Ignored by container-shaped sources.
-            batch_id: Batch identifier (see ``pipeline``).
+            pipeline: Accepted for interface stability; ignored. The
+                address is the exact location — folder sources list
+                ``{root}/{location.path}/`` the same way :meth:`read`
+                does, warehouses list ``database.schema``.
+            batch_id: Accepted for interface stability; ignored.
 
         Returns:
             The concrete list of ``--tables`` specs to copy. Each entry
@@ -505,6 +505,35 @@ class Driver(ABC):
         del location, pipeline, batch_id
         return None
 
+    def existing_tables(self, location: dict[str, Any] | None = None) -> list[str] | None:
+        """Return the tables already present at this address, for the overwrite gate.
+
+        The address is the exact location a run writes to, so a non-empty
+        result means the run would overwrite existing data and needs an
+        explicit confirmation (``--overwrite`` / ``confirm_overwrite``).
+
+        The default derives the answer from :meth:`expand_all_tables`:
+
+        - a missing folder / schema (``FileNotFoundError``) → ``[]``;
+        - a driver that cannot enumerate (``None`` / ``NotImplementedError``)
+          → ``None`` (*unknown* — callers must not block on it).
+
+        Returns:
+            Logical table names already present (``[]`` when empty), or
+            ``None`` when occupancy cannot be determined.
+        """
+        if not type(self).supports_expand_all():
+            return None
+        try:
+            specs = self.expand_all_tables(location)
+        except FileNotFoundError:
+            return []
+        except NotImplementedError:
+            return None
+        if specs is None:
+            return None
+        return sorted({str(s).split("=", 1)[0] for s in specs if str(s).strip()})
+
     def table_sizes(
         self,
         file_names: list[str],
@@ -523,8 +552,8 @@ class Driver(ABC):
 
         Args:
             file_names: Source-side lookup keys (``TableSpec.file_name``).
-            pipeline: Pipeline name (folder sources resolve the batch dir).
-            batch_id: Batch identifier.
+            pipeline: Ignored (the address is the exact location).
+            batch_id: Ignored (the address is the exact location).
 
         Returns:
             A mapping for the names whose size is known. Missing keys

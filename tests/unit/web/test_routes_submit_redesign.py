@@ -188,20 +188,19 @@ def test_submit_empty_transformations_rejected(
 
 @pytest.mark.unit
 def test_submit_page_renders_browse_validation_hooks(web_client, submit_pipeline: str) -> None:  # type: ignore[no-untyped-def]
-    """The submit page must ship the per-card ``picker-error`` targets.
+    """The job builder must ship its client-side completeness gate.
 
-    The client-side hard block (``submit_plan.js::bindStorageValidation``)
-    writes its inline "pick an account" message into
-    ``[data-role=picker-error]`` on the offending Input / Output card. If
-    that hook ever disappears from the template the block degrades to the
-    old confusing server-side redirect, so guard the markup here.
+    ``submit_builder.js`` keeps Submit disabled (and blocks the submit
+    event) until pipeline, source, target and batch id are all assigned,
+    so the operator never reaches the server-side "pick a storage
+    account" redirect. Guard the markup the gate relies on.
     """
     r = web_client.get("/submit")
     assert r.status_code == 200
     html = r.text
-    # One error target per storage card (input + output).
-    assert html.count('data-role="picker-error"') == 2
-    # The mode hidden fields the validator reads must be present.
+    assert 'id="builder-submit" disabled' in html
+    assert 'data-role="graph-status"' in html
+    # The mode hidden fields the server reads must be present.
     assert 'name="input_mode"' in html
     assert 'name="output_mode"' in html
     assert 'name="input_connection"' in html

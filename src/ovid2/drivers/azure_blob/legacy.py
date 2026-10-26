@@ -256,7 +256,7 @@ class AzureBlobAddress(BaseAddress):
         table_name: str,
         delimiter: str | None = None,
     ) -> None:
-        """Write a DataFrame under ``{prefix}/{pipeline}/{batch_id}/``."""
+        """Write a DataFrame directly under the address location ``{prefix}/``."""
         self._io.write(df, spark, pipeline, batch_id, table_name, delimiter)
 
 

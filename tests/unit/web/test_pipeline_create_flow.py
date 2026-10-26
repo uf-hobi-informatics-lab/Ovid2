@@ -233,6 +233,7 @@ def test_run_specific_batch_passes_batch_id(
         input_address=None,
         output_address=None,
         tables=None,
+        confirm_overwrite=False,
     ):  # type: ignore[no-untyped-def]
         captured["name"] = name
         captured["batch_id"] = batch_id
@@ -685,11 +686,12 @@ def test_run_now_open_pipeline_with_inline_storage_runs_immediately(
 def test_run_now_open_pipeline_derives_batch_id_from_browsed_location(
     web_client, isolated_xdg: Path, temp_pipelines_root: Path, monkeypatch
 ) -> None:  # type: ignore[no-untyped-def]
-    """No typed batch_id: the browsed folder/schema leaf names the batch.
+    """No typed batch_id: the input is bound *exactly* at the browsed folder.
 
-    The run modal has no free-text batch field — the operator navigates
-    to a folder (filesystem) or schema (warehouse), and its final path
-    segment becomes the batch id. Input side wins over output.
+    The address is the exact location of the data: the browsed input
+    folder becomes the input address's location verbatim (nothing is
+    appended later), and no batch id is invented by the route — jobs_svc
+    derives it from that address as its complete Data Space path.
     """
     _write_disc_connection(isolated_xdg, "in_store", str(isolated_xdg / "in"))
     _write_disc_connection(isolated_xdg, "out_store", str(isolated_xdg / "out"))
@@ -722,8 +724,11 @@ def test_run_now_open_pipeline_derives_batch_id_from_browsed_location(
         input_address=None,
         output_address=None,
         tables=None,
+        confirm_overwrite=False,
     ):  # type: ignore[no-untyped-def]
         captured["batch_id"] = batch_id
+        captured["input_address"] = input_address
+        captured["output_address"] = output_address
         return _Resp()
 
     monkeypatch.setattr(pipelines_svc, "run_now", _fake_run_now)
@@ -740,8 +745,21 @@ def test_run_now_open_pipeline_derives_batch_id_from_browsed_location(
     )
     assert r.status_code == 303, r.text
     assert r.headers["location"].startswith("/runs/")
-    # Input side wins; the final segment of the browsed path names the batch.
-    assert captured["batch_id"] == "2026_03"
+    # No route-side batch id: jobs_svc derives it from the input address.
+    assert captured["batch_id"] is None
+    from ovid2.web.services import addresses_svc, output_probe_svc
+
+    in_addr = addresses_svc.get_address(str(captured["input_address"]))
+    out_addr = addresses_svc.get_address(str(captured["output_address"]))
+    assert in_addr is not None and out_addr is not None
+    # Each side is bound exactly at the browsed folder.
+    assert (in_addr.location or {}).get("path") == "landing/2026_03"
+    assert (out_addr.location or {}).get("path") == "warehouse/omop"
+    # The batch id is the input's complete Data Space path.
+    assert (
+        output_probe_svc.batch_id_for_address(str(captured["input_address"]))
+        == "in_store/landing/2026_03"
+    )
 
 
 @pytest.mark.unit
@@ -776,9 +794,10 @@ def test_submit_form_preselects_pipeline_and_batch(web_client) -> None:  # type:
     r = web_client.get("/submit?pipeline=openrun&batch_id=20260101&engine=snowpark")
     assert r.status_code == 200
     body = r.text
-    # The value is injected as a selected option even if it is not an
-    # installed package / generic label.
-    assert '<option value="openrun" selected>' in body
+    # The value is injected as a pipeline card + the hidden field even if
+    # it is not an installed package / generic label.
+    assert 'name="pipeline" id="pipeline-field" value="openrun"' in body
+    assert 'data-pipeline="openrun"' in body
     assert 'value="20260101"' in body
     assert 'value="snowpark"' in body
 
@@ -935,6 +954,7 @@ def test_run_modal_tables_field_makes_open_copy_runnable(
         input_address=None,
         output_address=None,
         tables=None,
+        confirm_overwrite=False,
     ):  # type: ignore[no-untyped-def]
         captured["tables"] = tables
         return _Resp()

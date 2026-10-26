@@ -39,7 +39,16 @@ class SubmitHealthArgs(BaseModel):
             "only if you need its CDM/default-database behaviour."
         ),
     )
-    batch_id: str = Field(..., description="Batch / refresh identifier (e.g. 20260101).")
+    batch_id: str = Field(
+        "",
+        description=(
+            "Optional label. Ignored when the input has a location: the batch id is "
+            "always derived as the complete Data Space path of the input "
+            "(storage account + folder / DATABASE/SCHEMA). Every address is the "
+            "exact location its data is read from / written to — nothing is "
+            "appended to it."
+        ),
+    )
     input_address: str = Field(
         "",
         description=(
@@ -110,6 +119,16 @@ class SubmitHealthArgs(BaseModel):
         None, description="CDM name (defaults to the pipeline's CDM when omitted)."
     )
     engine: str = Field("pyspark", description="Compute engine (default: pyspark).")
+    confirm_overwrite: bool = Field(
+        False,
+        description=(
+            "Set True to let the run overwrite an output location that already "
+            "holds tables. Without it an occupied output answers 409 "
+            "overwrite_required (listing the existing tables). For an agent this "
+            "becomes a run.overwrite approval request (202) a human must approve "
+            "before re-submitting."
+        ),
+    )
 
 
 TOOL_NAME = "submit_health"

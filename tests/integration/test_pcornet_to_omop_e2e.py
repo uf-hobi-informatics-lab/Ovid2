@@ -26,8 +26,13 @@ if TYPE_CHECKING:
 def _write_pcornet_table(
     root: Path, pipeline: str, batch: str, table: str, header: list[str], rows: list[list[str]]
 ) -> None:
-    """Write a PCORnet source table as ``{root}/{pipeline}/{batch}/{TABLE}/{TABLE}.csv``."""
-    table_dir = root / pipeline / batch / table
+    """Write a PCORnet source table as ``{root}/{TABLE}/{TABLE}.csv``.
+
+    The address is the exact location of the data: ``root`` is the batch
+    folder itself (``pipeline`` / ``batch`` are labels, not path segments).
+    """
+    del pipeline, batch
+    table_dir = root / table
     table_dir.mkdir(parents=True, exist_ok=True)
     with (table_dir / f"{table}.csv").open("w", newline="") as fh:
         writer = csv.writer(fh)
@@ -36,8 +41,9 @@ def _write_pcornet_table(
 
 
 def _read_omop_output(out_root: Path, pipeline: str, batch: str, table: str) -> list[dict]:
-    """Read a written OMOP CSV artefact back into a list of dict rows."""
-    path = out_root / pipeline / batch / f"{table}.csv"
+    """Read a written OMOP CSV artefact (directly under the output address)."""
+    del pipeline, batch
+    path = out_root / f"{table}.csv"
     with path.open(newline="") as fh:
         return list(csv.DictReader(fh, delimiter="\t"))
 

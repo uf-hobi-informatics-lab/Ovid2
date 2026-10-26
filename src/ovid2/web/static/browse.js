@@ -12,10 +12,11 @@
  *   - a storage-account <select> (populated server-side),
  *   - a breadcrumb trail,
  *   - a lazily-fetched listing with folder / file / database / table
- *     icons (folders + databases + schemas navigable, files + tables
- *     selectable),
- *   - a "Use this folder" affordance that writes the current prefix
- *     into the location field and records the storage account.
+ *     icons. Clicking an entry's **icon** selects it (writes the path
+ *     into the location field and records the storage account);
+ *     clicking a folder / schema **name** opens it. A "current folder"
+ *     row at the top selects the folder being viewed the same way —
+ *     by its icon. There are no "use" link-buttons.
  *
  * It talks to GET /api/v1/storage/{name}/browse?prefix=… — the same
  * endpoint used for disc / s3 (filesystem prefixes) and Snowflake
@@ -155,10 +156,10 @@
           self.refresh();
           return;
         }
-        var use = evt.target.closest("[data-use]");
-        if (use) {
+        var pick = evt.target.closest("[data-pick]");
+        if (pick) {
           evt.preventDefault();
-          self.choose(use.getAttribute("data-use"));
+          self.choose(pick.getAttribute("data-pick"));
         }
       });
     }
@@ -207,6 +208,14 @@
 
   StoragePicker.prototype.choose = function (path) {
     var account = this.select ? this.select.value : "";
+    if (this.listing) {
+      var btns = this.listing.querySelectorAll(".pick-icon");
+      for (var b = 0; b < btns.length; b++) {
+        var on = btns[b].getAttribute("data-pick") === (path || "");
+        btns[b].classList.toggle("is-selected", on);
+        btns[b].setAttribute("aria-pressed", on ? "true" : "false");
+      }
+    }
     if (this.connectionField) this.connectionField.value = account;
     if (this.locationField) this.locationField.value = path || "";
     if (account) this.markBrowseActive();
@@ -304,16 +313,27 @@
     var dirIcon = isWarehouse ? ICONS.database : ICONS.folder;
     var leafIcon = isWarehouse ? ICONS.table : ICONS.file;
 
+    var chosenPath = this.locationField ? this.locationField.value : null;
+    var chosenConn = this.connectionField ? this.connectionField.value : "";
+    var account0 = this.select ? this.select.value : "";
+    function pickBtn(path, icon, label) {
+      var on = chosenConn === account0 && chosenPath === path;
+      return '<button type="button" class="pick-icon' + (on ? " is-selected" : "")
+        + '" data-pick="' + esc(path) + '" title="Click to choose ' + esc(label)
+        + '" aria-label="Choose ' + esc(label) + '" aria-pressed="' + (on ? "true" : "false")
+        + '">' + icon + "</button>";
+    }
+
     var html = '<ul class="storage-list">';
-    // Suppress the "use this <root>" affordance for a warehouse at root:
-    // committing an empty location there is exactly the misconfiguration
-    // this guard exists to prevent.
+    // A warehouse at its root is not runnable, so its root row offers no
+    // pick icon — only a prompt to open a database/schema.
     if (!(isWarehouse && atRoot)) {
-      html += '<li class="storage-use-here"><button type="button" class="button small" data-use="'
-        + esc(this.prefix) + '">Use this ' + (isWarehouse ? "schema" : "folder")
-        + ' (' + esc(this.prefix || "root") + ")</button></li>";
+      html += '<li class="entry entry-here">'
+        + pickBtn(this.prefix, dirIcon, "this " + (isWarehouse ? "schema" : "folder"))
+        + ' <span class="note">this ' + (isWarehouse ? "schema" : "folder")
+        + " (" + esc(this.prefix || "root") + ")</span></li>";
     } else {
-      html += '<li class="note">Pick a database/schema below to run against '
+      html += '<li class="note">Open a database/schema below to run against '
         + "this warehouse.</li>";
     }
     var entries = body.entries || [];
@@ -323,15 +343,11 @@
     for (var i = 0; i < entries.length; i++) {
       var e = entries[i];
       if (e.kind === "dir") {
-        html += '<li class="entry entry-dir">' + dirIcon
-          + ' <a href="#" data-descend="' + esc(e.path) + '">' + esc(e.name) + "</a>"
-          + ' <button type="button" class="link-button small" data-use="'
-          + esc(e.path) + '">use</button></li>';
+        html += '<li class="entry entry-dir">' + pickBtn(e.path, dirIcon, e.name)
+          + ' <a href="#" data-descend="' + esc(e.path) + '">' + esc(e.name) + "</a></li>";
       } else {
-        html += '<li class="entry entry-leaf">' + leafIcon
-          + ' <span class="mono">' + esc(e.name) + "</span>"
-          + ' <button type="button" class="link-button small" data-use="'
-          + esc(e.path) + '">use</button></li>';
+        html += '<li class="entry entry-leaf">' + pickBtn(e.path, leafIcon, e.name)
+          + ' <a href="#" class="mono" data-pick="' + esc(e.path) + '">' + esc(e.name) + "</a></li>";
       }
     }
     html += "</ul>";

@@ -8,10 +8,8 @@ from ovid2.mcp.client import WebApiClient
 
 TOOL_NAME = "ods_list_dimensions"
 TOOL_DESCRIPTION = (
-    "Return the catalogue of ODS dimensions (connection-type families "
-    "like disc, snowflake, s3, azure_blob, ...) together with the "
-    "deployment's routing defaults: settings.ods.default_dimension and "
-    "the per-dimension default addresses. Response shape: "
+    "Return the catalogue of storage types (dimensions: disc, snowflake, "
+    "s3, azure_blob, ...) and how many saved addresses use each. Response shape: "
     "OdsDimensionCatalog { default_dimension, dimensions: [{name, "
     "address_count, default_address}] }."
 )

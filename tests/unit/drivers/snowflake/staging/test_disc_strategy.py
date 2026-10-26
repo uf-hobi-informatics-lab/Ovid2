@@ -232,8 +232,8 @@ class TestMaterialise:
     @pytest.fixture
     def disc_source_tree(self, tmp_path):
         root = tmp_path / "src"
-        (root / "TEST" / "20260806").mkdir(parents=True)
-        csv_path = root / "TEST" / "20260806" / "sample.csv"
+        root.mkdir(parents=True, exist_ok=True)
+        csv_path = root / "sample.csv"
         csv_path.write_text(
             "id,name,value\n1,foo,10\n2,bar,20\n",
             encoding="utf-8",
@@ -323,8 +323,8 @@ class TestMaterialise:
         makes the reference resolve.
         """
         root = tmp_path / "src"
-        (root / "test" / "20260806").mkdir(parents=True)
-        csv_path = root / "test" / "20260806" / "concept_relationship.csv"
+        root.mkdir(parents=True, exist_ok=True)
+        csv_path = root / "concept_relationship.csv"
         csv_path.write_text(
             "concept_id_1\tconcept_id_2\trelationship_id\n1\t2\tMaps to\n",
             encoding="utf-8",
@@ -357,8 +357,8 @@ class TestMaterialise:
         tmp_path,
     ) -> None:
         root = tmp_path / "src"
-        (root / "TEST" / "20260806").mkdir(parents=True)
-        csv_path = root / "TEST" / "20260806" / "tabbed.csv"
+        root.mkdir(parents=True, exist_ok=True)
+        csv_path = root / "tabbed.csv"
         csv_path.write_text("id\tname\n1\tfoo\n", encoding="utf-8")
 
         driver = _FakeDiscDriver(str(root))
@@ -421,7 +421,7 @@ class TestMaterialise:
             )
 
     def test_missing_file_raises(self, strategy, tmp_path) -> None:
-        (tmp_path / "TEST" / "20260806").mkdir(parents=True)
+        tmp_path.mkdir(parents=True, exist_ok=True)
         driver = _FakeDiscDriver(str(tmp_path))
         session = _FakeSession()
         with pytest.raises(FileNotFoundError):
@@ -441,7 +441,7 @@ class TestMaterialise:
         tmp_path,
     ) -> None:
         # Create a directory that matches a glob.
-        (tmp_path / "TEST" / "20260806" / "adir").mkdir(parents=True)
+        (tmp_path / "adir").mkdir(parents=True)
         driver = _FakeDiscDriver(str(tmp_path))
         session = _FakeSession()
         with pytest.raises(ValueError, match="directory reads"):
@@ -457,8 +457,8 @@ class TestMaterialise:
 
     def test_empty_file_raises(self, strategy, tmp_path) -> None:
         root = tmp_path / "src"
-        (root / "TEST" / "20260806").mkdir(parents=True)
-        (root / "TEST" / "20260806" / "empty.csv").write_text("", encoding="utf-8")
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "empty.csv").write_text("", encoding="utf-8")
         driver = _FakeDiscDriver(str(root))
         session = _FakeSession()
         with pytest.raises(ValueError, match="is empty"):
@@ -523,7 +523,8 @@ class TestPersist:
         content: str = "id,val\n1,x\n",
     ) -> Path:
         """Emulate the file the GET step would produce on disk."""
-        out_dir = target_root / pipeline / batch_id
+        del pipeline, batch_id  # the address is the exact location
+        out_dir = target_root
         out_dir.mkdir(parents=True, exist_ok=True)
         p = out_dir / name
         p.write_text(content, encoding="utf-8")
@@ -575,7 +576,7 @@ class TestPersist:
         assert any(q.startswith("GET '") for q in session.sql_calls)
 
         # Result renamed to sample.csv on disk.
-        expected = disc_target_root / "test" / "20260806" / "sample.csv"
+        expected = disc_target_root / "sample.csv"
         assert expected.exists()
         assert expected.read_text(encoding="utf-8") == "id,val\n1,x\n"
 
@@ -648,7 +649,7 @@ class TestPersist:
         )
         assert capture["single"] is False
         # Multi-part output named sample.part-00000.csv, .part-00001.csv.
-        out_dir = disc_target_root / "test" / "20260806"
+        out_dir = disc_target_root
         assert (out_dir / "sample.part-00000.csv").exists()
         assert (out_dir / "sample.part-00001.csv").exists()
 
@@ -731,7 +732,7 @@ class TestPersist:
             delimiter=None,
         )
 
-        expected = disc_target_root / "test" / "20260806" / "sample.csv"
+        expected = disc_target_root / "sample.csv"
         assert expected.exists()
 
 
@@ -754,8 +755,8 @@ class TestCleanup:
         monkeypatch,
     ) -> None:
         root = tmp_path / "src"
-        (root / "TEST" / "20260806").mkdir(parents=True)
-        (root / "TEST" / "20260806" / "sample.csv").write_text(
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "sample.csv").write_text(
             "id\n1\n",
             encoding="utf-8",
         )
@@ -803,8 +804,8 @@ class TestCleanup:
         importlib.reload(_settings)
 
         root = tmp_path / "src"
-        (root / "TEST" / "20260806").mkdir(parents=True)
-        (root / "TEST" / "20260806" / "sample.csv").write_text(
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "sample.csv").write_text(
             "id\n1\n",
             encoding="utf-8",
         )
@@ -836,8 +837,8 @@ class TestCleanup:
         monkeypatch,
     ) -> None:
         root = tmp_path / "src"
-        (root / "TEST" / "20260806").mkdir(parents=True)
-        (root / "TEST" / "20260806" / "sample.csv").write_text(
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "sample.csv").write_text(
             "id\n1\n",
             encoding="utf-8",
         )
@@ -873,8 +874,8 @@ class TestCleanup:
         monkeypatch,
     ) -> None:
         root = tmp_path / "src"
-        (root / "TEST" / "20260806").mkdir(parents=True)
-        (root / "TEST" / "20260806" / "sample.csv").write_text(
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "sample.csv").write_text(
             "id\n1\n",
             encoding="utf-8",
         )

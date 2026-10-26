@@ -238,6 +238,32 @@ def driver_from_address(
     return instantiate(src_name, args=args, secrets=secrets, location=location)
 
 
+def driver_from_connection(
+    connection_name: str,
+    location: dict[str, Any] | None = None,
+) -> Driver:
+    """Resolve an inline ``{connection, location}`` to a native :class:`Driver`.
+
+    The run-time-selection counterpart to :func:`driver_from_address`
+    (used when a run targets a storage account + location without a saved
+    address). The location is the exact location of the data.
+
+    Raises:
+        FileNotFoundError: When the connection config does not exist.
+        ValueError: When the connection type has no registered driver.
+    """
+    from ovid2.config import connections as _connections
+
+    raw = _connections.load_connection_config(connection_name)
+    type_name = str(raw.get("type") or "")
+    return instantiate(
+        type_name,
+        args=dict(raw.get("args") or {}),
+        secrets=dict(_connections.resolve_secrets(raw)),
+        location=dict(location or {}),
+    )
+
+
 def _split_legacy_src_args(
     type_name: str,
     src_args: dict[str, Any],

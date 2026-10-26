@@ -114,7 +114,7 @@ class DiscAddress(BaseAddress):
     """Address for local or network-mounted disc storage.
 
     Config keys:
-        path (str, required): Root directory for pipeline-scoped reads/writes.
+        path (str, required): The exact directory the data is read from / written to.
         format (str, optional): ``csv`` (default), ``parquet``, or ``json``.
         lowercase_columns (bool, optional): If ``True``, all CSV headers are
             normalized to lowercase at read time. Default ``False``.
@@ -139,16 +139,17 @@ class DiscAddress(BaseAddress):
     # ------------------------------------------------------------------ read
 
     def _get_read_path(self, pipeline: str, batch_id: str, file_pattern: str) -> str:
-        """Resolve a pipeline-scoped read path (case-insensitive, glob-aware).
+        """Resolve a read path exactly under the address directory (glob-aware).
 
-        Preserved as a public method (via the double-underscore-free
-        name) because :mod:`ovid2.core.pipeline` and the Datavant
-        hash-token pre-processor peek at it. Delegates to the module-
-        level helper in :mod:`ovid2.drivers.disc.spark`.
+        Preserved because :mod:`ovid2.core.pipeline` and the Datavant
+        hash-token pre-processor peek at it. ``pipeline`` / ``batch_id``
+        are accepted for interface stability and ignored — the address
+        is the exact location of the data.
         """
+        del pipeline, batch_id
         from ovid2.drivers.disc.spark import resolve_read_path
 
-        return resolve_read_path(self.root_path, pipeline, batch_id, file_pattern)
+        return resolve_read_path(self.root_path, file_pattern)
 
     def _detect_delimiter(self, file_path: str) -> str:
         """Auto-detect the delimiter of a CSV file from its first line."""
@@ -173,14 +174,12 @@ class DiscAddress(BaseAddress):
         ``file_name`` is a glob) but is ignored here — disc reads
         always resolve through ``file_name`` and the on-disk layout.
         """
-        del table_name  # unused; disc reads always use file_name
+        del table_name, pipeline, batch_id  # the address is the exact location
         from ovid2.drivers.disc.spark import read_dataframe
 
         return read_dataframe(
             spark,
             self.root_path,
-            pipeline,
-            batch_id,
             file_name,
             delimiter,
             self.format,
@@ -190,8 +189,9 @@ class DiscAddress(BaseAddress):
     # ----------------------------------------------------------------- write
 
     def _get_write_path(self, pipeline: str, batch_id: str) -> str:
-        """Return the write directory for ``{root_path}/{pipeline}/{batch_id}``."""
-        return os.path.join(self.root_path, pipeline, batch_id)
+        """Return the write directory — the address directory itself."""
+        del pipeline, batch_id
+        return self.root_path
 
     def write(
         self,
@@ -203,14 +203,12 @@ class DiscAddress(BaseAddress):
         delimiter: str | None = None,
     ) -> None:
         """Write a DataFrame, merging Spark part-files into one output file."""
-        del spark  # unused; write_dataframe uses the writer built into the DF
+        del spark, pipeline, batch_id  # the address is the exact location
         from ovid2.drivers.disc.spark import write_dataframe
 
         write_dataframe(
             df,
             self.root_path,
-            pipeline,
-            batch_id,
             table_name,
             delimiter,
             self.format,

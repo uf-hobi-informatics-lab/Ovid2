@@ -348,7 +348,7 @@ class TestAzureBlobIOWriteChain:
         names = [n for n, _ in df.log]
         assert "coalesce" not in names
         assert ("format", ("csv",)) in df.log
-        assert ("save", ("abfss://c@acct.dfs.core.windows.net/p/b/t.csv",)) in df.log
+        assert ("save", ("abfss://c@acct.dfs.core.windows.net/t.csv",)) in df.log
 
     def test_single_file_true_uses_finalize_path(
         self,
@@ -379,13 +379,13 @@ class TestAzureBlobIOWriteChain:
         io = self._make(format="parquet")
         df = _FakeDF()
         io.write(df, _FakeSparkSession(), "p", "b", "t")  # type: ignore[arg-type]
-        assert ("parquet", ("abfss://c@acct.dfs.core.windows.net/p/b/t.parquet",)) in df.log
+        assert ("parquet", ("abfss://c@acct.dfs.core.windows.net/t.parquet",)) in df.log
 
     def test_json_write_unchanged(self) -> None:
         io = self._make(format="json")
         df = _FakeDF()
         io.write(df, _FakeSparkSession(), "p", "b", "t")  # type: ignore[arg-type]
-        assert ("json", ("abfss://c@acct.dfs.core.windows.net/p/b/t.json",)) in df.log
+        assert ("json", ("abfss://c@acct.dfs.core.windows.net/t.json",)) in df.log
 
     def test_unknown_format_raises(self) -> None:
         io = self._make(format="avro")

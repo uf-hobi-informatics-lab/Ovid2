@@ -201,28 +201,15 @@ class DiscDriver(Driver):
         base = normalised["container_path"] or normalised["host_path"]
         return os.path.join(base, sub) if sub else base
 
-    def _batch_dir(
-        self,
-        pipeline: str,
-        batch_id: str,
-        location: dict[str, Any] | None = None,
-    ) -> str | None:
-        """Return the directory ``read()`` resolves files under, or ``None``.
+    def _batch_dir(self, location: dict[str, Any] | None = None) -> str | None:
+        """Return the exact directory this address reads from, or ``None``.
 
-        Mirrors the layout precedence of
-        :func:`ovid2.drivers.disc.spark.resolve_read_path`:
-        ``{root}/{pipeline}/{batch}`` (case variants), then
-        ``{root}/{batch}``, then the root itself.
+        The address *is* the location of the data: no ``{pipeline}`` /
+        ``{batch_id}`` segment is appended. ``None`` when the directory
+        does not exist.
         """
         root = self._data_root(location)
-        candidates: list[str] = []
-        for name in (pipeline, pipeline.lower(), pipeline.upper()):
-            candidates.append(os.path.join(root, name, batch_id))
-        candidates.extend([os.path.join(root, batch_id), root])
-        for path in candidates:
-            if os.path.isdir(path):
-                return path
-        return None
+        return root if os.path.isdir(root) else None
 
     @staticmethod
     def _list_batch_dir(path: str) -> list[StorageEntry]:
@@ -261,25 +248,21 @@ class DiscDriver(Driver):
         pipeline: str | None = None,
         batch_id: str | None = None,
     ) -> list[str] | None:
-        """Expand ``all`` to every data file in the batch folder.
+        """Expand ``all`` to every data file directly in the address folder.
 
         Returns ``LOGICAL=SOURCE`` specs (``demographic=demographic.csv``)
-        so destination stems drop the extension. ``None`` when no
-        pipeline / batch is known (nothing to resolve against).
+        so destination stems drop the extension. ``pipeline`` /
+        ``batch_id`` are ignored — the address is the exact location.
 
         Raises:
-            FileNotFoundError: When no batch folder exists under the root.
+            FileNotFoundError: When the address folder does not exist.
         """
-        if not pipeline or not batch_id:
-            return None
+        del pipeline, batch_id
         from ovid2.drivers._table_listing import entries_to_table_specs
 
-        path = self._batch_dir(pipeline, batch_id, location)
+        path = self._batch_dir(location)
         if path is None:
-            raise FileNotFoundError(
-                f"no batch folder for pipeline={pipeline!r} batch_id={batch_id!r} "
-                f"under {self._data_root(location)!r}"
-            )
+            raise FileNotFoundError(f"address folder {self._data_root(location)!r} does not exist")
         return entries_to_table_specs(self._list_batch_dir(path))
 
     def table_sizes(
@@ -290,9 +273,10 @@ class DiscDriver(Driver):
         batch_id: str,
     ) -> dict[str, int]:
         """Return on-disk sizes for ``file_names`` (globs allowed) via ``stat``."""
+        del pipeline, batch_id
         from ovid2.drivers._table_listing import sizes_for
 
-        path = self._batch_dir(pipeline, batch_id)
+        path = self._batch_dir()
         if path is None:
             return {}
         return sizes_for(self._list_batch_dir(path), file_names)
@@ -344,11 +328,10 @@ class DiscDriver(Driver):
         from ovid2.drivers.disc.spark import read_dataframe
 
         merged = self._merged_location_view()
+        del pipeline, batch_id  # the address is the exact location
         return read_dataframe(
             session,  # type: ignore[arg-type]
             merged["root"],
-            pipeline,
-            batch_id,
             file_name,
             delimiter,
             merged["format"],
@@ -364,16 +347,14 @@ class DiscDriver(Driver):
         table_name: str,
         delimiter: str | None = None,
     ) -> None:
-        """Materialise ``df`` under ``{root}/{pipeline}/{batch_id}/``."""
-        del session  # not needed — write_dataframe uses df.write
+        """Materialise ``df`` directly under the address directory."""
+        del session, pipeline, batch_id  # the address is the exact location
         from ovid2.drivers.disc.spark import write_dataframe
 
         merged = self._merged_location_view()
         write_dataframe(
             df,
             merged["root"],
-            pipeline,
-            batch_id,
             table_name,
             delimiter,
             merged["format"],

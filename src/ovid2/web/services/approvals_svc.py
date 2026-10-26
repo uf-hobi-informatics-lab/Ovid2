@@ -55,6 +55,10 @@ DESTRUCTIVE_ACTIONS: frozenset[str] = frozenset(
         "pipeline.delete",
         "address.delete",
         "llm.delete",
+        # An agent (MCP / assistant) confirming that a run may overwrite an
+        # occupied output location. The address is the exact write
+        # location, so this replaces existing data — a human must approve.
+        "run.overwrite",
     }
 )
 

@@ -29,7 +29,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser.add_argument("--input_address", required=True)
     parser.add_argument("--output_address", required=True)
     parser.add_argument("--pipeline", required=True)
-    parser.add_argument("--batch_id", required=True)
+    parser.add_argument(
+        "--batch_id",
+        required=True,
+        help="Batch id — the complete Data Space path of the input location (<connection>/<path>); a run label, never appended to an address.",
+    )
     parser.add_argument("--tables", nargs="+", default=["all"])
     parser.add_argument(
         "--transformations",
@@ -41,6 +45,15 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         ),
     )
     parser.add_argument("--engine", default="pyspark")
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help=(
+            "Allow writing into an output location that already holds tables "
+            "(the address is the exact write location; without this flag the "
+            "run refuses to overwrite existing data)."
+        ),
+    )
     parser.add_argument("--workers", type=int, default=25)
     parser.add_argument("--sf_database", default=None)
     parser.add_argument("--sf_account", default=None)

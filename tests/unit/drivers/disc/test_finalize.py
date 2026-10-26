@@ -215,15 +215,13 @@ class TestEndToEndWrite:
         write_dataframe(
             df,
             str(root),
-            "demo",
-            "20260101",
             "letters",
             delimiter=",",
             fmt="csv",
             single_file=True,
         )
 
-        out = root / "demo" / "20260101" / "letters.csv"
+        out = root / "letters.csv"
         assert out.is_file(), f"Expected a single file at {out}"
         text = out.read_text().strip().splitlines()
         assert text[0] == "id,letter"
@@ -231,7 +229,7 @@ class TestEndToEndWrite:
         assert data == ["1,a", "2,b", "3,c", "4,d"]
 
         # Staging directory was cleaned up.
-        staging = root / "demo" / "20260101" / "tmp_letters.csv"
+        staging = root / "tmp_letters.csv"
         assert not staging.exists()
 
     def test_single_file_write_via_csv_module_matches_body(
@@ -250,14 +248,12 @@ class TestEndToEndWrite:
         write_dataframe(
             df,
             str(root),
-            "p",
-            "b",
             "t",
             ",",
             "csv",
             single_file=True,
         )
-        out = root / "p" / "b" / "t.csv"
+        out = root / "t.csv"
         with out.open() as fh:
             rows = list(csv.reader(fh))
         assert rows[0] == ["id", "letter"]
@@ -279,8 +275,6 @@ class TestEndToEndWrite:
         write_dataframe(
             df,
             str(root),
-            "demo",
-            "20260101",
             "letters",
             delimiter=",",
             fmt="csv",
@@ -288,7 +282,7 @@ class TestEndToEndWrite:
         )
 
         # With single_file=False the output is a directory of parts.
-        out = root / "demo" / "20260101" / "letters.csv"
+        out = root / "letters.csv"
         assert out.is_dir(), f"Expected a directory (Spark part-layout) at {out}"
         parts = sorted(out.glob("part-*.csv"))
         assert parts, "Spark should have produced at least one part file."
@@ -312,8 +306,6 @@ class TestEndToEndWrite:
             write_dataframe(
                 df,
                 str(tmp_path),
-                "p",
-                "b",
                 "t",
                 delimiter=None,
                 fmt="avro",
@@ -395,8 +387,6 @@ class TestLegacyAddressSingleFile:
         def fake_write_dataframe(
             df: object,
             root: str,
-            pipeline: str,
-            batch: str,
             table: str,
             delimiter: object,
             fmt: str,

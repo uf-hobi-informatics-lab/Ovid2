@@ -75,11 +75,10 @@ side is bound per-run.
 On the **Pipelines page** (`GET /pipelines`), an open row's *Actions*
 cell renders an inline storage-account `<select>` for **each** open side
 (`input_connection` / `output_connection`, populated from the saved
-storage accounts) plus a `batch_id` field, and a **run** button:
+storage accounts) and a **run** button:
 
-- Pick the account(s) for the open side(s), optionally type a
-  `batch_id` (which doubles as the schema to read from / write to), and
-  click **run**. `POST /pipelines/{name}/run` resolves each chosen
+- Pick the account(s) for the open side(s) and click **run**. The batch
+  id is derived from the input (see *Addresses are exact locations*). `POST /pipelines/{name}/run` resolves each chosen
   account into an address (at the account root) and submits the job
   immediately — you land on `/runs/{id}`, no detour.
 - Leave an open side's account unpicked and the run **falls back** to
@@ -89,7 +88,78 @@ storage accounts) plus a `batch_id` field, and a **run** button:
 
 A bound (non-open) side is never asked for at run time. Note that an
 open **input** cannot use the `watch` trigger — `watch` enumerates new
-batch folders under a bound input.
+child folders / schemas under a bound input (each child is one batch and
+runs against an address pointing exactly at it). A watch / scheduled
+pipeline writes to one fixed output, so tick **Runs may overwrite existing
+output data** (`allow_overwrite`) on its config.
+
+## Addresses are exact locations
+
+Ovid2 is a processor: a command plus an **input address** and an **output
+address**. Every address is the **exact** location its data is read from or
+written to — disc / S3 / Azure / GCS: the storage account root plus the
+folder path; warehouses: `DATABASE/SCHEMA`. Nothing is appended: there is no
+`{pipeline}/{batch_id}` sub-folder and no `OVID_<pipeline>_<batch>` schema.
+The storage account is just the top folder; every data space is a tree of
+plain directories (`/dataspace`, `GET /api/v1/dataspace?path=/<account>/<…>`).
+
+- **Batch id.** The complete path of the input location —
+  `<account>/<folder path>` or `<account>/<DATABASE>/<SCHEMA>` (e.g.
+  `inbox/landing/2026_03`). It is derived server-side and shown read-only on
+  `/submit`; it labels the run and is never used to build a path.
+- **Overwrite confirmation.** A run writes exactly at the output address,
+  so re-running after fixing the input replaces the output. When the output
+  already holds tables the run needs a confirmation: `--overwrite` on the
+  CLI, the *Overwrite existing data?* page on the web, `confirm_overwrite`
+  on the API (which otherwise answers `409 overwrite_required` listing the
+  tables). Agent (MCP / assistant) confirmations become a `run.overwrite`
+  approval a human must grant. `copy` / `move` only count the tables they
+  write; `health` only `dcq_results`.
+- **No `sf_database` / `sf_schema` overrides** on submit or pipeline
+  configs — pick the schema as the address. ADR:
+  the adr-address-is-exact-location design note.
+
+## Submitting a job: the job builder (`/submit`)
+
+`/submit` is a graphical job builder. The page has two halves.
+
+**Navigator (left).** Four collapsible sections, one open at a time. Each section closes once you have filled it in, and the next one opens:
+
+1. **Job & pipeline.** Job-type chips (ETL, Analysis, DQ checks, Health,
+   Copy, Move) and pipeline cards. Health kinds also show the generic
+   EDC labels. Copy and move take a free-form job name.
+2. **Source** and 3. **Target.** A lazy tree of *saved addresses* plus
+   *storage accounts*. Each node shows a type mark: Snowflake, S3, Azure Blob,
+   Databricks, GCS, Postgres, MSSQL, disc or Access. The marks are simple
+   original glyphs, not vendor trademark files. Accounts expand into
+   folders or database → schema levels, then files or tables, through
+   `GET /api/v1/storage/{name}/browse`.
+4. **Options** (optional). Tables, transformation stages, report cycle
+   and checks, and engine plus overrides.
+
+**Selecting an item:** **click its icon.** The icon gets a green ring and
+a check badge. Clicking a *name* opens or closes that node. Files, tables
+and saved addresses can't be opened, so clicking their name selects them.
+Keyboard: ↑/↓ moves between rows, → expands, ← collapses, Enter selects.
+The web UI no longer uses "use" link-buttons anywhere. The same
+icon-click rule applies to the storage pickers on `/pipelines` and
+`/pipelines/new`.
+
+**Job graph (right).** A sticky graph of Source → Pipeline → Target.
+Each node is grey and dashed until assigned, then turns green. An edge
+turns green once both of its ends are assigned. Clicking a node opens
+its section. The chips under the graph (Tables, Stages or Checks, Engine)
+show the current option values and highlight when you change them from
+the defaults. **Submit job** stays disabled until every node is green. The
+read-only **Batch id** under the graph fills in from the chosen source (its
+complete path).
+
+A warehouse account root is not a valid selection. Clicking its icon
+opens the account and prompts you to pick a database or schema.
+
+The POST contract is unchanged. The builder writes the same form fields
+as before (`kind`, `pipeline`, `<role>_mode` / `_address` / `_connection`
+/ `_location`, `tables`, `transformations`, …).
 
 ## Health checks: report-cycle packages (`20r1`, `20r2`, …)
 
@@ -186,7 +256,7 @@ and select the storage account, database, and schema at run time.
 | Surface | How you select storage → database → schema |
 | --- | --- |
 | Web submit form | *Pipeline* dropdown → pick `pcornet_edc` (under "Reusable EDC / health labels"). Input/Output storage cards → **Browse storage** → choose account, then click into the database and schema. |
-| CLI | `ovid2 health --pipeline pcornet_edc --input_connection <account> --input_location "DATABASE/SCHEMA" --output_connection <account> --output_location "DATABASE/SCHEMA" --batch_id 20260101 --packages 20r1` (a saved `--input_address` / `--output_address` still works; `--sf_database` / `--sf_schema` remain as overrides). |
+| CLI | `ovid2 health --pipeline pcornet_edc --input_connection <account> --input_location "DATABASE/SCHEMA" --output_connection <account> --output_location "DATABASE/SCHEMA" --packages 20r1` (a saved `--input_address` / `--output_address` still works; `--batch_id` labels the run). |
 | REST | `POST /api/v1/runs` with `kind:"health"`, `pipeline:"pcornet_edc"`, and `input_connection`/`input_location` (+ `output_connection`/`output_location`) instead of `input_address`/`output_address`. |
 | MCP | `submit_health(input_connection=<account>, input_location="DATABASE/SCHEMA", output_connection=<account>, output_location="DATABASE/SCHEMA", packages=["20r1"])`; discover accounts via `list_connections` and their databases/schemas via `browse_storage`. |
 
@@ -209,8 +279,8 @@ its own tables accepts `all`:
 | Source driver | What `all` means | Size source (for ordering) |
 | --- | --- | --- |
 | `snowflake` | every table + view in the address's `database.schema` (`SHOW TABLES` / `SHOW VIEWS`) | `SHOW TABLES` `bytes` |
-| `disc` | every data file / Spark `<t>.csv/` dir in the batch folder (same layout precedence as reads: `{root}/{pipeline}/{batch}`, `{root}/{batch}`, `{root}`) | file `stat` |
-| `s3`, `azure_blob` | every object / `<t>.csv/` prefix under `{path}/{pipeline}/{batch}/` | object / blob listing |
+| `disc` | every data file / Spark `<t>.csv/` dir directly in the address folder | file `stat` |
+| `s3`, `azure_blob` | every object / `<t>.csv/` prefix directly under the address `{path}/` | object / blob listing |
 | `access` | every user table in the `.accdb` / `.mdb`, minus `exclude_tables` | — |
 
 Junk entries (`_SUCCESS`, `.crc`, hidden files, `k=v` partitions, plain
@@ -227,7 +297,7 @@ web process never holds a credential. The stored job, and the draft a
 human reviews, therefore lists the concrete tables. If the source type can
 enumerate but not from the web host (e.g. Access jars only in the image),
 `all` is kept and the executor expands it at run time. A listing failure
-(missing batch folder, unknown schema) is a 400 that says why.
+(missing folder, unknown schema) is a 400 that says why.
 
 **Largest table first.** `ovid2 tools copy` copies tables in parallel
 (`$OVID2_COPY_TABLE_CONCURRENCY`, default 8). Before starting, it asks the
@@ -244,13 +314,16 @@ The driver contract:
 - `Driver.supports_expand_all()` — static, secret-free; the web tier uses
   it to decide whether to accept `all`.
 - `Driver.expand_all_tables(location, *, pipeline, batch_id)` — returns
-  table specs, `None` when unsupported.
+  table specs, `None` when unsupported (`pipeline` / `batch_id` are ignored:
+  the address is the exact location).
 - `Driver.table_sizes(file_names, *, pipeline, batch_id)` — `{name: bytes}`
   for the names whose size is known.
+- `Driver.existing_tables(location)` — the overwrite gate's occupancy check
+  (`[]` empty / missing, `None` unknown).
 
 ```
 ovid2 tools copy --from CHAR_DEMO --to SANDBOX \
-    --pipeline demo --batch_id 20260916 --tables all
+    --pipeline demo --batch_id sf/CHAR_DEMO/PUBLIC --tables all [--overwrite]
 ```
 
 ### Snowflake → Snowflake copy on Snowpark (`COPY_SNOWPARK`)
@@ -273,9 +346,9 @@ Address resolution: Snowflake addresses may store their location as
 `{"path": "DB"}` / `{"path": "DB/SCHEMA"}` (what the web UI saves) or as
 explicit `database` / `schema` keys. Both forms are equivalent, and a
 `path` database is **never** overridden by the pipeline label's
-`DEFAULT_PIPELINE_DB_NAME`. A destination with a schema writes there
-verbatim; a database-only destination writes to
-`DB.OVID_<pipeline>_<batch_id>`.
+`DEFAULT_PIPELINE_DB_NAME`. The destination is the exact `DB/SCHEMA` it
+names (created if missing; a date-shaped schema is quoted). A database-only
+destination is rejected — pick the schema.
 
 **Assistant routing.** `GET /api/v1/pipelines` entries carry `engine`,
 `engine_type` (the engine *type* the name resolves to) and `description`.

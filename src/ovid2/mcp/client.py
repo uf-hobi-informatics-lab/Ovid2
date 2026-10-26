@@ -72,13 +72,17 @@ class WebApiClient:
         """Release the underlying connection pool."""
         await self._client.aclose()
 
-    async def get(self, path: str, **params: Any) -> Any:
-        """Issue a ``GET`` and return the decoded JSON body."""
+    async def get(self, path: str, /, **params: Any) -> Any:
+        """Issue a ``GET`` and return the decoded JSON body.
+
+        ``path`` is positional-only so a ``path=`` *query* parameter (the
+        Data Space / filesystem tools) does not collide with it.
+        """
         clean = {k: v for k, v in params.items() if v is not None}
         response = await self._client.get(path, params=clean)
         return self._unwrap(response)
 
-    async def get_text(self, path: str, **params: Any) -> str:
+    async def get_text(self, path: str, /, **params: Any) -> str:
         """Issue a ``GET`` and return the raw ``text/plain`` body."""
         clean = {k: v for k, v in params.items() if v is not None}
         response = await self._client.get(path, params=clean)
@@ -86,7 +90,7 @@ class WebApiClient:
             self._raise(response)
         return response.text
 
-    async def post(self, path: str, json_body: Any = None, **params: Any) -> Any:
+    async def post(self, path: str, /, json_body: Any = None, **params: Any) -> Any:
         """Issue a ``POST`` and return the decoded JSON body."""
         clean = {k: v for k, v in params.items() if v is not None}
         response = await self._client.post(path, json=json_body, params=clean)

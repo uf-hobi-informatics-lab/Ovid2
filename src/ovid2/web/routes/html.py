@@ -1883,21 +1883,67 @@ def _resolve_submit_endpoint(
     return (address or "").strip()
 
 
-def _batch_id_from_location(*locations: str) -> str | None:
-    """Derive a batch id from the first non-empty browsed location leaf.
+def _overwrite_confirm_page(
+    request: Request,
+    *,
+    action: str,
+    fields: list[tuple[str, str]],
+    output_address: str,
+    tables: list[str],
+    back_url: str,
+) -> HTMLResponse:
+    """Render the overwrite confirmation for an occupied output.
 
-    The run modal replaces the free-text batch-id field: the operator
-    navigates to a folder (filesystem) or schema (warehouse), and its
-    final path segment names the batch. The candidate ``locations`` are
-    tried in order (input first, then output); the first that yields a
-    non-empty leaf wins. Returns ``None`` when none carry a location, so
-    the caller falls back to a synthesised timestamp batch id.
+    The address is the exact write location, so an occupied output is
+    replaced by the run. The page re-posts ``fields`` to ``action`` with
+    ``confirm_overwrite=true`` when the operator confirms.
     """
-    for raw in locations:
-        leaf = (raw or "").strip().strip("/").rsplit("/", 1)[-1].strip()
-        if leaf:
-            return leaf
-    return None
+    return templates.TemplateResponse(
+        request,
+        "overwrite_confirm.html",
+        {
+            "action": action,
+            "fields": [(k, v) for k, v in fields if k not in ("confirm_overwrite", "csrf_token")],
+            "output_address": output_address,
+            "tables": list(tables),
+            "back_url": back_url,
+        },
+        status_code=409,
+    )
+
+
+def _overwrite_response(
+    request: Request,
+    exc: jobs_svc.OverwriteRequired,
+    *,
+    action: str,
+) -> JSONResponse | HTMLResponse:
+    """409 for an occupied output: JSON for ``fetch`` callers, else the confirm page."""
+    if request.headers.get("x-requested-with", "").lower() == "fetch":
+        return JSONResponse(
+            {
+                "status": "overwrite_required",
+                "output_address": exc.output_address,
+                "existing_tables": exc.tables,
+                "message": str(exc),
+                "confirm_url": action,
+            },
+            status_code=409,
+        )
+    return _overwrite_confirm_page(
+        request,
+        action=action,
+        fields=[],
+        output_address=exc.output_address,
+        tables=exc.tables,
+        back_url=request.headers.get("referer") or "/runs",
+    )
+
+
+async def _form_fields(request: Request) -> list[tuple[str, str]]:
+    """Return the raw submitted form fields (multi-valued, order-preserving)."""
+    form = await request.form()
+    return [(str(k), str(v)) for k, v in form.multi_items() if isinstance(v, str)]
 
 
 @router.get("/submit", response_class=HTMLResponse, include_in_schema=False)
@@ -1930,13 +1976,35 @@ def submit_form(
     pipelines = pipelines_meta_svc.list_pipelines()
     address_names = _addresses.list_available_addresses()
     storage_accounts = connections_svc.list_connections()
+    # Saved addresses with a resolved storage *type* so the job-builder
+    # navigator can show the right logo next to each one. W7 addresses
+    # inherit their backing connection's type; legacy ones use src_name.
+    conn_types = {c.name: c.type for c in storage_accounts}
+    from ovid2.web.services import output_probe_svc
+
+    saved_addresses = [
+        {
+            "name": a.name,
+            "connection": a.connection or "",
+            "type": conn_types.get(a.connection or "", a.src_name),
+            # The address is the exact location; its complete Data Space
+            # path (connection + location) is the batch id of a run that
+            # reads from it. Empty for legacy (connectionless) addresses.
+            "batch": output_probe_svc.batch_id_for_address(a.name) or "",
+        }
+        for a in addresses_svc.list_addresses()
+        if a.name in set(address_names)
+    ]
     return templates.TemplateResponse(
         request,
         "submit.html",
         {
             "pipelines": pipelines,
             "addresses": address_names,
+            "saved_addresses": saved_addresses,
             "storage_accounts": storage_accounts,
+            "engines": engines_svc.list_engines(),
+            "engine_types": [t.type for t in engines_svc.list_engine_types()],
             "pipeline_kinds": PIPELINE_KINDS,
             "kind_choices": kind_choices(),
             "generic_labels": sorted(GENERIC_CDM_LABELS.keys()),
@@ -1953,11 +2021,11 @@ def submit_form(
     )
 
 
-@router.post("/submit", response_class=HTMLResponse, include_in_schema=False)
-def submit_form_post(
+@router.post("/submit", response_class=HTMLResponse, response_model=None, include_in_schema=False)
+async def submit_form_post(
     request: Request,
     pipeline: str = Form(...),
-    batch_id: str = Form(...),
+    batch_id: str = Form(""),
     input_address: str = Form(""),
     output_address: str = Form(""),
     kind: str = Form("etl"),
@@ -1983,9 +2051,18 @@ def submit_form_post(
     input_location: str = Form(""),
     output_connection: str = Form(""),
     output_location: str = Form(""),
-) -> RedirectResponse:
-    """Handle the submit form; redirect to the run detail page on success."""
+    confirm_overwrite: bool = Form(False),
+) -> HTMLResponse | RedirectResponse:
+    """Handle the submit form; redirect to the run detail page on success.
+
+    ``batch_id`` is derived server-side from the input location (its
+    complete Data Space path); the posted value is only a fallback label
+    for legacy inputs. An occupied output renders the overwrite
+    confirmation (409) instead of submitting.
+    """
     from urllib.parse import quote as _urlquote
+
+    raw_fields = await _form_fields(request)
 
     def _error(message: str) -> RedirectResponse:
         return RedirectResponse(url=f"/submit?error={_urlquote(str(message))}", status_code=303)
@@ -2068,6 +2145,7 @@ def submit_form_post(
                 sf_account=None,
                 sf_schema=None,
                 stderr_log=False,
+                confirm_overwrite=bool(confirm_overwrite),
                 extra_mounts=mount_list,
                 # strict_types is only honoured on kinds whose spec allows
                 # it (move); server-side ``jobs_svc._validate_submit``
@@ -2100,10 +2178,9 @@ def submit_form_post(
                 checks=check_list,
                 engine=engine.strip() or "pyspark",
                 workers=int(workers),
-                sf_database=sf_database.strip() or None,
                 sf_account=sf_account.strip() or None,
-                sf_schema=sf_schema.strip() or None,
                 stderr_log=bool(stderr_log),
+                confirm_overwrite=bool(confirm_overwrite),
             )
         else:
             table_list = [t for t in tables.split() if t]
@@ -2129,18 +2206,32 @@ def submit_form_post(
                 transformations=transformation_list,
                 engine=engine.strip() or "pyspark",
                 workers=int(workers),
-                sf_database=sf_database.strip() or None,
                 sf_account=sf_account.strip() or None,
-                sf_schema=sf_schema.strip() or None,
                 stderr_log=bool(stderr_log),
+                confirm_overwrite=bool(confirm_overwrite),
                 # extra_mounts is copy/move-only; deliberately not
                 # forwarded on the ETL path so the html.py branch
                 # mirrors the server-side kind gate in
                 # jobs_svc._validate_submit. Same for strict_types.
             )
+        if (sf_database or "").strip() or (sf_schema or "").strip():
+            return _error(
+                "Snowflake DATABASE / SCHEMA overrides are gone: every address is "
+                "the exact location of its data. Pick the schema in the Source / "
+                "Target tree instead."
+            )
         response = jobs_svc.submit(payload, actor="web")
     except addresses_svc.AddressError as exc:
         return _error(str(exc))
+    except jobs_svc.OverwriteRequired as exc:
+        return _overwrite_confirm_page(
+            request,
+            action="/submit",
+            fields=raw_fields,
+            output_address=exc.output_address,
+            tables=exc.tables,
+            back_url="/submit",
+        )
     except jobs_svc.SubmitError as exc:
         return _error(str(exc))
     except (ValueError, TypeError) as exc:  # invalid form encoding
@@ -2173,15 +2264,24 @@ def job_cancel_html(request: Request, job_id: str) -> RedirectResponse:
     response_model=None,
     include_in_schema=False,
 )
-def job_launch_html(request: Request, job_id: str) -> RedirectResponse | JSONResponse:
+def job_launch_html(
+    request: Request,
+    job_id: str,
+    confirm_overwrite: bool = Form(False),
+) -> RedirectResponse | JSONResponse | HTMLResponse:
     """Launch a draft job (draft → queued) — the run page's ▶ button.
 
     Mirrors :func:`job_rerun_html`: a background ``X-Requested-With:
     fetch`` POST gets JSON so the console can flip in place; a plain
-    form submit gets a 303 back to the same run page.
+    form submit gets a 303 back to the same run page. An occupied output
+    answers 409 (JSON for fetch callers, the confirmation page otherwise).
     """
     try:
-        detail = jobs_svc.launch_draft(job_id, actor="web")
+        detail = jobs_svc.launch_draft(
+            job_id, actor="web", confirm_overwrite=bool(confirm_overwrite)
+        )
+    except jobs_svc.OverwriteRequired as exc:
+        return _overwrite_response(request, exc, action=f"/jobs/{job_id}/launch")
     except jobs_svc.SubmitError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if request.headers.get("x-requested-with", "").lower() == "fetch":
@@ -2213,7 +2313,11 @@ def job_discard_html(request: Request, job_id: str) -> RedirectResponse:
     response_model=None,
     include_in_schema=False,
 )
-def job_rerun_html(request: Request, job_id: str) -> RedirectResponse | JSONResponse:
+def job_rerun_html(
+    request: Request,
+    job_id: str,
+    confirm_overwrite: bool = Form(False),
+) -> RedirectResponse | JSONResponse | HTMLResponse:
     """Rerun a job.
 
     Plain form submits (no-JS fallback) get a 303 redirect to the new
@@ -2225,7 +2329,9 @@ def job_rerun_html(request: Request, job_id: str) -> RedirectResponse | JSONResp
     ``static/live.js``).
     """
     try:
-        response = jobs_svc.rerun(job_id, actor="web")
+        response = jobs_svc.rerun(job_id, actor="web", confirm_overwrite=bool(confirm_overwrite))
+    except jobs_svc.OverwriteRequired as exc:
+        return _overwrite_response(request, exc, action=f"/jobs/{job_id}/rerun")
     except jobs_svc.SubmitError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if request.headers.get("x-requested-with", "").lower() == "fetch":
@@ -2820,6 +2926,7 @@ def _build_pipeline_write(form: dict[str, str]) -> PipelineWrite:
         sf_account=(str(form.get("sf_account", "")).strip() or None),
         sf_schema=(str(form.get("sf_schema", "")).strip() or None),
         stderr_log=bool(form.get("stderr_log")),
+        allow_overwrite=bool(form.get("allow_overwrite")),
         enabled=bool(form.get("enabled")),
         trigger=PipelineTrigger(**trigger_kwargs),
     )
@@ -3228,9 +3335,10 @@ def pipeline_config_delete_post(request: Request, name: str) -> RedirectResponse
 @router.post(
     "/pipelines/{name}/run",
     response_class=HTMLResponse,
+    response_model=None,
     include_in_schema=False,
 )
-def pipeline_config_run_post(
+async def pipeline_config_run_post(
     request: Request,
     name: str,
     batch_id: str = Form(""),
@@ -3239,17 +3347,19 @@ def pipeline_config_run_post(
     input_location: str = Form(""),
     output_location: str = Form(""),
     tables: str = Form(""),
-) -> RedirectResponse:
+    confirm_overwrite: bool = Form(False),
+) -> HTMLResponse | RedirectResponse:
     """Submit the pipeline as a job and redirect to the run detail page.
 
-    ``batch_id`` is normally *derived* from the browsed folder / schema
-    (the run modal's navigator no longer lets the operator type one): the
-    final path segment of the chosen input location — or, failing that,
-    the output location — names the batch. When neither open side yields
-    a location leaf a timestamp batch id is synthesised (the plain "run
-    now" behaviour). The batch id doubles as the schema to read from /
-    write to. A ``batch_id`` posted explicitly (e.g. by the JSON API or a
-    legacy caller) still wins.
+    ``batch_id`` is *derived* by ``jobs_svc`` from the input address: the
+    complete Data Space path of the input location (storage account +
+    folder path / ``DATABASE/SCHEMA``). Every address is the exact
+    location of its data — the batch id is a label and is never appended
+    to an address. A posted ``batch_id`` is only a fallback label for
+    legacy (connectionless) inputs.
+
+    An occupied output renders the overwrite confirmation (409) instead
+    of submitting.
 
     A pipeline that keeps its input or output *open* (unbound at create
     time) has no storage to run against. The operator binds the open
@@ -3270,6 +3380,18 @@ def pipeline_config_run_post(
     copy|move`` has no ``all`` sentinel).
     """
     from urllib.parse import quote as _urlquote
+
+    raw_fields = await _form_fields(request)
+
+    def _confirm(exc: pipelines_svc.OverwriteRequired) -> HTMLResponse:
+        return _overwrite_confirm_page(
+            request,
+            action=f"/pipelines/{_urlquote(name)}/run",
+            fields=raw_fields,
+            output_address=exc.output_address,
+            tables=exc.tables,
+            back_url="/pipelines",
+        )
 
     detail = pipelines_svc.get_pipeline(name)
     if detail is not None:
@@ -3332,15 +3454,10 @@ def pipeline_config_run_post(
                 params.append(f"tables={_urlquote(' '.join(parsed_tables))}")
             return RedirectResponse(url="/submit?" + "&".join(params), status_code=303)
 
-        # Derive the batch id from the browsed location leaf when the
-        # operator did not type one (the run modal does not offer a free
-        # text field). Input side wins over output. When neither open
-        # side carried a location, ``chosen_batch`` stays None and
-        # run_now synthesises a timestamp.
-        chosen_batch = (batch_id or "").strip() or _batch_id_from_location(
-            input_loc if input_open else "",
-            output_loc if output_open else "",
-        )
+        # The batch id is derived from the input address by jobs_svc (its
+        # complete Data Space path); the posted value is only a fallback
+        # label for legacy inputs.
+        chosen_batch = (batch_id or "").strip() or None
         # Preserve an ``all`` sentinel for this run when the (overridden
         # or config) source can expand it (e.g. Access). Otherwise the
         # stray ``all`` was already dropped from ``tables_override``.
@@ -3360,7 +3477,10 @@ def pipeline_config_run_post(
                 input_address=override_input,
                 output_address=override_output,
                 tables=tables_override,
+                confirm_overwrite=bool(confirm_overwrite),
             )
+        except pipelines_svc.OverwriteRequired as exc:
+            return _confirm(exc)
         except pipelines_svc.PipelineError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return RedirectResponse(
@@ -3380,8 +3500,14 @@ def pipeline_config_run_post(
             tables_override = ["all"]
     try:
         response = pipelines_svc.run_now(
-            name, actor="web", batch_id=chosen_batch, tables=tables_override
+            name,
+            actor="web",
+            batch_id=chosen_batch,
+            tables=tables_override,
+            confirm_overwrite=bool(confirm_overwrite),
         )
+    except pipelines_svc.OverwriteRequired as exc:
+        return _confirm(exc)
     except pipelines_svc.PipelineError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return RedirectResponse(
@@ -3529,49 +3655,36 @@ async def settings_post(request: Request, _csrf: None = Depends(require_csrf)) -
 
 @router.get("/dataspace", response_class=HTMLResponse, include_in_schema=False)
 def dataspace_root_page(request: Request) -> HTMLResponse:
-    """Render the root of the Ovid Data Space (pipeline list)."""
-    listing = dataspace_svc.list_pipelines()
-    catalog = dataspace_svc.get_dimension_catalog()
-    return templates.TemplateResponse(
-        request,
-        "dataspace_root.html",
-        {"listing": listing, "catalog": catalog},
-    )
+    """Render the Data Space root (every storage account)."""
+    return _dataspace_page(request, "/")
 
 
 @router.get(
-    "/dataspace/{pipeline}",
+    "/dataspace/{ods_path:path}",
     response_class=HTMLResponse,
     include_in_schema=False,
 )
-def dataspace_pipeline_page(request: Request, pipeline: str) -> HTMLResponse:
-    """Render the batches under ``/{pipeline}``."""
-    try:
-        listing = dataspace_svc.list_pipeline_batches(pipeline)
-    except dataspace_svc.OdsServiceError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return templates.TemplateResponse(
-        request,
-        "dataspace_pipeline.html",
-        {"listing": listing},
-    )
+def dataspace_path_page(request: Request, ods_path: str) -> HTMLResponse:
+    """Render one folder / schema of the Data Space (``/<account>/<path…>``)."""
+    return _dataspace_page(request, "/" + ods_path.strip("/"))
 
 
-@router.get(
-    "/dataspace/{pipeline}/{batch_id}",
-    response_class=HTMLResponse,
-    include_in_schema=False,
-)
-def dataspace_batch_page(request: Request, pipeline: str, batch_id: str) -> HTMLResponse:
-    """Render the tables under ``/{pipeline}/{batch_id}``."""
+def _dataspace_page(request: Request, path: str) -> HTMLResponse:
+    """Shared renderer: every data space is a tree of plain directories."""
     try:
-        listing = dataspace_svc.list_batch_tables(pipeline, batch_id)
+        listing = dataspace_svc.list_path(path)
     except dataspace_svc.OdsServiceError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    crumbs: list[tuple[str, str]] = []
+    acc = ""
+    for part in [p for p in listing.path.split("/") if p]:
+        acc += "/" + part
+        crumbs.append((part, acc))
+    catalog = dataspace_svc.get_dimension_catalog() if listing.connection is None else None
     return templates.TemplateResponse(
         request,
-        "dataspace_batch.html",
-        {"listing": listing},
+        "dataspace.html",
+        {"listing": listing, "crumbs": crumbs, "catalog": catalog},
     )
 
 

@@ -119,7 +119,7 @@ projections:
 {
   "src_name": "disc",
   "src_args": {
-    "path": "REPLACE_WITH_$QS/data/input",
+    "path": "REPLACE_WITH_$QS/data/input/demo/20260101",
     "format": "csv",
     "lowercase_columns": true,
     "single_file": true
@@ -133,7 +133,7 @@ projections:
 {
   "src_name": "disc",
   "src_args": {
-    "path": "REPLACE_WITH_$QS/data/output",
+    "path": "REPLACE_WITH_$QS/data/output/demo",
     "format": "csv",
     "single_file": true
   }
@@ -141,8 +141,11 @@ projections:
 ```
 
 Substitute the real absolute paths (the shell won't expand `$QS` inside a JSON
-file). The disc driver resolves reads as `{path}/{pipeline}/{batch_id}/{glob}`
-and writes as `{path}/{pipeline}/{batch_id}/{table}.csv`.
+file). **An address is the exact location of its data**: the disc driver
+reads `{path}/{glob}` and writes `{path}/{table}.csv` — `pipeline` and
+`batch_id` are never appended. Point the input address at the folder that
+directly holds the files. Writing into an output that already holds tables
+is refused unless you pass `--overwrite`.
 
 ## 4. Sample input data
 
@@ -164,7 +167,7 @@ export OVID2_CONFIGS_DIR="$QS/configs"   # where demo_input/demo_output live
 
 ovid2 etl --local \
   --pipeline demo \
-  --batch_id 20260101 \
+  --batch_id demo/20260101 \
   --tables person \
   --transformations format deduplicate \
   --input_address demo_input \
@@ -178,7 +181,7 @@ Expected tail:
 
 ```
 [ovid2] ETL run
-[ovid2]   pipeline=demo batch_id=20260101 tables=['person']
+[ovid2]   pipeline=demo batch_id=demo/20260101 tables=['person']
 [ovid2]   transformations=['format', 'deduplicate']
 [ovid2]   engine=pyspark instance_id=...
 [ovid2] Complete. failed=0 succeeded=1
@@ -187,7 +190,7 @@ Expected tail:
 ## 6. Check the output
 
 ```bash
-cat "$QS"/data/output/demo/20260101/person.csv
+cat "$QS"/data/output/demo/person.csv
 ```
 
 ```

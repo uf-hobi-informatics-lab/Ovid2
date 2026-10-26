@@ -44,7 +44,7 @@ from ovid2.config.settings import DATA_DIR, LEGACY_CREDENTIALS_DIR
 from ovid2.run_kinds import get_kind
 from ovid2.web import db as web_db
 from ovid2.web.models import JobDetail, normalize_kind
-from ovid2.web.services import jobs_svc, pipelines_svc, settings_svc, watch_svc
+from ovid2.web.services import addresses_svc, jobs_svc, pipelines_svc, settings_svc, watch_svc
 from ovid2.web.settings import (
     WEB_MAX_PARALLEL_JOBS,
     WEB_WORKER_POLL_SECONDS,
@@ -195,10 +195,12 @@ class Worker:
         """Scan every enabled ``watch`` pipeline and fire one job per new batch.
 
         For each enabled ``watch`` pipeline, poll its input storage account
-        for top-level folders unseen since the stored cursor (via
+        location for child folders unseen since the stored cursor (via
         :func:`watch_svc.scan_for_new_batches`); submit one job per new
-        batch with that folder name as the ``batch_id``, then advance the
-        cursor so the same folder never fires twice.
+        batch reading *exactly* that folder (a child address), then
+        advance the cursor so the same folder never fires twice. A watch
+        pipeline writes to a fixed output, so it needs ``allow_overwrite``
+        for the second batch onwards.
         ``watch_min_wait_minutes`` debounces re-scans of the same input.
         Gated on the same ``worker.route_dispatch_enabled`` flag as
         clock-driven dispatch.
@@ -230,7 +232,17 @@ class Worker:
                 continue
             for batch_id in new_batches:
                 try:
-                    response = pipelines_svc.run_now(detail.name, actor="worker", batch_id=batch_id)
+                    # The address is the exact location: run against a child
+                    # address pointing at this new folder / schema. Its batch
+                    # id (the complete Data Space path) is derived by
+                    # jobs_svc from that address.
+                    batch_input = watch_svc.batch_input_address(detail, batch_id, actor="worker")
+                    response = pipelines_svc.run_now(
+                        detail.name,
+                        actor="worker",
+                        batch_id=batch_id,
+                        input_address=batch_input,
+                    )
                     watch_svc.record_seen(detail.name, detail.input_address, batch_id)
                     logger.info(
                         "Watch pipeline %s fired job %s for new batch %s",
@@ -238,7 +250,7 @@ class Worker:
                         response.job_id,
                         batch_id,
                     )
-                except pipelines_svc.PipelineError:
+                except (pipelines_svc.PipelineError, addresses_svc.AddressError):
                     logger.exception(
                         "Watch pipeline %s failed to fire batch %s.",
                         detail.name,
@@ -381,12 +393,18 @@ class Worker:
         spec = get_kind(kind)
         builder = spec.argv_builder if spec else "etl"
         if builder == "copy":
-            return self._build_argv_copy(job)
-        if builder == "move":
-            return self._build_argv_move(job)
-        if builder == "health":
-            return self._build_argv_health(job, kind)
-        return self._build_argv_etl(job, kind)
+            argv = self._build_argv_copy(job)
+        elif builder == "move":
+            argv = self._build_argv_move(job)
+        elif builder == "health":
+            argv = self._build_argv_health(job, kind)
+        else:
+            argv = self._build_argv_etl(job, kind)
+        # The output address is the exact write location: forward an
+        # operator-confirmed overwrite so the executor's gate allows it.
+        if job.extra_args.get("overwrite"):
+            argv.append("--overwrite")
+        return argv
 
     def _build_argv_health(self, job: JobDetail, kind: str = "health") -> list[str]:
         """Build the argv for a health-shaped job (``health`` / ``dq_checks``).

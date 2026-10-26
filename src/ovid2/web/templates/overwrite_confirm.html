@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Confirm overwrite &mdash; Ovid2{% endblock %}
+{% block content %}
+{#
+  Overwrite confirmation (address = exact location).
+
+  Rendered by every HTML run surface (/submit, the pipeline Run modal,
+  rerun, launch) when the output address already holds tables. The
+  original form fields are re-posted verbatim to ``action`` with
+  ``confirm_overwrite=true`` added, so confirming is one click and
+  cancelling changes nothing.
+
+  Context:
+    action          URL the confirmed form is POSTed to
+    fields          list of (name, value) pairs to re-post
+    output_address  the occupied output address
+    tables          the tables already present there
+    back_url        where "Cancel" goes
+#}
+<section class="page overwrite-confirm-page">
+  <header>
+    <h1>Overwrite existing data?</h1>
+  </header>
+  <div class="card warn-card" role="alert">
+    <p>
+      The output <strong class="mono">{{ output_address }}</strong> already
+      contains <strong>{{ tables|length }}</strong>
+      table{{ "" if tables|length == 1 else "s" }}. Every address is the exact
+      location its data is written to, so this run will
+      <strong>replace</strong> them.
+    </p>
+    <ul class="overwrite-table-list mono small">
+      {% for t in tables[:50] %}<li>{{ t }}</li>{% endfor %}
+      {% if tables|length > 50 %}<li>&hellip; and {{ tables|length - 50 }} more</li>{% endif %}
+    </ul>
+    <p class="note small">
+      To keep the existing data, cancel and choose a different output
+      folder / schema.
+    </p>
+    <form method="post" action="{{ action }}" class="overwrite-confirm-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% for name, value in fields %}
+        <input type="hidden" name="{{ name }}" value="{{ value }}">
+      {% endfor %}
+      <input type="hidden" name="confirm_overwrite" value="true">
+      <div class="form-actions">
+        <a class="button" href="{{ back_url }}">Cancel</a>
+        <button type="submit" class="button danger" id="confirm-overwrite">
+          Overwrite and run
+        </button>
+      </div>
+    </form>
+  </div>
+</section>
+{% endblock %}

@@ -118,3 +118,15 @@ def write_llm(
         p.write_text(json.dumps(secret))
         p.chmod(0o600)
     (d / f"{name}.json").write_text(json.dumps(doc))
+
+
+@pytest.fixture(autouse=True)
+def _stub_overwrite_probe(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default the overwrite pre-flight to "occupancy unknown" (no subprocess).
+
+    Tests that exercise the overwrite gate call
+    :func:`tests.helpers.output_probe.set_output_tables` to override.
+    """
+    from tests.helpers.output_probe import stub_output_probe
+
+    stub_output_probe(monkeypatch)

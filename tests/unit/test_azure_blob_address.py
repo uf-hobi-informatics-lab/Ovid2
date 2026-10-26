@@ -158,28 +158,28 @@ class TestPaths:
         addr = AzureBlobAddress(_make_config())
         assert (
             addr._resolve_read_path("DEMO", "2024Q4", "demographic.csv")
-            == "abfss://landing@acct.dfs.core.windows.net/DEMO/2024Q4/demographic.csv"
+            == "abfss://landing@acct.dfs.core.windows.net/demographic.csv"
         )
 
     def test_read_path_with_prefix(self) -> None:
         addr = AzureBlobAddress(_make_config(prefix="pcornet/harvest"))
         assert (
             addr._resolve_read_path("DEMO", "2024Q4", "demographic.csv")
-            == "abfss://landing@acct.dfs.core.windows.net/pcornet/harvest/DEMO/2024Q4/demographic.csv"
+            == "abfss://landing@acct.dfs.core.windows.net/pcornet/harvest/demographic.csv"
         )
 
     def test_write_dir_shape(self) -> None:
         addr = AzureBlobAddress(_make_config(prefix="out"))
         assert (
             addr._resolve_write_dir("DEMO", "2024Q4")
-            == "abfss://landing@acct.dfs.core.windows.net/out/DEMO/2024Q4"
+            == "abfss://landing@acct.dfs.core.windows.net/out"
         )
 
     def test_read_path_respects_custom_suffix(self) -> None:
         addr = AzureBlobAddress(_make_config(endpoint_suffix="core.chinacloudapi.cn"))
         assert (
             addr._resolve_read_path("p", "b", "f")
-            == "abfss://landing@acct.dfs.core.chinacloudapi.cn/p/b/f"
+            == "abfss://landing@acct.dfs.core.chinacloudapi.cn/f"
         )
 
 
@@ -290,7 +290,7 @@ class TestRead:
         spark = _make_spark(columns=["A", "B"])
         addr.read(spark, "demo", "b1", "demographic.csv")
         spark.read.csv.assert_called_once_with(
-            "abfss://landing@acct.dfs.core.windows.net/demo/b1/demographic.csv"
+            "abfss://landing@acct.dfs.core.windows.net/demographic.csv"
         )
 
     def test_csv_delimiter_override(self) -> None:

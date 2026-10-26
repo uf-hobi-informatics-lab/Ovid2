@@ -124,32 +124,29 @@ def test_disc_supports_expand_all() -> None:
 
 
 @pytest.mark.unit
-def test_disc_expand_all_pipelined_layout(tmp_path: Path) -> None:
-    batch = tmp_path / "DEMO" / "20260101"
+def test_disc_expand_all_lists_address_folder_exactly(tmp_path: Path) -> None:
+    """``all`` lists the address folder itself — never ``{pipeline}/{batch}``."""
+    batch = tmp_path / "landing" / "20260101"
     batch.mkdir(parents=True)
     (batch / "demographic.csv").write_text("x" * 10)
     (batch / "encounter.csv").write_text("x" * 99)
     (batch / "_SUCCESS").write_text("")
-    specs = _disc(tmp_path).expand_all_tables(pipeline="demo", batch_id="20260101")
+    specs = _disc(tmp_path, "landing/20260101").expand_all_tables(
+        pipeline="demo", batch_id="landing/20260101"
+    )
     assert specs == ["demographic=demographic.csv", "encounter=encounter.csv"]
 
 
 @pytest.mark.unit
-def test_disc_expand_all_flat_and_root_layouts(tmp_path: Path) -> None:
-    (tmp_path / "20260101").mkdir()
-    (tmp_path / "20260101" / "vital.csv").write_text("x")
-    assert _disc(tmp_path).expand_all_tables(pipeline="p", batch_id="20260101") == [
-        "vital=vital.csv"
+def test_disc_expand_all_ignores_pipeline_and_batch(tmp_path: Path) -> None:
+    """Pipeline / batch never add path segments; sub-folders are not tables."""
+    (tmp_path / "death.csv").write_text("x")
+    (tmp_path / "demo" / "20260101").mkdir(parents=True)
+    (tmp_path / "demo" / "20260101" / "vital.csv").write_text("x")
+    assert _disc(tmp_path).expand_all_tables(pipeline="demo", batch_id="20260101") == [
+        "death=death.csv"
     ]
-    root = tmp_path / "rootdirect"
-    root.mkdir()
-    (root / "death.csv").write_text("x")
-    assert _disc(root).expand_all_tables(pipeline="p", batch_id="nope") == ["death=death.csv"]
-
-
-@pytest.mark.unit
-def test_disc_expand_all_needs_pipeline_and_batch(tmp_path: Path) -> None:
-    assert _disc(tmp_path).expand_all_tables() is None
+    assert _disc(tmp_path).expand_all_tables() == ["death=death.csv"]
 
 
 @pytest.mark.unit
@@ -168,7 +165,7 @@ def test_disc_table_sizes_files_dirs_and_globs(tmp_path: Path) -> None:
     (spark_dir / "part-0.csv").write_text("x" * 50)
     (spark_dir / "part-1.csv").write_text("x" * 50)
     (batch / "x_datavant_person_tokens_1.csv").write_text("x" * 20)
-    sizes = _disc(tmp_path).table_sizes(
+    sizes = _disc(tmp_path, "p/b").table_sizes(
         ["small.csv", "big.csv", "*datavant_person_tokens*", "absent.csv"],
         pipeline="p",
         batch_id="b",
@@ -324,11 +321,10 @@ def test_s3_expand_all_and_sizes(monkeypatch: pytest.MonkeyPatch) -> None:
 
     paginator = _FakePaginator(
         {
-            "root/demo/20260101/demographic.csv": 10,
-            "root/demo/20260101/lab_result_cm.csv/part-0.csv": 500,
-            "root/demo/20260101/lab_result_cm.csv/part-1.csv": 500,
-            "root/demo/20260101/_SUCCESS": 0,
-            "root/demo/other/x.csv": 1,
+            "root/demographic.csv": 10,
+            "root/lab_result_cm.csv/part-0.csv": 500,
+            "root/lab_result_cm.csv/part-1.csv": 500,
+            "root/_SUCCESS": 0,
         }
     )
 
@@ -344,7 +340,7 @@ def test_s3_expand_all_and_sizes(monkeypatch: pytest.MonkeyPatch) -> None:
         "demographic=demographic.csv",
         "lab_result_cm=lab_result_cm.csv",
     ]
-    assert paginator.calls[0] == {"Bucket": "bkt", "Prefix": "root/demo/20260101/"}
+    assert paginator.calls[0] == {"Bucket": "bkt", "Prefix": "root/"}
     sizes = driver.table_sizes(
         ["demographic.csv", "lab_result_cm.csv"], pipeline="demo", batch_id="20260101"
     )
@@ -379,9 +375,9 @@ def test_azure_blob_expand_all_and_sizes(monkeypatch: pytest.MonkeyPatch) -> Non
     from ovid2.drivers.azure_blob.driver import AzureBlobDriver
 
     blobs = [
-        _FakeBlob("SANDBOX/demo/b1/encounter.csv", 40),
-        _FakeBlob("SANDBOX/demo/b1/vital.csv/part-0", 7),
-        _FakeBlob("SANDBOX/demo/b1/vital.csv/part-1", 8),
+        _FakeBlob("SANDBOX/b1/encounter.csv", 40),
+        _FakeBlob("SANDBOX/b1/vital.csv/part-0", 7),
+        _FakeBlob("SANDBOX/b1/vital.csv/part-1", 8),
     ]
     seen: list[str | None] = []
 
@@ -404,11 +400,11 @@ def test_azure_blob_expand_all_and_sizes(monkeypatch: pytest.MonkeyPatch) -> Non
     driver = AzureBlobDriver(
         args={"account_name": "acct", "container_default": "data"},
         secrets={"account_key": "k"},
-        location={"path": "SANDBOX"},
+        location={"path": "SANDBOX/b1"},
     )
-    assert driver.expand_all_tables(pipeline="demo", batch_id="b1") == [
+    assert driver.expand_all_tables(pipeline="demo", batch_id="SANDBOX/b1") == [
         "encounter=encounter.csv",
         "vital=vital.csv",
     ]
-    assert seen[0] == "SANDBOX/demo/b1/"
+    assert seen[0] == "SANDBOX/b1/"
     assert driver.table_sizes(["vital.csv"], pipeline="demo", batch_id="b1") == {"vital.csv": 15}

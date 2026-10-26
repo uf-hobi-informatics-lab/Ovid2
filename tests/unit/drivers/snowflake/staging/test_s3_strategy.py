@@ -295,19 +295,15 @@ class TestHelpers:
     def test_s3_dir_uri_composition(self) -> None:
         from ovid2.drivers.snowflake.staging.s3 import _s3_dir_uri
 
-        assert _s3_dir_uri("bucket", "prefix", "demo", "20260101") == (
-            "s3://bucket/prefix/demo/20260101/"
-        )
-        assert _s3_dir_uri("bucket", "", "demo", "20260101") == ("s3://bucket/demo/20260101/")
-        assert _s3_dir_uri("bucket", "", "", "") == "s3://bucket/"
+        assert _s3_dir_uri("bucket", "prefix") == ("s3://bucket/prefix/")
+        assert _s3_dir_uri("bucket", "") == ("s3://bucket/")
+        assert _s3_dir_uri("bucket", "") == "s3://bucket/"
 
     def test_s3_key_composition(self) -> None:
         from ovid2.drivers.snowflake.staging.s3 import _s3_key
 
-        assert _s3_key("prefix", "demo", "20260101", "file.csv") == (
-            "prefix/demo/20260101/file.csv"
-        )
-        assert _s3_key("", "demo", "20260101", "file.csv") == ("demo/20260101/file.csv")
+        assert _s3_key("prefix", "file.csv") == ("prefix/file.csv")
+        assert _s3_key("", "file.csv") == ("file.csv")
 
     def test_escape_sql_doubles_single_quotes(self) -> None:
         from ovid2.drivers.snowflake.staging.s3 import _escape_sql
@@ -407,7 +403,7 @@ class TestMaterialise:
         assert len(copy_into) == 1
 
         # Stage URL points at the directory.
-        assert "s3://mybucket/raw/demo/20260101/" in create_stage[0]
+        assert "s3://mybucket/raw/" in create_stage[0]
         # Column names appear in the transient-table DDL.
         assert '"COL_A" VARCHAR' in create_table[0]
         assert '"COL_C" VARCHAR' in create_table[0]
@@ -519,7 +515,7 @@ class TestPersist:
             q for q in session.sql_calls if q.startswith("CREATE OR REPLACE TEMPORARY STAGE")
         ]
         assert len(create_stage) == 1
-        assert "s3://outbucket/cooked/demo/20260101/" in create_stage[0]
+        assert "s3://outbucket/cooked/" in create_stage[0]
         assert "STORAGE_INTEGRATION = MY_INT" in create_stage[0]
 
         # No GET step — the write is server-side via

@@ -355,11 +355,10 @@ class _NativeSnowparkStrategy(SnowparkStagingStrategy):
     ``repartition`` nor ``.format('snowflake')`` exists on
     :class:`snowflake.snowpark.DataFrame`.
 
-    The write target is ``{database}.{schema}.{table}``. When the
-    driver has a schema set on its location, we use that verbatim
-    (matches the ``phase_c_sf_target`` shape used in the E2E test).
-    Otherwise fall back to the pipeline-standard ``OVID_{pipeline}_{batch_id}``
-    naming (see :meth:`SnowflakeAddress._schema_name`).
+    The write target is ``{database}.{schema}.{table}`` exactly as the
+    driver's location names it — the address is the exact location, so
+    ``pipeline`` / ``batch_id`` never contribute. A location without a
+    schema is rejected at persist time.
     """
 
     driver_type = "snowflake"
@@ -406,10 +405,12 @@ class _NativeSnowparkStrategy(SnowparkStagingStrategy):
                 "'database' set in its location. Configure the "
                 "Snowflake address's `location.database` field."
             )
+        from ovid2.drivers._layout import sql_ident
+
         if schema:
-            fqtn = f"{database}.{schema}.{candidate.upper()}"
+            fqtn = f"{sql_ident(database)}.{sql_ident(schema)}.{candidate.upper()}"
         else:
-            fqtn = f"{database}.{candidate.upper()}"
+            fqtn = f"{sql_ident(database)}.{candidate.upper()}"
         native = getattr(session, "native", session)
         return _all_string_table(native, fqtn)
 
@@ -423,32 +424,27 @@ class _NativeSnowparkStrategy(SnowparkStagingStrategy):
         table_name: str,
         delimiter: str | None,
     ) -> None:
-        del delimiter  # Snowpark save_as_table has no delimiter
-        # Reach into the driver's location for target schema info.
-        # We accept both a native ``SnowflakeDriver`` (with a
-        # ``.location`` dict) and the legacy address bridge.
+        del delimiter, pipeline, batch_id  # the address is the exact location
+        from ovid2.drivers._layout import sql_ident
+
+        # Reach into the driver's location for the target schema. We
+        # accept both a native ``SnowflakeDriver`` (with a ``.location``
+        # dict) and the legacy address bridge.
         location = getattr(driver, "location", None) or {}
         database, schema = _snowflake_location_db_schema(location)
-
         if not database or not schema:
-            # Fall back to the pipeline-standard schema layout
-            # ``{database or config default}.OVID_{pipeline}_{batch_id}``.
-            # Reuse the legacy helper for backwards compatibility with
-            # the existing OVID_* materialisation contract.
-            from ovid2.drivers.snowflake.spark import SnowflakeAddress
-
-            legacy = SnowflakeAddress({**dict(location), "database": database})
-            legacy._validate_database()
-            database = legacy.database
-            schema = legacy._schema_name(pipeline, batch_id)
+            raise ValueError(
+                "Snowflake output address must name DATABASE/SCHEMA — the address "
+                f"is the exact write location (got database={database!r}, "
+                f"schema={schema!r})."
+            )
 
         # Ensure the target schema exists — Snowpark ``save_as_table``
-        # will not auto-create it. Runs for both the driver-provided
-        # and the fallback layout; ``IF NOT EXISTS`` makes it idempotent
+        # will not auto-create it. ``IF NOT EXISTS`` makes it idempotent
         # and safe when the operator pre-created the schema.
         native = getattr(session, "native", session)
         native.sql(  # noqa: OVID2001 administrative DDL, not a data action
-            f"CREATE SCHEMA IF NOT EXISTS {database}.{schema}"
+            f"CREATE SCHEMA IF NOT EXISTS {sql_ident(database)}.{sql_ident(schema)}"
         ).collect()
 
         # Write the produced DataFrame to ``{database}.{schema}.{table}``.
@@ -467,7 +463,7 @@ class _NativeSnowparkStrategy(SnowparkStagingStrategy):
         # time and fail with ``Object 'CONCEPT' does not exist``. So the
         # session namespace is left untouched and every target is named
         # fully-qualified.
-        target_fqtn = f"{database}.{schema}.{table_name.upper()}"
+        target_fqtn = f"{sql_ident(database)}.{sql_ident(schema)}.{table_name.upper()}"
 
         # Apply the CDM's declared column types (the Snowpark analogue of
         # the Spark connector's ``createTableColumnTypes``). The produced
@@ -503,8 +499,7 @@ def _snowflake_location_db_schema(location: Any) -> tuple[str, str]:
     the form ``DATABASE[/SCHEMA]`` (the generic web-UI address shape) is
     split. Either element is ``""`` when absent — unlike the read-side
     ``SnowflakeDriver._database_schema`` there is no ``PUBLIC`` default,
-    so a schema-less write target keeps the ``OVID_{pipeline}_{batch}``
-    layout.
+    so a schema-less write target is rejected by :meth:`persist`.
     """
     from ovid2.config.addresses import split_snowflake_path
 

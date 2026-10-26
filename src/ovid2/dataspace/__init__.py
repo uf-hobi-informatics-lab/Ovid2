@@ -1,25 +1,25 @@
-"""Ovid Data Space (ODS) — naming layer over connections + addresses.
+"""Ovid Data Space (ODS) — every storage account as a tree of plain directories.
 
-A single POSIX-style namespace that identifies a health-data table by
-``/<pipeline>/<batch_id>/<table>``. Vendor storage (disc, S3, Azure,
-Snowflake, …) is orthogonal and referred to as a *dimension*.
+A single POSIX-style namespace ``/<connection>/<path…>``: the first
+segment is a storage account (connection), the rest is the location
+under it — folders for disc / s3 / azure_blob / gcs, ``DATABASE/SCHEMA``
+for warehouses. Every data space is the same; there is no
+``pipeline`` / ``batch_id`` level. The complete path of a folder /
+schema is the ``batch_id`` of a run that reads it, and an address
+pointing at it is the exact location its data is read from / written
+to.
 
-See :doc:the adr-ods-naming-layer design note for the
-design rationale.
+See :doc:the adr-address-is-exact-location design note.
 
 Public API:
 
-- :class:`OdsPath` — value object for a normalised ODS path.
-- :class:`ResolvedTarget` — the outcome of :func:`resolve`.
-- :func:`resolve` — ``(path, dim) → ResolvedTarget``.
-- :func:`list_pipelines`, :func:`list_batches`, :func:`list_tables` —
-  read-only listings.
-- :func:`list_dimensions` — every registered dimension name.
-- :func:`dimension_for_address` — connection-type of an address.
-
-v1 is deliberately a *naming-only* layer: no read/write facade, no
-mount table, no cross-dimension mirroring. See the ADR for the
-scope split.
+- :class:`OdsPath` — value object for a normalised path.
+- :func:`resolve` — path → storage account + exact location (+ the
+  saved address pointing exactly there).
+- :func:`list_children` — one level under a path.
+- :func:`list_storage_accounts` — the root.
+- :func:`list_dimensions` / :func:`dimension_for_address` — storage
+  types (the connection-type families).
 """
 
 from __future__ import annotations
@@ -31,23 +31,25 @@ from ovid2.dataspace.registry import (
     list_dimensions,
 )
 from ovid2.dataspace.resolver import (
+    OdsEntry,
     OdsResolutionError,
     ResolvedTarget,
-    list_batches,
-    list_pipelines,
-    list_tables,
+    driver_lister,
+    list_children,
+    list_storage_accounts,
     resolve,
 )
 
 __all__ = [
+    "OdsEntry",
     "OdsPath",
     "OdsResolutionError",
     "ResolvedTarget",
     "dimension_for_address",
+    "driver_lister",
     "list_addresses_by_dimension",
-    "list_batches",
+    "list_children",
     "list_dimensions",
-    "list_pipelines",
-    "list_tables",
+    "list_storage_accounts",
     "resolve",
 ]

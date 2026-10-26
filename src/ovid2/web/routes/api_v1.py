@@ -67,11 +67,10 @@ from ovid2.web.models import (
     MapperSpecDetail,
     MapperValidationReport,
     MapperWrite,
-    OdsBatchListing,
     OdsDimensionCatalog,
-    OdsPipelineListing,
+    OdsListing,
     OdsResolveResult,
-    OdsTableListing,
+    OverwriteConfirm,
     PipelineConfigDetail,
     PipelineConfigSummary,
     PipelineDetail,
@@ -159,6 +158,56 @@ def _gate(action: str, target: str | None, requested_by: str = "web") -> None:
                 "target": exc.target,
             },
         ) from exc
+
+
+#: Principals that are *agents* (the MCP service token, the assistant's
+#: per-turn token). An agent may propose an overwrite of an occupied output
+#: location but a human must approve it (``run.overwrite`` gate).
+_AGENT_PRINCIPAL_PREFIXES: tuple[str, ...] = ("mcp:", "llm:")
+
+
+def _is_agent(ctx: AuthContext | None) -> bool:
+    """Return ``True`` when ``ctx`` is an agent principal (MCP / assistant)."""
+    return bool(ctx and ctx.user_id.startswith(_AGENT_PRINCIPAL_PREFIXES))
+
+
+def _actor(ctx: AuthContext | None) -> str:
+    """Audit label for a job written through the API.
+
+    Humans (and the auth-disabled bypass) keep the historical ``web``
+    label; agent principals are recorded verbatim (``mcp:service`` /
+    ``llm:<user>``) so an agent-initiated run is attributable.
+    """
+    return ctx.user_id if _is_agent(ctx) and ctx is not None else "web"
+
+
+def _overwrite_target(job_or_output: str) -> str:
+    """Return the approval target string for an overwrite of ``job_or_output``."""
+    return f"output:{job_or_output}"
+
+
+def _overwrite_conflict(
+    exc: jobs_svc.OverwriteRequired | pipelines_svc.OverwriteRequired,
+) -> HTTPException:
+    """Map an ``OverwriteRequired`` (jobs / pipelines) to ``409 overwrite_required``."""
+    return HTTPException(
+        status_code=409,
+        detail={
+            "status": "overwrite_required",
+            "output_address": exc.output_address,
+            "existing_tables": exc.tables,
+            "message": str(exc),
+            "hint": "Re-submit with confirm_overwrite=true to replace the existing data.",
+        },
+    )
+
+
+def _gate_agent_overwrite(ctx: AuthContext | None, confirm: bool, output: str) -> None:
+    """Route an agent's ``confirm_overwrite`` through the human-approval gate."""
+    if confirm and _is_agent(ctx):
+        _gate(
+            "run.overwrite", _overwrite_target(output), requested_by=ctx.user_id if ctx else "agent"
+        )
 
 
 @router.get(
@@ -678,20 +727,6 @@ def api_list_runs(
 
 
 @router.get(
-    "/runs/{batch_id}",
-    response_model=RunSummary,
-    summary="One run by batch_id",
-    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
-)
-def api_get_run(batch_id: str) -> RunSummary:
-    """Return the run row for one ``batch_id``."""
-    run = runs_svc.get_run(batch_id)
-    if run is None:
-        raise HTTPException(status_code=404, detail=f"Run '{batch_id}' not found.")
-    return run
-
-
-@router.get(
     "/runs/{instance_id}/events",
     response_model=RunEventPage,
     summary="Cursor-paged events for a run",
@@ -901,6 +936,39 @@ def api_briefing_cooking() -> list[dict[str, Any]]:
     return metrics_svc.briefing_cooking()
 
 
+@router.get(
+    "/runs/{batch_id}",
+    response_model=RunSummary,
+    summary="One run by batch_id",
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def api_get_run(batch_id: str) -> RunSummary:
+    """Return the run row for one ``batch_id`` (or ``instance_id``).
+
+    A batch id is a Data Space path (``conn/folder/leaf``); send it URL-
+    encoded (``%2F``) or use the slash-tolerant twin registered below.
+    """
+    run = runs_svc.get_run(batch_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"Run '{batch_id}' not found.")
+    return run
+
+
+@router.get(
+    "/runs/{batch_id:path}",
+    response_model=RunSummary,
+    include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def api_get_run_by_path(batch_id: str) -> RunSummary:
+    """Slash-tolerant twin of :func:`api_get_run` (batch ids are Data Space paths).
+
+    Registered after every ``/runs/{instance_id}/…`` sub-route so the
+    ``:path`` converter cannot shadow them.
+    """
+    return api_get_run(batch_id)
+
+
 # ---------------------------------------------------------------------------
 # Jobs (W3)
 # ---------------------------------------------------------------------------
@@ -913,10 +981,22 @@ def api_briefing_cooking() -> list[dict[str, Any]]:
     summary="Submit a new ETL run",
     dependencies=[Depends(require_capability(Capability.SUBMIT_JOBS))],
 )
-def api_submit_run(request: JobSubmitRequest) -> JobSubmitResponse:
-    """Enqueue an ETL job. The worker will spawn ``ovid2 etl`` shortly."""
+def api_submit_run(
+    request: JobSubmitRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.SUBMIT_JOBS)),
+) -> JobSubmitResponse:
+    """Enqueue a job. The worker spawns the matching ``ovid2`` subcommand shortly.
+
+    The output address is the exact write location: an output that
+    already holds tables answers ``409 overwrite_required`` until the
+    caller re-submits with ``confirm_overwrite=true`` (agent principals
+    then go through the ``run.overwrite`` human approval → ``202``).
+    """
+    _gate_agent_overwrite(ctx, request.confirm_overwrite, request.output_address or "")
     try:
-        return jobs_svc.submit(request, actor="web")
+        return jobs_svc.submit(request, actor=_actor(ctx))
+    except jobs_svc.OverwriteRequired as exc:
+        raise _overwrite_conflict(exc) from exc
     except jobs_svc.SubmitError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -975,10 +1055,25 @@ def api_cancel_job(job_id: str) -> JobDetail:
     summary="Rerun a finished job",
     dependencies=[Depends(require_capability(Capability.SUBMIT_JOBS))],
 )
-def api_rerun_job(job_id: str) -> JobSubmitResponse:
-    """Enqueue a byte-identical retry of a finished job."""
+def api_rerun_job(
+    job_id: str,
+    body: OverwriteConfirm | None = None,
+    confirm_overwrite: bool = Query(
+        False, description="Confirm overwriting the (occupied) output location."
+    ),
+    ctx: AuthContext = Depends(require_capability(Capability.SUBMIT_JOBS)),
+) -> JobSubmitResponse:
+    """Enqueue a retry of a finished job (same input, output, tables).
+
+    A rerun writes to the same exact output location, so it answers
+    ``409 overwrite_required`` until ``confirm_overwrite=true``.
+    """
+    confirm_overwrite = bool(confirm_overwrite or (body and body.confirm_overwrite))
+    _gate_agent_overwrite(ctx, confirm_overwrite, f"job:{job_id}")
     try:
-        return jobs_svc.rerun(job_id, actor="web")
+        return jobs_svc.rerun(job_id, actor=_actor(ctx), confirm_overwrite=confirm_overwrite)
+    except jobs_svc.OverwriteRequired as exc:
+        raise _overwrite_conflict(exc) from exc
     except jobs_svc.SubmitError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -1009,10 +1104,25 @@ def api_create_job_draft(request: JobSubmitRequest) -> JobSubmitResponse:
     summary="Launch a draft job (draft → queued)",
     dependencies=[Depends(require_capability(Capability.SUBMIT_JOBS))],
 )
-def api_launch_job(job_id: str) -> JobDetail:
-    """Promote a draft job to ``queued`` so the worker runs it."""
+def api_launch_job(
+    job_id: str,
+    body: OverwriteConfirm | None = None,
+    confirm_overwrite: bool = Query(
+        False, description="Confirm overwriting the (occupied) output location."
+    ),
+    ctx: AuthContext = Depends(require_capability(Capability.SUBMIT_JOBS)),
+) -> JobDetail:
+    """Promote a draft job to ``queued`` so the worker runs it.
+
+    Runs the overwrite gate: ``409 overwrite_required`` when the output is
+    occupied and ``confirm_overwrite`` is not set.
+    """
+    confirm_overwrite = bool(confirm_overwrite or (body and body.confirm_overwrite))
+    _gate_agent_overwrite(ctx, confirm_overwrite, f"job:{job_id}")
     try:
-        return jobs_svc.launch_draft(job_id, actor="web")
+        return jobs_svc.launch_draft(job_id, actor=_actor(ctx), confirm_overwrite=confirm_overwrite)
+    except jobs_svc.OverwriteRequired as exc:
+        raise _overwrite_conflict(exc) from exc
     except jobs_svc.SubmitError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -1342,8 +1452,14 @@ def api_get_pipeline_config(name: str) -> PipelineConfigDetail:
     summary="Create a pipeline",
     dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG))],
 )
-def api_create_pipeline_config(name: str, payload: PipelineWrite) -> WriteResult:
+def api_create_pipeline_config(
+    name: str,
+    payload: PipelineWrite,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_CONFIG)),
+) -> WriteResult:
     """Create a new pipeline JSON."""
+    # A standing overwrite permission set by an agent needs human approval.
+    _gate_agent_overwrite(ctx, bool(payload.allow_overwrite), f"pipeline:{name}")
     try:
         return pipelines_svc.write_pipeline(name, payload, actor="web", create_only=True)
     except pipelines_svc.PipelineError as exc:
@@ -1356,8 +1472,14 @@ def api_create_pipeline_config(name: str, payload: PipelineWrite) -> WriteResult
     summary="Create or update a pipeline",
     dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG))],
 )
-def api_put_pipeline_config(name: str, payload: PipelineWrite) -> WriteResult:
+def api_put_pipeline_config(
+    name: str,
+    payload: PipelineWrite,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_CONFIG)),
+) -> WriteResult:
     """Idempotent create-or-update of a pipeline JSON."""
+    # A standing overwrite permission set by an agent needs human approval.
+    _gate_agent_overwrite(ctx, bool(payload.allow_overwrite), f"pipeline:{name}")
     try:
         return pipelines_svc.write_pipeline(name, payload, actor="web")
     except pipelines_svc.PipelineError as exc:
@@ -1419,7 +1541,11 @@ def api_draft_pipeline_config(
     summary="Submit an ETL job from this pipeline",
     dependencies=[Depends(require_capability(Capability.SUBMIT_JOBS))],
 )
-def api_run_pipeline_config(name: str, body: PipelineRunRequest | None = None) -> JobSubmitResponse:
+def api_run_pipeline_config(
+    name: str,
+    body: PipelineRunRequest | None = None,
+    ctx: AuthContext = Depends(require_capability(Capability.SUBMIT_JOBS)),
+) -> JobSubmitResponse:
     """Convert a pipeline into a job submission and enqueue it.
 
     An optional body carries one-run overrides (``batch_id`` /
@@ -1438,6 +1564,8 @@ def api_run_pipeline_config(name: str, body: PipelineRunRequest | None = None) -
     input_override: str | None = None
     output_override: str | None = None
     draft = False
+    confirm = bool(body.confirm_overwrite) if body is not None else False
+    _gate_agent_overwrite(ctx, confirm, f"pipeline:{name}")
     if body is not None:
         batch_override = (body.batch_id or None) if body.batch_id else None
         input_override = (body.input_address or "").strip() or None
@@ -1457,7 +1585,10 @@ def api_run_pipeline_config(name: str, body: PipelineRunRequest | None = None) -
             output_address=output_override,
             tables=tables_override,
             draft=draft,
+            confirm_overwrite=confirm,
         )
+    except pipelines_svc.OverwriteRequired as exc:
+        raise _overwrite_conflict(exc) from exc
     except pipelines_svc.PipelineError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -1626,70 +1757,50 @@ def api_test_engine(name: str) -> EngineTestReport:
 
 @router.get(
     "/dataspace",
-    response_model=OdsPipelineListing,
-    summary="List every pipeline in the Ovid Data Space",
+    response_model=OdsListing,
+    summary="List one level of the Ovid Data Space",
     dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
 )
-def api_ods_list_pipelines() -> OdsPipelineListing:
-    """Return every pipeline and the dimensions they are known in."""
-    return dataspace_svc.list_pipelines()
+def api_ods_list(
+    path: str = Query(
+        "/",
+        description=(
+            "Data Space path: '/' lists storage accounts, '/<account>/<folder…>' "
+            "lists a folder or DATABASE/SCHEMA. Every data space is a tree of "
+            "plain directories."
+        ),
+    ),
+) -> OdsListing:
+    """List the children of a Data Space path (storage accounts / folders / schemas)."""
+    try:
+        return dataspace_svc.list_path(path)
+    except dataspace_svc.OdsServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get(
     "/dataspace/dimensions",
     response_model=OdsDimensionCatalog,
-    summary="List every ODS dimension + resolution defaults",
+    summary="List every storage type (dimension) in the Data Space",
     dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
 )
 def api_ods_dimensions() -> OdsDimensionCatalog:
-    """Return the dimension catalogue and the deployment's routing defaults."""
+    """Return the storage types and how many addresses use each."""
     return dataspace_svc.get_dimension_catalog()
 
 
 @router.get(
     "/dataspace/resolve",
     response_model=OdsResolveResult,
-    summary="Resolve an ODS path + dimension to an address",
+    summary="Resolve a Data Space path to its storage account + exact location",
     dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
 )
 def api_ods_resolve(
-    path: str = Query(..., description="ODS path (e.g. /demo/20260316/DEMOGRAPHIC)."),
-    dim: str | None = Query(
-        None,
-        description="Optional dimension name (disc, snowflake, s3, ...).",
-    ),
+    path: str = Query(..., description="Data Space path, e.g. /inbox/landing/2026_03."),
 ) -> OdsResolveResult:
-    """Return the address that would serve ``(path, dim)`` without doing I/O."""
+    """Return the storage account, exact location, batch id and matching address."""
     try:
-        return dataspace_svc.resolve_path(path, dim=dim)
-    except dataspace_svc.OdsServiceError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@router.get(
-    "/dataspace/{pipeline}",
-    response_model=OdsBatchListing,
-    summary="List every batch under a pipeline",
-    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
-)
-def api_ods_list_batches(pipeline: str) -> OdsBatchListing:
-    """Return the batches under ``/{pipeline}``."""
-    try:
-        return dataspace_svc.list_pipeline_batches(pipeline)
-    except dataspace_svc.OdsServiceError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@router.get(
-    "/dataspace/{pipeline}/{batch_id}",
-    response_model=OdsTableListing,
-    summary="List every table under a pipeline batch",
-    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
-)
-def api_ods_list_tables(pipeline: str, batch_id: str) -> OdsTableListing:
-    """Return the tables under ``/{pipeline}/{batch_id}``."""
-    try:
-        return dataspace_svc.list_batch_tables(pipeline, batch_id)
+        return dataspace_svc.resolve_path(path)
     except dataspace_svc.OdsServiceError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

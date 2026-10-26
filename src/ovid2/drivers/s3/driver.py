@@ -194,7 +194,7 @@ class S3Driver(PrefixTableListingMixin, Driver):
         table_name: str,
         delimiter: str | None = None,
     ) -> None:
-        """Materialise ``df`` under ``{prefix}/{pipeline}/{batch_id}/``."""
+        """Materialise ``df`` directly under the address location ``{prefix}/``."""
         io = self._build_io()
         io.write(df, session, pipeline, batch_id, table_name, delimiter)  # type: ignore[arg-type]
 

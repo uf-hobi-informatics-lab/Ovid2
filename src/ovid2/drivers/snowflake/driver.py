@@ -169,9 +169,9 @@ class SnowflakeDriver(Driver):
     ) -> list[str] | None:
         """Expand ``all`` to every table + view in the address's schema.
 
-        ``pipeline`` / ``batch_id`` are ignored: Snowflake reads come from
-        the address's own ``database.schema`` (see
-        :meth:`SnowflakeAddress.read`), not a batch-scoped path.
+        ``pipeline`` / ``batch_id`` are ignored: the address is the exact
+        location — its own ``database.schema`` (see
+        :meth:`SnowflakeAddress.read`).
 
         Raises:
             ValueError: When the address has no database.
@@ -270,7 +270,7 @@ class SnowflakeDriver(Driver):
         table_name: str,
         delimiter: str | None = None,
     ) -> None:
-        """Write ``df`` into ``{database}.OVID_{pipeline}_{batch_id}.{table_name}``."""
+        """Write ``df`` into the address's ``{database}.{schema}.{table_name}``."""
         addr = self._build_address()
         addr.write(df, session, pipeline, batch_id, table_name, delimiter)  # type: ignore[arg-type]
 

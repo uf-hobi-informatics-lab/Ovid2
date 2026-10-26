@@ -51,8 +51,10 @@ logger = logging.getLogger(__name__)
 #: it into the connection is the whole point of the migration, so it
 #: becomes ``host_path`` on the connection side (widened schema from
 #: the disc-mount / path-picker phase) and the address is left with
-#: an empty location (pipelines already scope by
-#: ``{pipeline}/{batch_id}`` under the root at read time).
+#: an empty location. Since 2026-10 an address is the *exact* location
+#: of the data (no ``{pipeline}/{batch_id}`` is appended at read time),
+#: so a migrated root-level address reads files directly under the root;
+#: point ``location.path`` at the batch folder to read a specific batch.
 _SPLIT: dict[str, tuple[frozenset[str], frozenset[str], frozenset[str]]] = {
     "disc": (
         frozenset({"host_path"}),

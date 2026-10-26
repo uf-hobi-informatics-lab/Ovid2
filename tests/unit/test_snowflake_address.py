@@ -92,15 +92,46 @@ class TestConstruction:
 
 
 @pytest.mark.unit
-class TestSchemaName:
-    def test_simple(self) -> None:
-        addr = SnowflakeAddress(_minimal_config())
-        assert addr._schema_name("acme", "20260610") == "OVID_acme_20260610"
+class TestTargetSchema:
+    """The address is the exact location: write target = location schema."""
 
-    def test_slashes_are_sanitised(self) -> None:
+    def test_uses_location_schema_ignoring_pipeline_and_batch(self) -> None:
+        addr = SnowflakeAddress(_minimal_config(schema="SITE_X"))
+        assert addr._target_schema() == "SITE_X"
+
+    def test_missing_schema_raises(self) -> None:
         addr = SnowflakeAddress(_minimal_config())
-        assert addr._schema_name("acme", "sub/20260610") == "OVID_acme_sub_20260610"
-        assert addr._schema_name("acme", "sub\\20260610") == "OVID_acme_sub_20260610"
+        with pytest.raises(ValueError, match="names no schema"):
+            addr._target_schema()
+
+    def test_no_ovid_schema_naming(self) -> None:
+        assert not hasattr(SnowflakeAddress, "_schema_name")
+
+
+@pytest.mark.unit
+class TestCreateSchemaQuoting:
+    """Date-shaped schemas are double-quoted in DDL; plain ones are not."""
+
+    def _capture(self, monkeypatch: pytest.MonkeyPatch, addr: SnowflakeAddress) -> list[str]:
+        executed: list[str] = []
+        cursor = MagicMock()
+        cursor.execute.side_effect = executed.append
+        conn = MagicMock()
+        conn.cursor.return_value = cursor
+        monkeypatch.setattr(addr, "_get_sf_connection", lambda: conn)
+        return executed
+
+    def test_plain_identifier_unquoted(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        addr = SnowflakeAddress(_minimal_config(schema="SITE_X"))
+        executed = self._capture(monkeypatch, addr)
+        addr._create_schema_if_not_exists("SITE_X")
+        assert executed == ["CREATE SCHEMA IF NOT EXISTS TEST_DB.SITE_X"]
+
+    def test_date_shaped_identifier_quoted(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        addr = SnowflakeAddress(_minimal_config(schema="20260101"))
+        executed = self._capture(monkeypatch, addr)
+        addr._create_schema_if_not_exists("20260101")
+        assert executed == ['CREATE SCHEMA IF NOT EXISTS TEST_DB."20260101"']
 
 
 # ---------------------------------------------------------------------------
@@ -424,7 +455,7 @@ class TestTransientError:
 @pytest.mark.unit
 class TestWriteSuccess:
     def test_write_creates_schema_and_saves(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        addr = SnowflakeAddress(_minimal_config(private_key=b"DER"))
+        addr = SnowflakeAddress(_minimal_config(private_key=b"DER", schema="SITE_X"))
         df = _make_df_mock()
 
         # Stub the DDL executor so we don't need a Snowflake driver.
@@ -454,7 +485,8 @@ class TestWriteSuccess:
             table_name="hash_token",
         )
 
-        assert called["schema"] == "OVID_acme_20260610"
+        # The address schema is the exact target — pipeline/batch ignored.
+        assert called["schema"] == "SITE_X"
         assert applied["table"] == "hash_token"
         df.repartition.assert_called_once_with(10)
         df.write.format.assert_called_once_with("snowflake")
@@ -469,12 +501,12 @@ class TestWriteSuccess:
         # dbtable is upper-cased.
         options_arg = df.write.options.call_args.kwargs
         assert options_arg["dbtable"] == "HASH_TOKEN"
-        assert options_arg["sfSchema"] == "OVID_acme_20260610"
+        assert options_arg["sfSchema"] == "SITE_X"
 
     def test_write_warns_when_no_cdm(
         self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
-        addr = SnowflakeAddress(_minimal_config(private_key=b"DER"))
+        addr = SnowflakeAddress(_minimal_config(private_key=b"DER", schema="SITE_X"))
         df = _make_df_mock()
         monkeypatch.setattr(addr, "_create_schema_if_not_exists", lambda s: None)
         # No CDM write spec -> _apply_cdm_schema returns df unchanged + warns.
@@ -497,9 +529,23 @@ class TestWriteSuccess:
 
 
 @pytest.mark.unit
+def test_write_without_schema_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A schema-less output address is rejected (no OVID_* fallback)."""
+    addr = SnowflakeAddress(_minimal_config(private_key=b"DER"))
+    with pytest.raises(ValueError, match="names no schema"):
+        addr.write(
+            df=_make_df_mock(),
+            spark=MagicMock(),
+            pipeline="acme",
+            batch_id="20260610",
+            table_name="hash_token",
+        )
+
+
+@pytest.mark.unit
 class TestWriteRetry:
     def test_transient_error_retries_then_succeeds(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        addr = SnowflakeAddress(_minimal_config(private_key=b"DER"))
+        addr = SnowflakeAddress(_minimal_config(private_key=b"DER", schema="SITE_X"))
         df = _make_df_mock()
 
         # First save raises transient; second succeeds.
@@ -525,7 +571,7 @@ class TestWriteRetry:
         assert call_state["n"] == 2
 
     def test_non_transient_error_raises_immediately(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        addr = SnowflakeAddress(_minimal_config(private_key=b"DER"))
+        addr = SnowflakeAddress(_minimal_config(private_key=b"DER", schema="SITE_X"))
         df = _make_df_mock()
         df.write.save.side_effect = RuntimeError("SQL compilation error: table X does not exist")
         monkeypatch.setattr(addr, "_create_schema_if_not_exists", lambda s: None)
@@ -550,7 +596,7 @@ class TestWriteRetry:
     def test_transient_error_gives_up_after_max_retries(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        addr = SnowflakeAddress(_minimal_config(private_key=b"DER"))
+        addr = SnowflakeAddress(_minimal_config(private_key=b"DER", schema="SITE_X"))
         df = _make_df_mock()
         df.write.save.side_effect = RuntimeError("connection reset")
         monkeypatch.setattr(addr, "_create_schema_if_not_exists", lambda s: None)

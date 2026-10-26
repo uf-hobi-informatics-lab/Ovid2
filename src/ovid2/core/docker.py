@@ -518,12 +518,19 @@ def _build_ovid2_argv(args: Any) -> list[str]:
     """
     command = getattr(args, "command", "etl")
     if command in ("tools copy", "copy"):
-        return _build_tools_copy_argv(args)
-    if command in ("tools move", "move"):
-        return _build_tools_move_argv(args)
-    if command in ("health", "dq_checks"):
-        return _build_health_argv(args)
-    return _build_etl_argv(args, command)
+        tokens = _build_tools_copy_argv(args)
+    elif command in ("tools move", "move"):
+        tokens = _build_tools_move_argv(args)
+    elif command in ("health", "dq_checks"):
+        tokens = _build_health_argv(args)
+    else:
+        tokens = _build_etl_argv(args, command)
+    # The address is the exact write location: an operator-confirmed
+    # overwrite must survive the host → container hop, otherwise the
+    # in-container overwrite gate would refuse the run.
+    if getattr(args, "overwrite", False):
+        tokens.append("--overwrite")
+    return tokens
 
 
 def _build_etl_argv(args: Any, command: str) -> list[str]:

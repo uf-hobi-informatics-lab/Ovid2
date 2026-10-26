@@ -497,7 +497,30 @@ class JobSubmitRequest(BaseModel):
         description="CDM name, required when kind=etl.",
     )
     pipeline: str = Field(..., description="Pipeline name (must exist under ovid2_pipelines).")
-    batch_id: str = Field(..., description="Batch identifier, e.g. ``20260101``.")
+    batch_id: str = Field(
+        "",
+        description=(
+            "Run label. Always *derived* server-side from the input: the "
+            "complete Data Space path of the input location — storage "
+            "account followed by the folder path or ``DATABASE/SCHEMA`` "
+            "(e.g. ``inbox/landing/2026_03``, ``sf_prod/CHAR_DB/SITE_X``). "
+            "A supplied value is used only when the input has no derivable "
+            "location (legacy addresses). Never appended to an address: "
+            "every address is the exact location its data is read from / "
+            "written to."
+        ),
+    )
+    confirm_overwrite: bool = Field(
+        False,
+        description=(
+            "Confirm writing into an output location that already holds "
+            "tables. The output address is the exact write location, so an "
+            "occupied output is overwritten; without this flag the API "
+            "answers ``409 overwrite_required`` listing the existing "
+            "tables. Agent principals (MCP / assistant) setting it go "
+            "through the ``run.overwrite`` human-approval gate."
+        ),
+    )
     input_address: str = Field(
         "",
         description=(
@@ -558,9 +581,21 @@ class JobSubmitRequest(BaseModel):
     )
     engine: str = Field("pyspark", description="Compute engine (default: pyspark).")
     workers: int = Field(25, ge=1, le=200, description="Spark worker count for isolated cluster.")
-    sf_database: str | None = Field(None, description="Snowflake DATABASE override.")
+    sf_database: str | None = Field(
+        None,
+        description=(
+            "Deprecated. The address is the exact location — set "
+            "DATABASE/SCHEMA on the address instead."
+        ),
+    )
     sf_account: str | None = Field(None, description="Snowflake ACCOUNT override.")
-    sf_schema: str | None = Field(None, description="Snowflake SCHEMA override.")
+    sf_schema: str | None = Field(
+        None,
+        description=(
+            "Deprecated. The address is the exact location — set "
+            "DATABASE/SCHEMA on the address instead."
+        ),
+    )
     stderr_log: bool = Field(False, description="Mirror events to stderr as plain-text log lines.")
     extra_mounts: list[str] = Field(
         default_factory=list,
@@ -621,6 +656,18 @@ class JobSubmitRequest(BaseModel):
         description=(
             "``kind='health'`` only. Prior-refresh input address for "
             "the freshness / volume-trend panel. Ignored otherwise."
+        ),
+    )
+
+
+class OverwriteConfirm(BaseModel):
+    """Optional body for ``POST /jobs/{job_id}/rerun`` and ``/launch``."""
+
+    confirm_overwrite: bool = Field(
+        False,
+        description=(
+            "Confirm overwriting the occupied output location (the output "
+            "address is the exact write location)."
         ),
     )
 
@@ -1172,6 +1219,14 @@ class PipelineConfigDetail(BaseModel):
     sf_account: str | None = None
     sf_schema: str | None = None
     stderr_log: bool = False
+    allow_overwrite: bool = Field(
+        False,
+        description=(
+            "Standing confirmation that this pipeline's runs may overwrite "
+            "an occupied output location (needed for unattended watch / "
+            "scheduled runs, whose output address is fixed)."
+        ),
+    )
     enabled: bool = True
     trigger: PipelineTrigger = Field(default_factory=lambda: PipelineTrigger(type="manual"))
     last_fired_at: str | None = None
@@ -1256,6 +1311,14 @@ class PipelineWrite(BaseModel):
     sf_account: str | None = None
     sf_schema: str | None = None
     stderr_log: bool = False
+    allow_overwrite: bool = Field(
+        False,
+        description=(
+            "Standing confirmation that runs of this pipeline may overwrite "
+            "an occupied output location. Set by an agent principal it "
+            "requires the ``run.overwrite`` human approval."
+        ),
+    )
     enabled: bool = True
     trigger: PipelineTrigger = Field(default_factory=lambda: PipelineTrigger(type="manual"))
 
@@ -1270,7 +1333,18 @@ class PipelineRunRequest(BaseModel):
 
     batch_id: str | None = Field(
         None,
-        description=("Override the synthesised timestamp batch id for this run."),
+        description=(
+            "Ignored when the input has a derivable location — the batch id "
+            "is always the complete Data Space path of the input location. "
+            "Used only as the label for legacy (connectionless) inputs."
+        ),
+    )
+    confirm_overwrite: bool = Field(
+        False,
+        description=(
+            "Confirm overwriting an occupied output location for this run "
+            "(see ``JobSubmitRequest.confirm_overwrite``)."
+        ),
     )
     tables: list[str] | None = Field(
         None,
@@ -1893,49 +1967,35 @@ class OdsDimensionCatalog(BaseModel):
     dimensions: list[OdsDimensionSummary] = Field(default_factory=list)
 
 
-class OdsPipelineSummary(BaseModel):
-    """One row in the root ODS listing."""
+class OdsEntryModel(BaseModel):
+    """One child in a Data Space listing (a folder, schema, file or table)."""
 
     name: str
-    known_dimensions: list[str] = Field(
-        default_factory=list,
-        description="Dimensions that have at least one address for this pipeline.",
-    )
+    kind: str = Field(..., description="``account`` | ``dir`` | ``file`` | ``table``.")
+    path: str = Field(..., description="The child's full Data Space path (``/<conn>/<…>``).")
+    type: str = Field("", description="Storage type (disc / snowflake / s3 / …).")
+    size_bytes: int | None = None
 
 
-class OdsPipelineListing(BaseModel):
-    """Response for ``GET /api/v1/dataspace``."""
+class OdsListing(BaseModel):
+    """Response for ``GET /api/v1/dataspace?path=…``.
 
-    pipelines: list[OdsPipelineSummary] = Field(default_factory=list)
+    Every data space is the same — a tree of plain directories rooted at
+    a storage account. ``/`` lists storage accounts; deeper paths list
+    the folder / schema. ``batch_id`` is what a run reading this location
+    is labelled with; ``address_name`` the saved address pointing exactly
+    here (if any).
+    """
 
-
-class OdsBatchSummary(BaseModel):
-    """One batch under a pipeline."""
-
-    batch_id: str
-    dimensions: list[str] = Field(default_factory=list)
-
-
-class OdsBatchListing(BaseModel):
-    """Response for ``GET /api/v1/dataspace/{pipeline}``."""
-
-    pipeline: str
-    batches: list[OdsBatchSummary] = Field(default_factory=list)
-
-
-class OdsTableSummary(BaseModel):
-    """One table under a batch."""
-
-    name: str
-    dimensions: list[str] = Field(default_factory=list)
-
-
-class OdsTableListing(BaseModel):
-    """Response for ``GET /api/v1/dataspace/{pipeline}/{batch}``."""
-
-    pipeline: str
-    batch_id: str
-    tables: list[OdsTableSummary] = Field(default_factory=list)
+    path: str
+    connection: str | None = None
+    type: str = ""
+    location: str = ""
+    batch_id: str = ""
+    address_name: str | None = None
+    supported: bool = True
+    message: str | None = None
+    entries: list[OdsEntryModel] = Field(default_factory=list)
 
 
 class CdmSummary(BaseModel):
@@ -2013,25 +2073,22 @@ class CdmDetail(BaseModel):
 class OdsResolveResult(BaseModel):
     """Response for ``GET /api/v1/dataspace/resolve``.
 
-    Contains the naming information but never the credentials or the
-    concrete address object — the web tier deliberately keeps the
-    pyspark import surface at zero.
+    Naming information only — never credentials. The path is
+    ``/<connection>/<location…>``; ``location`` is the exact folder /
+    ``DATABASE/SCHEMA`` it names and ``batch_id`` the run label for it.
     """
 
     path: str
-    pipeline: str | None = None
-    batch_id: str | None = None
-    table: str | None = None
-    dimension: str
-    address_name: str
-    tier: str = Field(
-        ...,
-        description=(
-            "Which resolution rule fired: 'explicit', 'pipeline_route', "
-            "'dimension_default', or 'sole_candidate'."
-        ),
+    connection: str | None = None
+    type: str = ""
+    location: str = ""
+    batch_id: str = ""
+    address_name: str | None = Field(
+        None, description="A saved address pointing exactly at this location, if any."
     )
-    candidates: list[str] = Field(default_factory=list)
+    candidates: list[str] = Field(
+        default_factory=list, description="Every saved address on this storage account."
+    )
 
 
 # ---------------------------------------------------------------------------

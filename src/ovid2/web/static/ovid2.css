@@ -3760,7 +3760,27 @@ details.submit-card > summary.card-title::-webkit-details-marker { display: none
   color: var(--fg-subtle);
 }
 .storage-list .entry-dir .icon { color: var(--accent); }
-.storage-list .storage-use-here { margin-bottom: 0.4rem; }
+.storage-list .entry-here { margin-bottom: 0.3rem; }
+/* browse.js: the entry icon is the select control (no "use" links). */
+.storage-list .pick-icon {
+  position: relative;
+  flex: none;
+  width: 26px; height: 26px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1.5px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+}
+.storage-list .pick-icon:hover { border-color: var(--accent); background: var(--bg-elev); }
+.storage-list .pick-icon:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-subtle); }
+.storage-list .pick-icon.is-selected {
+  border-color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+}
+.storage-list .pick-icon.is-selected .icon { color: var(--ok); }
 
 /* --- Tables checkbox grid --- */
 .picker-toolbar {
@@ -4577,3 +4597,301 @@ body.modal-open { overflow: hidden; }
 }
 .modal-panel .storage-card { margin-top: 0.9rem; }
 
+
+/* ==================================================================
+   Job builder (/submit) — navigator left, job graph right.
+   See templates/submit.html + static/submit_builder.js.
+   ================================================================== */
+
+.builder-page { max-width: 1400px; }
+.job-builder {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 520px);
+  gap: 1.25rem;
+  align-items: start;
+}
+.builder-nav { display: flex; flex-direction: column; gap: 0.6rem; min-width: 0; }
+
+/* --- collapsible sections --- */
+.builder-section {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+  transition: border-color var(--dur-med) var(--ease);
+}
+.builder-section[open] { border-color: var(--accent); }
+.builder-section.is-done:not([open]) { border-color: color-mix(in srgb, var(--ok) 55%, var(--border)); }
+.builder-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.builder-summary::-webkit-details-marker { display: none; }
+.builder-step {
+  flex: none;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: var(--fs-sm); font-weight: 700;
+  border: 2px dashed var(--border-strong);
+  color: var(--fg-muted);
+}
+.builder-step.is-optional { border-style: solid; }
+.builder-section.is-done .builder-step {
+  border: 2px solid var(--ok); background: var(--ok); color: var(--accent-fg);
+}
+.builder-summary-title { font-weight: 600; color: var(--fg); }
+.builder-summary-value {
+  flex: 1 1 auto; min-width: 0;
+  font-size: var(--fs-sm); color: var(--fg-subtle);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-align: right;
+}
+.builder-summary-value.is-done { color: var(--ok); font-family: var(--mono); }
+.builder-summary-chevron { flex: none; color: var(--fg-subtle); transition: transform var(--dur-med) var(--ease); }
+.builder-section[open] .builder-summary-chevron { transform: rotate(180deg); }
+.builder-body { padding: 0 1rem 1rem; }
+.builder-label {
+  margin: 0.6rem 0 0.4rem;
+  font-size: var(--fs-xs); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--fg-muted);
+}
+
+/* --- kind + engine chips --- */
+.kind-chips, .engine-chips { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-bottom: 0.4rem; }
+.kind-chip {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-elev);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  color: var(--fg-muted);
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.kind-chip input { position: absolute; opacity: 0; width: 0; height: 0; }
+.kind-chip:hover { background: var(--accent-subtle); }
+.kind-chip:has(input:checked) { border-color: var(--accent); background: var(--accent-subtle); color: var(--fg); }
+.kind-chip:has(input:focus-visible) { box-shadow: 0 0 0 3px var(--accent-subtle); }
+.kind-chip-icon { display: inline-flex; color: var(--accent); }
+.kind-chip-label { font-weight: 500; }
+
+/* --- pipeline cards --- */
+.pipeline-cards {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.45rem;
+  max-height: 22rem; overflow: auto;
+}
+.pipeline-card {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+  cursor: pointer;
+  min-width: 0;
+}
+.pipeline-card[hidden] { display: none; }
+.pipeline-card:hover { border-color: var(--accent); }
+.pipeline-card.is-selected { border-color: var(--ok); box-shadow: 0 0 0 1px var(--ok); }
+.pipeline-card-body { display: flex; flex-direction: column; min-width: 0; }
+.pipeline-card-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+.pipeline-card-sub { color: var(--fg-subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.builder-free-name { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.7rem; color: var(--fg-muted); }
+.builder-free-name[hidden] { display: none; }
+
+/* --- storage tree --- */
+.storage-tree { max-height: 26rem; overflow: auto; }
+.tree-root, .tree-group { list-style: none; margin: 0; padding: 0; }
+.tree-group { padding-left: 1.15rem; border-left: 1px dashed var(--border); margin-left: 0.6rem; }
+.tree-group[hidden] { display: none; }
+.tree-row {
+  display: flex; align-items: center; gap: 0.3rem;
+  padding: 0.12rem 0.25rem;
+  border-radius: var(--radius-md);
+}
+.tree-row:hover { background: var(--accent-subtle); }
+.tree-chevron {
+  flex: none; width: 16px; height: 16px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--fg-subtle); cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease);
+}
+.tree-chevron-spacer { cursor: default; }
+.tree-item[aria-expanded="true"] > .tree-row > .tree-chevron { transform: rotate(90deg); }
+
+/* The icon IS the select control (no "use" links). */
+.tree-icon {
+  position: relative;
+  flex: none;
+  width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1.5px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  color: var(--fg-muted);
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.tree-icon:hover { border-color: var(--accent); background: var(--bg-elev); transform: scale(1.06); }
+.tree-icon:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-subtle); border-color: var(--accent); }
+.tree-check {
+  position: absolute; right: -5px; bottom: -5px;
+  width: 15px; height: 15px; border-radius: 50%;
+  display: none; align-items: center; justify-content: center;
+  background: var(--ok); color: var(--accent-fg);
+  border: 2px solid var(--card-bg);
+}
+.tree-check svg { width: 9px; height: 9px; stroke-width: 3.5; }
+.is-selected > .tree-row > .tree-icon,
+.pipeline-card.is-selected > .tree-icon {
+  border-color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+}
+.is-selected > .tree-row > .tree-icon .tree-check,
+.pipeline-card.is-selected > .tree-icon .tree-check { display: inline-flex; }
+.is-selected > .tree-row > .tree-label { color: var(--ok); font-weight: 600; }
+
+.tree-label {
+  flex: 1 1 auto; min-width: 0;
+  border: none; background: transparent; padding: 0.2rem 0.25rem;
+  text-align: left; cursor: pointer;
+  color: var(--fg); font: inherit; font-size: var(--fs-sm);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tree-label:focus-visible { outline: none; text-decoration: underline; }
+.tree-type { flex: none; color: var(--fg-subtle); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.04em; }
+.tree-count { color: var(--fg-subtle); font-size: var(--fs-xs); margin-left: 0.25rem; }
+.tree-msg { padding: 0.25rem 0.5rem; font-size: var(--fs-sm); color: var(--fg-subtle); }
+.tree-err { color: var(--err); }
+.tree-hint {
+  margin: 0.1rem 0 0.3rem 2.6rem;
+  color: var(--warn);
+}
+
+/* Storage-type logo tints (brand-like hues, readable in both themes). */
+.logo-snowflake  { color: #29b5e8; }
+.logo-s3         { color: #e7852a; }
+.logo-azure_blob { color: #0a84d6; }
+.logo-databricks { color: #ef4b30; }
+.logo-gcs        { color: #4b8bf5; }
+.logo-postgres   { color: #4f7dbb; }
+.logo-mssql      { color: #c73a3a; }
+.logo-disc       { color: #7a8794; }
+.logo-access     { color: #b03a4a; }
+.logo-folder     { color: var(--accent); }
+.logo-schema     { color: var(--accent); }
+.logo-table      { color: var(--fg-muted); }
+.logo-file       { color: var(--fg-muted); }
+.logo-saved      { color: var(--warn); }
+
+/* --- options sub-sections --- */
+.builder-sub { border-top: 1px solid var(--border); padding: 0.55rem 0; }
+.builder-sub:first-child { border-top: none; }
+.builder-sub[hidden] { display: none; }
+.builder-sub > summary {
+  display: flex; align-items: center; gap: 0.45rem;
+  cursor: pointer; font-weight: 600; font-size: var(--fs-sm); color: var(--fg);
+  padding: 0.2rem 0; list-style: none;
+}
+.builder-sub > summary::-webkit-details-marker { display: none; }
+.builder-sub > summary .icon { color: var(--accent); }
+.builder-sub[open] > summary { margin-bottom: 0.6rem; }
+.builder-field { display: flex; flex-direction: column; gap: 0.3rem; font-size: var(--fs-sm); color: var(--fg-muted); margin-top: 0.6rem; }
+.builder-field[hidden], .job-builder label.checkbox[hidden] { display: none; }
+
+/* --- job graph (right) --- */
+.builder-graph {
+  position: sticky;
+  top: calc(var(--topbar-h) + 1rem);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  padding: 1rem;
+  display: flex; flex-direction: column; gap: 0.8rem;
+  transition: border-color var(--dur-med) var(--ease);
+}
+.builder-graph.is-complete { border-color: var(--ok); }
+.job-graph-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.graph-caption { text-anchor: middle; font-size: 11px; fill: var(--fg-subtle); letter-spacing: 0.04em; }
+.graph-node { cursor: pointer; outline: none; }
+.graph-node-box {
+  fill: var(--bg-elev);
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+  transition: fill var(--dur-med) var(--ease), stroke var(--dur-med) var(--ease);
+}
+.graph-node:hover .graph-node-box, .graph-node:focus-visible .graph-node-box { stroke: var(--accent); }
+.graph-node-disc { fill: var(--accent-subtle); transition: fill var(--dur-med) var(--ease); }
+.graph-logo { color: var(--fg-muted); }
+.graph-node-title { text-anchor: middle; font-size: 12px; font-weight: 700; fill: var(--fg); }
+.graph-node-value { text-anchor: middle; font-size: 10.5px; fill: var(--fg-subtle); font-family: var(--mono); }
+.graph-node-sub { text-anchor: middle; font-size: 9.5px; fill: var(--fg-subtle); text-transform: uppercase; letter-spacing: 0.05em; }
+.graph-badge-disc { fill: var(--bg); stroke: var(--border-strong); stroke-width: 1.2; }
+.graph-badge-num { text-anchor: middle; font-size: 10px; font-weight: 700; fill: var(--fg-muted); }
+.graph-badge-check { fill: none; stroke: var(--accent-fg); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+.graph-node.is-done .graph-node-box {
+  fill: color-mix(in srgb, var(--ok) 10%, var(--bg-elev));
+  stroke: var(--ok);
+  stroke-dasharray: none;
+  stroke-width: 2;
+}
+.graph-node.is-done .graph-node-disc { fill: color-mix(in srgb, var(--ok) 22%, transparent); }
+.graph-node.is-done .graph-node-value { fill: var(--ok); }
+.graph-node.is-done .graph-badge-disc { fill: var(--ok); stroke: var(--ok); }
+
+.graph-edge { stroke: var(--border-strong); stroke-width: 2; stroke-dasharray: 5 4; transition: stroke var(--dur-med) var(--ease); }
+.graph-edge.is-done { stroke: var(--ok); stroke-dasharray: none; stroke-width: 2.5; }
+.graph-arrow { fill: var(--border-strong); }
+.graph-arrow.is-done { fill: var(--ok); }
+
+.graph-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; }
+.graph-chip {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-elev);
+  font-size: var(--fs-xs); color: var(--fg-muted);
+  cursor: pointer;
+}
+.graph-chip:hover { border-color: var(--accent); }
+.graph-chip.is-custom { border-color: var(--accent); background: var(--accent-subtle); color: var(--fg); }
+.graph-chip.is-missing { border-color: var(--err); color: var(--err); }
+.graph-chip-label { font-weight: 600; }
+.graph-chip-value { font-family: var(--mono); }
+
+.builder-batch { display: flex; flex-direction: column; gap: 0.2rem; }
+.builder-batch .builder-label { margin: 0; }
+.graph-status { margin: 0; color: var(--fg-subtle); text-align: center; }
+.graph-status.is-done { color: var(--ok); font-weight: 600; }
+.builder-graph .submit-actions { display: flex; }
+.builder-graph .submit-actions .button { width: 100%; justify-content: center; }
+.job-builder button[type="submit"]:disabled {
+  opacity: 0.5; cursor: not-allowed;
+}
+
+@media (max-width: 1000px) {
+  .job-builder { grid-template-columns: minmax(0, 1fr); }
+  .builder-graph { position: static; order: -1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tree-icon, .graph-node-box, .graph-edge, .builder-summary-chevron, .tree-chevron { transition: none; }
+}
+/* ``form.submit-form label`` stacks labels vertically; chips and check
+   items in the builder are horizontal. */
+.job-builder label.kind-chip,
+.job-builder label.check-item { flex-direction: row; align-items: center; font-size: var(--fs-sm); }

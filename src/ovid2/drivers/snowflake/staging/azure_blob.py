@@ -142,8 +142,6 @@ class SnowparkAzureBlobStrategy(SnowparkStagingStrategy):
             endpoint_suffix,
             container,
             prefix,
-            pipeline,
-            batch_id,
         )
 
         native = _native_session(session)
@@ -169,7 +167,7 @@ class SnowparkAzureBlobStrategy(SnowparkStagingStrategy):
             account=account,
             endpoint_suffix=endpoint_suffix,
             container=container,
-            blob=_azure_blob_name(prefix, pipeline, batch_id, file_name),
+            blob=_azure_blob_name(prefix, file_name),
             delimiter=delim,
             merged_config=merged,
         )
@@ -239,8 +237,6 @@ class SnowparkAzureBlobStrategy(SnowparkStagingStrategy):
             endpoint_suffix,
             container,
             prefix,
-            pipeline,
-            batch_id,
         )
 
         native = _native_session(session)
@@ -437,14 +433,9 @@ def _parse_connection_string(conn_str: str) -> dict[str, str]:
     return _p(conn_str)
 
 
-def _azure_blob_name(
-    prefix: str,
-    pipeline: str,
-    batch_id: str,
-    file_name: str,
-) -> str:
-    """Assemble the container-relative blob name ``{prefix}/{pipeline}/{batch}/{file}``."""
-    parts = [p for p in (prefix, pipeline, batch_id, file_name) if p]
+def _azure_blob_name(prefix: str, file_name: str) -> str:
+    """Assemble the container-relative blob name ``{prefix}/{file}`` (address = exact location)."""
+    parts = [p for p in (prefix, file_name) if p]
     return "/".join(parts)
 
 
@@ -453,8 +444,6 @@ def _azure_dir_url(
     endpoint_suffix: str,
     container: str,
     prefix: str,
-    pipeline: str,
-    batch_id: str,
 ) -> str:
     """Assemble the Snowflake-flavoured ``azure://…/`` directory URL.
 
@@ -463,7 +452,7 @@ def _azure_dir_url(
     The ``.blob.`` subdomain is required — the ``.dfs.`` (ADLS Gen2)
     endpoint is not supported by external stages.
     """
-    parts = [p for p in (prefix, pipeline, batch_id) if p]
+    parts = [p for p in (prefix,) if p]
     key = "/".join(parts)
     base = f"azure://{account}.blob.{endpoint_suffix}/{container}/"
     if key:

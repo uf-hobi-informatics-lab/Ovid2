@@ -194,7 +194,7 @@ class SnowparkS3Strategy(SnowparkStagingStrategy):
         # multiple files under the same pipeline/batch can share a
         # stage. COPY INTO's file-name clause below narrows to the
         # specific object.
-        read_dir_uri = _s3_dir_uri(bucket, prefix, pipeline, batch_id)
+        read_dir_uri = _s3_dir_uri(bucket, prefix)
 
         native = _native_session(session)
         self._maybe_schedule_cleanup(session, instance_id)
@@ -222,7 +222,7 @@ class SnowparkS3Strategy(SnowparkStagingStrategy):
         # boto3 GET (small — one line).
         columns = _read_header_columns_from_s3(
             bucket=bucket,
-            key=_s3_key(prefix, pipeline, batch_id, file_name),
+            key=_s3_key(prefix, file_name),
             delimiter=delim,
             merged_config=merged,
         )
@@ -276,7 +276,7 @@ class SnowparkS3Strategy(SnowparkStagingStrategy):
 
         No GET step — Snowflake writes directly into the bucket via
         the stage's ``URL='s3://…/'`` and the CSV ends up under
-        ``{prefix}/{pipeline}/{batch_id}/{table_name}/`` (matching the
+        ``{prefix}/{table_name}/`` (matching the
         legacy 15-part-prefix contract when
         ``location.single_file=False``, or as a single file when
         ``True``).
@@ -308,7 +308,7 @@ class SnowparkS3Strategy(SnowparkStagingStrategy):
 
         instance_id = _current_instance_id()
         stage_name = _stage_name(instance_id, pipeline, batch_id, table_name, kind="out")
-        write_dir_uri = _s3_dir_uri(bucket, prefix, pipeline, batch_id)
+        write_dir_uri = _s3_dir_uri(bucket, prefix)
 
         native = _native_session(session)
         self._maybe_schedule_cleanup(session, instance_id)
@@ -479,15 +479,15 @@ def _require_bucket(merged: dict[str, Any]) -> str:
     return bucket
 
 
-def _s3_key(prefix: str, pipeline: str, batch_id: str, file_name: str) -> str:
-    """Assemble the bucket-relative key ``{prefix}/{pipeline}/{batch}/{file}``."""
-    parts = [p for p in (prefix, pipeline, batch_id, file_name) if p]
+def _s3_key(prefix: str, file_name: str) -> str:
+    """Assemble the bucket-relative key ``{prefix}/{file}`` (address = exact location)."""
+    parts = [p for p in (prefix, file_name) if p]
     return "/".join(parts)
 
 
-def _s3_dir_uri(bucket: str, prefix: str, pipeline: str, batch_id: str) -> str:
-    """Assemble the ``s3://<bucket>/<key-prefix>/`` directory URI."""
-    parts = [p for p in (prefix, pipeline, batch_id) if p]
+def _s3_dir_uri(bucket: str, prefix: str) -> str:
+    """Assemble the ``s3://<bucket>/<key-prefix>/`` directory URI (address = exact location)."""
+    parts = [p for p in (prefix,) if p]
     key = "/".join(parts)
     if key:
         return f"s3://{bucket}/{key}/"
