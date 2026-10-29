@@ -273,6 +273,18 @@ def test_html_pages_render(client: TestClient, gateway: str) -> None:
     assert "Routing" in client.get("/llms").text
 
 
+def test_llms_page_stacked_boxes(client: TestClient) -> None:
+    """LLM connections render as stacked boxes; routing is its own panel."""
+    llms_svc.write_llm("nemo", _nemo("https://gw.example/v1"))
+    _route(enabled=True, general="nemo")
+    html = client.get("/llms").text
+    assert "pl-panel" in html and 'action="/llms/routing"' in html
+    assert 'data-llm-row="nemo"' in html and 'data-llm-role="general"' in html
+    assert 'data-llm-cell="nemo"' in html and 'data-test-llm="nemo"' in html
+    assert "general-test-model" in html and "https://gw.example/v1" in html
+    assert 'class="pl-grid"' in html and "<table" not in html.split("</form>")[-1]
+
+
 def test_routing_rejects_unknown(client: TestClient) -> None:
     r = client.post(
         "/llms/routing", data={"enabled": "on", "general": "ghost"}, follow_redirects=False

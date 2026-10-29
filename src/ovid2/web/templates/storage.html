@@ -1,71 +1,159 @@
 {% extends "base.html" %}
 {% block title %}Storage accounts &mdash; Ovid2{% endblock %}
 {% block content %}
-<section class="page">
-  <div class="page-header">
-    <h1>Storage accounts</h1>
+{% import "_icons.html" as icons %}
+{% import "_help.html" as help %}
+{#
+  Storage accounts index — stacked component boxes (same visual language
+  as the Warehouses / LLMs / Pipelines pages), grouped by storage category
+  (filesystems / object stores / databases). Each box: head (badge + name
+  + type) | flow strip (type -> secret -> config file) | foot (test result
+  + actions). The data-connection-row / data-test-connection /
+  data-test-cell hooks drive the inline Test / Test-all script below.
+#}
+{% set type_labels = {"disc": "Filesystem", "s3": "Amazon S3", "gcs": "Google Cloud Storage",
+                      "azure_blob": "Azure Blob", "snowflake": "Snowflake", "databricks": "Databricks",
+                      "postgres": "PostgreSQL", "mssql": "SQL Server", "access": "MS Access"} %}
+{% set categories = [
+  ("filesystem", "Filesystems", "folder", ["disc"]),
+  ("object_store", "Object stores", "bucket", ["s3", "gcs", "azure_blob"]),
+  ("database", "Databases & warehouses", "database", ["snowflake", "databricks", "postgres", "mssql", "access"]),
+] %}
+{% set known_types = type_labels.keys() | list %}
+{% set type_icons = {"disc": "folder", "s3": "bucket", "gcs": "bucket", "azure_blob": "bucket"} %}
+<section class="page pl-page">
+  <div class="page-header pl-header">
+    <div class="pl-title">
+      <h1>Storage accounts
+        {% call help.tip_block(label="What is a storage account?") %}
+          A <strong>storage account</strong> holds the credentials and shared
+          endpoint metadata (host, region, account, bucket, container&hellip;)
+          for one reachable system where data lives &mdash; a filesystem, an
+          object store (S3, GCS, Azure Blob), or a database / warehouse
+          (Snowflake, Databricks, Postgres, SQL Server). A pipeline picks a
+          storage account for its input and output, then chooses the folder /
+          bucket / schema at run time.
+        {% endcall %}
+      </h1>
+      <p class="pl-subtitle">Where data lives &mdash; filesystems, object stores and databases pipelines read from and write to.</p>
+    </div>
     <div class="page-actions">
       {% if connections %}
         <button type="button" id="test-all-btn" class="button small"
-                data-test-all="connections">Test all</button>
+                data-test-all="connections">{{ icons.icon("activity", size=15) }} Test all</button>
       {% endif %}
-      <a href="/connections/new" class="button primary small">+ New storage account</a>
+      <a href="/connections/new" class="button primary">{{ icons.icon("plus", size=16) }} New storage account</a>
     </div>
   </div>
-  <p class="note">
-    A <strong>storage account</strong> holds the credentials and shared
-    endpoint metadata (host, region, account, bucket, container&hellip;)
-    for one reachable system where data lives &mdash; a filesystem, an
-    object store (S3, GCS, Azure Blob), or a database / warehouse
-    (Snowflake, Databricks, Postgres, SQL Server). A pipeline picks a
-    storage account for its input and output, then chooses the folder /
-    bucket / schema at run time.
-  </p>
 
   {% if connections %}
-    <div id="test-all-summary" class="flash" style="display: none;"></div>
-    <div class="table-wrap">
-    <table class="runs-table">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Secret ref</th>
-          <th>Path</th>
-          <th>Result</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for c in connections %}
-          <tr data-connection-row="{{ c.name }}">
-            <td><a href="/connections/{{ c.name }}">{{ c.name }}</a></td>
-            <td>{{ c.type }}</td>
-            <td class="mono small">{{ c.secret_ref or '&mdash;' | safe }}</td>
-            <td class="mono small">{{ c.path }}</td>
-            <td class="test-result-cell" data-test-cell="{{ c.name }}">
-              <span class="small" style="color: var(--fg-muted);">&mdash;</span>
-            </td>
-            <td>
-              <button type="button" class="button small"
-                      data-test-connection="{{ c.name }}">Test</button>
-              <a href="/connections/{{ c.name }}/edit" class="small">edit</a>
-              <form action="/connections/{{ c.name }}/delete" method="post" style="display: inline;"
-                    onsubmit="return confirm('Delete storage account {{ c.name }}?')">
-                <button type="submit" class="link-button small danger">delete</button>
-              </form>
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="pl-stats" role="list" aria-label="Storage account summary">
+      <div class="pl-stat pl-stat-total" role="listitem">
+        <span class="pl-stat-icon">{{ icons.icon("layers", size=20) }}</span>
+        <span class="pl-stat-body">
+          <span class="pl-stat-value">{{ connections | length }}</span>
+          <span class="pl-stat-label">storage accounts</span>
+        </span>
+      </div>
+      {% for t, label in type_labels.items() %}
+        {% set n = connections | selectattr("type", "equalto", t) | list | length %}
+        {% if n %}
+          <div class="pl-stat" data-ctype="{{ t }}" style="--sc: var(--pk);" role="listitem">
+            <span class="pl-stat-icon">{{ icons.icon(type_icons.get(t, "database"), size=20) }}</span>
+            <span class="pl-stat-body">
+              <span class="pl-stat-value">{{ n }}</span>
+              <span class="pl-stat-label">{{ label }}</span>
+            </span>
+          </div>
+        {% endif %}
+      {% endfor %}
     </div>
+
+    <div id="test-all-summary" class="flash" style="display: none;"></div>
+
+    {% set other = connections | rejectattr("type", "in", known_types) | list %}
+    {% set cat_list = categories + ([("other", "Other", "layers", [])] if other else []) %}
+    {% for key, title, cat_icon, types in cat_list %}
+      {% set rows = other if key == "other" else (connections | selectattr("type", "in", types) | list) %}
+      {% if rows %}
+        <details class="pipeline-group pl-group" data-storage-group="{{ key }}" open>
+          <summary>
+            <span class="pl-group-icon">{{ icons.icon(cat_icon, size=16) }}</span>
+            <span class="group-kind">{{ title }}</span>
+            <span class="group-count">{{ rows | length }}</span>
+            <span class="pl-group-rule" aria-hidden="true"></span>
+          </summary>
+          <div class="pl-grid">
+            {% for c in rows %}
+              <article class="pl-card" data-connection-row="{{ c.name }}" data-ctype="{{ c.type }}">
+                <header class="pl-card-head">
+                  <span class="pl-card-badge">{{ icons.icon(type_icons.get(c.type, "database"), size=16) }}</span>
+                  <div class="pl-card-title">
+                    <a href="/connections/{{ c.name }}" class="pl-card-name">{{ c.name }}</a>
+                    <span class="pl-card-sub">
+                      <span class="pl-kind-label">{{ type_labels.get(c.type, c.type) }}</span>
+                    </span>
+                  </div>
+                </header>
+
+                <div class="pl-flow" aria-label="Storage account {{ c.name }}: {{ c.type }}">
+                  <div class="pl-node pl-node-engine" title="Type: {{ c.type }}">
+                    <span class="pl-node-icon">{{ icons.icon(type_icons.get(c.type, "database"), size=14) }}</span>
+                    <span class="pl-node-text">{{ c.type }}</span>
+                  </div>
+                  <span class="pl-link" aria-hidden="true"></span>
+                  <div class="pl-node {{ 'is-open' if not c.secret_ref }}"
+                       title="{{ ('Secret: ' ~ c.secret_ref) if c.secret_ref else 'No secret file' }}">
+                    <span class="pl-node-icon">{{ icons.icon("secrets", size=14) }}</span>
+                    <span class="pl-node-text">{% if c.secret_ref %}{{ c.secret_ref }}{% else %}<span class="badge">no secret</span>{% endif %}</span>
+                  </div>
+                  <span class="pl-link" aria-hidden="true"></span>
+                  <div class="pl-node" title="{{ c.path }}">
+                    <span class="pl-node-icon">{{ icons.icon("file", size=14) }}</span>
+                    <span class="pl-node-text">{{ c.path }}</span>
+                  </div>
+                </div>
+
+                <footer class="pl-card-foot">
+                  <span class="pl-result test-result-cell" data-test-cell="{{ c.name }}">
+                    <span class="small muted">&mdash;</span>
+                  </span>
+                  <div class="row-actions pl-actions">
+                    <button type="button" class="icon-button pl-run" title="Test"
+                            aria-label="Test {{ c.name }}"
+                            data-test-connection="{{ c.name }}">{{ icons.icon("activity", size=15) }}</button>
+                    <a href="/connections/{{ c.name }}/edit" class="icon-button"
+                       title="Edit" aria-label="Edit {{ c.name }}">{{ icons.icon("edit", size=15) }}</a>
+                    <form action="/connections/{{ c.name }}/delete" method="post" class="pl-inline-form"
+                          onsubmit="return confirm('Delete storage account {{ c.name }}?')">
+                      <button type="submit" class="icon-button danger"
+                              title="Delete" aria-label="Delete {{ c.name }}">{{ icons.icon("trash", size=15) }}</button>
+                    </form>
+                  </div>
+                </footer>
+              </article>
+            {% endfor %}
+          </div>
+        </details>
+      {% endif %}
+    {% endfor %}
   {% else %}
-    <p class="empty">
-      No storage accounts yet. Click
-      <a href="/connections/new">New storage account</a> to create one.
-      Files land under <code>$XDG_CONFIG_HOME/ovid2/connections/</code>.
-    </p>
+    <div class="pl-empty">
+      <div class="pl-empty-art" aria-hidden="true">
+        <span class="pl-empty-node">{{ icons.icon("secrets", size=22) }}</span>
+        <span class="pl-empty-link"></span>
+        <span class="pl-empty-node pl-empty-core">{{ icons.icon("folder", size=26) }}</span>
+        <span class="pl-empty-link"></span>
+        <span class="pl-empty-node">{{ icons.icon("database", size=22) }}</span>
+      </div>
+      <h2>No storage accounts yet
+        {% call help.tip_block(label="Where are storage accounts stored?") %}
+          Files land under <code>$XDG_CONFIG_HOME/ovid2/connections/</code>.
+        {% endcall %}
+      </h2>
+      <p class="muted">Add a filesystem, object store or database so pipelines have somewhere to read from and write to.</p>
+      <a href="/connections/new" class="button primary">{{ icons.icon("plus", size=16) }} New storage account</a>
+    </div>
   {% endif %}
 </section>
 
@@ -171,15 +259,16 @@
   }
 
   document.addEventListener("click", function (evt) {
-    var t = evt.target;
-    if (!(t instanceof HTMLElement)) return;
-    var single = t.getAttribute("data-test-connection");
-    if (single) {
+    // closest(): clicks usually land on the inline SVG inside the button.
+    var t = evt.target instanceof Element ? evt.target : null;
+    if (!t) return;
+    var singleBtn = t.closest("[data-test-connection]");
+    if (singleBtn) {
       evt.preventDefault();
-      runOne(single);
+      runOne(singleBtn.getAttribute("data-test-connection"));
       return;
     }
-    if (t.getAttribute("data-test-all") === "connections") {
+    if (t.closest('[data-test-all="connections"]')) {
       evt.preventDefault();
       var rows = document.querySelectorAll("[data-connection-row]");
       var names = [];

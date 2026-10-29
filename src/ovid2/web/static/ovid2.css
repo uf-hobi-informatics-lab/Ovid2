@@ -4636,18 +4636,22 @@ details.submit-card > summary.card-title::-webkit-details-marker { display: none
   .pipeline-group > summary::before { transition: none; }
 }
 
+/* Component boxes are stacked full-width rows (one per pipeline /
+   warehouse / LLM): head | flow strip | foot on a single short line.
+   Narrow viewports fall back to the stacked-inside-the-card layout. */
 .pl-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
-  gap: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
   margin-top: 0.6rem;
 }
 .pl-card {
   position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-  padding: 1rem 1rem 0.8rem;
+  flex-direction: row;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.55rem 0.9rem 0.55rem 1.05rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background:
@@ -4667,20 +4671,21 @@ details.submit-card > summary.card-title::-webkit-details-marker { display: none
 }
 .pl-card:hover,
 .pl-card:focus-within {
-  transform: translateY(-2px);
   box-shadow: var(--shadow-2);
   border-color: color-mix(in srgb, var(--pk) 45%, var(--border));
 }
 .pl-card[hidden] { display: none; }
-.pl-card-head { display: flex; align-items: flex-start; gap: 0.7rem; }
+.pl-card-head { flex: 0 0 clamp(220px, 24%, 320px); min-width: 0; display: flex; align-items: center; gap: 0.7rem; }
+.pl-card > .pl-flow { flex: 1 1 auto; min-width: 0; }
+.pl-card > .pl-card-foot { flex: 0 0 auto; }
 .pl-card-badge {
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
   color: #fff;
   background: linear-gradient(135deg, var(--pk), color-mix(in srgb, var(--pk) 60%, #000));
   box-shadow: 0 4px 12px color-mix(in srgb, var(--pk) 35%, transparent);
@@ -4717,7 +4722,7 @@ details.submit-card > summary.card-title::-webkit-details-marker { display: none
   display: flex;
   align-items: center;
   gap: 0;
-  padding: 0.55rem;
+  padding: 0.3rem 0.4rem;
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--fg) 3.5%, transparent);
 }
@@ -4841,6 +4846,84 @@ details.submit-card > summary.card-title::-webkit-details-marker { display: none
 }
 .pl-empty-link { width: 34px; height: 2px; background: repeating-linear-gradient(90deg, var(--border-strong) 0 6px, transparent 6px 10px); }
 .pl-empty .button .icon { vertical-align: -3px; }
+
+/* Narrow viewports: boxes revert to head / flow / foot stacked inside. */
+@media (max-width: 900px) {
+  .pl-card { flex-direction: column; align-items: stretch; gap: 0.6rem; }
+  .pl-card-head { flex: none; }
+  .pl-card > .pl-flow { flex: none; }
+}
+
+/* Warehouse + LLM accents (same --pk contract as pipeline kinds). */
+[data-etype="pyspark"]          { --pk: #f97316; }
+[data-etype="databricks_spark"] { --pk: #ef4444; }
+[data-etype="snowpark"]         { --pk: #0ea5e9; }
+[data-llm-role="general"]       { --pk: #8b5cf6; }
+[data-llm-role="system1"]       { --pk: #10b981; }
+.pl-stat-off { --sc: var(--fg-muted); }
+.pl-result { display: inline-flex; align-items: center; min-width: 3.5rem; }
+.pl-active-pill { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--border)); }
+.pl-link.is-off { background: var(--border); opacity: 0.6; }
+.pl-link.is-off::after { border-left-color: var(--border-strong); }
+
+/* Storage-account accents (same --pk contract; brand-like hues shared
+   with the .logo-<type> tints used by the storage trees). */
+[data-ctype="snowflake"]  { --pk: #29b5e8; }
+[data-ctype="s3"]         { --pk: #e7852a; }
+[data-ctype="azure_blob"] { --pk: #0a84d6; }
+[data-ctype="databricks"] { --pk: #ef4b30; }
+[data-ctype="gcs"]        { --pk: #4b8bf5; }
+[data-ctype="postgres"]   { --pk: #4f7dbb; }
+[data-ctype="mssql"]      { --pk: #c73a3a; }
+[data-ctype="disc"]       { --pk: #7a8794; }
+[data-ctype="access"]     { --pk: #b03a4a; }
+[data-storage-group="filesystem"]   { --pk: #7a8794; }
+[data-storage-group="object_store"] { --pk: #e7852a; }
+[data-storage-group="database"]     { --pk: #29b5e8; }
+
+/* CDM accents: YAML-authored vs Python-declared. */
+[data-cdm-origin="yaml"]   { --pk: var(--ok); }
+[data-cdm-origin="python"] { --pk: var(--warn); }
+.pl-src-pill { color: var(--pk); border-color: color-mix(in srgb, var(--pk) 40%, var(--border)); text-transform: uppercase; letter-spacing: 0.06em; }
+.pl-back { margin: 0 0 0.25rem; font-size: var(--fs-sm); }
+.pl-back a { display: inline-flex; align-items: center; gap: 0.25rem; color: var(--fg-muted); text-decoration: none; }
+.pl-back a:hover { color: var(--accent); }
+.pl-panel .table-wrap { margin-top: 0.4rem; }
+.pl-panel .kv-table { margin: 0; }
+.pl-panel-head .group-count {
+  padding: 0.05rem 0.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent-subtle);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+}
+
+/* Standalone panel box (e.g. the LLM routing form). */
+.pl-panel {
+  position: relative;
+  margin: 0.4rem 0 1.25rem;
+  padding: 0.9rem 1.1rem 0.9rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(120% 80% at 100% 0%, color-mix(in srgb, var(--pk) 7%, transparent), transparent 60%),
+    var(--card-bg);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+.pl-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--pk);
+}
+.pl-panel-head { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.7rem; }
+.pl-panel-head h2 { margin: 0; font-size: var(--fs-md); }
+.pl-panel .pl-flow { margin-bottom: 0.8rem; }
+.pl-panel .form-row:last-child { margin-bottom: 0; }
+.pl-section-head { display: flex; align-items: center; gap: 0.55rem; padding: 0.35rem 0; font-weight: 600; }
 
 /* ==================================================================
    New-pipeline builder — two-pane layout (left pickers, right canvas).
@@ -5518,7 +5601,7 @@ body.modal-open { overflow: hidden; }
    See templates/submit.html + static/submit_builder.js.
    ================================================================== */
 
-.builder-page { max-width: 1400px; }
+.builder-page { max-width: var(--page-max); }
 .job-builder {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(340px, 520px);
@@ -5811,6 +5894,92 @@ body.modal-open { overflow: hidden; }
 .job-builder label.kind-chip,
 .job-builder label.check-item { flex-direction: row; align-items: center; font-size: var(--fs-sm); }
 
+/* --- Job builder in the pl-* visual language (Pipelines / Warehouses /
+   Storage). The form's data-kind (synced by submit_builder.js) sets the
+   --pk accent for the open section, pipeline cards and graph frame
+   (the [data-kind=…] rules near the Pipelines index; .pl-page supplies
+   the --accent fallback). --- */
+.job-builder .builder-section[open] { border-color: color-mix(in srgb, var(--pk) 55%, var(--border)); }
+.job-builder .builder-section {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 60% at 100% 0%, color-mix(in srgb, var(--pk) 6%, transparent), transparent 55%),
+    var(--card-bg);
+}
+.job-builder .builder-section[open]::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--pk);
+}
+.job-builder .builder-summary-title {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: var(--fs-sm);
+}
+.job-builder .builder-section[open] .builder-step:not(.is-optional) {
+  border-style: solid;
+  border-color: var(--pk);
+  color: var(--pk);
+}
+/* Job-type radios rendered as Pipelines-page kind tiles. */
+.job-builder .kind-chip.pl-kind-tile { color: var(--fg); }
+.job-builder .kind-chip.pl-kind-tile:hover { background: color-mix(in srgb, var(--pk) 16%, var(--card-bg)); }
+.job-builder .kind-chip.pl-kind-tile:has(input:checked) {
+  border-color: var(--pk);
+  background: color-mix(in srgb, var(--pk) 22%, var(--card-bg));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pk) 22%, transparent);
+}
+.job-builder .kind-chip.pl-kind-tile:has(input:focus-visible) {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pk) 40%, transparent);
+}
+/* Pipeline cards as compact pl-cards: accent stripe, gradient badge. */
+.job-builder .pipeline-cards { gap: 0.5rem; }
+.job-builder .pipeline-card {
+  position: relative;
+  overflow: hidden;
+  padding: 0.5rem 0.7rem 0.5rem 0.85rem;
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(120% 80% at 100% 0%, color-mix(in srgb, var(--pk) 9%, transparent), transparent 60%),
+    var(--card-bg);
+  box-shadow: var(--shadow-1);
+  transition: box-shadow var(--dur-med) var(--ease), border-color var(--dur-med) var(--ease);
+}
+.job-builder .pipeline-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--pk);
+}
+.job-builder .pipeline-card:hover { border-color: color-mix(in srgb, var(--pk) 45%, var(--border)); box-shadow: var(--shadow-2); }
+.job-builder .pipeline-card.is-selected { border-color: var(--ok); box-shadow: 0 0 0 1px var(--ok), var(--shadow-1); }
+.job-builder .pipeline-card-name { font-weight: 650; }
+.job-builder .sb-card-badge {
+  color: #fff;
+  background: linear-gradient(135deg, var(--pk), color-mix(in srgb, var(--pk) 60%, #000));
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--pk) 35%, transparent);
+}
+.job-builder .sb-card-badge:hover { background: linear-gradient(135deg, var(--pk), color-mix(in srgb, var(--pk) 60%, #000)); border-color: transparent; }
+.job-builder .pipeline-card.is-selected > .sb-card-badge {
+  background: linear-gradient(135deg, var(--ok), color-mix(in srgb, var(--ok) 60%, #000));
+  border-color: transparent;
+}
+.job-builder .builder-graph {
+  border-color: color-mix(in srgb, var(--pk) 30%, var(--border));
+  background:
+    radial-gradient(120% 50% at 100% 0%, color-mix(in srgb, var(--pk) 7%, transparent), transparent 55%),
+    var(--card-bg);
+}
+.job-builder .builder-graph.is-complete { border-color: var(--ok); }
+.sb-empty { margin: 0.4rem 0; padding: 1.1rem 1rem; max-width: none; }
+.sb-empty[hidden] { display: none; }
+.sb-empty .pl-empty-node { width: 36px; height: 36px; }
+.sb-empty .pl-empty-core { width: 46px; height: 46px; }
+.sb-empty p { margin: 0; }
 
 /* ==================================================================
    Data Space explorer (/dataspace) — tree left, detail right.

@@ -16,20 +16,43 @@
   fields the server has always read (``pipeline``, ``kind``,
   ``<role>_mode`` / ``<role>_address`` / ``<role>_connection`` /
   ``<role>_location``, ``tables``, ``transformations``, ``checks`` …).
+
+  Visual language matches the Pipelines / Warehouses / Storage pages
+  (pl-header, pl-kind-tile job types, pl-card-style pipeline cards). The
+  form's ``data-kind`` (set by submit_builder.js) drives the --pk accent.
+
+  Pipeline cards carry ``data-kinds`` — the job types that have a saved
+  pipeline referencing the package — so switching job type only lists
+  packages that apply (submit_builder.js ``applyKind``).
 #}
-<section class="page submit-page builder-page">
-  <header class="submit-head">
-    <h1>{{ icons.icon("submit", size=24, cls="head-icon") }} Submit a job</h1>
-    <p class="note">
-      Build the job on the left &mdash; click an icon to assign it. The
-      graph on the right turns green as each piece is in place.
-    </p>
-  </header>
+{% set kind_icons = {"etl": "workflow", "analysis": "chart", "dq_checks": "shield-check",
+                     "health": "activity", "copy": "copy", "move": "move"} %}
+{% import "_help.html" as help %}
+<section class="page pl-page submit-page builder-page">
+  <div class="page-header pl-header">
+    <div class="pl-title">
+      <h1>Submit a job
+        {% call help.tip_block(label="How does the job builder work?") %}
+          Build the job on the left &mdash; pick a job type and a pipeline,
+          then click an <strong>icon</strong> in the Source / Target trees to
+          assign it (click a <strong>name</strong> to open it). The graph on
+          the right turns green as each piece is in place; Submit unlocks
+          once every required node is green.
+        {% endcall %}
+      </h1>
+      <p class="pl-subtitle">One-off run &mdash; choose a job type, a pipeline, a source and a target.</p>
+    </div>
+    <div class="page-actions">
+      <a href="/runs" class="button small">{{ icons.icon("runs", size=15) }} Jobs</a>
+      <a href="/pipelines" class="button small">{{ icons.icon("layers", size=15) }} Pipelines</a>
+    </div>
+  </div>
 
   {% if flash %}<p class="flash-ok">{{ flash }}</p>{% endif %}
   {% if error %}<p class="flash-error">{{ error }}</p>{% endif %}
 
   <form method="post" action="/submit" class="submit-form job-builder" id="submit-form"
+        data-kind="{{ preselect_kind or 'etl' }}"
         data-plan-url="/api/v1/pipeline-packages/">
 
     <div class="builder-nav" id="builder-nav">
@@ -47,10 +70,11 @@
           <div class="kind-chips" role="radiogroup" aria-label="Job type">
             {% for k in kind_choices %}
               {% set is_sel = (k.name == (preselect_kind or "etl")) %}
-              <label class="kind-chip" title="{{ k.description }}">
+              <label class="kind-chip pl-kind-tile" data-kind="{{ k.name }}" title="{{ k.description }}">
                 <input type="radio" name="kind" value="{{ k.name }}"{% if is_sel %} checked{% endif %}>
-                <span class="kind-chip-icon" data-logo="{{ k.name }}" data-logo-size="22"></span>
+                {{ icons.icon(kind_icons.get(k.name, "pipelines"), size=15) }}
                 <span class="kind-chip-label">{{ k.label }}</span>
+                {% if kind_counts.get(k.name) %}<span class="pl-kind-tile-count" title="Saved pipelines of this type">{{ kind_counts.get(k.name) }}</span>{% endif %}
               </label>
             {% endfor %}
           </div>
@@ -61,35 +85,46 @@
           {% set known = generic_labels + (pipelines | map(attribute='name') | list) %}
           <ul class="pipeline-cards" role="listbox" aria-label="Pipeline">
             {% if preselect_pipeline and preselect_pipeline not in known %}
-              <li class="pipeline-card" role="option" data-pipeline="{{ preselect_pipeline }}" data-group="package" aria-selected="false">
-                <button type="button" class="tree-icon" aria-label="Choose {{ preselect_pipeline }}"><span data-logo="pipeline" data-logo-size="20"></span><span class="tree-check" aria-hidden="true">{{ icons.icon("check", size=10) }}</span></button>
-                <span class="pipeline-card-body"><span class="pipeline-card-name mono">{{ preselect_pipeline }}</span><span class="pipeline-card-sub small">from pipeline</span></span>
+              <li class="pipeline-card" role="option" data-pipeline="{{ preselect_pipeline }}" data-group="package"
+                  data-kinds="{{ package_kinds.get(preselect_pipeline, []) | join(' ') }}" aria-selected="false">
+                <button type="button" class="tree-icon sb-card-badge" aria-label="Choose {{ preselect_pipeline }}">{{ icons.icon("workflow", size=16) }}<span class="tree-check" aria-hidden="true">{{ icons.icon("check", size=10) }}</span></button>
+                <span class="pipeline-card-body"><span class="pipeline-card-name">{{ preselect_pipeline }}</span><span class="pipeline-card-sub small">from pipeline</span></span>
               </li>
             {% endif %}
             {% for p in pipelines %}
+              {% set pk = package_kinds.get(p.name, []) %}
               <li class="pipeline-card" role="option" data-pipeline="{{ p.name }}" data-group="package"
+                  data-kinds="{{ pk | join(' ') }}"
                   data-sub="{{ p.mappers_type }}" aria-selected="false">
-                <button type="button" class="tree-icon" aria-label="Choose {{ p.name }}"><span data-logo="pipeline" data-logo-size="20"></span><span class="tree-check" aria-hidden="true">{{ icons.icon("check", size=10) }}</span></button>
+                <button type="button" class="tree-icon sb-card-badge" aria-label="Choose {{ p.name }}">{{ icons.icon("workflow", size=16) }}<span class="tree-check" aria-hidden="true">{{ icons.icon("check", size=10) }}</span></button>
                 <span class="pipeline-card-body">
-                  <span class="pipeline-card-name mono">{{ p.name }}</span>
-                  <span class="pipeline-card-sub small">{{ p.mappers_type or "pipeline package" }}{% if p.formatter_count %} &middot; {{ p.formatter_count }} formatters{% endif %}</span>
+                  <span class="pipeline-card-name">{{ p.name }}</span>
+                  <span class="pipeline-card-sub small"><span class="pl-kind-label">{{ p.mappers_type or "package" }}</span>{% if p.formatter_count %} &middot; {{ p.formatter_count }} formatters{% endif %}</span>
                 </span>
               </li>
             {% endfor %}
             {% for g in generic_labels %}
               <li class="pipeline-card" role="option" data-pipeline="{{ g }}" data-group="generic"
                   data-sub="generic label" aria-selected="false">
-                <button type="button" class="tree-icon" aria-label="Choose {{ g }}"><span data-logo="health" data-logo-size="20"></span><span class="tree-check" aria-hidden="true">{{ icons.icon("check", size=10) }}</span></button>
+                <button type="button" class="tree-icon sb-card-badge" aria-label="Choose {{ g }}">{{ icons.icon("shield-check", size=16) }}<span class="tree-check" aria-hidden="true">{{ icons.icon("check", size=10) }}</span></button>
                 <span class="pipeline-card-body">
-                  <span class="pipeline-card-name mono">{{ g }}</span>
-                  <span class="pipeline-card-sub small">generic EDC / health label</span>
+                  <span class="pipeline-card-name">{{ g }}</span>
+                  <span class="pipeline-card-sub small"><span class="pl-kind-label">generic</span> &middot; EDC / health label</span>
                 </span>
               </li>
             {% endfor %}
           </ul>
-          {% if not pipelines and not generic_labels %}
-            <p class="note">No pipelines installed. <a href="/pipelines/new">Create one</a>.</p>
-          {% endif %}
+          <div class="pl-empty sb-empty" data-role="no-pipelines" hidden>
+            <div class="pl-empty-art" aria-hidden="true">
+              <span class="pl-empty-node">{{ icons.icon("folder", size=18) }}</span>
+              <span class="pl-empty-link"></span>
+              <span class="pl-empty-node pl-empty-core">{{ icons.icon("workflow", size=20) }}</span>
+              <span class="pl-empty-link"></span>
+              <span class="pl-empty-node">{{ icons.icon("database", size=18) }}</span>
+            </div>
+            <p class="muted">No <strong data-role="no-pipelines-kind">such</strong> pipelines yet.</p>
+            <a href="/pipelines/new" class="button small primary">{{ icons.icon("plus", size=14) }} Create one</a>
+          </div>
           <label class="builder-free-name" data-role="free-name" hidden>
             <span class="small">Job name (copy / move jobs don&rsquo;t need a package)</span>
             <input type="text" id="pipeline-free" placeholder="e.g. demo_copy" autocomplete="off">

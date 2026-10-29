@@ -1756,6 +1756,39 @@ async def _form_fields(request: Request) -> list[tuple[str, str]]:
     return [(str(k), str(v)) for k, v in form.multi_items() if isinstance(v, str)]
 
 
+def _submit_package_kinds(
+    preselect_pipeline: str, preselect_kind: str | None
+) -> tuple[dict[str, list[str]], dict[str, int]]:
+    """Map each pipeline package to the job types it has saved pipelines for.
+
+    The Submit page lists a package under a job type only when a saved
+    pipeline of that type references it, so switching ETL -> Analysis
+    hides ETL-only packages instead of leaving them selectable.
+
+    Args:
+        preselect_pipeline: Package pre-selected via ``?pipeline=``; it is
+            always listed under ``preselect_kind`` so a "run now" hand-off
+            keeps working.
+        preselect_kind: Job type pre-selected via ``?kind=`` (``etl`` when
+            empty).
+
+    Returns:
+        ``(package_kinds, kind_counts)`` — package name -> sorted kind
+        names, and kind name -> number of saved pipelines of that kind.
+    """
+    from ovid2.run_kinds import normalize_kind
+
+    by_package: dict[str, set[str]] = {}
+    counts: dict[str, int] = {}
+    for cfg in pipelines_svc.list_pipelines():
+        counts[cfg.kind] = counts.get(cfg.kind, 0) + 1
+        if cfg.pipeline:
+            by_package.setdefault(cfg.pipeline, set()).add(cfg.kind)
+    if preselect_pipeline:
+        by_package.setdefault(preselect_pipeline, set()).add(normalize_kind(preselect_kind))
+    return {name: sorted(kinds) for name, kinds in by_package.items()}, counts
+
+
 @router.get("/submit", response_class=HTMLResponse, include_in_schema=False)
 def submit_form(
     request: Request,
@@ -1805,11 +1838,16 @@ def submit_form(
         for a in addresses_svc.list_addresses()
         if a.name in set(address_names)
     ]
+    package_kinds, kind_counts = _submit_package_kinds(
+        (pipeline or "").strip(), (kind or "").strip() or None
+    )
     return templates.TemplateResponse(
         request,
         "submit.html",
         {
             "pipelines": pipelines,
+            "package_kinds": package_kinds,
+            "kind_counts": kind_counts,
             "addresses": address_names,
             "saved_addresses": saved_addresses,
             "storage_accounts": storage_accounts,

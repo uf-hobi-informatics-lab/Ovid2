@@ -1,30 +1,98 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icons %}
 {% block title %}LLMs &mdash; Ovid2{% endblock %}
 {% block content %}
-<section class="page">
-  <div class="page-header">
-    <h1>LLMs</h1>
+{% import "_help.html" as help %}
+{#
+  LLMs index — same visual language as the Pipelines page: stat strip,
+  a routing panel box (System 1 -> threshold -> General flow graphic
+  above the unchanged routing form), then one stacked component box per
+  LLM connection. data-test-llm / data-llm-cell drive the Test script.
+#}
+{% set n_general = llms | selectattr("role", "equalto", "general") | list | length %}
+{% set n_system1 = llms | selectattr("role", "equalto", "system1") | list | length %}
+<section class="page pl-page">
+  <div class="page-header pl-header">
+    <div class="pl-title">
+      <h1>LLMs
+        {% call help.tip_block(label="How does the assistant pick a model?") %}
+          The assistant (the <strong>LLM</strong> button on the right rail) uses two kinds of model.
+          <strong>System 1</strong> (e.g. JEV or a similar decision model) is a fast decision model
+          that is asked first. When it abstains, errors, or is not confident enough, the question
+          goes to the <strong>general</strong> LLM (any OpenAI-compatible endpoint). API keys are
+          stored in <code>secrets.d/</code> (mode 0600) and are only read by a short-lived executor
+          subprocess. The web server never holds them.
+        {% endcall %}
+      </h1>
+      <p class="pl-subtitle">Assistant models &mdash; a fast System 1 decides first, a general LLM answers the rest.</p>
+    </div>
     <div class="page-actions">
-      <a href="/llms/new?provider=openai_compatible&role=general" class="button primary small">+ General LLM</a>
-      <a href="/llms/new?provider=jev&role=system1" class="button small">+ System 1 LLM</a>
+      <a href="/llms/new?provider=jev&role=system1" class="button small">{{ icons.icon("plus", size=15) }} System 1 LLM</a>
+      <a href="/llms/new?provider=openai_compatible&role=general" class="button primary">{{ icons.icon("plus", size=16) }} General LLM</a>
     </div>
   </div>
 
   {% if flash %}<div class="flash ok">{{ flash }}</div>{% endif %}
   {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
 
-  <p class="note">
-    The assistant (the <strong>LLM</strong> button on the right rail) uses two kinds of model.
-    <strong>System 1</strong> (e.g. JEV or a similar decision model) is a fast decision model that is asked first. When it
-    abstains, errors, or is not confident enough, the question goes to the
-    <strong>general</strong> LLM (any OpenAI-compatible endpoint). API keys are stored in
-    <code>secrets.d/</code> (mode 0600) and are only read by a short-lived executor
-    subprocess. The web server never holds them.
-  </p>
+  <div class="pl-stats" role="list" aria-label="LLM summary">
+    <div class="pl-stat pl-stat-total" role="listitem">
+      <span class="pl-stat-icon">{{ icons.icon("llm", size=20) }}</span>
+      <span class="pl-stat-body">
+        <span class="pl-stat-value">{{ llms | length }}</span>
+        <span class="pl-stat-label">connections</span>
+      </span>
+    </div>
+    <div class="pl-stat" data-llm-role="general" style="--sc: var(--pk);" role="listitem">
+      <span class="pl-stat-icon">{{ icons.icon("llm", size=20) }}</span>
+      <span class="pl-stat-body">
+        <span class="pl-stat-value">{{ n_general }}</span>
+        <span class="pl-stat-label">general</span>
+      </span>
+    </div>
+    <div class="pl-stat" data-llm-role="system1" style="--sc: var(--pk);" role="listitem">
+      <span class="pl-stat-icon">{{ icons.icon("zap", size=20) }}</span>
+      <span class="pl-stat-body">
+        <span class="pl-stat-value">{{ n_system1 }}</span>
+        <span class="pl-stat-label">system 1</span>
+      </span>
+    </div>
+    <div class="pl-stat {{ 'pl-stat-ok' if routing.enabled else 'pl-stat-off' }}" role="listitem">
+      <span class="pl-stat-icon">{{ icons.icon("check" if routing.enabled else "stop", size=20) }}</span>
+      <span class="pl-stat-body">
+        <span class="pl-stat-value">{{ 'on' if routing.enabled else 'off' }}</span>
+        <span class="pl-stat-label">assistant</span>
+      </span>
+    </div>
+  </div>
 
-  <h2>Routing</h2>
-  <form method="post" action="/llms/routing" class="edit-form llm-routing">
+  <form method="post" action="/llms/routing" class="edit-form llm-routing pl-panel" data-llm-routing>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="pl-panel-head">
+      <span class="pl-card-badge">{{ icons.icon("sliders", size=16) }}</span>
+      <h2>Routing</h2>
+      <span class="pl-status {{ 'is-on' if routing.enabled else 'is-off' }}">
+        <span class="pl-status-dot" aria-hidden="true"></span>{{ 'enabled' if routing.enabled else 'disabled' }}
+      </span>
+    </div>
+
+    <div class="pl-flow" aria-label="Routing: {{ routing.system1 or 'no System 1' }} then {{ routing.general or 'no general LLM' }}">
+      <div class="pl-node {{ 'is-open' if not routing.system1 }}" title="System 1 (decides first)">
+        <span class="pl-node-icon">{{ icons.icon("zap", size=14) }}</span>
+        <span class="pl-node-text">{% if routing.system1 %}{{ routing.system1 }}{% else %}<span class="badge">no system 1</span>{% endif %}</span>
+      </div>
+      <span class="pl-link {{ 'is-off' if not routing.fallback_to_general }}" aria-hidden="true"></span>
+      <div class="pl-node pl-node-engine" title="Confidence threshold{% if not routing.fallback_to_general %} (fallback disabled){% endif %}">
+        <span class="pl-node-icon">{{ icons.icon("sliders", size=14) }}</span>
+        <span class="pl-node-text">&lt; {{ routing.confidence_threshold }}{% if not routing.fallback_to_general %} &middot; no fallback{% endif %}</span>
+      </div>
+      <span class="pl-link {{ 'is-off' if not routing.fallback_to_general }}" aria-hidden="true"></span>
+      <div class="pl-node {{ 'is-open' if not routing.general }}" title="General LLM">
+        <span class="pl-node-icon">{{ icons.icon("llm", size=14) }}</span>
+        <span class="pl-node-text">{% if routing.general %}{{ routing.general }}{% else %}<span class="badge">no general</span>{% endif %}</span>
+      </div>
+    </div>
+
     <div class="form-row">
       <label>
         <input type="checkbox" name="enabled" {% if routing.enabled %}checked{% endif %}>
@@ -85,40 +153,76 @@
     </div>
   </form>
 
-  <h2>Connections</h2>
+  <div class="pipeline-group pl-group">
+    <div class="pl-section-head">
+      <span class="pl-group-icon">{{ icons.icon("llm", size=16) }}</span>
+      <span class="group-kind">Connections</span>
+      <span class="group-count">{{ llms | length }}</span>
+      <span class="pl-group-rule" aria-hidden="true"></span>
+    </div>
   {% if llms %}
-    <div class="table-wrap">
-    <table class="runs-table">
-      <thead><tr><th>Name</th><th>Role</th><th>Provider</th><th>Model</th><th>Endpoint</th><th>Result</th><th>Actions</th></tr></thead>
-      <tbody>
-        {% for x in llms %}
-          <tr>
-            <td><a href="/llms/{{ x.name }}">{{ x.name }}</a>
-              {% if routing.general == x.name %}<span class="badge severity-ok">general</span>{% endif %}
-              {% if routing.system1 == x.name %}<span class="badge severity-ok">system 1</span>{% endif %}
-            </td>
-            <td>{{ x.role }}</td>
-            <td>{{ x.provider }}</td>
-            <td class="mono small">{{ x.model or '—' }}</td>
-            <td class="mono small">{{ x.base_url or '—' }}</td>
-            <td data-llm-cell="{{ x.name }}"><span class="small muted">&mdash;</span></td>
-            <td>
-              <button type="button" class="button small" data-test-llm="{{ x.name }}">Test</button>
-              <a href="/llms/{{ x.name }}/edit" class="small">edit</a>
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="pl-grid">
+      {% for x in llms %}
+        <article class="pl-card" data-llm-row="{{ x.name }}" data-llm-role="{{ x.role }}">
+          <header class="pl-card-head">
+            <span class="pl-card-badge">{{ icons.icon("zap" if x.role == "system1" else "llm", size=16) }}</span>
+            <div class="pl-card-title">
+              <a href="/llms/{{ x.name }}" class="pl-card-name">{{ x.name }}</a>
+              <span class="pl-card-sub">
+                <span class="pl-kind-label">{{ 'system 1' if x.role == 'system1' else x.role }}</span>
+              </span>
+            </div>
+            {% if routing.general == x.name %}<span class="pl-pill pl-active-pill" title="Active general LLM">general</span>{% endif %}
+            {% if routing.system1 == x.name %}<span class="pl-pill pl-active-pill" title="Active System 1">system 1</span>{% endif %}
+          </header>
+
+          <div class="pl-flow" aria-label="{{ x.name }}: {{ x.provider }} {{ x.model }}">
+            <div class="pl-node pl-node-engine" title="Provider: {{ x.provider }}">
+              <span class="pl-node-icon">{{ icons.icon("api", size=14) }}</span>
+              <span class="pl-node-text">{{ x.provider }}</span>
+            </div>
+            <span class="pl-link" aria-hidden="true"></span>
+            <div class="pl-node {{ 'is-open' if not x.model }}" title="Model: {{ x.model or 'not set' }}">
+              <span class="pl-node-icon">{{ icons.icon("cpu", size=14) }}</span>
+              <span class="pl-node-text">{% if x.model %}{{ x.model }}{% else %}<span class="badge">no model</span>{% endif %}</span>
+            </div>
+            <span class="pl-link" aria-hidden="true"></span>
+            <div class="pl-node {{ 'is-open' if not x.base_url }}" title="Endpoint: {{ x.base_url or 'not set' }}">
+              <span class="pl-node-icon">{{ icons.icon("external", size=14) }}</span>
+              <span class="pl-node-text">{% if x.base_url %}{{ x.base_url }}{% else %}<span class="badge">no endpoint</span>{% endif %}</span>
+            </div>
+          </div>
+
+          <footer class="pl-card-foot">
+            <span class="pl-result" data-llm-cell="{{ x.name }}"><span class="small muted">&mdash;</span></span>
+            <div class="row-actions pl-actions">
+              <button type="button" class="icon-button pl-run" title="Test"
+                      aria-label="Test {{ x.name }}"
+                      data-test-llm="{{ x.name }}">{{ icons.icon("activity", size=15) }}</button>
+              <a href="/llms/{{ x.name }}/edit" class="icon-button"
+                 title="Edit" aria-label="Edit {{ x.name }}">{{ icons.icon("edit", size=15) }}</a>
+            </div>
+          </footer>
+        </article>
+      {% endfor %}
     </div>
   {% else %}
-    <p class="empty">
-      No LLM connections yet. Click <a href="/llms/new?provider=openai_compatible&role=general">General LLM</a>
-      to add one. You need an OpenAI-compatible base URL (ending in <code>/v1</code>), the model id
-      the endpoint serves, and an API key. Add a <a href="/llms/new?provider=jev&role=system1">System 1</a>
-      decision model the same way.
-    </p>
+    <div class="pl-empty">
+      <div class="pl-empty-art" aria-hidden="true">
+        <span class="pl-empty-node">{{ icons.icon("zap", size=22) }}</span>
+        <span class="pl-empty-link"></span>
+        <span class="pl-empty-node pl-empty-core">{{ icons.icon("llm", size=26) }}</span>
+      </div>
+      <h2>No LLM connections yet</h2>
+      <p class="muted">You need an OpenAI-compatible base URL (ending in <code>/v1</code>), the model id
+        the endpoint serves, and an API key. Add a System 1 decision model the same way.</p>
+      <div class="page-actions">
+        <a href="/llms/new?provider=openai_compatible&role=general" class="button primary">{{ icons.icon("plus", size=16) }} General LLM</a>
+        <a href="/llms/new?provider=jev&role=system1" class="button">{{ icons.icon("plus", size=15) }} System 1 LLM</a>
+      </div>
+    </div>
   {% endif %}
+  </div>
 </section>
 <script>
 (function () {
@@ -126,8 +230,8 @@
   function esc(s) { return String(s || "").replace(/[<>&"']/g, function (c) {
     return { "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   document.addEventListener("click", function (ev) {
-    var t = ev.target;
-    if (!(t instanceof HTMLElement)) return;
+    var t = ev.target instanceof Element ? ev.target.closest("[data-test-llm]") : null;
+    if (!t) return;
     var name = t.getAttribute("data-test-llm");
     if (!name) return;
     ev.preventDefault();

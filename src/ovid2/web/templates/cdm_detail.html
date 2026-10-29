@@ -1,47 +1,117 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icons %}
 {% block title %}CDM {{ cdm.name }} &mdash; Ovid2{% endblock %}
 {% block content %}
-<section class="page">
-  <p><a href="/cdms">&larr; all CDMs</a></p>
-  <h1>CDM: <span class="mono">{{ cdm.name }}</span></h1>
+{% import "_help.html" as help %}
+{#
+  CDM detail — same visual language as the other index pages: pl-header
+  with a back link, a stat strip, a source/flow panel, then one pl-panel
+  per section. The long lists stay as tables inside the panels.
+#}
+{% set origin = "yaml" if cdm.has_yaml else "python" %}
+<section class="page pl-page" data-cdm-origin="{{ origin }}">
+  <p class="pl-back"><a href="/cdms">{{ icons.icon("chevron-left", size=14) }} all CDMs</a></p>
+  <div class="page-header pl-header">
+    <div class="pl-title">
+      <h1>CDM: <span class="mono">{{ cdm.name }}</span>
+        {% call help.tip_block(label="What is shown here?") %}
+          The state this CDM registers on its <code>CdmHandle</code>: tables
+          and composite dedup keys, identifier columns, shared views, and
+          bounded valuesets. The generic ETL engine reads all of this from
+          the registry &mdash; it never imports the CDM module directly.
+        {% endcall %}
+      </h1>
+      <p class="pl-subtitle">
+        {% if cdm.version %}Version <span class="mono">{{ cdm.version }}</span>{% else %}Unversioned{% endif %}
+        &middot; {{ 'YAML-authored' if cdm.has_yaml else 'Declared in Python' }}
+      </p>
+    </div>
+    <div class="page-actions">
+      <a href="/api/v1/cdms/{{ cdm.name }}" class="button small">{{ icons.icon("api", size=15) }} JSON</a>
+    </div>
+  </div>
 
-  <table class="kv-table">
-    <tbody>
-      <tr><th>Version</th><td class="mono">{{ cdm.version or '(unspecified)' }}</td></tr>
-      <tr>
-        <th>Source</th>
-        <td>
-          {% if cdm.has_yaml %}
-            <span class="badge severity-ok">yaml</span>
-            <span class="mono small">{{ cdm.yaml_dir }}</span>
-          {% else %}
-            <span class="badge severity-warning">python</span>
-            <span class="small">Pipeline-family CDM declared in
-            <code>ovid2/cdm/</code>.</span>
-          {% endif %}
-        </td>
-      </tr>
-      <tr><th>Tables</th><td>{{ cdm.tables|length }}</td></tr>
-      <tr><th>Reference tables</th>
-        <td class="mono small">
-          {% if cdm.reference_tables %}
-            {{ cdm.reference_tables|join(', ') }}
-          {% else %}&mdash;{% endif %}
-        </td>
-      </tr>
-      <tr><th>Flavour of null</th>
-        <td class="mono small">
-          {% if cdm.flavour_of_null %}
-            {% for v in cdm.flavour_of_null -%}
-              {% if v is none %}<code>(null)</code>{% else %}<code>{{ v or '(empty)' }}</code>{% endif %}{% if not loop.last %}, {% endif %}
-            {%- endfor %}
-          {% else %}&mdash;{% endif %}
-        </td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="pl-stats" role="list" aria-label="CDM summary">
+    <div class="pl-stat pl-stat-total" role="listitem">
+      <span class="pl-stat-icon">{{ icons.icon("table", size=20) }}</span>
+      <span class="pl-stat-body">
+        <span class="pl-stat-value">{{ cdm.tables | length }}</span>
+        <span class="pl-stat-label">tables</span>
+      </span>
+    </div>
+    <div class="pl-stat" role="listitem">
+      <span class="pl-stat-icon">{{ icons.icon("check-square", size=20) }}</span>
+      <span class="pl-stat-body">
+        <span class="pl-stat-value">{{ cdm.valuesets | length }}</span>
+        <span class="pl-stat-label">valuesets</span>
+      </span>
+    </div>
+    <div class="pl-stat" role="listitem">
+      <span class="pl-stat-icon">{{ icons.icon("secrets", size=20) }}</span>
+      <span class="pl-stat-body">
+        <span class="pl-stat-value">{{ cdm.id_columns | length }}</span>
+        <span class="pl-stat-label">ID columns</span>
+      </span>
+    </div>
+    <div class="pl-stat" role="listitem">
+      <span class="pl-stat-icon">{{ icons.icon("eye", size=20) }}</span>
+      <span class="pl-stat-body">
+        <span class="pl-stat-value">{{ cdm.shared_views | length }}</span>
+        <span class="pl-stat-label">shared views</span>
+      </span>
+    </div>
+  </div>
 
-  <h2>Tables &amp; composite keys</h2>
+  <div class="pl-panel">
+    <div class="pl-panel-head">
+      <span class="pl-card-badge">{{ icons.icon("cdms", size=16) }}</span>
+      <h2>Overview</h2>
+      <span class="pl-pill pl-src-pill">{{ origin }}</span>
+    </div>
+    <div class="pl-flow" aria-label="Source to tables">
+      <div class="pl-node pl-node-engine" title="{{ cdm.yaml_dir if cdm.has_yaml else 'ovid2/cdm/' }}">
+        <span class="pl-node-icon">{{ icons.icon("file" if cdm.has_yaml else "api", size=14) }}</span>
+        <span class="pl-node-text">{% if cdm.has_yaml %}{{ cdm.yaml_dir }}{% else %}ovid2/cdm/ (Python){% endif %}</span>
+      </div>
+      <span class="pl-link" aria-hidden="true"></span>
+      <div class="pl-node {{ 'is-open' if not cdm.tables }}">
+        <span class="pl-node-icon">{{ icons.icon("table", size=14) }}</span>
+        <span class="pl-node-text">{{ cdm.tables | length }} tables</span>
+      </div>
+      <span class="pl-link" aria-hidden="true"></span>
+      <div class="pl-node {{ 'is-open' if not cdm.valuesets }}">
+        <span class="pl-node-icon">{{ icons.icon("check-square", size=14) }}</span>
+        <span class="pl-node-text">{{ cdm.valuesets | length }} valuesets</span>
+      </div>
+    </div>
+    <table class="kv-table">
+      <tbody>
+        <tr><th>Version</th><td class="mono">{{ cdm.version or '(unspecified)' }}</td></tr>
+        <tr><th>Reference tables</th>
+          <td class="mono small">
+            {% if cdm.reference_tables %}
+              {{ cdm.reference_tables|join(', ') }}
+            {% else %}&mdash;{% endif %}
+          </td>
+        </tr>
+        <tr><th>Flavour of null</th>
+          <td class="mono small">
+            {% if cdm.flavour_of_null %}
+              {% for v in cdm.flavour_of_null -%}
+                {% if v is none %}<code>(null)</code>{% else %}<code>{{ v or '(empty)' }}</code>{% endif %}{% if not loop.last %}, {% endif %}
+              {%- endfor %}
+            {% else %}&mdash;{% endif %}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="pl-panel">
+  <div class="pl-panel-head">
+    <span class="pl-card-badge">{{ icons.icon("table", size=16) }}</span>
+    <h2>Tables &amp; composite keys</h2>
+    <span class="group-count">{{ cdm.tables | length }}</span>
+  </div>
   {% if cdm.tables %}
     <div class="table-wrap">
     <table class="runs-table">
@@ -65,7 +135,7 @@
               {% if t.is_reference %}
                 <span class="badge severity-ok" title="Persisted after processing">reference</span>
               {% else %}
-                <span class="small" style="color: var(--fg-muted);">&mdash;</span>
+                <span class="small muted">&mdash;</span>
               {% endif %}
             </td>
           </tr>
@@ -76,8 +146,14 @@
   {% else %}
     <p class="empty">This CDM registers no tables.</p>
   {% endif %}
+  </div>
 
-  <h2>Identifier columns</h2>
+  <div class="pl-panel">
+  <div class="pl-panel-head">
+    <span class="pl-card-badge">{{ icons.icon("secrets", size=16) }}</span>
+    <h2>Identifier columns</h2>
+    <span class="group-count">{{ cdm.id_columns | length }}</span>
+  </div>
   {% if cdm.id_columns %}
     <div class="table-wrap">
     <table class="runs-table">
@@ -104,8 +180,14 @@
   {% else %}
     <p class="empty">No identifier columns declared.</p>
   {% endif %}
+  </div>
 
-  <h2>Shared views</h2>
+  <div class="pl-panel">
+  <div class="pl-panel-head">
+    <span class="pl-card-badge">{{ icons.icon("eye", size=16) }}</span>
+    <h2>Shared views</h2>
+    <span class="group-count">{{ cdm.shared_views | length }}</span>
+  </div>
   {% if cdm.shared_views %}
     <div class="table-wrap">
     <table class="runs-table">
@@ -134,8 +216,14 @@
   {% else %}
     <p class="empty">No shared views registered on this CDM.</p>
   {% endif %}
+  </div>
 
-  <h2>Valuesets ({{ cdm.valuesets|length }})</h2>
+  <div class="pl-panel">
+  <div class="pl-panel-head">
+    <span class="pl-card-badge">{{ icons.icon("check-square", size=16) }}</span>
+    <h2>Valuesets</h2>
+    <span class="group-count">{{ cdm.valuesets | length }}</span>
+  </div>
   {% if cdm.valuesets %}
     <p class="note small">
       Bounded enums registered on this CDM. Full code lists live in the
@@ -165,5 +253,6 @@
   {% else %}
     <p class="empty">No bounded valuesets registered.</p>
   {% endif %}
+  </div>
 </section>
 {% endblock %}

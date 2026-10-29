@@ -59,7 +59,7 @@ def _write_w7_address(name: str, connection: str, sub: str = "sub") -> None:
 
 @pytest.mark.unit
 def test_connections_list_renders_test_column_and_buttons(web_client, isolated_xdg: Path) -> None:  # type: ignore[no-untyped-def]
-    """`/connections` shows a Result column, per-row Test, and Test all."""
+    """`/connections` shows a result cell, per-card Test, and Test all."""
     _write_connection(isolated_xdg, "c_one", str(isolated_xdg))
     _write_connection(isolated_xdg, "c_two", str(isolated_xdg))
 
@@ -67,8 +67,9 @@ def test_connections_list_renders_test_column_and_buttons(web_client, isolated_x
     assert response.status_code == 200
     html = response.text
 
-    # Column header
-    assert "<th>Result</th>" in html
+    # Card layout (Warehouses / Pipelines look) with a result slot per card.
+    assert 'class="pl-grid"' in html
+    assert 'class="pl-result test-result-cell"' in html
     # Test all button
     assert 'data-test-all="connections"' in html
     # Per-row buttons for both connections

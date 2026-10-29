@@ -168,17 +168,38 @@ class JobBuilder {
     show("copy-hint", kind === "copy");
     show("move-hint", kind === "move");
 
-    // Pipeline cards relevant to the kind: health kinds can use generic
-    // labels; ETL-shaped kinds need an installed package; copy/move take
-    // a free job name (or an installed package name).
+    // Pipeline cards relevant to the kind: a package card is listed only
+    // when a saved pipeline of this kind references it (``data-kinds``,
+    // server-rendered from the pipeline configs); health kinds also get
+    // the generic EDC labels; copy/move additionally take a free job name.
+    let visible = 0;
     for (const card of this.form.querySelectorAll(".pipeline-card")) {
       const generic = card.dataset.group === "generic";
-      card.hidden = generic ? !isHealth : false;
+      const kinds = (card.dataset.kinds || "").split(/\s+/).filter(Boolean);
+      card.hidden = generic ? !isHealth : !kinds.includes(kind);
+      if (!card.hidden) visible++;
     }
     if (this.freeName) this.freeName.hidden = !isCopy;
-    // Drop a pipeline that no longer applies to this kind.
-    const cur = this.form.querySelector('.pipeline-card[data-pipeline="' + CSS.escape(this.pipelineField.value) + '"]');
-    if (cur && cur.hidden) this.choosePipeline("", false);
+    this.form.dataset.kind = kind;
+    const empty = this.form.querySelector("[data-role=no-pipelines]");
+    if (empty) {
+      empty.hidden = visible > 0 || isCopy;
+      const lbl = empty.querySelector("[data-role=no-pipelines-kind]");
+      if (lbl) lbl.textContent = (this.kindDescriptions[kind] || {}).label || kind;
+    }
+    // A pipeline chosen for one job type never carries over to another:
+    // a user-initiated switch always clears it (the initial render keeps
+    // a ?pipeline= preselect); otherwise drop it only if it got hidden.
+    const curName = this.pipelineField.value;
+    const cur = curName
+      ? this.form.querySelector('.pipeline-card[data-pipeline="' + CSS.escape(curName) + '"]')
+      : null;
+    if (userInitiated && curName) {
+      if (this.freeInput) this.freeInput.value = "";
+      this.choosePipeline("", false);
+    } else if (cur && cur.hidden) {
+      this.choosePipeline("", false);
+    }
 
     const desc = this.form.querySelector("[data-role=kind-desc]");
     if (desc) desc.textContent = (this.kindDescriptions[kind] || {}).description || "";

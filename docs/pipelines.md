@@ -127,9 +127,16 @@ plain directories (`/dataspace`, `GET /api/v1/dataspace?path=/<account>/<…>`).
 
 **Navigator (left).** Four collapsible sections, one open at a time. Each section closes once you have filled it in, and the next one opens:
 
-1. **Job & pipeline.** Job-type chips (ETL, Analysis, DQ checks, Health,
-   Copy, Move) and pipeline cards. Health kinds also show the generic
-   EDC labels. Copy and move take a free-form job name.
+1. **Job & pipeline.** Job-type tiles (ETL, Analysis, DQ checks, Health,
+   Copy, Move — the same tiles and colours as the Pipelines page, with a
+   count of saved pipelines per type) and pipeline cards. A package is
+   listed under a job type only when a **saved pipeline of that type**
+   (`/pipelines`) references it, so switching ETL → Analysis hides
+   ETL-only packages; when none match, a "No <type> pipelines yet →
+   Create one" box links to `/pipelines/new`. Changing the job type always
+   clears the chosen pipeline (a `?pipeline=` pre-selection is kept on
+   first load). Health kinds also show the generic EDC labels. Copy and
+   move take a free-form job name.
 2. **Source** and 3. **Target.** A lazy tree of *saved addresses* plus
    *storage accounts*. Each node shows a type mark: Snowflake, S3, Azure Blob,
    Databricks, GCS, Postgres, MSSQL, disc or Access. The marks are simple

@@ -1,61 +1,123 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icons %}
 {% block title %}CDMs &mdash; Ovid2{% endblock %}
 {% block content %}
-<section class="page">
-  <div class="page-header">
-    <h1>Common Data Models</h1>
+{% import "_help.html" as help %}
+{#
+  CDMs index — stacked component boxes (same visual language as the
+  Warehouses / Storage / Pipelines pages). Each box: head (badge + name +
+  version + source pill) | flow strip (source -> tables) | foot (view).
+  CDMs are registered from code / YAML, so there is no "New" button.
+#}
+{% set n_yaml = cdms | selectattr("has_yaml") | list | length %}
+{% set n_tables = cdms | sum(attribute="table_count") %}
+<section class="page pl-page">
+  <div class="page-header pl-header">
+    <div class="pl-title">
+      <h1>Common Data Models
+        {% call help.tip_block(label="What is a CDM?") %}
+          A <strong>CDM</strong> (Common Data Model) declares the table list,
+          composite dedup keys, identifier columns, and bounded valuesets the
+          generic ETL engine relies on. The pipeline never imports a specific
+          CDM module &mdash; it reads state from a
+          <code>CdmHandle</code> registered here. YAML-authored CDMs live
+          under <code>src/ovid2/resources/cdms/</code> and are regenerated via
+          <code>ovid2 tools import-cdm</code>; pipeline-family CDMs (nursing,
+          veritas, tumor) remain declared in Python.
+        {% endcall %}
+      </h1>
+      <p class="pl-subtitle">Target data models &mdash; tables, keys and valuesets the ETL engine validates against.</p>
+    </div>
   </div>
-  <p class="note">
-    A <strong>CDM</strong> (Common Data Model) declares the table list,
-    composite dedup keys, identifier columns, and bounded valuesets the
-    generic ETL engine relies on. The pipeline never imports a specific
-    CDM module &mdash; it reads state from a
-    <code>CdmHandle</code> registered here. YAML-authored CDMs live
-    under <code>src/ovid2/resources/cdms/</code> and are regenerated via
-    <code>ovid2 tools import-cdm</code>; pipeline-family CDMs (nursing,
-    veritas, tumor) remain declared in Python.
-  </p>
 
   {% if cdms %}
-    <div class="table-wrap">
-    <table class="runs-table">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Version</th>
-          <th>Tables</th>
-          <th>YAML</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for c in cdms %}
-          <tr>
-            <td><a href="/cdms/{{ c.name }}" class="mono">{{ c.name }}</a></td>
-            <td class="mono small">{{ c.version or '&mdash;' | safe }}</td>
-            <td>{{ c.table_count }}</td>
-            <td>
-              {% if c.has_yaml %}
-                <span class="badge severity-ok" title="YAML tree present">yaml</span>
-              {% else %}
-                <span class="badge severity-warning"
-                      title="Declared in Python (pipeline-family CDM)">python</span>
-              {% endif %}
-            </td>
-            <td><a href="/cdms/{{ c.name }}" class="small">view</a></td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="pl-stats" role="list" aria-label="CDM summary">
+      <div class="pl-stat pl-stat-total" role="listitem">
+        <span class="pl-stat-icon">{{ icons.icon("cdms", size=20) }}</span>
+        <span class="pl-stat-body">
+          <span class="pl-stat-value">{{ cdms | length }}</span>
+          <span class="pl-stat-label">CDMs</span>
+        </span>
+      </div>
+      <div class="pl-stat" data-cdm-origin="yaml" style="--sc: var(--pk);" role="listitem">
+        <span class="pl-stat-icon">{{ icons.icon("file", size=20) }}</span>
+        <span class="pl-stat-body">
+          <span class="pl-stat-value">{{ n_yaml }}</span>
+          <span class="pl-stat-label">YAML</span>
+        </span>
+      </div>
+      <div class="pl-stat" data-cdm-origin="python" style="--sc: var(--pk);" role="listitem">
+        <span class="pl-stat-icon">{{ icons.icon("api", size=20) }}</span>
+        <span class="pl-stat-body">
+          <span class="pl-stat-value">{{ (cdms | length) - n_yaml }}</span>
+          <span class="pl-stat-label">Python</span>
+        </span>
+      </div>
+      <div class="pl-stat" role="listitem">
+        <span class="pl-stat-icon">{{ icons.icon("table", size=20) }}</span>
+        <span class="pl-stat-body">
+          <span class="pl-stat-value">{{ n_tables }}</span>
+          <span class="pl-stat-label">tables</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="pl-grid">
+      {% for c in cdms %}
+        {% set origin = "yaml" if c.has_yaml else "python" %}
+        <article class="pl-card" data-cdm-row="{{ c.name }}" data-cdm-origin="{{ origin }}">
+          <header class="pl-card-head">
+            <span class="pl-card-badge">{{ icons.icon("cdms", size=16) }}</span>
+            <div class="pl-card-title">
+              <a href="/cdms/{{ c.name }}" class="pl-card-name">{{ c.name }}</a>
+              <span class="pl-card-sub">
+                <span class="pl-kind-label">{% if c.version %}v{{ c.version }}{% else %}unversioned{% endif %}</span>
+              </span>
+            </div>
+            <span class="pl-pill pl-src-pill"
+                  title="{{ 'YAML tree present' if c.has_yaml else 'Declared in Python (pipeline-family CDM)' }}">{{ origin }}</span>
+          </header>
+
+          <div class="pl-flow" aria-label="CDM {{ c.name }}: {{ origin }}, {{ c.table_count }} tables">
+            <div class="pl-node pl-node-engine" title="{{ 'resources/cdms/' ~ c.name ~ '/' if c.has_yaml else 'ovid2/cdm/' }}">
+              <span class="pl-node-icon">{{ icons.icon("file" if c.has_yaml else "api", size=14) }}</span>
+              <span class="pl-node-text">{{ 'YAML tree' if c.has_yaml else 'Python module' }}</span>
+            </div>
+            <span class="pl-link" aria-hidden="true"></span>
+            <div class="pl-node {{ 'is-open' if not c.table_count }}" title="{{ c.table_count }} tables">
+              <span class="pl-node-icon">{{ icons.icon("table", size=14) }}</span>
+              <span class="pl-node-text">{{ c.table_count }} table{{ '' if c.table_count == 1 else 's' }}</span>
+            </div>
+          </div>
+
+          <footer class="pl-card-foot">
+            <span class="pl-result small muted mono">{{ c.name }}</span>
+            <div class="row-actions pl-actions">
+              <a href="/cdms/{{ c.name }}" class="icon-button pl-run"
+                 title="View" aria-label="View {{ c.name }}">{{ icons.icon("eye", size=15) }}</a>
+            </div>
+          </footer>
+        </article>
+      {% endfor %}
     </div>
   {% else %}
-    <p class="empty">
-      No CDMs registered. This is unusual &mdash; the bundled CDMs
-      (<code>pcornet_7_0</code>, <code>ovid2_pipeline_nursing_v1</code>,
-      <code>ovid2_pipeline_veritas_v1</code>,
-      <code>ovid2_pipeline_tumor_v1</code>) self-register at package
-      import time. Check the server log for a startup error.
-    </p>
+    <div class="pl-empty">
+      <div class="pl-empty-art" aria-hidden="true">
+        <span class="pl-empty-node">{{ icons.icon("file", size=22) }}</span>
+        <span class="pl-empty-link"></span>
+        <span class="pl-empty-node pl-empty-core">{{ icons.icon("cdms", size=26) }}</span>
+        <span class="pl-empty-link"></span>
+        <span class="pl-empty-node">{{ icons.icon("table", size=22) }}</span>
+      </div>
+      <h2>No CDMs registered</h2>
+      <p class="muted">
+        This is unusual &mdash; the bundled CDMs
+        (<code>pcornet_7_0</code>, <code>ovid2_pipeline_nursing_v1</code>,
+        <code>ovid2_pipeline_veritas_v1</code>,
+        <code>ovid2_pipeline_tumor_v1</code>) self-register at package
+        import time. Check the server log for a startup error.
+      </p>
+    </div>
   {% endif %}
 </section>
 {% endblock %}

@@ -97,6 +97,88 @@ def test_submit_page_preselect_address(web_client) -> None:  # type: ignore[no-u
     assert 'name="input_address" value="in_x"' in body
     assert 'name="pipeline" id="pipeline-field" value="foo"' in body
     assert 'name="kind" value="copy" checked' in body
+    # The preselected (unknown) package is listed under the preselected kind.
+    assert re.search(r'data-pipeline="foo" data-group="package"\s+data-kinds="copy"', body)
+
+
+@pytest.fixture()
+def kind_packages(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_xdg: Path):  # type: ignore[no-untyped-def]
+    """Two installed packages: ``sb_etl`` (ETL pipeline) and ``sb_ana`` (analysis)."""
+    import os
+    import sys
+
+    from ovid2.web.models import PipelineTrigger, PipelineWrite
+    from ovid2.web.services import pipelines_svc
+
+    root = tmp_path / "pipelines_root"
+    for name in ("sb_etl", "sb_ana"):
+        pkg = root / "ovid2_pipelines" / name
+        (pkg / "formatters").mkdir(parents=True)
+        (pkg / "__init__.py").write_text("", encoding="utf-8")
+        (pkg / "pipeline_settings.py").write_text(
+            "mappers_type = 'pcornet_mappers'\n", encoding="utf-8"
+        )
+    monkeypatch.syspath_prepend(str(root))
+    for mod in list(sys.modules):
+        if mod == "ovid2_pipelines" or mod.startswith("ovid2_pipelines."):
+            del sys.modules[mod]
+    configs = Path(os.environ["OVID2_CONFIGS_DIR"])
+    for nm in ("in_k", "out_k"):
+        (configs / f"{nm}.json").write_text(
+            json.dumps({"src_name": "disc", "src_args": {"path": str(tmp_path / nm)}}),
+            encoding="utf-8",
+        )
+    for cfg, kind, pkg_name in (("cfg_etl", "etl", "sb_etl"), ("cfg_ana", "analysis", "sb_ana")):
+        pipelines_svc.write_pipeline(
+            cfg,
+            PipelineWrite(
+                kind=kind,
+                cdm="pcornet_7_0" if kind == "etl" else None,
+                pipeline=pkg_name,
+                input_address="in_k",
+                output_address="out_k",
+                trigger=PipelineTrigger(type="manual"),
+            ),
+            actor="test",
+            create_only=True,
+        )
+    yield
+    for mod in list(sys.modules):
+        if mod == "ovid2_pipelines" or mod.startswith("ovid2_pipelines."):
+            del sys.modules[mod]
+
+
+@pytest.mark.unit
+def test_submit_pipeline_cards_carry_saved_pipeline_kinds(web_client, kind_packages) -> None:  # type: ignore[no-untyped-def]
+    """Package cards are tagged with the job types of their saved pipelines.
+
+    Regression: switching ETL -> Analysis left ETL-only packages listed
+    (and selected) because cards had no kind data to filter on.
+    """
+    body = web_client.get("/submit").text
+    assert re.search(r'data-pipeline="sb_etl" data-group="package"\s+data-kinds="etl"', body)
+    assert re.search(r'data-pipeline="sb_ana" data-group="package"\s+data-kinds="analysis"', body)
+    # Empty-state block the JS reveals when a kind has no pipelines.
+    assert 'data-role="no-pipelines"' in body
+
+
+@pytest.mark.unit
+def test_submit_builder_filters_and_clears_on_kind_change(web_client) -> None:  # type: ignore[no-untyped-def]
+    """The builder hides cards whose data-kinds lack the kind and clears the pick."""
+    js = web_client.get("/static/submit_builder.js").text
+    assert "card.dataset.kinds" in js
+    assert "!kinds.includes(kind)" in js
+    assert "if (userInitiated && curName)" in js
+
+
+@pytest.mark.unit
+def test_submit_page_uses_pl_visual_language(web_client) -> None:  # type: ignore[no-untyped-def]
+    body = web_client.get("/submit").text
+    assert 'class="page pl-page submit-page builder-page"' in body
+    assert 'class="page-header pl-header"' in body
+    assert 'class="pl-subtitle"' in body
+    assert 'class="kind-chip pl-kind-tile" data-kind="etl"' in body
+    assert 'id="submit-form"\n        data-kind="etl"' in body
 
 
 @pytest.mark.unit

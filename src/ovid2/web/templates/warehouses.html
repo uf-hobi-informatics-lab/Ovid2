@@ -1,72 +1,132 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icons %}
 {% block title %}Warehouses &mdash; Ovid2{% endblock %}
 {% block content %}
-<section class="page">
-  <div class="page-header">
-    <h1>Warehouses</h1>
+{% import "_help.html" as help %}
+{#
+  Warehouses index — stacked component boxes (same visual language as
+  the Pipelines page). Each box: head (badge + name + type) | flow strip
+  (type -> secret -> config file) | foot (test result + actions).
+  The data-engine-row / data-test-engine / data-test-cell hooks drive
+  the inline Test / Test-all script below.
+#}
+{% set type_labels = {"pyspark": "PySpark", "databricks_spark": "Databricks", "snowpark": "Snowpark"} %}
+<section class="page pl-page">
+  <div class="page-header pl-header">
+    <div class="pl-title">
+      <h1>Warehouses
+        {% call help.tip_block(label="What is a warehouse?") %}
+          A <strong>warehouse</strong> selects the compute backend a pipeline
+          runs on (PySpark, Databricks Connect, or Snowpark) and its resource
+          knobs (executor memory, cluster id, Snowflake warehouse). Warehouses
+          control <em>how</em> the pipeline computes; they never influence
+          application logic. Pipelines reference a warehouse by name.
+        {% endcall %}
+      </h1>
+      <p class="pl-subtitle">Compute backends pipelines run on &mdash; pick the engine and its resource knobs.</p>
+    </div>
     <div class="page-actions">
       {% if engines %}
         <button type="button" id="test-all-btn" class="button small"
-                data-test-all="engines">Test all</button>
+                data-test-all="engines">{{ icons.icon("activity", size=15) }} Test all</button>
       {% endif %}
-      <a href="/engines/new" class="button primary small">+ New warehouse</a>
+      <a href="/engines/new" class="button primary">{{ icons.icon("plus", size=16) }} New warehouse</a>
     </div>
   </div>
-  <p class="note">
-    A <strong>warehouse</strong> selects the compute backend a pipeline
-    runs on (PySpark, Databricks Connect, or Snowpark) and its resource
-    knobs (executor memory, cluster id, Snowflake warehouse). Warehouses
-    control <em>how</em> the pipeline computes; they never influence
-    application logic. Pipelines reference a warehouse by name.
-  </p>
 
   {% if engines %}
+    <div class="pl-stats" role="list" aria-label="Warehouse summary">
+      <div class="pl-stat pl-stat-total" role="listitem">
+        <span class="pl-stat-icon">{{ icons.icon("engines", size=20) }}</span>
+        <span class="pl-stat-body">
+          <span class="pl-stat-value">{{ engines | length }}</span>
+          <span class="pl-stat-label">warehouses</span>
+        </span>
+      </div>
+      {% for t, label in type_labels.items() %}
+        {% set n = engines | selectattr("type", "equalto", t) | list | length %}
+        {% if n %}
+          <div class="pl-stat" data-etype="{{ t }}" style="--sc: var(--pk);" role="listitem">
+            <span class="pl-stat-icon">{{ icons.icon("cpu", size=20) }}</span>
+            <span class="pl-stat-body">
+              <span class="pl-stat-value">{{ n }}</span>
+              <span class="pl-stat-label">{{ label }}</span>
+            </span>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+
     <div id="test-all-summary" class="flash" style="display: none;"></div>
-    <div class="table-wrap">
-    <table class="runs-table">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Secret ref</th>
-          <th>Path</th>
-          <th>Result</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for e in engines %}
-          <tr data-engine-row="{{ e.name }}">
-            <td><a href="/engines/{{ e.name }}">{{ e.name }}</a></td>
-            <td>{{ e.type }}</td>
-            <td class="mono small">{{ e.secret_ref or '&mdash;' | safe }}</td>
-            <td class="mono small">{{ e.path }}</td>
-            <td class="test-result-cell" data-test-cell="{{ e.name }}">
-              <span class="small" style="color: var(--fg-muted);">&mdash;</span>
-            </td>
-            <td>
-              <button type="button" class="button small"
-                      data-test-engine="{{ e.name }}">Test</button>
-              <a href="/engines/{{ e.name }}/edit" class="small">edit</a>
-              <form action="/engines/{{ e.name }}/delete" method="post" style="display: inline;"
+    <div class="pl-grid">
+      {% for e in engines %}
+        <article class="pl-card" data-engine-row="{{ e.name }}" data-etype="{{ e.type }}">
+          <header class="pl-card-head">
+            <span class="pl-card-badge">{{ icons.icon("cpu", size=16) }}</span>
+            <div class="pl-card-title">
+              <a href="/engines/{{ e.name }}" class="pl-card-name">{{ e.name }}</a>
+              <span class="pl-card-sub">
+                <span class="pl-kind-label">{{ type_labels.get(e.type, e.type) }}</span>
+              </span>
+            </div>
+          </header>
+
+          <div class="pl-flow" aria-label="Warehouse {{ e.name }}: {{ e.type }}">
+            <div class="pl-node pl-node-engine" title="Engine type: {{ e.type }}">
+              <span class="pl-node-icon">{{ icons.icon("engines", size=14) }}</span>
+              <span class="pl-node-text">{{ e.type }}</span>
+            </div>
+            <span class="pl-link" aria-hidden="true"></span>
+            <div class="pl-node {{ 'is-open' if not e.secret_ref }}"
+                 title="{{ ('Secret: ' ~ e.secret_ref) if e.secret_ref else 'No secret file' }}">
+              <span class="pl-node-icon">{{ icons.icon("secrets", size=14) }}</span>
+              <span class="pl-node-text">{% if e.secret_ref %}{{ e.secret_ref }}{% else %}<span class="badge">no secret</span>{% endif %}</span>
+            </div>
+            <span class="pl-link" aria-hidden="true"></span>
+            <div class="pl-node" title="{{ e.path }}">
+              <span class="pl-node-icon">{{ icons.icon("file", size=14) }}</span>
+              <span class="pl-node-text">{{ e.path }}</span>
+            </div>
+          </div>
+
+          <footer class="pl-card-foot">
+            <span class="pl-result test-result-cell" data-test-cell="{{ e.name }}">
+              <span class="small muted">&mdash;</span>
+            </span>
+            <div class="row-actions pl-actions">
+              <button type="button" class="icon-button pl-run" title="Test"
+                      aria-label="Test {{ e.name }}"
+                      data-test-engine="{{ e.name }}">{{ icons.icon("activity", size=15) }}</button>
+              <a href="/engines/{{ e.name }}/edit" class="icon-button"
+                 title="Edit" aria-label="Edit {{ e.name }}">{{ icons.icon("edit", size=15) }}</a>
+              <form action="/engines/{{ e.name }}/delete" method="post" class="pl-inline-form"
                     onsubmit="return confirm('Delete warehouse {{ e.name }}?')">
-                <button type="submit" class="link-button small danger">delete</button>
+                <button type="submit" class="icon-button danger"
+                        title="Delete" aria-label="Delete {{ e.name }}">{{ icons.icon("trash", size=15) }}</button>
               </form>
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+            </div>
+          </footer>
+        </article>
+      {% endfor %}
     </div>
   {% else %}
-    <p class="empty">
-      No warehouses yet. Click <a href="/engines/new">New warehouse</a> to
-      create one. Files land under
-      <code>$XDG_CONFIG_HOME/ovid2/engines/</code>. The bare type name
-      <code>pyspark</code> continues to work everywhere as a built-in
-      fallback with default settings; you only need to create a named
-      warehouse when you want to override the defaults.
-    </p>
+    <div class="pl-empty">
+      <div class="pl-empty-art" aria-hidden="true">
+        <span class="pl-empty-node">{{ icons.icon("secrets", size=22) }}</span>
+        <span class="pl-empty-link"></span>
+        <span class="pl-empty-node pl-empty-core">{{ icons.icon("cpu", size=26) }}</span>
+        <span class="pl-empty-link"></span>
+        <span class="pl-empty-node">{{ icons.icon("database", size=22) }}</span>
+      </div>
+      <h2>No warehouses yet
+        {% call help.tip_block(label="Where are warehouses stored?") %}
+          Files land under <code>$XDG_CONFIG_HOME/ovid2/engines/</code>.
+        {% endcall %}
+      </h2>
+      <p class="muted">The bare type name <code>pyspark</code> works everywhere as a built-in
+        fallback with default settings; create a named warehouse only to override the defaults.</p>
+      <a href="/engines/new" class="button primary">{{ icons.icon("plus", size=16) }} New warehouse</a>
+    </div>
   {% endif %}
 </section>
 
@@ -172,8 +232,9 @@
   }
 
   document.addEventListener("click", function (evt) {
-    var t = evt.target;
-    if (!(t instanceof HTMLElement)) return;
+    var t = evt.target instanceof Element
+      ? evt.target.closest("[data-test-engine],[data-test-all]") : null;
+    if (!t) return;
     var single = t.getAttribute("data-test-engine");
     if (single) {
       evt.preventDefault();

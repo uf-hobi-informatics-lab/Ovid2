@@ -64,6 +64,28 @@ def test_html_cdms_index_links_to_detail(web_client, isolated_xdg: Path) -> None
 
 
 @pytest.mark.unit
+def test_html_cdms_index_is_card_layout(web_client, isolated_xdg: Path) -> None:
+    """``/cdms`` uses the Warehouses / Storage card language, not a table."""
+    body = web_client.get("/cdms").text
+    assert 'class="page pl-page"' in body
+    assert 'class="pl-stats"' in body
+    assert 'class="pl-grid"' in body
+    assert 'data-cdm-row="pcornet_7_0" data-cdm-origin="yaml"' in body
+    assert 'data-cdm-origin="python"' in body
+    assert "<table" not in body.split('class="pl-grid"')[1].split("</section>")[0]
+
+
+@pytest.mark.unit
+def test_html_cdm_detail_uses_panels(web_client, isolated_xdg: Path) -> None:
+    """``/cdms/{name}`` has the pl-header, stat strip and section panels."""
+    body = web_client.get("/cdms/pcornet_7_0").text
+    assert 'class="page pl-page" data-cdm-origin="yaml"' in body
+    assert 'class="pl-stats"' in body
+    assert body.count('class="pl-panel"') >= 5
+    assert 'href="/cdms"' in body
+
+
+@pytest.mark.unit
 def test_html_cdm_detail_ok(web_client, isolated_xdg: Path) -> None:
     """``GET /cdms/pcornet_7_0`` renders tables + valuesets."""
     r = web_client.get("/cdms/pcornet_7_0")
