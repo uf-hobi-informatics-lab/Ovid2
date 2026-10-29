@@ -142,7 +142,7 @@ SPARK_CONFIG: dict[str, str] = {
     "spark.driver.memory": "32g",
     "spark.driver.memoryOverhead": "4g",
     "spark.driver.maxResultSize": "8g",
-    "spark.driver.extraJavaOptions": f"-Dlog4j.configuration={LOG4J_CONFIG_URI}",
+    "spark.driver.extraJavaOptions": f"-Dlog4j2.configurationFile={LOG4J_CONFIG_URI}",
     # Executors — 8 cores / 48g each
     "spark.executor.memory": "48g",
     "spark.executor.memoryOverhead": "8g",
@@ -156,6 +156,13 @@ SPARK_CONFIG: dict[str, str] = {
     "spark.sql.autoBroadcastJoinThreshold": "200m",
     # Datetime parser leniency for legacy source data
     "spark.sql.legacy.timeParserPolicy": "LEGACY",
+    # Spark 4 turned ANSI SQL mode on by default: a malformed cast /
+    # ``to_date`` / overflow then *raises* instead of yielding NULL. The
+    # formatters, fixers, and health ops rely on the NULL-on-failure
+    # contract (multi-format ``coalesce(to_date(...))`` chains,
+    # ``cast("double").isNotNull()`` numeric probes), so keep the Spark 3
+    # semantics. Pinned by ``tests/contract/test_spark_ansi_disabled.py``.
+    "spark.sql.ansi.enabled": "false",
     # Parallelism
     "spark.sql.shuffle.partitions": "200",
     "spark.default.parallelism": "200",

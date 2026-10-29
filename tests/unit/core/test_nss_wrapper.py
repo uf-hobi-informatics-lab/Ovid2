@@ -10,8 +10,8 @@ would trip ``java.lang.IllegalArgumentException: basedir must be
 absolute: ?/.ivy2/local``.
 
 The fix is a per-invocation ``passwd`` / ``group`` overlay served via
-``libnss_wrapper.so`` (bundled inside the Bitnami base image at
-``/opt/bitnami/common/lib/``). This test file locks the surface:
+``libnss_wrapper.so`` (Debian ``libnss-wrapper``, symlinked in the
+image at ``/usr/local/lib/``). This test file locks the surface:
 
 - :meth:`OvidInstance.ensure_nss_files` writes the files.
 - :func:`ovid2.core.docker.nss_wrapper_env` returns the ``docker run``
@@ -315,3 +315,39 @@ def test_master_publishes_ephemeral_ports_only(
     for i in range(1, 2):
         worker = compose["services"][_stubbed_instance.worker_name(i)]
         assert "ports" not in worker
+
+
+@pytest.mark.unit
+def test_master_and_workers_launch_spark_class_from_image_spark_home(
+    _stubbed_instance: OvidInstance,
+) -> None:
+    """Master / workers run ``$SPARK_HOME/bin/spark-class`` in the foreground.
+
+    The runtime image is upstream (pip) PySpark, not Bitnami: there is no
+    ``/opt/bitnami`` tree and no Bitnami entrypoint consuming
+    ``SPARK_MODE``. Each daemon must be launched via the image's
+    ``spark-class`` with host/port/master-URL passed as CLI flags.
+    """
+    from ovid2.core.docker import SPARK_CLASS_IN_CONTAINER
+
+    assert SPARK_CLASS_IN_CONTAINER == "/opt/spark/bin/spark-class"
+    _stubbed_instance.nss_dir = Path("/host")
+    compose = build_compose_dict(_stubbed_instance, num_workers=2)
+    master = compose["services"][_stubbed_instance.master_name]
+    (master_cmd,) = master["command"]
+    assert master_cmd.startswith(
+        f"exec {SPARK_CLASS_IN_CONTAINER} org.apache.spark.deploy.master.Master "
+    )
+    assert f"--host {_stubbed_instance.master_name} --port 7077" in master_cmd
+    for i in (1, 2):
+        worker = compose["services"][_stubbed_instance.worker_name(i)]
+        (worker_cmd,) = worker["command"]
+        assert worker_cmd.startswith(
+            f"exec {SPARK_CLASS_IN_CONTAINER} org.apache.spark.deploy.worker.Worker "
+            f"{_stubbed_instance.spark_master_url()} "
+        )
+        assert "PYSPARK_PYTHON=python3" in worker["environment"]
+    for name, svc in compose["services"].items():
+        blob = " ".join([*svc["environment"], *svc["command"], *svc["volumes"]])
+        assert "bitnami" not in blob.lower(), f"{name} still references Bitnami: {blob}"
+        assert not any(e.startswith("SPARK_MODE=") for e in svc["environment"]), name

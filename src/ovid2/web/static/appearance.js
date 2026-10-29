@@ -14,7 +14,7 @@
  *      (ovid2RightPanelOpen). On mobile the panel overlays with a scrim.
  *
  *   2. The APPEARANCE EDITOR rendered inside the panel: pick one of the
- *      six base themes, then restyle five component groups
+ *      seven base themes, then restyle five component groups
  *      independently (colour + font size + font weight + font family),
  *      with LIVE preview. Overrides (a flat map of CSS-var name -> value)
  *      and named saved themes (base theme + all overrides) are stored
@@ -75,10 +75,16 @@
     { value: "var(--font-display)", label: "Display (theme brand face)" },
     { value: '"Orbitron", sans-serif', label: "Orbitron (sci-fi)" },
     { value: '"Fredoka", sans-serif', label: "Fredoka (rounded)" },
+    { value: '"Press Start 2P", monospace', label: "Press Start 2P (8-bit)" },
     { value: '"Baloo 2", sans-serif', label: "Baloo 2 (chunky)" },
     { value: '"VT323", monospace', label: "VT323 (terminal)" },
-    { value: '"Inter", sans-serif', label: "Inter (clean UI)" },
+    { value: '"JetBrains Mono", monospace', label: "JetBrains Mono (terminal)" },
+    { value: '"Share Tech Mono", monospace', label: "Share Tech Mono (terminal)" },
+    { value: '"IBM Plex Sans", sans-serif', label: "IBM Plex Sans (clean UI)" },
+    { value: '"IBM Plex Mono", monospace', label: "IBM Plex Mono" },
+    { value: '"IBM Plex Sans Condensed", sans-serif', label: "IBM Plex Sans Condensed (dense)" },
     { value: '"Exo 2", sans-serif', label: "Exo 2 (techno)" },
+    { value: '"Michroma", sans-serif', label: "Michroma (wide sci-fi)" },
     { value: '"Nunito", sans-serif', label: "Nunito (rounded sans)" },
     { value: '"Comic Sans MS", "Comic Sans", cursive', label: "Comic Sans" },
     { value: 'Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif', label: "Impact" },

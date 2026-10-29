@@ -200,7 +200,7 @@ class TestReadWriteDispatch:
 
 
 class TestContainerRequirements:
-    """The Spark-Snowflake connector jars ship with the Bitnami image today."""
+    """The Spark-Snowflake connector jars are baked into the runtime image today."""
 
     def test_empty_container_requirements(self) -> None:
         driver = SnowflakeDriver(

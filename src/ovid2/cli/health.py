@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ovid2.core.addresses.base import BaseAddress
+    from ovid2.drivers.base import Driver
 
 logger = logging.getLogger(__name__)
 
@@ -214,6 +215,37 @@ def _load_endpoint(
     )
 
 
+def _load_endpoint_driver(
+    address_name: str | None,
+    connection_name: str | None,
+    location: str | None,
+    *,
+    sf_overrides: dict[str, str] | None,
+    pipeline: str,
+    cdm_name: str | None,
+) -> Driver | None:
+    """Resolve one health endpoint to a native :class:`Driver`, or ``None``.
+
+    The driver form is what an engine's stager consumes (non-Spark engines
+    read / write only through the stager), and what supplies the
+    workspace-database fallback for :meth:`BaseEngine.prepare_workspace`.
+    Same precedence as :func:`_load_endpoint`: ``connection`` + ``location``
+    win over a saved ``address``.
+    """
+    from ovid2.drivers.registry import driver_from_address, driver_from_connection
+
+    if connection_name:
+        driver = driver_from_connection(connection_name, _location_from_str(location))
+        if cdm_name:
+            driver.location["cdm"] = cdm_name
+        return driver
+    if address_name:
+        return driver_from_address(
+            address_name, pipeline=pipeline, sf_overrides=sf_overrides, cdm_name=cdm_name
+        )
+    return None
+
+
 def main(args: argparse.Namespace) -> int:
     """Entry point invoked by :mod:`ovid2.cli.__main__`."""
     from ovid2.core.docker import is_inside_docker
@@ -328,10 +360,13 @@ def _run_container_mode(args: argparse.Namespace) -> int:
     bus.emit(instance_started(instance_id=instance_id, pipeline=pipeline))
 
     engine = load_engine(args.engine)
-    # The Spark-typed legacy ``BaseAddress.write`` takes this session;
-    # ``cli/`` may not import pyspark (even for typing).
+    # Session is ``Any``: ``cli/`` may not import pyspark (even for typing).
     session: Any = engine.get_session()
-    engine.prepare_workspace()
+    # Spark-family sessions use the legacy address data plane; every other
+    # engine (Snowpark) reads / writes exclusively through its stager,
+    # which consumes native drivers. Same checks either way — storage,
+    # compute and the check algorithms stay orthogonal.
+    staged = not bool(getattr(engine, "session_is_spark", True))
 
     sf_overrides = _sf_overrides(args)
     cdm_name = getattr(args, "cdm", None)
@@ -343,24 +378,55 @@ def _run_container_mode(args: argparse.Namespace) -> int:
 
     cdm = get_cdm(cdm_name)
 
-    input_address = _load_endpoint(
-        getattr(args, "input_address", None),
-        getattr(args, "input_connection", None),
-        getattr(args, "input_location", None),
-        sf_overrides=sf_overrides,
-        pipeline=pipeline,
-        cdm_name=cdm_name,
-        role="input",
+    def _endpoint(role: str) -> Any:
+        address = getattr(args, f"{role}_address", None)
+        connection = getattr(args, f"{role}_connection", None)
+        location = getattr(args, f"{role}_location", None)
+        if staged:
+            driver = _load_endpoint_driver(
+                address,
+                connection,
+                location,
+                sf_overrides=sf_overrides,
+                pipeline=pipeline,
+                cdm_name=cdm_name,
+            )
+            if driver is None:
+                raise ValueError(
+                    f"health: no {role} endpoint — pass --{role}_address or "
+                    f"--{role}_connection (+ --{role}_location)."
+                )
+            return driver
+        return _load_endpoint(
+            address,
+            connection,
+            location,
+            sf_overrides=sf_overrides,
+            pipeline=pipeline,
+            cdm_name=cdm_name,
+            role=role,
+        )
+
+    input_address = _endpoint("input")
+    output_address = _endpoint("output")
+
+    # Bind a writable scratch namespace for engine-managed temp objects
+    # (no-op on Spark). When the engine names no database, the run's own
+    # warehouse addresses (output first) are offered as fallbacks.
+    from ovid2.cli._workspace import (
+        workspace_databases_from_addresses,
+        workspace_databases_from_drivers,
     )
-    output_address = _load_endpoint(
-        getattr(args, "output_address", None),
-        getattr(args, "output_connection", None),
-        getattr(args, "output_location", None),
-        sf_overrides=sf_overrides,
-        pipeline=pipeline,
-        cdm_name=cdm_name,
-        role="output",
-    )
+
+    if staged:
+        fallback_dbs = workspace_databases_from_drivers([output_address, input_address])
+    else:
+        fallback_dbs = workspace_databases_from_addresses(
+            [getattr(args, "output_address", None), getattr(args, "input_address", None)],
+            pipeline=pipeline,
+            sf_overrides=sf_overrides,
+        )
+    engine.prepare_workspace(fallback_dbs)
 
     # Overwrite gate: the output is the exact write location. Health only
     # writes its ``dcq_results`` table (often next to the CDM tables it
@@ -421,6 +487,7 @@ def _run_container_mode(args: argparse.Namespace) -> int:
         batch_id=batch_id,
         instance_id=instance_id,
         event_bus=bus,
+        engine=engine,
     )
 
     failures = 0
@@ -431,9 +498,17 @@ def _run_container_mode(args: argparse.Namespace) -> int:
         prior_tables: dict[str, object] = {}
         prev_name = getattr(args, "prev_input_address", None)
         if prev_name:
-            prev_address = load_address(
-                prev_name, sf_overrides=sf_overrides, pipeline=pipeline, cdm_name=cdm_name
-            )
+            prev_address: Any
+            if staged:
+                from ovid2.drivers.registry import driver_from_address
+
+                prev_address = driver_from_address(
+                    prev_name, pipeline=pipeline, sf_overrides=sf_overrides, cdm_name=cdm_name
+                )
+            else:
+                prev_address = load_address(
+                    prev_name, sf_overrides=sf_overrides, pipeline=pipeline, cdm_name=cdm_name
+                )
             prior_tables = runner.register_prior_tables(prev_address, candidates)
 
         outcomes = runner.run(specs, available_tables=available, prior_tables=prior_tables)
@@ -443,7 +518,12 @@ def _run_container_mode(args: argparse.Namespace) -> int:
         results_uri: str | None = None
         try:
             results_df = runner.build_results_dataframe(outcomes)
-            output_address.write(results_df, session, pipeline, batch_id, "dcq_results")
+            if staged:
+                engine.get_stager().persist(
+                    results_df, output_address, pipeline, batch_id, "dcq_results"
+                )
+            else:
+                output_address.write(results_df, session, pipeline, batch_id, "dcq_results")
             results_uri = f"{output_desc}:dcq_results"
         except Exception as exc:
             logger.exception("health: results table write failed: %s", exc)

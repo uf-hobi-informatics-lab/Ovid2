@@ -31,7 +31,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from ovid2.web import db as web_db
 from ovid2.web.models import ApprovalDecision, ApprovalListResponse, ApprovalSummary
@@ -81,7 +81,7 @@ class ApprovalRequired(Exception):
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _row_to_summary(row: sqlite3.Row) -> ApprovalSummary:

@@ -107,7 +107,7 @@ class TestListDir:
         assert [e.kind for e in entries] == ["table", "table"]
         assert [e.name for e in entries] == ["Drugs", "Ndc"]
         # path round-trips as file::table
-        assert entries[0].path == "v.accdb::Drugs"
+        assert entries[0].path == "v.accdb/Drugs"
 
     def test_escape_rejected(self, tmp_path) -> None:
         d = AccessDriver({"host_path": str(tmp_path)}, {}, {})
@@ -255,4 +255,4 @@ class TestSupportsExpandAll:
         entries = d.list_dir("v.accdb")
         assert [e.name for e in entries] == ["Alpha", "Beta"]
         assert [e.kind for e in entries] == ["table", "table"]
-        assert entries[0].path == "v.accdb::Alpha"
+        assert entries[0].path == "v.accdb/Alpha"

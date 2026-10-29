@@ -320,8 +320,18 @@ def _run_container_mode(args: argparse.Namespace) -> int:
     # Bind a writable namespace for engine-managed temporary objects
     # (temp views / transient staging tables). No-op on Spark; on
     # Snowpark this binds a writable database + schema so temp views
-    # don't land in the read-only SNOWFLAKE system database.
-    engine.prepare_workspace()
+    # don't land in the read-only SNOWFLAKE system database. When the
+    # engine names no database, the run's warehouse addresses (output
+    # first) are offered as fallbacks — scratch objects only.
+    from ovid2.cli._workspace import workspace_databases_from_addresses
+
+    engine.prepare_workspace(
+        workspace_databases_from_addresses(
+            [args.output_address, args.input_address],
+            pipeline=pipeline,
+            sf_overrides=_sf_overrides(args),
+        )
+    )
 
     # Startup summary — the CLI is one of the packages allowed to print.
     print("[ovid2] ETL run")

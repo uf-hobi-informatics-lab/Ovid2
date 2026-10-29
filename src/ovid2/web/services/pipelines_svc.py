@@ -32,7 +32,7 @@ import hashlib
 import json
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -178,7 +178,7 @@ def _hash(payload: dict[str, Any]) -> str:
 
 def _now() -> datetime:
     """Return the current UTC time (module-local for monkeypatching)."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _now_iso() -> str:
@@ -284,7 +284,7 @@ def compute_next_fire(
             # strictly after 'now' to avoid a burst of back-fires.
             itr = croniter(str(trigger.cron), reference)
             next_dt = itr.get_next(datetime)
-        return next_dt.astimezone(timezone.utc)
+        return next_dt.astimezone(UTC)
     if trigger.type == "interval":
         assert trigger.interval_minutes is not None
         step = timedelta(minutes=int(trigger.interval_minutes))
@@ -1014,7 +1014,7 @@ def due_pipelines(*, now: datetime | None = None) -> list[PipelineConfigDetail]:
         except ValueError:
             continue
         if next_dt.tzinfo is None:
-            next_dt = next_dt.replace(tzinfo=timezone.utc)
+            next_dt = next_dt.replace(tzinfo=UTC)
         if next_dt <= reference:
             due.append(detail)
     return due

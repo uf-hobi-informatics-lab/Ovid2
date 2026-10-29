@@ -12,25 +12,30 @@ from ovid2.installer import doctor
 
 @pytest.mark.unit
 def test_python_version_check_reports_ok() -> None:
-    """The Python-version check should pass on a 3.11+ interpreter."""
-    import sys
-
-    if sys.version_info < (3, 11):
-        pytest.skip("Test host runs Python <3.11; check correctly reports 'error'.")
+    """The Python-version check passes on the (3.11+) test interpreter."""
     result = doctor._check_python_version()
     assert result.severity == "ok"
     assert result.name == "python"
 
 
 @pytest.mark.unit
-def test_python_version_check_flags_old_interpreters() -> None:
-    """On an interpreter below 3.11 the check must report 'error'."""
+@pytest.mark.parametrize("version", [(3, 9, 18), (3, 10, 22)])
+def test_python_version_check_flags_old_interpreters(
+    monkeypatch: pytest.MonkeyPatch, version: tuple[int, int, int]
+) -> None:
+    """Interpreters below the 3.11 floor must report 'error'."""
     import sys
+    from typing import NamedTuple
 
-    if sys.version_info >= (3, 11):
-        pytest.skip("Test host runs Python 3.11+; positive path covered elsewhere.")
+    class _Ver(NamedTuple):
+        major: int
+        minor: int
+        micro: int
+
+    monkeypatch.setattr(sys, "version_info", _Ver(*version))
     result = doctor._check_python_version()
     assert result.severity == "error"
+    assert f"{version[0]}.{version[1]}" in result.message
 
 
 @pytest.mark.unit

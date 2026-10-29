@@ -366,8 +366,183 @@ export function mountTerminal(pane, opts) {
   // new run page into ``#main`` and pushes history. Any failure (no
   // fetch, non-2xx, missing id) rejects so the caller can fall back to
   // a plain navigation.
+  // ---- overwrite-conflict popup ------------------------------------
+  //
+  // Every address is the exact write location, so launching / rerunning
+  // into an occupied output answers ``409 overwrite_required`` (JSON for
+  // our ``X-Requested-With: fetch`` POSTs). Instead of treating that as
+  // a failure and falling back to a full-page form POST (which lands on
+  // the standalone confirmation page), we show the in-page popup from
+  // ``_terminal_pane.html``. "Overwrite and run" re-POSTs the action
+  // with ``confirm_overwrite=true``; Cancel / Esc / backdrop click sends
+  // nothing and restores the ▶ control.
+  const OVERWRITE_SHOWN = 50;
+  const overwriteModal = pane.querySelector("[data-overwrite-modal]");
+  let overwriteState = null; // { url, onConfirm, onCancel, returnFocus }
+
+  /** Error carrying the 409 payload so callers can open the popup. */
+  function OverwriteRequired(data) {
+    const err = new Error("overwrite-required");
+    err.overwrite = data || {};
+    return err;
+  }
+
+  // POST a run action (launch / rerun) in the background. Resolves with
+  // the JSON body on 2xx; rejects with an ``OverwriteRequired`` error on
+  // a ``409 overwrite_required`` and a plain error on anything else.
+  function postRunAction(url, confirm) {
+    const init = {
+      method: "POST",
+      headers: { "X-Requested-With": "fetch", Accept: "application/json" },
+      credentials: "same-origin",
+    };
+    if (confirm) {
+      const body = new FormData();
+      body.append("confirm_overwrite", "true");
+      init.body = body;
+    }
+    return fetch(url, init).then(function (r) {
+      if (r.status === 409) {
+        return r
+          .json()
+          .catch(function () {
+            return null;
+          })
+          .then(function (data) {
+            if (data && data.status === "overwrite_required") {
+              throw OverwriteRequired(data);
+            }
+            throw new Error("action-failed:409");
+          });
+      }
+      if (!r.ok) throw new Error("action-failed:" + r.status);
+      return r.json();
+    });
+  }
+
+  function overwriteKeydown(ev) {
+    if (ev.key === "Escape") {
+      ev.preventDefault();
+      closeOverwrite(true);
+    }
+  }
+
+  function overwriteBackdropClick(ev) {
+    if (ev.target === overwriteModal) closeOverwrite(true);
+  }
+
+  function closeOverwrite(cancelled) {
+    if (!overwriteModal || !overwriteState) return;
+    const state = overwriteState;
+    overwriteState = null;
+    overwriteModal.hidden = true;
+    document.body.classList.remove("modal-open");
+    document.removeEventListener("keydown", overwriteKeydown, true);
+    // The popup is re-parented to <body> while open (so no ancestor's
+    // overflow / stacking context can clip it); put it back in the pane
+    // so an in-place page swap drops it with the rest of the run page.
+    if (overwriteModal.parentNode !== pane) pane.appendChild(overwriteModal);
+    if (cancelled && typeof state.onCancel === "function") state.onCancel();
+    if (state.returnFocus && typeof state.returnFocus.focus === "function") {
+      try {
+        state.returnFocus.focus();
+      } catch (_e) {
+        /* element gone */
+      }
+    }
+  }
+
+  // Show the popup for a 409 payload. ``onConfirm`` returns a promise
+  // for the confirmed re-POST; on failure the error is shown inline so
+  // the operator can retry or cancel.
+  function openOverwrite(data, onConfirm, onCancel) {
+    if (!overwriteModal) return false;
+    const tables = Array.isArray(data.existing_tables) ? data.existing_tables : [];
+    const addrEl = overwriteModal.querySelector("[data-overwrite-address]");
+    const countEl = overwriteModal.querySelector("[data-overwrite-count]");
+    const listEl = overwriteModal.querySelector("[data-overwrite-tables]");
+    const errEl = overwriteModal.querySelector("[data-overwrite-error]");
+    const confirmBtn = overwriteModal.querySelector("[data-overwrite-confirm]");
+    if (addrEl) addrEl.textContent = data.output_address || "the output";
+    if (countEl) {
+      countEl.textContent =
+        tables.length + " table" + (tables.length === 1 ? "" : "s");
+    }
+    if (listEl) {
+      listEl.replaceChildren();
+      tables.slice(0, OVERWRITE_SHOWN).forEach(function (t) {
+        const li = document.createElement("li");
+        li.textContent = String(t);
+        listEl.appendChild(li);
+      });
+      if (tables.length > OVERWRITE_SHOWN) {
+        const li = document.createElement("li");
+        li.textContent = "… and " + (tables.length - OVERWRITE_SHOWN) + " more";
+        listEl.appendChild(li);
+      }
+    }
+    if (errEl) {
+      errEl.hidden = true;
+      errEl.textContent = "";
+    }
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "Overwrite and run";
+    }
+    overwriteState = {
+      onConfirm: onConfirm,
+      onCancel: onCancel,
+      returnFocus: promptBtn,
+    };
+    if (overwriteModal.parentNode !== document.body) {
+      document.body.appendChild(overwriteModal);
+    }
+    overwriteModal.hidden = false;
+    document.body.classList.add("modal-open");
+    document.addEventListener("keydown", overwriteKeydown, true);
+    const cancelBtn = overwriteModal.querySelector(".modal-footer [data-overwrite-cancel]");
+    if (cancelBtn) cancelBtn.focus();
+    return true;
+  }
+
+  if (overwriteModal) {
+    overwriteModal.addEventListener("click", overwriteBackdropClick);
+    overwriteModal.querySelectorAll("[data-overwrite-cancel]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        closeOverwrite(true);
+      });
+    });
+    const confirmBtn = overwriteModal.querySelector("[data-overwrite-confirm]");
+    if (confirmBtn) {
+      confirmBtn.addEventListener("click", function () {
+        if (!overwriteState || confirmBtn.disabled) return;
+        const state = overwriteState;
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = "Starting…";
+        Promise.resolve()
+          .then(state.onConfirm)
+          .then(function () {
+            state.onCancel = null; // success — nothing to restore
+            closeOverwrite(false);
+          })
+          .catch(function (err) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = "Overwrite and run";
+            const errEl = overwriteModal.querySelector("[data-overwrite-error]");
+            if (errEl) {
+              errEl.textContent =
+                "Could not start the run (" +
+                ((err && err.message) || "error") +
+                "). Try again or cancel.";
+              errEl.hidden = false;
+            }
+          });
+      });
+    }
+  }
+
   let rerunRequested = false;
-  function requestRerun() {
+  function requestRerun(confirm) {
     if (!jobId || rerunRequested) return Promise.reject(new Error("no-job"));
     rerunRequested = true;
     if (promptBtn) {
@@ -385,18 +560,7 @@ export function mountTerminal(pane, opts) {
         promptBtn.setAttribute("title", "Rerun");
       }
     };
-    return fetch("/jobs/" + jobId + "/rerun", {
-      method: "POST",
-      headers: {
-        "X-Requested-With": "fetch",
-        Accept: "application/json",
-      },
-      credentials: "same-origin",
-    })
-      .then(function (r) {
-        if (!r.ok) throw new Error("rerun-failed:" + r.status);
-        return r.json();
-      })
+    return postRunAction("/jobs/" + jobId + "/rerun", !!confirm)
       .then(function (data) {
         const newId = data && data.instance_id;
         if (!newId) throw new Error("rerun-no-instance-id");
@@ -434,7 +598,7 @@ export function mountTerminal(pane, opts) {
   // live status poll and the ▶ becomes a ■ Stop. Rejects on failure so
   // the caller falls back to the native form POST.
   let launchRequested = false;
-  function requestLaunch() {
+  function requestLaunch(confirm) {
     if (!jobId || launchRequested) return Promise.reject(new Error("no-job"));
     launchRequested = true;
     if (promptBtn) {
@@ -444,15 +608,7 @@ export function mountTerminal(pane, opts) {
       promptBtn.setAttribute("aria-label", "Starting…");
       promptBtn.setAttribute("title", "Starting…");
     }
-    return fetch("/jobs/" + jobId + "/launch", {
-      method: "POST",
-      headers: { "X-Requested-With": "fetch", Accept: "application/json" },
-      credentials: "same-origin",
-    })
-      .then(function (r) {
-        if (!r.ok) throw new Error("launch-failed:" + r.status);
-        return r.json();
-      })
+    return postRunAction("/jobs/" + jobId + "/launch", !!confirm)
       .then(function (data) {
         const id = (data && data.instance_id) || pane.getAttribute("data-instance-id");
         const url = "/runs/" + encodeURIComponent(id);
@@ -496,28 +652,27 @@ export function mountTerminal(pane, opts) {
       if (action === "cancel") {
         ev.preventDefault();
         requestStop();
-      } else if (action === "launch") {
+      } else if (action === "launch" || action === "rerun") {
         if (typeof window.fetch !== "function") return; // native POST fallback
         ev.preventDefault();
-        requestLaunch().catch(function () {
-          try {
-            promptForm.submit();
-          } catch (_e) {
-            /* give up silently */
+        const run = action === "launch" ? requestLaunch : requestRerun;
+        run(false).catch(function (err) {
+          // Occupied output (409 overwrite_required): ask in place. The
+          // request's own catch has already restored the ▶ control, so
+          // Cancel needs no extra work; confirming re-POSTs with
+          // ``confirm_overwrite=true`` and navigates on success.
+          if (err && err.overwrite && openOverwrite(err.overwrite, function () {
+            return run(true);
+          })) {
+            return;
           }
-        });
-      } else if (action === "rerun") {
-        if (typeof window.fetch !== "function") return; // native POST fallback
-        ev.preventDefault();
-        requestRerun().catch(function () {
-          // requestRerun already navigates on the happy path and only
-          // rejects when it could not start / complete; fall back to a
-          // plain navigation to the rerun route so the click is never a
-          // dead end.
+          // Any other failure: fall back to the native form POST so the
+          // click is never a dead end (the server renders the full-page
+          // confirmation / error there).
           try {
             promptForm.submit();
           } catch (_e) {
-            /* give up silently — the button is re-enabled by clearPending */
+            /* give up silently — the button was re-enabled by the catch */
           }
         });
       }

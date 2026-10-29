@@ -49,4 +49,5 @@ def kind_choices() -> list[dict[str, str]]:
     return [
         {"name": spec.name, "label": spec.label, "description": spec.description}
         for spec in KIND_REGISTRY.values()
+        if not spec.job_only
     ]

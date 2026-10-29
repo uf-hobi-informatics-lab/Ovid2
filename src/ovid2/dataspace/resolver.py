@@ -58,6 +58,8 @@ class OdsEntry:
         path: The child's full Data Space path (``/<conn>/<…>``).
         type: The storage type (``disc`` / ``snowflake`` / …).
         size_bytes: Size when the store reports it.
+        modified_at: ISO-8601 UTC last-modified time when reported.
+        row_count: Row count when the store reports it for free.
     """
 
     name: str
@@ -65,6 +67,8 @@ class OdsEntry:
     path: str
     type: str = ""
     size_bytes: int | None = None
+    modified_at: str | None = None
+    row_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -243,6 +247,8 @@ def list_children(
     for raw in raw_entries:
         rel = str(raw.get("path") or raw.get("name") or "").strip("/")
         size = raw.get("size_bytes")
+        rows = raw.get("row_count")
+        modified = raw.get("modified_at")
         entries.append(
             OdsEntry(
                 name=str(raw.get("name") or rel.rsplit("/", 1)[-1]),
@@ -250,6 +256,8 @@ def list_children(
                 path=f"/{target.connection}/{rel}" if rel else f"/{target.connection}",
                 type=target.type,
                 size_bytes=int(size) if isinstance(size, int) else None,
+                modified_at=str(modified) if modified else None,
+                row_count=int(rows) if isinstance(rows, int) else None,
             )
         )
     return supported, entries, message

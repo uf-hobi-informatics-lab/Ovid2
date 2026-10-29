@@ -110,7 +110,9 @@ plain directories (`/dataspace`, `GET /api/v1/dataspace?path=/<account>/<…>`).
 - **Overwrite confirmation.** A run writes exactly at the output address,
   so re-running after fixing the input replaces the output. When the output
   already holds tables the run needs a confirmation: `--overwrite` on the
-  CLI, the *Overwrite existing data?* page on the web, `confirm_overwrite`
+  CLI, the *Overwrite existing data?* page on the web (on a run page the
+  ▶ launch / ▶ rerun button shows it as an in-page popup listing the
+  existing tables — Cancel sends nothing), `confirm_overwrite`
   on the API (which otherwise answers `409 overwrite_required` listing the
   tables). Agent (MCP / assistant) confirmations become a `run.overwrite`
   approval a human must grant. `copy` / `move` only count the tables they
@@ -222,6 +224,35 @@ the lower). All three are additive/back-compatible:
 Enforced by `tests/contract/test_health_packages_valid.py` (every
 manifest validates, every referenced check id resolves, packages ordered
 most-recent first).
+
+### Any engine, any storage
+
+Health / EDC checks run unchanged on every compute engine — `pyspark`,
+`databricks_spark` and `snowpark` — against any storage driver the engine's
+stager can reach (Snowflake, disc, S3, Azure Blob, GCS, …). The three axes
+are independent:
+
+- **Algorithm** — check operators (`transformations/quality/ops/`) never
+  import an engine library. Columns come from the engine's
+  `EngineFunctions` (`ctx.functions`), tables from the runner's frame
+  registry, packaged reference CSVs (RxNorm tiers) through the engine's
+  stager, and the `dcq_results` frame from
+  `BaseEngine.create_typed_dataframe`.
+- **Compute** — `--engine pyspark|databricks_spark|snowpark` (or a named
+  engine config).
+- **Storage** — the input / output addresses. Spark-family runs use the
+  driver's Spark data plane; Snowpark reads and writes through its stager
+  (native table reads for Snowflake, `PUT`/`COPY` for disc, …).
+
+`tests/unit/quality/test_health_engine_parity.py` runs every operator on
+each engine and asserts identical metric rows (set
+`OVID2_TEST_SNOWPARK_ENGINE=<engine config>` to include live Snowpark).
+
+**Snowpark scratch schema.** Snowpark creates its temp views and staging
+tables in `<db>.OVID2_SNOWPARK_STAGING`. `<db>` resolves in this order:
+`$OVID2_SNOWPARK_STAGING_SCHEMA`, the engine's `database` field, then the
+run's Snowflake output and input address databases (output first). Only
+scratch objects go there; results still land at the exact output address.
 
 ## Running EDC checks against *any* PCORnet database (no duplicate pipelines)
 

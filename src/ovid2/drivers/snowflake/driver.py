@@ -29,6 +29,7 @@ CDM. The pipeline-side :class:`SnowflakeAddress` reads the same
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
 from ovid2.drivers.base import (
@@ -37,6 +38,8 @@ from ovid2.drivers.base import (
     LocationField,
     ProbeResult,
     StorageEntry,
+    TableInfo,
+    TableSample,
 )
 from ovid2.drivers.snowflake.metadata import (
     build_address_config,
@@ -104,6 +107,19 @@ class SnowflakeDriver(Driver):
         v = location.get("cdm")
         return str(v) if v else None
 
+    @classmethod
+    def workspace_database(cls, location: dict[str, Any] | None) -> str | None:
+        """Return the address's database (explicit key or ``DB[/SCHEMA]`` path).
+
+        Used by Snowpark as a scratch-schema fallback when the engine
+        names no database (see
+        :func:`ovid2.drivers.snowflake.staging.disc._ensure_writable_staging_schema`).
+        """
+        loc = dict(location or {})
+        parts = [p for p in str(loc.get("path") or "").split("/") if p.strip()]
+        database = str(loc.get("database") or (parts[0] if parts else "")).strip()
+        return database or None
+
     # ------------------------------------------------------------------
     # Probes
     # ------------------------------------------------------------------
@@ -131,6 +147,38 @@ class SnowflakeDriver(Driver):
         that function for the prefix grammar.
         """
         return list_dir_from_config(dict(self.args), dict(self.secrets), prefix)
+
+    # ------------------------------------------------------------------
+    # Table introspection (Data Space explorer — metadata queries)
+    # ------------------------------------------------------------------
+
+    def describe_table(self, path: str) -> TableInfo:
+        """Columns / row count / bytes / last altered / ``GET_DDL`` for ``DB/SCHEMA/TABLE``."""
+        from ovid2.drivers.snowflake.introspect import describe_table_from_config
+
+        return describe_table_from_config(dict(self.args), dict(self.secrets), path)
+
+    def sample_rows(self, path: str, limit: int = 100) -> TableSample:
+        """``SELECT * … LIMIT n`` for ``DB/SCHEMA/TABLE``."""
+        from ovid2.drivers.snowflake.introspect import sample_rows_from_config
+
+        return sample_rows_from_config(dict(self.args), dict(self.secrets), path, limit)
+
+    def iter_rows(
+        self, path: str, limit: int | None = None, *, batch_size: int = 5000
+    ) -> tuple[list[str], Iterator[list[tuple[Any, ...]]]]:
+        """Stream the table in ``fetchmany`` batches."""
+        from ovid2.drivers.snowflake.introspect import iter_rows_from_config
+
+        return iter_rows_from_config(
+            dict(self.args), dict(self.secrets), path, limit, batch_size=batch_size
+        )
+
+    def count_rows(self, path: str) -> int:
+        """``SELECT COUNT(*)``."""
+        from ovid2.drivers.snowflake.introspect import count_rows_from_config
+
+        return count_rows_from_config(dict(self.args), dict(self.secrets), path)
 
     # ------------------------------------------------------------------
     # ``all`` expansion + size hints (control plane, ``SHOW`` only)

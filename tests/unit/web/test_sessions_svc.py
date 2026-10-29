@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -35,7 +35,7 @@ def test_create_returns_session_record():
     assert rec.idp_sid == "idp_session_abc"
     assert rec.revoked is False
     # Timestamps should be recent
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     created = datetime.fromisoformat(rec.created_at)
     assert abs((now - created).total_seconds()) < 5
     # expires_at should be min(abs, idle)

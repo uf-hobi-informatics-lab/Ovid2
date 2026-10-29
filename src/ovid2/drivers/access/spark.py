@@ -6,7 +6,7 @@ Enforced by ``tests/contract/test_no_pyspark_outside_engine.py`` (the
 ``drivers/<type>/spark.py`` path is auto-allowed).
 
 Reads use the UCanAccess JDBC driver (baked into the ETL image's
-``/opt/bitnami/spark/jars/``). A single-file Access database has no
+``$SPARK_HOME/jars/``). A single-file Access database has no
 natural partition column, so each table is read as one JDBC
 partition — acceptable for a raw copy job. UCanAccess is pointed at
 the container-visible path of the mounted ``.accdb`` file.
@@ -40,7 +40,7 @@ _SAFE_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 #: Fully-qualified class name of the UCanAccess Spark ``JdbcDialect``
 #: compiled at Docker build time (``docker/ucanaccess-dialect/`` →
-#: ``/opt/bitnami/spark/jars/ucanaccess-spark-dialect.jar``). It
+#: ``$SPARK_HOME/jars/ucanaccess-spark-dialect.jar``). It
 #: bracket-quotes column identifiers so Spark's JDBC reader stops
 #: emitting double-quoted columns (which UCanAccess reads as string
 #: literals — every row comes back as its own column names). Registered
@@ -318,7 +318,7 @@ def _register_dialect(spark: SparkSession) -> None:
             "JVM classpath. It is compiled at Docker build time into "
             "ucanaccess-spark-dialect.jar; rebuild the image "
             "(docker/Dockerfile) so the jar is baked into "
-            "/opt/bitnami/spark/jars/."
+            "$SPARK_HOME/jars/."
         ) from exc
 
 

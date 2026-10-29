@@ -12,7 +12,7 @@ Locks:
   :func:`probe_auth_from_config` (verified indirectly by asserting
   the ``code='skipped'`` path when the Azure SDK is absent).
 - ``container_requirements`` currently returns an empty tuple (the
-  ABFS driver ships with the Bitnami Spark image).
+  ABFS driver (hadoop-azure) is baked into the runtime image).
 """
 
 from __future__ import annotations
@@ -241,7 +241,7 @@ class TestReadWriteDispatch:
 
 
 class TestContainerRequirements:
-    """The ABFS driver ships with the Bitnami image today (no JavaPackage)."""
+    """The ABFS driver is baked into the runtime image today (no JavaPackage)."""
 
     def test_empty_container_requirements(self) -> None:
         driver = AzureBlobDriver(

@@ -487,7 +487,7 @@ def test_prepare_workspace_binds_writable_db_and_schema(
     monkeypatch.setattr(
         disc_mod,
         "_ensure_writable_staging_schema",
-        lambda _n: "OMOP_OUT.OVID2_SNOWPARK_STAGING",
+        lambda _n, fallback_databases=(): "OMOP_OUT.OVID2_SNOWPARK_STAGING",
     )
 
     engine.prepare_workspace()
@@ -506,7 +506,7 @@ def test_prepare_workspace_propagates_unwritable_error(
 
     import ovid2.drivers.snowflake.staging.disc as disc_mod
 
-    def _boom(_n: Any) -> str:
+    def _boom(_n: Any, fallback_databases: Any = ()) -> str:
         raise RuntimeError("no writable current database")
 
     monkeypatch.setattr(disc_mod, "_ensure_writable_staging_schema", _boom)
@@ -516,12 +516,37 @@ def test_prepare_workspace_propagates_unwritable_error(
 
 
 @pytest.mark.unit
+def test_prepare_workspace_threads_and_remembers_fallbacks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fallback databases reach the resolver and persist for the per-table re-bind."""
+    engine = SnowparkEngine(args={"connection": "irrelevant"})
+    engine._native = _RecordingNative()  # type: ignore[assignment]
+
+    import ovid2.drivers.snowflake.staging.disc as disc_mod
+
+    seen: list[tuple[str, ...]] = []
+
+    def _resolve(_n: Any, fallback_databases: Any = ()) -> str:
+        seen.append(tuple(fallback_databases))
+        return "CHAR_X.OVID2_SNOWPARK_STAGING"
+
+    monkeypatch.setattr(disc_mod, "_ensure_writable_staging_schema", _resolve)
+
+    engine.prepare_workspace(["CHAR_X", "CHAR_Y"])
+    engine.prepare_workspace()  # core/pipeline.py re-bind: no argument
+
+    assert seen == [("CHAR_X", "CHAR_Y"), ("CHAR_X", "CHAR_Y")]
+
+
+@pytest.mark.unit
 def test_base_engine_prepare_workspace_is_noop() -> None:
     """The default (Spark) prepare_workspace does nothing and returns None."""
     from ovid2.core.engines.pyspark import PySparkEngine
 
     engine = PySparkEngine()
     assert engine.prepare_workspace() is None
+    assert engine.prepare_workspace(["ANY_DB"]) is None
 
 
 # ---------------------------------------------------------------------------
@@ -717,3 +742,32 @@ def test_base_engine_cancel_running_queries_is_noop() -> None:
     engine = PySparkEngine(args={})
     # Should not raise even without a session.
     engine.cancel_running_queries()
+
+
+# ---------------------------------------------------------------------------
+# Staging cleanups run over the live session, before close()
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_stop_session_runs_staging_cleanups_before_close(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from ovid2.core.engines import stager as stager_mod
+
+    monkeypatch.setattr("atexit.register", lambda fn: fn)
+    order: list[str] = []
+
+    class _Native:
+        def close(self) -> None:
+            order.append("close")
+
+    native = _Native()
+    engine = SnowparkEngine(args={"connection": "irrelevant"})
+    engine._native = native  # type: ignore[assignment]
+    once = stager_mod.register_session_cleanup(native, lambda: order.append("cleanup"))
+
+    engine.stop_session()
+    once()  # the atexit backstop firing later must be a no-op
+
+    assert order == ["cleanup", "close"]

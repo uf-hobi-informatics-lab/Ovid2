@@ -36,7 +36,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import IO
 
@@ -278,8 +278,8 @@ class Worker:
         except ValueError:
             return False
         if last.tzinfo is None:
-            last = last.replace(tzinfo=timezone.utc)
-        elapsed = datetime.now(timezone.utc) - last
+            last = last.replace(tzinfo=UTC)
+        elapsed = datetime.now(UTC) - last
         return elapsed < timedelta(minutes=int(wait))
 
     def _on_shutdown_signal(self, _signum: int, _frame: object) -> None:
@@ -398,6 +398,8 @@ class Worker:
             argv = self._build_argv_move(job)
         elif builder == "health":
             argv = self._build_argv_health(job, kind)
+        elif builder == "export":
+            return self._build_argv_export(job)
         else:
             argv = self._build_argv_etl(job, kind)
         # The output address is the exact write location: forward an
@@ -601,6 +603,35 @@ class Worker:
         for spec in job.extra_args.get("extra_mounts") or []:
             argv.extend(["--extra-mount", str(spec)])
         return argv
+
+    def _build_argv_export(self, job: JobDetail) -> list[str]:
+        """Build the argv for an ``export``-kind job (Data Space full-table export).
+
+        ``ovid2 tools export-table <connection> --path <location>
+        --format … --delimiter … --header-case … --out <artifact>`` — no
+        ``--limit`` (the whole table). Runs on the host; no container.
+        """
+        extra = job.extra_args
+        connection = str(extra.get("connection") or "")
+        location = str(extra.get("location") or "")
+        artifact = str(extra.get("artifact") or "")
+        if not (connection and location and artifact):
+            raise ValueError("export jobs need connection / location / artifact in extra_args.")
+        return list(self.ovid2_bin) + [
+            "tools",
+            "export-table",
+            connection,
+            "--path",
+            location,
+            "--format",
+            str(extra.get("format") or "csv"),
+            "--delimiter",
+            str(extra.get("delimiter") or ","),
+            "--header-case",
+            str(extra.get("header_case") or "asis"),
+            "--out",
+            artifact,
+        ]
 
     def _build_env(self, job: JobDetail) -> dict[str, str]:
         """Return a least-privilege environment for the executor.

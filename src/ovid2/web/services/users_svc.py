@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import secrets
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from ovid2.web import db as web_db
@@ -58,7 +58,7 @@ def upsert_from_idp(
     Returns:
         The resulting user record as a dictionary.
     """
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     user_id = secrets.token_urlsafe(16)
 
     with web_db.connect() as conn:
@@ -215,7 +215,7 @@ def activate(user_id: str, role: Role, actor: str) -> dict[str, Any]:
                 raise UserError("Cannot change role of the last active system administrator")
 
         # Update user
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn.execute(
             """
             UPDATE web_users
@@ -291,7 +291,7 @@ def set_role(user_id: str, role: Role, actor: str) -> dict[str, Any]:
                 raise UserError("Cannot change role of the last active system administrator")
 
         # Update user
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn.execute(
             """
             UPDATE web_users
@@ -357,7 +357,7 @@ def disable(user_id: str, actor: str) -> dict[str, Any]:
                 raise UserError("Cannot disable the last active system administrator")
 
         # Update user
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn.execute(
             """
             UPDATE web_users
@@ -403,7 +403,7 @@ def enable(user_id: str, actor: str) -> dict[str, Any]:
             raise UserError(f"User not found: {user_id}")
 
         # Update user
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn.execute(
             """
             UPDATE web_users

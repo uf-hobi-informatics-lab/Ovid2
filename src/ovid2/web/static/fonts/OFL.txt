@@ -13,18 +13,29 @@ its original copyright below. The full license text follows.
                   (https://github.com/hafontia/Fredoka)
   VT323           Copyright 2011 The VT323 Project Authors
                   (peter.hull@oikoi.com)
-  Inter           Copyright 2016 The Inter Project Authors
-                  (https://github.com/rsms/inter)
   Exo 2           Copyright 2013 The Exo 2 Project Authors
                   (https://github.com/NDISCOVER/Exo-2.0)
   Baloo 2         Copyright 2019 The Baloo 2 Project Authors
                   (https://github.com/EbenSorkin/Baloo)
   Nunito          Copyright 2014 The Nunito Project Authors
                   (https://github.com/googlefonts/nunito)
+  JetBrains Mono  Copyright 2020 The JetBrains Mono Project Authors
+                  (https://github.com/JetBrains/JetBrainsMono)
+  Share Tech Mono Copyright (c) 2012, Carrois Type Design, Ralph du
+                  Carrois (www.carrois.com), Reserved Font Name 'Share'
+  Press Start 2P  Copyright 2012 The Press Start 2P Project Authors
+                  (cody@zone38.net), Reserved Font Name "Press Start 2P"
+  Michroma        Copyright 2011 The Michroma Project Authors
+                  (https://github.com/googlefonts/Michroma-font)
+  IBM Plex Sans   Copyright 2017 IBM Corp. (https://github.com/IBM/plex)
+  IBM Plex Mono   Copyright 2017 IBM Corp. (https://github.com/IBM/plex)
+  IBM Plex Sans Condensed
+                  Copyright 2019 IBM Corp. (https://github.com/IBM/plex)
 
-Sources are the Google Fonts distribution (fonts.google.com); each is
-licensed under OFL 1.1. Latin-subset woff2 builds are bundled to avoid
-any runtime CDN dependency.
+Sources are the Google Fonts distribution (fonts.google.com), packaged
+as Latin-subset woff2 by the Fontsource project (fontsource.org) for the
+newer faces; each is licensed under OFL 1.1. Latin-subset woff2 builds
+are bundled to avoid any runtime CDN dependency.
 
 -----------------------------------------------------------
 SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007

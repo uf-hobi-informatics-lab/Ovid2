@@ -1198,3 +1198,92 @@ class TestEnsureWritableStagingSchemaRejectsSystemDb:
         monkeypatch.setenv("OVID2_SNOWPARK_STAGING_SCHEMA", "OMOP_OUT.STG")
         native = self._Native("SNOWFLAKE")
         assert _ensure_writable_staging_schema(native) == "OMOP_OUT.STG"
+
+
+class TestEnsureWritableStagingSchemaFallbacks:
+    """Fallback databases (the run's warehouse addresses) for the scratch schema."""
+
+    class _Native:
+        def __init__(self, current_db: str | None, failing: set[str] | None = None) -> None:
+            self._db = current_db
+            self._failing = failing or set()
+            self.sql_calls: list[str] = []
+
+        def get_current_database(self) -> str | None:
+            return self._db
+
+        def sql(self, query: str) -> Any:
+            self.sql_calls.append(query)
+            if any(f"EXISTS {db}." in query for db in self._failing):
+                raise RuntimeError("Insufficient privileges to operate on database")
+            result = MagicMock()
+            result.collect.return_value = []
+            return result
+
+    @pytest.fixture(autouse=True)
+    def _no_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OVID2_SNOWPARK_STAGING_SCHEMA", raising=False)
+
+    def test_unbound_session_uses_first_fallback(self) -> None:
+        from ovid2.drivers.snowflake.staging.disc import _ensure_writable_staging_schema
+
+        native = self._Native(None)
+        schema = _ensure_writable_staging_schema(native, fallback_databases=["CHAR_X", "CHAR_Y"])
+        assert schema == "CHAR_X.OVID2_SNOWPARK_STAGING"
+        assert native.sql_calls == ["CREATE SCHEMA IF NOT EXISTS CHAR_X.OVID2_SNOWPARK_STAGING"]
+
+    def test_system_db_session_uses_fallback(self) -> None:
+        """The disc strategy's SNOWFLAKE @~ binding must not block the fallback."""
+        from ovid2.drivers.snowflake.staging.disc import _ensure_writable_staging_schema
+
+        native = self._Native("SNOWFLAKE")
+        assert (
+            _ensure_writable_staging_schema(native, fallback_databases=["CHAR_X"])
+            == "CHAR_X.OVID2_SNOWPARK_STAGING"
+        )
+
+    def test_failed_fallback_moves_to_next(self) -> None:
+        from ovid2.drivers.snowflake.staging.disc import _ensure_writable_staging_schema
+
+        native = self._Native(None, failing={"CHAR_X"})
+        schema = _ensure_writable_staging_schema(native, fallback_databases=["CHAR_X", "CHAR_Y"])
+        assert schema == "CHAR_Y.OVID2_SNOWPARK_STAGING"
+
+    def test_all_fallbacks_fail_names_each_in_error(self) -> None:
+        from ovid2.drivers.snowflake.staging.disc import _ensure_writable_staging_schema
+
+        native = self._Native(None, failing={"CHAR_X", "CHAR_Y"})
+        with pytest.raises(RuntimeError) as exc:
+            _ensure_writable_staging_schema(native, fallback_databases=["CHAR_X", "CHAR_Y"])
+        assert "CHAR_X, CHAR_Y" in str(exc.value)
+
+    def test_system_and_duplicate_fallbacks_are_skipped(self) -> None:
+        from ovid2.drivers.snowflake.staging.disc import _ensure_writable_staging_schema
+
+        native = self._Native(None)
+        schema = _ensure_writable_staging_schema(
+            native, fallback_databases=["SNOWFLAKE", "", "char_x", "CHAR_X"]
+        )
+        assert schema == "char_x.OVID2_SNOWPARK_STAGING"
+        assert len(native.sql_calls) == 1
+
+    def test_session_database_wins_over_fallbacks(self) -> None:
+        from ovid2.drivers.snowflake.staging.disc import _ensure_writable_staging_schema
+
+        native = self._Native("SANDBOX")
+        assert (
+            _ensure_writable_staging_schema(native, fallback_databases=["CHAR_X"])
+            == "SANDBOX.OVID2_SNOWPARK_STAGING"
+        )
+
+    def test_bare_override_pairs_with_fallback_when_unbound(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from ovid2.drivers.snowflake.staging.disc import _ensure_writable_staging_schema
+
+        monkeypatch.setenv("OVID2_SNOWPARK_STAGING_SCHEMA", "MY_STG")
+        native = self._Native(None)
+        assert (
+            _ensure_writable_staging_schema(native, fallback_databases=["CHAR_X"])
+            == "CHAR_X.MY_STG"
+        )

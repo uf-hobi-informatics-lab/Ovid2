@@ -30,7 +30,7 @@ from ovid2.run_kinds import (
     package_free_kinds,
 )
 
-_VALID_ARGV_BUILDERS = {"etl", "health", "copy", "move"}
+_VALID_ARGV_BUILDERS = {"etl", "health", "copy", "move", "export"}
 _VALID_TABLES_MODES = {"all", "explicit", "none"}
 _VALID_CREATE_FLOWS = {
     "scaffold_package",
@@ -79,6 +79,7 @@ def test_worker_has_a_builder_for_every_kind() -> None:
         "health": "_build_argv_health",
         "copy": "_build_argv_copy",
         "move": "_build_argv_move",
+        "export": "_build_argv_export",
     }
     offenders: list[str] = []
     for name, spec in KIND_REGISTRY.items():
@@ -119,5 +120,20 @@ def test_data_mount_flags_match_historical_behaviour() -> None:
     """
     ro = {n for n, s in KIND_REGISTRY.items() if s.read_only_data_mount}
     rw = {n for n, s in KIND_REGISTRY.items() if not s.read_only_data_mount}
-    assert ro == {"etl", "analysis", "dq_checks"}
+    # ``export`` is a host-side executor subprocess (no container); the
+    # flag is the conservative default.
+    assert ro == {"etl", "analysis", "dq_checks", "export"}
     assert rw == {"copy", "move", "health"}
+
+
+@pytest.mark.contract
+def test_job_only_kinds_are_not_pipeline_kinds() -> None:
+    """Job-only kinds (``export``) are dispatchable but never offered as pipelines."""
+    from ovid2.web.kinds import kind_choices
+
+    job_only = {n for n, s in KIND_REGISTRY.items() if s.job_only}
+    assert job_only == {"export"}
+    assert not job_only & set(all_kinds())
+    assert not job_only & {k["name"] for k in kind_choices()}
+    for name in job_only:
+        assert get_kind(name) is KIND_REGISTRY[name]

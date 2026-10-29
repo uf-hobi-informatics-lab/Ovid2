@@ -24,6 +24,7 @@ Example (host with jars downloaded to /tmp/uca):
 from __future__ import annotations
 
 import os
+import sys
 
 import pytest
 
@@ -52,6 +53,7 @@ def access_spark():
     pytest.importorskip("pyspark")
     from pyspark.sql import SparkSession
 
+    os.environ.setdefault("PYSPARK_PYTHON", sys.executable)
     builder = (
         SparkSession.builder.master("local[2]")
         .appName("ovid2-access-it")
@@ -184,5 +186,5 @@ def test_list_dir_surfaces_tables(access_spark) -> None:
     entries = driver.list_dir(filename)
     assert entries
     assert all(e.kind == "table" for e in entries)
-    # path round-trips as file::table
-    assert all("::" in e.path for e in entries)
+    # path round-trips as <file>/<table> (a valid Data Space path)
+    assert all(e.path == f"{filename}/{e.name}" for e in entries)

@@ -355,6 +355,12 @@ def register_all_legacy_drivers() -> None:
         "ovid2.drivers.azure_blob",
         "ovid2.drivers.snowflake",
         "ovid2.drivers.access",
+        # Legacy-adapter subclasses that add Data Space browsing +
+        # table introspection (probe / data plane stay on the adapter).
+        "ovid2.drivers.postgres",
+        "ovid2.drivers.mssql",
+        "ovid2.drivers.databricks",
+        "ovid2.drivers.gcs",
     )
     for module_path in _NATIVE_DRIVER_MODULES:
         # A broken native driver falls back to the legacy adapter

@@ -11,8 +11,10 @@ from __future__ import annotations
 import contextlib
 import os
 import shutil
+import sys
 import tempfile
 from dataclasses import dataclass
+from datetime import UTC
 from typing import TYPE_CHECKING, Any
 
 from ovid2.core.engines.base import BaseEngine, EngineTestResult
@@ -260,6 +262,74 @@ class _SparkFunctions:
             return self._F.rand()
         return self._F.rand(seed=seed)
 
+    # --- Portable extensions (health / EDC checks) ----------------------
+
+    def length(self, c: Any) -> Any:
+        return self._F.length(c)
+
+    def to_double(self, c: Any) -> Any:
+        # ANSI mode is pinned off (``tests/contract/test_spark_ansi_disabled.py``)
+        # so an unparseable string casts to NULL — the lenient contract.
+        return c.cast("double")
+
+
+#: Portable type-name -> ``pyspark.sql.types`` class name, consumed by
+#: :func:`create_typed_dataframe`. Keep in sync with the Snowpark mirror
+#: in :mod:`ovid2.core.engines.snowpark`.
+_PORTABLE_SPARK_TYPES: dict[str, str] = {
+    "string": "StringType",
+    "double": "DoubleType",
+    "boolean": "BooleanType",
+    "long": "LongType",
+    "date": "DateType",
+    "timestamp": "TimestampType",
+}
+
+
+def create_typed_dataframe(
+    session: Any,
+    rows: list[tuple[Any, ...]],
+    schema: list[tuple[str, str]],
+) -> Any:
+    """Build a Spark DataFrame from Python rows with an explicit schema.
+
+    Args:
+        session: A real ``SparkSession`` (local or Databricks-Connect).
+        rows: Row tuples, positionally aligned with ``schema``.
+        schema: ``(column_name, portable_type)`` pairs; types are keys of
+            :data:`_PORTABLE_SPARK_TYPES`. Every column is nullable.
+
+    Returns:
+        A lazy Spark DataFrame.
+
+    Raises:
+        ValueError: On an unknown portable type name.
+    """
+    from pyspark.sql import types as T
+
+    fields = []
+    for name, type_name in schema:
+        cls_name = _PORTABLE_SPARK_TYPES.get(type_name)
+        if cls_name is None:
+            raise ValueError(f"create_typed_dataframe: unknown portable type {type_name!r}")
+        fields.append(T.StructField(name, getattr(T, cls_name)(), True))
+    return session.createDataFrame(rows, schema=T.StructType(fields))
+
+
+def _pin_worker_python() -> None:
+    """Make Spark's Python workers use the driver's own interpreter.
+
+    PySpark refuses to run when the worker's minor version differs from
+    the driver's (``PYTHON_VERSION_MISMATCH``). Without an explicit
+    ``PYSPARK_PYTHON`` Spark launches whatever ``python3`` is first on
+    ``PATH`` — on a host whose system Python is older than the venv
+    driving the ETL, every UDF / Python-side task then fails. An
+    operator-provided ``PYSPARK_PYTHON`` (e.g. the cluster compose file's
+    ``python3``, which *is* the image interpreter) always wins.
+    """
+    if sys.executable:
+        os.environ.setdefault("PYSPARK_PYTHON", sys.executable)
+
 
 class PySparkEngine(BaseEngine):
     """Concrete :class:`BaseEngine` backed by a single ``SparkSession``.
@@ -328,6 +398,7 @@ class PySparkEngine(BaseEngine):
 
             for key, value in merged.items():
                 builder = builder.config(key, value)
+            _pin_worker_python()
             self._session = builder.getOrCreate()
             self._session.sparkContext.setLogLevel("OFF")
         # Structural-typing: SparkSession satisfies EngineSession.
@@ -624,12 +695,12 @@ class PySparkEngine(BaseEngine):
         # without pyspark. Imports themselves are cached by CPython so
         # this is not a per-call cost after the first sample.
         import time
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from ovid2.core.engines.metrics import EngineMetricsSample
 
         now_ms = int(time.monotonic() * 1000)
-        wall = datetime.now(timezone.utc).isoformat()
+        wall = datetime.now(UTC).isoformat()
 
         # No session yet → return a bare "alive" sample so the pulse
         # can still show engine_family. Not an error.

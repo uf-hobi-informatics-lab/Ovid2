@@ -19,14 +19,10 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
-
-try:  # Python 3.11+
-    import tomllib
-except ModuleNotFoundError:  # pragma: no cover - Python 3.10
-    import tomli as tomllib  # type: ignore[no-redef]
 
 _ROOT = Path(__file__).resolve().parents[2]
 _PUBLIC = _ROOT / "scripts" / "public"
@@ -104,3 +100,22 @@ def test_overlay_is_leak_free() -> None:
                 if pattern.search(line):
                     hits.append(f"{path.relative_to(_ROOT)}:{lineno}: {pattern.pattern}")
     assert not hits, "public overlay contains denylisted terms:\n  " + "\n  ".join(hits)
+
+
+def test_pre_push_hook_runs_publish_on_python_311_plus() -> None:
+    """The pre-push hook must not run ``publish.py`` on a bare ``python3``.
+
+    ``publish.py`` imports ``tomllib`` (3.11+); a host whose system
+    ``python3`` is older crashed every background publish. The hook picks a
+    3.11+ interpreter into ``$publish_python`` and uses it everywhere.
+    """
+    hook = (_ROOT / "scripts" / "git-hooks" / "pre-push").read_text(encoding="utf-8")
+    assert "sys.version_info < (3, 11)" in hook
+    assert '"$publish_python" scripts/public/publish.py' in hook
+    for line in hook.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        assert not re.search(r"(^|[\s;&(])python3\s+(-\s|scripts/)", stripped), (
+            f"pre-push invokes bare python3: {stripped!r}"
+        )

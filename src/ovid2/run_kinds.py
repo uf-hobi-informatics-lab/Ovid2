@@ -1,7 +1,7 @@
 """Run-kind registry — the single source of truth for pipeline *kinds*.
 
 A **run kind** (``etl``, ``analysis``, ``dq_checks``, ``health``,
-``copy``, ``move``) is not a cosmetic label: it carries executor
+``copy``, ``move`` — plus the job-only ``export``) is not a cosmetic label: it carries executor
 behaviour — which CLI subcommand the worker invokes, which argv builder
 shapes the command line, whether the container mounts ``/data``
 read-only, whether an installed ``ovid2_pipelines.<name>`` package is
@@ -55,7 +55,7 @@ __all__ = [
 ]
 
 #: How the worker/CLI shapes the container argv for a kind.
-ArgvBuilder = Literal["etl", "health", "copy", "move"]
+ArgvBuilder = Literal["etl", "health", "copy", "move", "export"]
 
 #: How the ``tables`` field is interpreted for a kind.
 #:
@@ -114,6 +114,12 @@ class KindSpec:
             ``/data`` read-only. ``False`` for kinds that legitimately
             write under ``/data`` (copy / move) or refresh it (health).
         create_flow: Which New-pipeline create flow the web builder runs.
+        job_only: When ``True`` the kind is a one-off *job* created by a
+            dedicated surface (the Data Space ``export`` button), never a
+            configurable pipeline: it is excluded from :func:`all_kinds`
+            (so the Pipelines page, the New-pipeline dropdown and the
+            Submit chips never offer it) and rejected by pipeline
+            create / ``POST /runs`` validation.
     """
 
     name: str
@@ -130,6 +136,7 @@ class KindSpec:
     health_selection: bool = False
     read_only_data_mount: bool = True
     create_flow: CreateFlow = "plain"
+    job_only: bool = False
 
     @property
     def command_tokens(self) -> tuple[str, ...]:
@@ -254,6 +261,24 @@ KIND_REGISTRY: dict[str, KindSpec] = {
         read_only_data_mount=False,
         create_flow="plain",
     ),
+    "export": KindSpec(
+        name="export",
+        label="Export",
+        description=(
+            "Full-table export of one Data Space table to csv / xlsx, run in "
+            "the background. Created from the Data Space table page only."
+        ),
+        package_required=False,
+        cli_subcommand="tools export-table",
+        argv_builder="export",
+        uses_transformations=False,
+        uses_cdm=False,
+        tables_mode="none",
+        # Host-side executor subprocess — no container, no /data mount.
+        read_only_data_mount=True,
+        create_flow="plain",
+        job_only=True,
+    ),
 }
 
 
@@ -276,8 +301,13 @@ def normalize_kind(kind: str | None) -> str:
 
 
 def all_kinds() -> tuple[str, ...]:
-    """Return every registered kind name, in registry (display) order."""
-    return tuple(KIND_REGISTRY.keys())
+    """Return every *pipeline* kind name, in registry (display) order.
+
+    Job-only kinds (:attr:`KindSpec.job_only`, e.g. ``export``) are
+    excluded — they are dispatchable by the worker (:func:`get_kind`)
+    but never configurable as a pipeline.
+    """
+    return tuple(name for name, spec in KIND_REGISTRY.items() if not spec.job_only)
 
 
 def package_free_kinds() -> frozenset[str]:

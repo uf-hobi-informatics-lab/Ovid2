@@ -22,6 +22,7 @@ absent").
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
 from ovid2.drivers.access.metadata import (
@@ -41,11 +42,14 @@ from ovid2.drivers.access.probe import (
     probe_read_from_file,
 )
 from ovid2.drivers.base import (
+    ColumnInfo,
     ConnectionFieldSpec,
     Driver,
     LocationField,
     ProbeResult,
     StorageEntry,
+    TableInfo,
+    TableSample,
 )
 from ovid2.drivers.container import ContainerRequirement
 
@@ -200,7 +204,9 @@ class AccessDriver(Driver):
             StorageEntry(
                 name=table,
                 kind="table",
-                path=f"{rel_file}::{table}",
+                # ``<file>/<TABLE>`` — a plain Data Space path segment
+                # (``::`` is not a valid OdsPath component).
+                path=f"{rel_file}/{table}",
             )
             for table in table_names
         ]
@@ -233,6 +239,83 @@ class AccessDriver(Driver):
 
             session = get_active_session()
             return list_tables(session, spark_file_path or file_path)
+
+    # ------------------------------------------------------------------
+    # Table introspection (Data Space explorer — UCanAccess, no Spark)
+    # ------------------------------------------------------------------
+
+    def _split_table_path(self, path: str) -> tuple[str, str]:
+        """Split ``<dir…>/<file>.accdb/<TABLE>`` into ``(host_file, table)``.
+
+        The legacy ``<file>::<TABLE>`` form is accepted too.
+
+        Raises:
+            ValueError: When the path does not name a table in an Access
+                file, or escapes the storage-account root.
+        """
+        raw = (path or "").strip().lstrip("/")
+        if "::" in raw:
+            rel_file, table = raw.split("::", 1)
+        else:
+            rel_file, _, table = raw.rpartition("/")
+        if not rel_file.lower().endswith(ACCESS_FILE_SUFFIXES) or not table:
+            raise ValueError(f"{path!r} is not <file>.accdb/<TABLE>.")
+        root = os.path.realpath(str(self._widened()["host_path"] or ""))
+        target = os.path.realpath(os.path.join(root, rel_file))
+        if not target.startswith(root.rstrip("/") + "/"):
+            raise ValueError(f"path {path!r} escapes the storage-account root.")
+        if not os.path.isfile(target):
+            raise FileNotFoundError(f"Access file {rel_file!r} does not exist.")
+        return target, table
+
+    def describe_table(self, path: str) -> TableInfo:
+        """Columns (``getColumns``) + exact row count for one Access table."""
+        from ovid2.drivers.access.reader import describe_table_no_spark
+
+        file_path, table = self._split_table_path(path)
+        meta = describe_table_no_spark(file_path, table)
+        st = os.stat(file_path)
+        from ovid2.drivers._tabular import iso_utc
+
+        return TableInfo(
+            name=table,
+            path=path,
+            kind="table",
+            format="table",
+            columns=tuple(ColumnInfo(name=n, type=t, nullable=nl) for n, t, nl in meta["columns"]),
+            row_count=meta["row_count"],
+            row_count_exact=meta["row_count"] is not None,
+            modified_at=iso_utc(st.st_mtime),
+            ddl=_access_ddl(table, meta["columns"]),
+            message=f"Stored in {os.path.basename(file_path)} ({st.st_size} bytes).",
+        )
+
+    def iter_rows(
+        self, path: str, limit: int | None = None, *, batch_size: int = 5000
+    ) -> tuple[list[str], Iterator[list[tuple[Any, ...]]]]:
+        """Stream ``SELECT [TOP n] *`` from one Access table."""
+        from ovid2.drivers.access.reader import iter_rows_no_spark
+
+        file_path, table = self._split_table_path(path)
+        return iter_rows_no_spark(file_path, table, limit, batch_size)
+
+    def sample_rows(self, path: str, limit: int = 100) -> TableSample:
+        """The first ``limit`` rows of one Access table."""
+        from ovid2.drivers._tabular import MAX_SAMPLE_ROWS
+
+        limit = max(1, min(int(limit), MAX_SAMPLE_ROWS))
+        columns, batches = self.iter_rows(path, limit + 1, batch_size=limit + 1)
+        rows: list[tuple[Any, ...]] = []
+        for batch in batches:
+            rows.extend(batch)
+        return TableSample(
+            columns=tuple(columns), rows=tuple(rows[:limit]), truncated=len(rows) > limit
+        )
+
+    def count_rows(self, path: str) -> int:
+        """Exact row count (``SELECT COUNT(*)``)."""
+        info = self.describe_table(path)
+        return int(info.row_count or 0)
 
     # ------------------------------------------------------------------
     # Table discovery (data plane helper)
@@ -389,6 +472,15 @@ class AccessDriver(Driver):
         base = normalised["container_path"] or normalised["host_path"]
         sub = str(location.get("path") or "")
         return os.path.join(base, sub) if sub else base
+
+
+def _access_ddl(table: str, columns: list[tuple[str, str, bool | None]]) -> str:
+    """Reconstruct a ``CREATE TABLE`` from JDBC column metadata (display only)."""
+    body = ",\n".join(
+        f"  [{name}] {typ}{'' if nullable is not False else ' NOT NULL'}"
+        for name, typ, nullable in columns
+    )
+    return f"CREATE TABLE [{table}] (\n{body}\n);"  # noqa: OVID2003 — display text, never executed
 
 
 # ---------------------------------------------------------------------------

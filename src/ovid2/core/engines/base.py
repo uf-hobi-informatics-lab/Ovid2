@@ -17,7 +17,9 @@ Concrete implementations live under :mod:`ovid2.core.engines`.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import UTC
 from typing import TYPE_CHECKING, Any
 
 from ovid2.core.engines.protocols import EngineFamily, EngineFunctions, EngineSession
@@ -146,7 +148,7 @@ class BaseEngine(ABC):
         # Local import to keep ``base.py`` free of the (very cheap)
         # metrics module until someone actually samples.
         import time
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from ovid2.core.engines.metrics import EngineMetricsSample
 
@@ -155,7 +157,7 @@ class BaseEngine(ABC):
         )
         return EngineMetricsSample(
             t_ms=int(time.monotonic() * 1000),
-            wall_iso=datetime.now(timezone.utc).isoformat(),
+            wall_iso=datetime.now(UTC).isoformat(),
             engine_family=family_value,
         )
 
@@ -288,7 +290,35 @@ class BaseEngine(ABC):
             )
         return stager_cls(self)
 
-    def prepare_workspace(self) -> None:
+    def create_typed_dataframe(
+        self,
+        rows: list[tuple[Any, ...]],
+        schema: list[tuple[str, str]],
+    ) -> Any:
+        """Build an engine-native DataFrame from Python rows + a portable schema.
+
+        Engine-portable callers (the data-health results table, for one)
+        describe column types with the portable names ``string`` /
+        ``double`` / ``boolean`` / ``long`` / ``date`` / ``timestamp``
+        instead of importing ``pyspark.sql.types`` or
+        ``snowflake.snowpark.types`` themselves. Every column is nullable,
+        so an all-``None`` column never trips type inference.
+
+        The default implementation serves the Spark family (``pyspark`` and
+        ``databricks_spark`` share it); :class:`SnowparkEngine` overrides.
+
+        Args:
+            rows: Row tuples, positionally aligned with ``schema``.
+            schema: ``(column_name, portable_type)`` pairs.
+
+        Returns:
+            A lazy engine-native DataFrame.
+        """
+        from ovid2.core.engines.pyspark import create_typed_dataframe
+
+        return create_typed_dataframe(self.get_session(), rows, schema)
+
+    def prepare_workspace(self, fallback_databases: Sequence[str] = ()) -> None:
         """Bind a writable namespace for engine-managed temporary objects.
 
         The pipeline registers intermediate results as temporary views
@@ -305,7 +335,17 @@ class BaseEngine(ABC):
         'SNOWFLAKE' is not allowed" when the session defaulted to the
         read-only system database). Called once per run, before any
         temp view is registered.
+
+        Args:
+            fallback_databases: Candidate databases (typically the run's
+                warehouse output / input addresses, output first) the
+                engine may adopt for its scratch namespace when its own
+                configuration names none. Ignored by the Spark family.
+                Only ever used for engine scratch objects — never as a
+                write target, so the "address is the exact location"
+                rule is unaffected.
         """
+        del fallback_databases
         return None
 
 

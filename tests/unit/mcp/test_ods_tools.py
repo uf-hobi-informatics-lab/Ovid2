@@ -6,7 +6,9 @@ import inspect
 
 import pytest
 
-ODS_TOOL_NAMES = frozenset({"ods_list", "ods_list_dimensions", "ods_resolve"})
+ODS_TOOL_NAMES = frozenset(
+    {"ods_list", "ods_list_dimensions", "ods_resolve", "ods_describe_table", "ods_sample_table"}
+)
 
 
 def _specs() -> dict[str, object]:
@@ -50,3 +52,14 @@ def test_resolve_expects_path_only() -> None:
 @pytest.mark.unit
 def test_dimensions_has_no_args() -> None:
     assert _specs()["ods_list_dimensions"].args_model is None  # type: ignore[attr-defined]
+
+
+@pytest.mark.unit
+def test_table_tools_take_a_path() -> None:
+    specs = _specs()
+    describe = specs["ods_describe_table"].args_model  # type: ignore[attr-defined]
+    sample = specs["ods_sample_table"].args_model  # type: ignore[attr-defined]
+    assert set(describe.model_fields) == {"path", "refresh"}
+    assert set(sample.model_fields) == {"path", "limit"}
+    with pytest.raises(ValueError):
+        sample(path="/a/b", limit=5000)

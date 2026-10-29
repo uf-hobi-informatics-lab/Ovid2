@@ -62,11 +62,18 @@ def spark() -> Iterator[object]:
     pytest.importorskip("pyspark")
     from pyspark.sql import SparkSession
 
+    # Python workers must match the driver's minor version; without this
+    # Spark spawns ``python3`` from PATH (possibly an older system Python).
+    os.environ.setdefault("PYSPARK_PYTHON", sys.executable)
+    from ovid2.config.settings import SPARK_CONFIG
+
     session = (
         SparkSession.builder.master("local[2]")
         .appName("ovid2-tests")
         .config("spark.ui.enabled", "false")
         .config("spark.sql.shuffle.partitions", "4")
+        # Same SQL semantics as production (Spark 4 defaults ANSI on).
+        .config("spark.sql.ansi.enabled", SPARK_CONFIG["spark.sql.ansi.enabled"])
         .getOrCreate()
     )
     session.sparkContext.setLogLevel("ERROR")

@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Any
 
 from ovid2.core.events import (
@@ -50,6 +50,8 @@ from ovid2.transformations.quality.results import (
 if TYPE_CHECKING:
     from ovid2.cdm.handle import CdmHandle
     from ovid2.core.addresses.base import BaseAddress
+    from ovid2.core.engines.base import BaseEngine
+    from ovid2.drivers.base import Driver
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +69,26 @@ class HealthCheckRunner:
         instance_id: str = "",
         event_bus: EventBus | None = None,
         run_date: date | None = None,
+        engine: BaseEngine | None = None,
     ) -> None:
+        """Create a runner.
+
+        Args:
+            session: The engine session tables are read through.
+            cdm: Active CDM handle.
+            pipeline: Pipeline label.
+            batch_id: Batch label (the input's Data Space path).
+            instance_id: Run instance id (also the results ``RUN_ID``).
+            event_bus: Bus for check lifecycle events.
+            run_date: Reference date for future-date checks.
+            engine: The compute engine. Supplies the column DSL, the
+                typed results frame and the stager used for packaged
+                reference files, so the same checks run on PySpark,
+                Databricks and Snowpark. ``None`` keeps the historical
+                Spark-only behaviour (``session`` must be a
+                ``SparkSession``).
+        """
+        self.engine = engine
         self.session = session
         self.cdm = cdm
         self.pipeline = pipeline
@@ -75,16 +96,56 @@ class HealthCheckRunner:
         self.instance_id = instance_id
         self.bus = event_bus if event_bus is not None else get_default_bus()
         self.run_date = run_date or date.today()
-        self.run_id = instance_id or datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+        self.run_id = instance_id or datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+        #: Uppercased table name -> engine DataFrame read by
+        #: :meth:`register_input_tables`. Operators resolve tables from here
+        #: first, so non-Spark engines need no session temp views.
+        self.frames: dict[str, Any] = {}
+        #: ``id(frame)`` -> row count memo for the registered base frames.
+        #: Most checks start with ``ctx.rows(ctx.table(T))`` on the same few
+        #: tables; memoising saves one full scan (one warehouse query on
+        #: Snowpark) per repeat.
+        self._row_memo: dict[int, int] = {}
 
     # ------------------------------------------------------------------ #
     # Table registration + availability                                  #
     # ------------------------------------------------------------------ #
 
+    @property
+    def _session_is_spark(self) -> bool:
+        """Whether the session is a real ``SparkSession`` (no engine = Spark)."""
+        return self.engine is None or bool(getattr(self.engine, "session_is_spark", True))
+
+    def _read_source(self, source: BaseAddress | Driver, table: str) -> Any:
+        """Read one table from ``source`` as an engine-native DataFrame.
+
+        Spark-family sessions call ``source.read`` directly (``source`` is a
+        legacy address or a driver — both speak the same ``read``
+        signature). Non-Spark engines (Snowpark) cannot use the Spark data
+        plane, so ``source`` must be a :class:`~ovid2.drivers.base.Driver`
+        and the read goes through the engine's stager (native table read
+        for Snowflake, ``PUT`` + ``COPY`` for disc, external stages for
+        object stores).
+        """
+        if not self._session_is_spark:
+            assert self.engine is not None  # implied by _session_is_spark
+            return self.engine.get_stager().materialise(
+                source,
+                self.pipeline,
+                self.batch_id,
+                table,
+                table_name=table,
+            )
+        return source.read(self.session, self.pipeline, self.batch_id, table, table_name=table)
+
     def register_input_tables(
-        self, input_address: BaseAddress, candidate_tables: list[str]
+        self, input_address: BaseAddress | Driver, candidate_tables: list[str]
     ) -> frozenset[str]:
-        """Read each candidate CDM table and register it as a temp view.
+        """Read each candidate CDM table and register it for the operators.
+
+        Every frame read lands in :attr:`frames` (the operators resolve
+        tables from there); Spark-family sessions additionally get a temp
+        view per table.
 
         Returns the uppercased set of tables that read successfully — the
         availability set operators consult. A table that fails to read
@@ -103,13 +164,13 @@ class HealthCheckRunner:
         for table in candidate_tables:
             lower = table.lower()
             try:
-                df = input_address.read(
-                    self.session, self.pipeline, self.batch_id, lower, table_name=lower
-                )
+                df = self._read_source(input_address, lower)
                 # Registering the view is lazy; a genuinely absent source
                 # raises here or at first use — probe with schema access.
                 _ = df.columns  # cheap; forces schema resolution, not data
-                _register_view(self.session, table.upper(), df)
+                self.frames[table.upper()] = df
+                if self._session_is_spark:
+                    _register_view(table.upper(), df)
                 available.add(table.upper())
             except Exception as exc:
                 # Carry the real reason (exception type + message) into the
@@ -141,19 +202,13 @@ class HealthCheckRunner:
         return frozenset(available)
 
     def register_prior_tables(
-        self, prior_address: BaseAddress, tables: list[str]
+        self, prior_address: BaseAddress | Driver, tables: list[str]
     ) -> dict[str, Any]:
         """Read prior-refresh tables for the freshness delta. Best-effort."""
         out: dict[str, Any] = {}
         for table in tables:
             try:
-                df = prior_address.read(
-                    self.session,
-                    self.pipeline,
-                    self.batch_id,
-                    table.lower(),
-                    table_name=table.lower(),
-                )
+                df = self._read_source(prior_address, table.lower())
                 _ = df.columns
                 out[table.upper()] = df
             except Exception as exc:
@@ -165,8 +220,49 @@ class HealthCheckRunner:
     # ------------------------------------------------------------------ #
 
     def _count(self, df: Any) -> int:
-        """Materialise a row count. The one deliberate action (analysis pass)."""
-        return int(df.count())  # noqa: OVID2001 health analysis pass — deliberate
+        """Materialise a row count. The one deliberate action (analysis pass).
+
+        Counts of the registered base frames are memoised (see
+        :attr:`_row_memo`); derived frames are always counted afresh.
+        """
+        key = id(df)
+        memo = self._row_memo.get(key)
+        if memo is not None:
+            return memo
+        n = int(df.count())  # noqa: OVID2001 health analysis pass — deliberate
+        if any(df is frame for frame in self.frames.values()):
+            self._row_memo[key] = n
+        return n
+
+    def _read_reference(self, path: str, delimiter: str) -> Any:
+        """Load a packaged reference CSV through the engine's stager.
+
+        A synthetic ``disc`` driver rooted at the file's directory lets every
+        engine family use its own data-plane bridge: Spark reads the CSV
+        directly; Snowpark ``PUT``s it to a stage and ``COPY``s it into a
+        transient table. Mirrors
+        :func:`ovid2.core.pipeline._register_shared_view_from_local_file`.
+        """
+        if self.engine is None:
+            return self.session.read.option("header", True).option("sep", delimiter).csv(path)
+        import os
+
+        from ovid2.drivers.disc.driver import DiscDriver
+
+        parent = os.path.dirname(path)
+        driver = DiscDriver(
+            args={"host_path": parent, "container_path": parent},
+            secrets={},
+            location={"format": "csv"},
+        )
+        return self.engine.get_stager().materialise(
+            driver,
+            self.pipeline,
+            self.batch_id,
+            os.path.basename(path),
+            delimiter,
+            table_name=os.path.splitext(os.path.basename(path))[0],
+        )
 
     def _all_empty(
         self,
@@ -210,6 +306,9 @@ class HealthCheckRunner:
             pipeline=self.pipeline,
             run_date=self.run_date,
             prior_tables=prior_tables or {},
+            functions=self.engine.get_functions() if self.engine is not None else None,
+            frames=self.frames,
+            reference_reader=self._read_reference,
         )
         outcomes: list[CheckOutcome] = []
         for spec in specs:
@@ -298,7 +397,11 @@ class HealthCheckRunner:
         for outcome in outcomes:
             for metric in outcome.rows:
                 rows.append(metric.as_table_row(self.run_id))
-        return self.session.createDataFrame(rows, schema=_results_schema())
+        if self.engine is not None:
+            return self.engine.create_typed_dataframe(rows, RESULTS_SCHEMA)
+        from ovid2.core.engines.pyspark import create_typed_dataframe
+
+        return create_typed_dataframe(self.session, rows, RESULTS_SCHEMA)
 
 
 def all_candidate_tables(specs: list[CheckSpec]) -> list[str]:
@@ -315,47 +418,42 @@ def all_candidate_tables(specs: list[CheckSpec]) -> list[str]:
     return list(seen)
 
 
-def _register_view(session: Any, name: str, df: Any) -> None:
-    """Register ``df`` as a temp view under ``name`` (engine-agnostic)."""
-    create_spark = getattr(df, "createOrReplaceTempView", None)
-    if callable(create_spark):
-        create_spark(name)
-        return
-    create_snow = getattr(df, "create_or_replace_temp_view", None)
-    if callable(create_snow):
-        create_snow(name)
+def _register_view(name: str, df: Any) -> None:
+    """Best-effort register ``df`` as a temp view under ``name``.
 
-
-def _results_schema() -> Any:
-    """Return the explicit Spark schema for the DCQ_RESULTS metric-row table.
-
-    An explicit schema avoids type-inference failures when a nullable
-    numeric / string column is ``None`` for an entire run.
+    Kept for SQL-level consumers on the Spark family (the operators
+    themselves resolve tables from :attr:`HealthCheckRunner.frames`). A
+    failure is logged, never raised: the frame registry is authoritative.
     """
-    from pyspark.sql.types import (
-        BooleanType,
-        DoubleType,
-        StringType,
-        StructField,
-        StructType,
-    )
+    for method in ("createOrReplaceTempView", "create_or_replace_temp_view"):
+        create = getattr(df, method, None)
+        if callable(create):
+            try:
+                create(name)
+            except Exception as exc:
+                logger.debug("health: temp view %s not registered: %s", name, exc)
+            return
 
-    return StructType(
-        [
-            StructField("RUN_ID", StringType(), True),
-            StructField("CHECK_ID", StringType(), True),
-            StructField("CHECK_NAME", StringType(), True),
-            StructField("PART", StringType(), True),
-            StructField("EDC_TABLE", StringType(), True),
-            StructField("SOURCE_TABLE", StringType(), True),
-            StructField("METRIC", StringType(), True),
-            StructField("VALUE_NUM", DoubleType(), True),
-            StructField("VALUE_STR", StringType(), True),
-            StructField("THRESHOLD_NUM", DoubleType(), True),
-            StructField("EXCEPTION_FLAG", BooleanType(), True),
-            StructField("DETAILS", StringType(), True),
-        ]
-    )
+
+#: Column layout of the durable ``DCQ_RESULTS`` metric-row table, as
+#: ``(name, portable_type)`` pairs for :meth:`BaseEngine.create_typed_dataframe`.
+#: An explicit schema avoids type-inference failures when a nullable numeric /
+#: string column is ``None`` for an entire run. Positionally aligned with
+#: :meth:`~ovid2.transformations.quality.results.MetricRow.as_table_row`.
+RESULTS_SCHEMA: list[tuple[str, str]] = [
+    ("RUN_ID", "string"),
+    ("CHECK_ID", "string"),
+    ("CHECK_NAME", "string"),
+    ("PART", "string"),
+    ("EDC_TABLE", "string"),
+    ("SOURCE_TABLE", "string"),
+    ("METRIC", "string"),
+    ("VALUE_NUM", "double"),
+    ("VALUE_STR", "string"),
+    ("THRESHOLD_NUM", "double"),
+    ("EXCEPTION_FLAG", "boolean"),
+    ("DETAILS", "string"),
+]
 
 
 def select_health_specs(
@@ -368,6 +466,7 @@ def select_health_specs(
 
 
 __all__ = [
+    "RESULTS_SCHEMA",
     "HealthCheckRunner",
     "all_candidate_tables",
     "select_health_specs",

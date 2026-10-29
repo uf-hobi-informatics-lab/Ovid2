@@ -31,12 +31,15 @@
     <form method="post" action="/jobs/{{ job.job_id }}/cancel" style="display:inline">
       <button class="secondary small" type="submit">Cancel</button>
     </form>
-  {% else %}
+  {% elif job.extra_args.get("kind") != "export" %}
     <form method="post" action="/jobs/{{ job.job_id }}/rerun" style="display:inline">
       <button class="secondary small" type="submit">Rerun</button>
     </form>
   {% endif %}
   <a class="small mono" href="/api/v1/jobs/{{ job.job_id }}/log">worker log &rarr;</a>
+  {% if job.extra_args.get("kind") == "export" and job.status == "done" %}
+    <a class="button primary small" href="/api/v1/jobs/{{ job.job_id }}/artifact" download>Download export</a>
+  {% endif %}
 </div>
 {% if job.status == "failed" and job.error %}
   <div class="flash error" role="alert">

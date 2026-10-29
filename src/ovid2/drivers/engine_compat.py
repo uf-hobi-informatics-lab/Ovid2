@@ -289,7 +289,7 @@ def _assert_stager_supports_drivers(
             f"supports driver types {supported}. Snowpark DataFrames "
             f"live inside Snowflake and cannot read/write non-Snowflake "
             f"peripherals directly; use '--engine pyspark' for "
-            f"cross-peripheral copies (the Bitnami base image ships "
+            f"cross-peripheral copies (the ovid2 runtime image ships "
             f"the JDBC + hadoop-aws + ABFS drivers)."
         )
 

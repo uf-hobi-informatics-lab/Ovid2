@@ -33,7 +33,7 @@ import json
 import logging
 import os
 import stat
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -132,11 +132,7 @@ def _mode_octal(path: Path) -> str:
 
 def _iso_mtime(path: Path) -> str:
     """Return the mtime of ``path`` as an ISO-8601 UTC timestamp."""
-    return (
-        datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
-        .replace(microsecond=0)
-        .isoformat()
-    )
+    return datetime.fromtimestamp(path.stat().st_mtime, tz=UTC).replace(microsecond=0).isoformat()
 
 
 def _ensure_safe_to_write(path: Path) -> None:

@@ -1,0 +1,10 @@
+# Allow-list build context for docker/Dockerfile. The image only needs the
+# package source, its metadata, and the docker/ helpers — never pipeline
+# data, venvs, outputs or material (the repo tree is ~8 GB without this).
+*
+!pyproject.toml
+!README.md
+!src/
+!docker/
+**/__pycache__
+**/*.pyc

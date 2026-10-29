@@ -43,8 +43,11 @@ _FORBIDDEN_PREFIXES = (
     "/api/v1/llm/",
     "/api/v1/storage",
     "/api/v1/fs",
+    # Data Space table *rows* (patient data) never reach the LLM; only
+    # the metadata-only ``GET /api/v1/dataspace/table`` is allowed.
+    "/api/v1/dataspace/table/",
 )
-_FORBIDDEN_SUFFIXES = ("/file", "/events.log", "/metrics/stream")
+_FORBIDDEN_SUFFIXES = ("/file", "/events.log", "/metrics/stream", "/artifact")
 
 
 @pytest.mark.contract

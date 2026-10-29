@@ -456,7 +456,7 @@ def _list_tables(cursor: Any, database: str, schema: str) -> list[StorageEntry]:
     start the largest tables first. Views have no size (``None``).
     """
     qualified = f"{_quote_identifier(database)}.{_quote_identifier(schema)}"
-    sizes: dict[str, int | None] = {}
+    meta: dict[str, tuple[int | None, int | None, str | None]] = {}
     for keyword in ("TABLES", "VIEWS"):
         stmt = f"SHOW {keyword} IN SCHEMA {qualified}"
         try:
@@ -464,12 +464,14 @@ def _list_tables(cursor: Any, database: str, schema: str) -> list[StorageEntry]:
                 name = row.get("name")
                 if not name:
                     continue
-                raw = row.get("bytes")
-                try:
-                    size = int(raw) if raw is not None else None
-                except (TypeError, ValueError):
-                    size = None
-                sizes.setdefault(str(name), size)
+                meta.setdefault(
+                    str(name),
+                    (
+                        _int_or_none(row.get("bytes")),
+                        _int_or_none(row.get("rows")),
+                        _iso_or_none(row.get("last_altered")),
+                    ),
+                )
         except Exception as exc:
             logger.debug("SHOW %s failed for %s: %s", keyword, qualified, exc)
             continue
@@ -478,10 +480,29 @@ def _list_tables(cursor: Any, database: str, schema: str) -> list[StorageEntry]:
             name=name,
             kind="table",
             path=f"{database}/{schema}/{name}",
-            size_bytes=sizes[name],
+            size_bytes=meta[name][0],
+            row_count=meta[name][1],
+            modified_at=meta[name][2],
         )
-        for name in sorted(sizes)
+        for name in sorted(meta)
     ]
+
+
+def _int_or_none(raw: Any) -> int | None:
+    """Return ``int(raw)`` or ``None`` when absent / not numeric."""
+    try:
+        return int(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _iso_or_none(raw: Any) -> str | None:
+    """Render a ``SHOW`` timestamp as ISO-8601 UTC (``None`` passes)."""
+    if raw is None or not hasattr(raw, "isoformat"):
+        return None
+    from ovid2.drivers._tabular import iso_utc
+
+    return iso_utc(raw)
 
 
 def list_schema_tables_from_config(

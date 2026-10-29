@@ -19,8 +19,8 @@ def _close(client: object) -> None:
     """Best-effort close of the client's underlying httpx pool.
 
     Uses a fresh event loop so the helper is robust to test ordering
-    (Python 3.10 raises from ``asyncio.get_event_loop()`` when a prior
-    test has already closed the thread's default loop).
+    (``asyncio.get_event_loop()`` no longer creates a loop implicitly on
+    3.14, and a prior test may have closed the thread's default loop).
     """
     loop = asyncio.new_event_loop()
     try:

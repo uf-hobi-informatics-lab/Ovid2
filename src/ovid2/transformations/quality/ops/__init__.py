@@ -25,7 +25,7 @@ filter are present — but it should still be defensive.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import TYPE_CHECKING, Any
 
@@ -43,10 +43,16 @@ _OPERATORS: dict[str, Callable[[OpContext, CheckSpec], list[MetricRow]]] = {}
 class OpContext:
     """Everything an operator needs, engine-agnostically.
 
+    Operators never import an engine library. Column expressions come from
+    :attr:`functions` (the engine's
+    :class:`~ovid2.core.engines.protocols.EngineFunctions`), tables from
+    :meth:`table`, and packaged reference files from
+    :meth:`read_reference` — so one operator body runs unchanged on
+    PySpark, Databricks and Snowpark.
+
     Attributes:
         session: The engine session (real Spark session on the Spark path,
-            Snowpark adapter otherwise). Exposes ``.table(name)`` /
-            ``.sql(...)``.
+            Snowpark adapter otherwise). Exposes ``.table(name)``.
         cdm: The active CDM handle (composite keys, valuesets, ids).
         available_tables: Uppercased names of tables present at the input
             (already probed by the runner).
@@ -56,6 +62,15 @@ class OpContext:
         run_date: Reference date for future-date checks.
         prior_tables: Optional map of uppercased table name -> DataFrame for
             the prior refresh (freshness delta). Empty when no prior input.
+        functions: The engine's column DSL. ``None`` means the Spark
+            family (back-compat for callers that pass a bare
+            ``SparkSession``).
+        frames: Uppercased table name -> engine DataFrame registered by the
+            runner. Consulted before ``session.table`` so non-Spark engines
+            need no temp views.
+        reference_reader: ``(path, delimiter) -> DataFrame`` used to load
+            packaged reference CSVs through the engine's stager. ``None``
+            falls back to the Spark ``session.read`` CSV reader.
     """
 
     session: Any
@@ -65,9 +80,21 @@ class OpContext:
     pipeline: str = ""
     run_date: date | None = None
     prior_tables: dict[str, Any] | None = None
+    functions: Any = None
+    frames: dict[str, Any] = field(default_factory=dict)
+    reference_reader: Callable[[str, str], Any] | None = None
+
+    def __post_init__(self) -> None:
+        if self.functions is None:
+            from ovid2.core.engines.pyspark import spark_functions
+
+            self.functions = spark_functions()
 
     def table(self, name: str) -> Any:
         """Return the engine DataFrame for ``name`` (case-insensitive)."""
+        frame = self.frames.get(name.upper())
+        if frame is not None:
+            return frame
         return self.session.table(name)
 
     def has(self, name: str) -> bool:
@@ -83,6 +110,18 @@ class OpContext:
         the runner's ``_count`` (marked ``# noqa: OVID2001``).
         """
         return self.count_fn(df)
+
+    def read_reference(self, path: str, delimiter: str) -> Any:
+        """Load a packaged reference CSV (header row) as an engine DataFrame.
+
+        Args:
+            path: Absolute path to the CSV inside the installed package.
+            delimiter: Field separator.
+        """
+        if self.reference_reader is not None:
+            return self.reference_reader(path, delimiter)
+        # Spark-family fallback (duck-typed; no pyspark import here).
+        return self.session.read.option("header", True).option("sep", delimiter).csv(path)
 
 
 def operator(
@@ -126,6 +165,30 @@ def _mk(spec: CheckSpec, **kwargs: Any) -> MetricRow:
         edc_table=spec.edc_table,
         **kwargs,
     )
+
+
+def _isin(fn: Any, column: Any, values: Any) -> Any:
+    """Return ``column IN values``; an empty ``values`` is a constant FALSE.
+
+    Spark accepts ``isin([])`` (always false) but Snowflake rejects an empty
+    ``IN ()`` list, so the empty case is folded to a literal here.
+    """
+    values = list(values)
+    if not values:
+        return fn.lit(False)
+    return column.isin(values)
+
+
+#: Alias of the per-group row count produced by :func:`_group_count`.
+#: Engine-neutral: ``GroupedData.count()`` names the column ``count`` on
+#: Spark but ``COUNT`` on Snowpark, so the aggregate is aliased explicitly.
+_N = "N"
+
+
+def _group_count(fn: Any, df: Any, *group_cols: Any) -> Any:
+    """Return the lazy ``group by group_cols`` frame with a row count ``N``."""
+    n_rows = fn.count(fn.lit(1))  # noqa: OVID2001 aggregate function reference, not an eager action
+    return df.groupBy(*group_cols).agg(n_rows.alias(_N))
 
 
 def _columns(df: Any) -> list[str]:
@@ -258,10 +321,10 @@ def _future_date(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     lazy scan; the exception metric is selected by which threshold the spec
     supplies.
     """
-    from pyspark.sql import functions as F
+    fn = ctx.functions
 
     run_date = ctx.run_date or date.today()
-    run_lit = F.lit(run_date.isoformat()).cast("date")
+    run_lit = fn.lit(run_date.isoformat()).cast("date")
     rows_threshold = spec.thresholds.get("future_date_rows_gt")
     pct_threshold = spec.thresholds.get("future_date_pct_gt")
     rows: list[MetricRow] = []
@@ -276,7 +339,7 @@ def _future_date(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
         # Build a lazy OR of "any date column is in the future".
         cond = None
         for c in date_cols:
-            parsed = F.to_date(F.col(c))
+            parsed = fn.to_date(fn.col(c))
             this = parsed.isNotNull() & (parsed > run_lit)
             cond = this if cond is None else (cond | this)
         future = ctx.rows(df.filter(cond)) if cond is not None else 0
@@ -333,7 +396,7 @@ def _valueset_membership(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
       out-of-valueset record raises the exception (``col3flag=1``). The
       spec sets ``out_of_valueset_pct_gt: 0.0`` so ``pct > 0`` flags.
     """
-    from pyspark.sql import functions as F
+    fn = ctx.functions
 
     threshold = float(spec.thresholds.get("out_of_valueset_pct_gt", 0.0))
     # SAS matches case-sensitively; keep an opt-in override for callers.
@@ -362,13 +425,13 @@ def _valueset_membership(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
                     prefixes.append(code_cmp[:-1])
                 else:
                     exact.add(code_cmp)
-            value_expr = F.upper(F.trim(F.col(column))) if ci else F.trim(F.col(column))
+            value_expr = fn.upper(fn.trim(fn.col(column))) if ci else fn.trim(fn.col(column))
             # Rows with a non-null, non-empty, non-flavour-of-null value.
-            populated = value_expr.isNotNull() & (F.trim(F.col(column)) != F.lit(""))
+            populated = value_expr.isNotNull() & (fn.trim(fn.col(column)) != fn.lit(""))
             if fon_cmp:
                 populated = populated & (~value_expr.isin(list(fon_cmp)))
             # Conforming = exact-set member OR matches any wildcard prefix.
-            conforms = value_expr.isin(list(exact)) if exact else F.lit(False)
+            conforms = value_expr.isin(list(exact)) if exact else fn.lit(False)
             for pfx in prefixes:
                 conforms = conforms | value_expr.startswith(pfx)
             out = populated & (~conforms)
@@ -405,7 +468,7 @@ def _valueset_membership(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
 @operator("null_rate")
 def _null_rate(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     """DC 3.09: per-column null / flavour-of-null rate (completeness heatmap)."""
-    from pyspark.sql import functions as F
+    fn = ctx.functions
 
     threshold = float(spec.thresholds.get("null_pct_gt", 90.0))
     treat_fon = bool(spec.params.get("treat_flavour_of_null_as_missing", True))
@@ -428,10 +491,10 @@ def _null_rate(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
         for column in _columns(df):
             if wanted is not None and column not in wanted:
                 continue
-            trimmed = F.trim(F.col(column))
-            missing = F.col(column).isNull() | (trimmed == F.lit(""))
+            trimmed = fn.trim(fn.col(column))
+            missing = fn.col(column).isNull() | (trimmed == fn.lit(""))
             if treat_fon and fon_upper:
-                missing = missing | F.upper(trimmed).isin(list(fon_upper))
+                missing = missing | fn.upper(trimmed).isin(list(fon_upper))
             nulls = ctx.rows(df.filter(missing))
             pct = 100.0 * nulls / total
             rows.append(
@@ -462,7 +525,7 @@ def _orphan_fk(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     (``orphan_pct_gt: 5.0``). Which metric raises the exception is chosen by
     whichever threshold the spec supplies (rows by default).
     """
-    from pyspark.sql import functions as F
+    fn = ctx.functions
 
     rows_threshold = spec.thresholds.get("orphan_rows_gt", 0)
     pct_threshold = spec.thresholds.get("orphan_pct_gt")
@@ -482,9 +545,9 @@ def _orphan_fk(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
         if parent_key.upper() not in set(_columns(pdf)):
             continue
         # Non-null child keys that fail a left-anti join against the parent.
-        child_nonnull = cdf.filter(F.col(child_key).isNotNull())
+        child_nonnull = cdf.filter(fn.col(child_key).isNotNull())
         child_total = ctx.rows(child_nonnull)
-        parent_keys = pdf.select(F.col(parent_key).alias(child_key)).dropDuplicates()
+        parent_keys = pdf.select(fn.col(parent_key).alias(child_key)).dropDuplicates()
         orphans = child_nonnull.join(parent_keys, on=child_key, how="left_anti")
         orphan_n = ctx.rows(orphans)
         pct = (100.0 * orphan_n / child_total) if child_total else 0.0
@@ -528,7 +591,7 @@ def _mapping_coverage(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     """Mapping / vocabulary coverage rollup over the pipeline dictionaries."""
     import importlib
 
-    from pyspark.sql import functions as F
+    fn = ctx.functions
 
     if not ctx.pipeline:
         return []
@@ -557,15 +620,17 @@ def _mapping_coverage(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
         if not isinstance(pipeline_dict, dict):
             continue
         mapped_upper = [str(k).upper() for k in pipeline_dict]
-        value_u = F.upper(F.trim(F.col(column)))
+        value_u = fn.upper(fn.trim(fn.col(column)))
         populated = (
-            value_u.isNotNull() & (F.trim(F.col(column)) != F.lit("")) & (~value_u.isin(list(fon)))
+            value_u.isNotNull()
+            & (fn.trim(fn.col(column)) != fn.lit(""))
+            & (~_isin(fn, value_u, fon))
         )
         pop_df = df.filter(populated)
         total = ctx.rows(pop_df)
         if total == 0:
             continue
-        unmapped_df = pop_df.filter(~value_u.isin(mapped_upper))
+        unmapped_df = pop_df.filter(~_isin(fn, value_u, mapped_upper))
         unmapped_rows = ctx.rows(unmapped_df)
         unmapped_distinct = ctx.rows(unmapped_df.select(value_u).dropDuplicates())
         pct = 100.0 * unmapped_rows / total
@@ -655,14 +720,18 @@ def _freshness_delta(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
 # --------------------------------------------------------------------------- #
 
 
-def _populated_expr(column: str, fon_upper: set[str]) -> Any:
-    """Return a lazy boolean column: value is present (not null / blank / FON)."""
-    from pyspark.sql import functions as F
+def _populated_expr(fn: Any, column: str, fon_upper: set[str]) -> Any:
+    """Return a lazy boolean column: value is present (not null / blank / FON).
 
-    trimmed = F.trim(F.col(column))
-    present = F.col(column).isNotNull() & (trimmed != F.lit(""))
+    Args:
+        fn: The engine's :class:`~ovid2.core.engines.protocols.EngineFunctions`.
+        column: Column name.
+        fon_upper: Upper-cased flavour-of-null codes treated as missing.
+    """
+    trimmed = fn.trim(fn.col(column))
+    present = fn.col(column).isNotNull() & (trimmed != fn.lit(""))
     if fon_upper:
-        present = present & (~F.upper(trimmed).isin(list(fon_upper)))
+        present = present & (~fn.upper(trimmed).isin(list(fon_upper)))
     return present
 
 
@@ -675,7 +744,7 @@ def _refresh_date_present(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     is present but exposes no resolvable date column (or all-null dates) is
     flagged. ``EXTERNAL_MEDS`` / ``PAT_RELATIONSHIP`` are excluded per SAS.
     """
-    from pyspark.sql import functions as F
+    fn = ctx.functions
 
     exclude = {t.upper() for t in spec.params.get("exclude", [])}
     rows: list[MetricRow] = []
@@ -701,7 +770,7 @@ def _refresh_date_present(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
         # Any parseable date across the date columns yields a refresh date.
         has_date = None
         for c in date_cols:
-            parsed = F.to_date(F.col(c)).isNotNull()
+            parsed = fn.to_date(fn.col(c)).isNotNull()
             has_date = parsed if has_date is None else (has_date | parsed)
         populated = ctx.rows(df.filter(has_date)) if has_date is not None else 0
         missing = 0.0 if populated > 0 else 1.0
@@ -728,7 +797,7 @@ def _panel_loinc_rate(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     (the SAS package ships the full LOINC panel reference; the operator uses
     the provided list so the check stays engine-portable and data-free).
     """
-    from pyspark.sql import functions as F
+    fn = ctx.functions
 
     threshold = float(spec.thresholds.get("panel_pct_gt", 5.0))
     panels = {str(c).upper() for c in spec.params.get("panel_loincs", [])}
@@ -745,8 +814,8 @@ def _panel_loinc_rate(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
                 break
         if col_u is None:
             continue
-        value_u = F.upper(F.trim(F.col(col_u)))
-        loinc_rows = df.filter(value_u.isNotNull() & (F.trim(F.col(col_u)) != F.lit("")))
+        value_u = fn.upper(fn.trim(fn.col(col_u)))
+        loinc_rows = df.filter(value_u.isNotNull() & (fn.trim(fn.col(col_u)) != fn.lit("")))
         total = ctx.rows(loinc_rows)
         if total == 0:
             continue
@@ -786,7 +855,7 @@ def _code_placement(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     *bad* when its type value is outside ``valid_types``; *misplaced* is a
     hook reserved for cross-table rules (0 by default here).
     """
-    from pyspark.sql import functions as F
+    fn = ctx.functions
 
     bad_threshold = float(spec.thresholds.get("bad_record_pct_gt", 5.0))
     rows: list[MetricRow] = []
@@ -799,8 +868,8 @@ def _code_placement(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
         df = ctx.table(table)
         if type_col.upper() not in set(_columns(df)):
             continue
-        type_u = F.upper(F.trim(F.col(type_col)))
-        populated = df.filter(type_u.isNotNull() & (F.trim(F.col(type_col)) != F.lit("")))
+        type_u = fn.upper(fn.trim(fn.col(type_col)))
+        populated = df.filter(type_u.isNotNull() & (fn.trim(fn.col(type_col)) != fn.lit("")))
         total = ctx.rows(populated)
         if total == 0:
             continue
@@ -829,7 +898,7 @@ def _illogical_date(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     illogical when both dates parse and ``later < earlier`` (e.g.
     ``DISCHARGE_DATE < ADMIT_DATE``, ``ADMIT_DATE < BIRTH_DATE``).
     """
-    from pyspark.sql import functions as F
+    fn = ctx.functions
 
     threshold = float(spec.thresholds.get("illogical_pct_gt", 5.0))
     rows: list[MetricRow] = []
@@ -843,8 +912,8 @@ def _illogical_date(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
         cols = set(_columns(df))
         if earlier.upper() not in cols or later.upper() not in cols:
             continue
-        e = F.to_date(F.col(earlier))
-        l_ = F.to_date(F.col(later))
+        e = fn.to_date(fn.col(earlier))
+        l_ = fn.to_date(fn.col(later))
         total = ctx.rows(df)
         if total == 0:
             continue
@@ -874,7 +943,7 @@ def _implausible_value(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     ``{table, column, low, high}``; a value below ``low`` or above ``high``
     (both optional) is implausible.
     """
-    from pyspark.sql import functions as F
+    fn = ctx.functions
 
     threshold = float(spec.thresholds.get("implausible_pct_gt", 10.0))
     rows: list[MetricRow] = []
@@ -888,16 +957,16 @@ def _implausible_value(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
         df = ctx.table(table)
         if column.upper() not in set(_columns(df)):
             continue
-        num = F.col(column).cast("double")
+        num = fn.to_double(fn.col(column))
         populated = df.filter(num.isNotNull())
         total = ctx.rows(populated)
         if total == 0:
             continue
         cond = None
         if low is not None:
-            cond = num < F.lit(float(low))
+            cond = num < fn.lit(float(low))
         if high is not None:
-            hi = num > F.lit(float(high))
+            hi = num > fn.lit(float(high))
             cond = hi if cond is None else (cond | hi)
         bad_n = ctx.rows(populated.filter(cond)) if cond is not None else 0
         pct = 100.0 * bad_n / total
@@ -923,7 +992,7 @@ def _encounter_per_visit(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     the tuple ``(PATID, ADMIT_DATE, ENC_TYPE)``; the metric is
     encounters / distinct visits within each flagged encounter type.
     """
-    from pyspark.sql import functions as F
+    fn = ctx.functions
 
     threshold = float(spec.thresholds.get("enc_per_visit_gt", 2.0))
     enc_types = {str(t).upper() for t in spec.params.get("enc_types", ["ED", "EI", "IP"])}
@@ -935,9 +1004,9 @@ def _encounter_per_visit(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     if not {"PATID", "ADMIT_DATE", "ENC_TYPE"}.issubset(cols):
         return []
     rows: list[MetricRow] = []
-    et_u = F.upper(F.trim(F.col("ENC_TYPE")))
+    et_u = fn.upper(fn.trim(fn.col("ENC_TYPE")))
     for et in sorted(enc_types):
-        subset = df.filter(et_u == F.lit(et))
+        subset = df.filter(et_u == fn.lit(et))
         enc_n = ctx.rows(subset)
         if enc_n == 0:
             continue
@@ -967,7 +1036,7 @@ def _records_per_encounter(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     child records with a *known* type per encounter of that encounter type.
     Thresholds per encounter type are supplied in ``params.min_per_type``.
     """
-    from pyspark.sql import functions as F
+    fn = ctx.functions
 
     child = str(spec.params["child_table"])
     type_col = str(spec.params["type_column"])
@@ -983,12 +1052,12 @@ def _records_per_encounter(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
         return []
     if not {"ENCOUNTERID", type_col.upper()}.issubset(set(_columns(cdf))):
         return []
-    enc_type_u = F.upper(F.trim(F.col("ENC_TYPE")))
-    known_type = _populated_expr(type_col, fon_upper)
+    enc_type_u = fn.upper(fn.trim(fn.col("ENC_TYPE")))
+    known_type = _populated_expr(fn, type_col, fon_upper)
     child_known = cdf.filter(known_type)
     rows: list[MetricRow] = []
     for et, minimum in sorted(min_per_type.items()):
-        enc_et = enc.filter(enc_type_u == F.lit(et))
+        enc_et = enc.filter(enc_type_u == fn.lit(et))
         enc_n = ctx.rows(enc_et.select("ENCOUNTERID").dropDuplicates())
         if enc_n == 0:
             continue
@@ -1033,7 +1102,7 @@ def _field_completeness(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
         total = ctx.rows(df)
         if total == 0:
             continue
-        present = _populated_expr(column, fon_upper)
+        present = _populated_expr(ctx.functions, column, fon_upper)
         missing_n = ctx.rows(df.filter(~present))
         pct = 100.0 * missing_n / total
         rows.append(
@@ -1060,8 +1129,6 @@ def _known_value_coverage(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     non-blank, non-flavour-of-null) must be >=80%; below that flags. Used for
     RXCUI-tier coverage, LAB_LOINC/result coverage, and result-unit coverage.
     """
-    from pyspark.sql import functions as F  # noqa: F401 (kept for parity/clarity)
-
     threshold = float(spec.thresholds.get("coverage_pct_lt", 80.0))
     fon_upper = {str(v).upper() for v in ctx.cdm.flavour_of_null if v is not None}
     rows: list[MetricRow] = []
@@ -1078,10 +1145,10 @@ def _known_value_coverage(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
         total = ctx.rows(df)
         if total == 0:
             continue
-        present = _populated_expr(column, fon_upper)
+        present = _populated_expr(ctx.functions, column, fon_upper)
         for extra in require:
             if extra.upper() in cols:
-                present = present & _populated_expr(extra, fon_upper)
+                present = present & _populated_expr(ctx.functions, extra, fon_upper)
         covered_n = ctx.rows(df.filter(present))
         pct = 100.0 * covered_n / total
         rows.append(
@@ -1170,7 +1237,7 @@ def _monthly_volume(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     a single ``.collect()`` on that grouped result is a legitimate analysis
     pass (marked ``# noqa: OVID2001``), mirroring ``mapping_gap``.
     """
-    from pyspark.sql import functions as F
+    fn = ctx.functions
 
     frac = float(spec.thresholds.get("recent_month_pct_lt", 75.0)) / 100.0
     rows: list[MetricRow] = []
@@ -1184,19 +1251,14 @@ def _monthly_volume(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
             date_col = next((c for c in cols if "DATE" in c), "")
         if not date_col:
             continue
-        parsed = F.to_date(F.col(date_col))
-        # ``GroupedData.count()`` is a *lazy* aggregation (returns a DataFrame),
-        # not the eager ``DataFrame.count()`` action — but the AST scanner sees
-        # the method name ``count`` on the multi-line expression's first line,
-        # so the suppression marker rides here. The single real materialisation
-        # is the ``.collect()`` on the tiny bucket frame below.
-        monthly = (
-            df.filter(parsed.isNotNull())  # noqa: OVID2001 lazy GroupedData.count() below
-            .groupBy(F.date_format(parsed, "yyyy-MM").alias("YM"))
-            .count()
+        parsed = fn.to_date(fn.col(date_col))
+        # The single real materialisation is the ``.collect()`` on the tiny
+        # per-month bucket frame below (a few dozen rows at most).
+        monthly = _group_count(
+            fn, df.filter(parsed.isNotNull()), fn.date_format(parsed, "yyyy-MM").alias("YM")
         )
-        buckets = monthly.orderBy(F.col("YM").asc()).collect()  # noqa: OVID2001 analysis pass
-        pairs = [(str(r["YM"]), int(r["count"])) for r in buckets if r["YM"] is not None]
+        buckets = monthly.orderBy(fn.col("YM").asc()).collect()  # noqa: OVID2001 analysis pass
+        pairs = [(str(r["YM"]), int(r[_N])) for r in buckets if r["YM"] is not None]
         if not pairs:
             continue
         recent_month, recent_count = pairs[-1]
@@ -1246,7 +1308,7 @@ def _monthly_volume_zscore(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     The per-month bucket frame is tiny, so the single ``.collect()`` analysis
     pass mirrors ``monthly_volume`` (marked ``# noqa: OVID2001``).
     """
-    from pyspark.sql import functions as F
+    fn = ctx.functions
 
     nback = int(spec.params.get("nback", 12))
     nsd = float(spec.params.get("nsd", -7.0))
@@ -1268,15 +1330,15 @@ def _monthly_volume_zscore(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
             date_col = next((c for c in cols if "DATE" in c), "")
         if not date_col:
             continue
-        parsed = F.to_date(F.col(date_col))
+        parsed = fn.to_date(fn.col(date_col))
         stratify = table.upper() in enc_type_tables and "ENC_TYPE" in cols
         base = df.filter(parsed.isNotNull())
         if stratify and enc_types:
-            base = base.filter(F.upper(F.trim(F.col("ENC_TYPE"))).isin(list(enc_types)))
-        group_cols = [F.date_format(parsed, "yyyy-MM").alias("YM")]
+            base = base.filter(fn.upper(fn.trim(fn.col("ENC_TYPE"))).isin(list(enc_types)))
+        group_cols = [fn.date_format(parsed, "yyyy-MM").alias("YM")]
         if stratify:
-            group_cols.append(F.upper(F.trim(F.col("ENC_TYPE"))).alias("CAT"))
-        monthly = base.groupBy(*group_cols).count()  # noqa: OVID2001 lazy GroupedData.count()
+            group_cols.append(fn.upper(fn.trim(fn.col("ENC_TYPE"))).alias("CAT"))
+        monthly = _group_count(fn, base, *group_cols)
         buckets = monthly.collect()  # noqa: OVID2001 analysis pass — tiny bucket frame
 
         # Organise into per-category month->count series.
@@ -1288,7 +1350,7 @@ def _monthly_volume_zscore(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
             if ym is None:
                 continue
             cat = r["CAT"] if stratify else "__all__"
-            series[cat][str(ym)] = int(r["count"])
+            series[cat][str(ym)] = int(r[_N])
 
         flagged_any = False
         flagged_detail: list[dict[str, Any]] = []
@@ -1370,8 +1432,6 @@ def _refresh_trend(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     tables (``--prev_input_address``); tables with no prior are reported
     informationally.
     """
-    from pyspark.sql import functions as F  # noqa: F401
-
     threshold = float(spec.thresholds.get("decrease_pct_lt", -5.0))
     prior = ctx.prior_tables or {}
     rows: list[MetricRow] = []
@@ -1424,7 +1484,7 @@ def _rxnorm_tier_coverage(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
         ``tier1_labels`` — the reference tier labels that count as Tier 1
             (default ``["Tier 1"]``).
     """
-    from pyspark.sql import functions as F
+    fn = ctx.functions
 
     threshold = float(spec.thresholds.get("coverage_pct_lt", 80.0))
     table = str(spec.params.get("table", "PRESCRIBING"))
@@ -1440,11 +1500,13 @@ def _rxnorm_tier_coverage(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     if total == 0:
         return rows
 
-    ref = _rxnorm_tier_reference(ctx.session)
+    ref = _rxnorm_tier_reference(ctx)
     # Left-join the CDM table's CUI to the reference tier.
-    left = df.select(F.trim(F.col(cui_column).cast("string")).alias("__cui__"))
-    joined = left.join(ref, left["__cui__"] == ref["RXNORM_CUI"], how="left")
-    tier1 = joined.filter(F.col("RXNORM_CUI_TIER").isin(tier1_labels))
+    # Upper-case alias: Snowflake folds unquoted identifiers to upper case,
+    # so a lower-case alias would become a quoted, case-sensitive name.
+    left = df.select(fn.trim(fn.col(cui_column).cast("string")).alias("CUI_KEY__"))
+    joined = left.join(ref, left["CUI_KEY__"] == ref["RXNORM_CUI"], how="left")
+    tier1 = joined.filter(_isin(fn, fn.col("RXNORM_CUI_TIER"), tier1_labels))
     tier1_n = ctx.rows(tier1)
     pct = 100.0 * tier1_n / total
     exc = pct < threshold or tier1_n == 0
@@ -1467,18 +1529,18 @@ def _rxnorm_tier_coverage(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     return rows
 
 
-def _rxnorm_tier_reference(session: Any) -> Any:
+def _rxnorm_tier_reference(ctx: OpContext) -> Any:
     """Read the packaged RxNorm CUI->tier reference as a lazy DataFrame.
 
     The reference ships as a tab-delimited CSV under ``ovid2.resources``
     (``health/reference/rxnorm_cui_tier.csv``), extracted from the PCORnet
     DCQ RxNorm reference bundle. Columns: ``RXNORM_CUI``, ``RXNORM_CUI_TTY``,
-    ``RXNORM_CUI_TIER``.
+    ``RXNORM_CUI_TIER``. Loaded through :meth:`OpContext.read_reference`
+    so a non-Spark engine stages it into its own compute layer.
     """
     from importlib import resources
 
-    from pyspark.sql import functions as F
-
+    fn = ctx.functions
     with resources.as_file(
         resources.files("ovid2.resources")
         .joinpath("health")
@@ -1486,10 +1548,10 @@ def _rxnorm_tier_reference(session: Any) -> Any:
         .joinpath("rxnorm_cui_tier.csv")
     ) as path:
         ref_path = str(path)
-    ref = session.read.option("header", True).option("sep", "\t").csv(ref_path)
+    ref = ctx.read_reference(ref_path, "\t")
     return ref.select(
-        F.trim(F.col("RXNORM_CUI").cast("string")).alias("RXNORM_CUI"),
-        F.col("RXNORM_CUI_TIER"),
+        fn.trim(fn.col("RXNORM_CUI").cast("string")).alias("RXNORM_CUI"),
+        fn.col("RXNORM_CUI_TIER"),
     )
 
 
@@ -1509,7 +1571,7 @@ def _bad_zip(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     null values are treated as *missing* (not bad) — SAS conformance counts
     only populated values against the valid-length rule.
     """
-    from pyspark.sql import functions as F
+    fn = ctx.functions
 
     threshold_rows = float(spec.thresholds.get("bad_rows_gt", 0.0))
     rows: list[MetricRow] = []
@@ -1522,12 +1584,12 @@ def _bad_zip(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
         df = ctx.table(table)
         if column.upper() not in set(_columns(df)):
             continue
-        trimmed = F.trim(F.col(column))
-        populated = F.col(column).isNotNull() & (trimmed != F.lit(""))
+        trimmed = fn.trim(fn.col(column))
+        populated = fn.col(column).isNotNull() & (trimmed != fn.lit(""))
         # Bad = populated AND (contains a non-digit OR wrong length).
         # ``rlike`` for all-digits: ``^[0-9]+$``; wrong length via char count.
         all_digits = trimmed.rlike("^[0-9]+$")
-        right_length = F.length(trimmed) == F.lit(length)
+        right_length = fn.length(trimmed) == fn.lit(length)
         bad = populated & (~(all_digits & right_length))
         bad_n = ctx.rows(df.filter(bad))
         rows.append(

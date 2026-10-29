@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -78,7 +78,7 @@ def test_get_ready_batches_respects_min_wait(tracker: SqliteBatchTracker) -> Non
     """Only NEW batches older than ``min_wait_minutes`` are returned."""
     tracker.register_batch("recent/1", "/data/recent/1")
     # Manually backdate a second batch by an hour so it's ready.
-    old_iso = (datetime.now(timezone.utc) - timedelta(minutes=60)).isoformat()
+    old_iso = (datetime.now(UTC) - timedelta(minutes=60)).isoformat()
     with sqlite3.connect(tracker.path) as raw:
         raw.execute(
             "INSERT INTO data_batch(batch_id, path, received_time, status) VALUES (?, ?, ?, ?)",

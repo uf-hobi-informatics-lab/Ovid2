@@ -18,8 +18,9 @@ unchanged.
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, Any
+from typing import IO, TYPE_CHECKING, Any
 
+from ovid2.drivers._tabular import TabularFile, TabularIntrospectionMixin, iso_utc
 from ovid2.drivers.base import (
     ConnectionFieldSpec,
     Driver,
@@ -48,7 +49,7 @@ if TYPE_CHECKING:
     from ovid2.core.engines.protocols import EngineSession
 
 
-class DiscDriver(Driver):
+class DiscDriver(TabularIntrospectionMixin, Driver):
     """Native driver for the ``disc`` peripheral.
 
     Constructor keeps the uniform ``(args, secrets, location)`` shape
@@ -157,21 +158,37 @@ class DiscDriver(Driver):
                 except OSError:
                     is_dir = False
                 size: int | None = None
-                if not is_dir:
-                    try:
-                        size = entry.stat().st_size
-                    except OSError:
-                        size = None
+                mtime: float | None = None
+                try:
+                    st = entry.stat()
+                    mtime = st.st_mtime
+                    if not is_dir:
+                        size = st.st_size
+                except OSError:
+                    size = None
                 entries.append(
                     StorageEntry(
                         name=entry.name,
                         kind="dir" if is_dir else "file",
                         path=rel,
                         size_bytes=size,
+                        modified_at=iso_utc(mtime),
                     )
                 )
         entries.sort(key=lambda e: (0 if e.kind == "dir" else 1, e.name.lower()))
         return entries
+
+    # ------------------------------------------------------------------
+    # Table introspection (control plane, pyarrow / stdlib — no Spark)
+    # ------------------------------------------------------------------
+
+    def _tabular_source(self) -> _DiscTabularSource:
+        """Return the confined :class:`TabularSource` for this account."""
+        normalised = self._widened()
+        root = os.path.realpath(str(normalised["host_path"] or ""))
+        if not root or not os.path.isdir(root):
+            raise NotImplementedError(f"disc host_path {root!r} is not a listable directory.")
+        return _DiscTabularSource(root)
 
     # ------------------------------------------------------------------
     # ``all`` expansion + size hints (control plane, stdlib only)
@@ -386,6 +403,60 @@ class DiscDriver(Driver):
             "lowercase_columns": bool(self.location.get("lowercase_columns") or False),
             "single_file": single_file,
         }
+
+
+# ---------------------------------------------------------------------------
+# Tabular source (Data Space explorer)
+# ---------------------------------------------------------------------------
+
+
+class _DiscTabularSource:
+    """:class:`~ovid2.drivers._tabular.TabularSource` confined to a disc root."""
+
+    def __init__(self, root: str) -> None:
+        self._root = root
+
+    def _abs(self, path: str) -> str:
+        """Resolve ``path`` under the root; reject escapes."""
+        sub = (path or "").strip().lstrip("/")
+        target = os.path.realpath(os.path.join(self._root, sub)) if sub else self._root
+        if target != self._root and not target.startswith(self._root.rstrip("/") + "/"):
+            raise ValueError(f"path {path!r} escapes the storage-account root.")
+        return target
+
+    def _file(self, abs_path: str) -> TabularFile:
+        st = os.stat(abs_path)
+        is_dir = os.path.isdir(abs_path)
+        return TabularFile(
+            path=os.path.relpath(abs_path, self._root),
+            name=os.path.basename(abs_path),
+            size_bytes=None if is_dir else st.st_size,
+            modified_at=iso_utc(st.st_mtime),
+            is_dir=is_dir,
+        )
+
+    def stat(self, path: str) -> TabularFile:
+        """Return the file / directory at ``path``."""
+        target = self._abs(path)
+        if not os.path.exists(target):
+            raise FileNotFoundError(f"'{path}' does not exist.")
+        return self._file(target)
+
+    def children(self, path: str) -> list[TabularFile]:
+        """Return the direct children of ``path``."""
+        target = self._abs(path)
+        out: list[TabularFile] = []
+        with os.scandir(target) as scanner:
+            for entry in scanner:
+                try:
+                    out.append(self._file(entry.path))
+                except OSError:
+                    continue
+        return out
+
+    def open(self, file: TabularFile) -> IO[bytes]:
+        """Open ``file`` for binary reading."""
+        return open(self._abs(file.path), "rb")
 
 
 # ---------------------------------------------------------------------------

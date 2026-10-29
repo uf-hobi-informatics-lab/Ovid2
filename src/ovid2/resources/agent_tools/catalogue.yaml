@@ -22,7 +22,9 @@
 #
 # Deliberately excluded (PHI / privilege): secrets, settings, install,
 # users, approvals, LLM connections, storage browse, pipeline file
-# preview, filesystem listing, any DELETE.
+# preview, filesystem listing, Data Space table *rows* (sample / export /
+# artifact download — only the metadata-only ods_describe_table is
+# listed), any DELETE.
 v: 1
 tools:
   # ---------------------------------------------------------------- status
@@ -359,6 +361,22 @@ tools:
       properties:
         path: {type: string, description: "e.g. /inbox/landing/2026_03"}
 
+  - name: ods_describe_table
+    description: >-
+      Ovid Data Space - describe one table / data file (metadata only, no
+      row values) - its fields and types, row count (exact or estimate),
+      size, last modified, part files, and for databases the table
+      definition. Path is /<account>/<folder...>/<file> or
+      /<account>/<DATABASE>/<SCHEMA>/<TABLE>, as listed by ods_list.
+    method: GET
+    path: /api/v1/dataspace/table
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [path]
+      properties:
+        path: {type: string, description: "e.g. /inbox/landing/2026_03/DEMOGRAPHIC.csv or /sf_prod/CDM_DB/SITE_X/DEMOGRAPHIC"}
+
   # ======================================================= drafts (write)
   # Executed by the user's browser WITHOUT a click: it only creates a draft
   # job (never claimed by the worker) and opens its run page, where the
@@ -547,8 +565,8 @@ tools:
       properties:
         theme:
           type: string
-          description: "Base theme: clinical (light, teal), matrix (black/green), super-mario-world (bright, playful), tatooine (dark, sandy amber), financial (dark, green), lego (light, red)."
-          enum: [clinical, matrix, super-mario-world, tatooine, financial, lego]
+          description: "Base theme: clinical (light, calm hospital teal, IBM Plex), matrix (black CRT, phosphor-green digital rain), super-mario-world (16-bit sky blue, cream boxes, brick red + coin gold), tatooine (dark desert dusk, sunset orange + twin suns, cut-corner panels), financial (dark trading terminal, amber + green/red tickers, dense), lego (light toy bricks, primary red/blue/yellow/green, studded cards), spaceship (dark, sci-fi terminal, teal glow)."
+          enum: [clinical, matrix, super-mario-world, tatooine, financial, lego, spaceship]
         colors:
           type: object
           description: "Quick colour overrides as #rrggbb. surface = cards and raised panels."

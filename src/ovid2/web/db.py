@@ -32,7 +32,7 @@ import contextlib
 import logging
 import sqlite3
 from collections.abc import Iterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from ovid2.web.settings import web_db_path
 
@@ -271,7 +271,7 @@ def audit(
             "(ts, actor, action, target, before_hash, after_hash, detail_json) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
-                datetime.now(timezone.utc).isoformat(),
+                datetime.now(UTC).isoformat(),
                 actor,
                 action,
                 target,

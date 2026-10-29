@@ -80,8 +80,9 @@ _PYSPARK_ALLOWED: frozenset[str] = frozenset(
         "src/ovid2/transformations/fixers/base.py",
         "src/ovid2/transformations/quality/mapping_report.py",
         "src/ovid2/transformations/quality/mapping_gap.py",
-        "src/ovid2/transformations/quality/runner.py",
-        "src/ovid2/transformations/quality/ops/__init__.py",
+        # ``transformations/quality/runner.py`` + ``quality/ops/__init__.py``
+        # are intentionally absent — ported to ``EngineFunctions`` so the
+        # data-health / EDC checks run on every engine family.
         "src/ovid2/transformations/analysis/distinct_values.py",
         "src/ovid2/transformations/analysis/monthly_counts.py",
     }

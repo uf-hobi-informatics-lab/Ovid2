@@ -41,7 +41,7 @@ import argparse
 import logging
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, SupportsInt, cast
 
@@ -451,7 +451,7 @@ def _render_cdm_yaml(spec: _ImportedSpec, curated: dict[str, Any]) -> dict[str, 
             "origin": curated_source.get("origin")
             or f"CDM {spec.cdm_name} v{spec.source_version}".strip(),
             "imported_from": spec.imported_from,
-            "imported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "imported_at": datetime.now(UTC).isoformat(timespec="seconds"),
         },
         "tables": tables_ordered,
     }

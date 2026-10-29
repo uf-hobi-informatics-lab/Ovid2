@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import PlainTextResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
 
 from ovid2.web.auth.csrf import require_json_content_type
 from ovid2.web.auth.deps import AuthContext, require_capability
@@ -68,8 +68,12 @@ from ovid2.web.models import (
     MapperValidationReport,
     MapperWrite,
     OdsDimensionCatalog,
+    OdsExportJobRequest,
     OdsListing,
     OdsResolveResult,
+    OdsTableCount,
+    OdsTableDetail,
+    OdsTableSample,
     OverwriteConfirm,
     PipelineConfigDetail,
     PipelineConfigSummary,
@@ -108,6 +112,7 @@ from ovid2.web.services import (
     cdms_svc,
     connections_svc,
     dataspace_svc,
+    dataspace_table_svc,
     engines_svc,
     events_svc,
     formatters_svc,
@@ -1802,6 +1807,151 @@ def api_ods_resolve(
     try:
         return dataspace_svc.resolve_path(path)
     except dataspace_svc.OdsServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get(
+    "/jobs/{job_id}/artifact",
+    summary="Download the file produced by a finished export job",
+    response_class=FileResponse,
+    responses={200: {"description": "The exported file (attachment)."}},
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_job_artifact(job_id: str) -> FileResponse:
+    """Stream a finished ``export`` job's file; 404 until the job is done."""
+    found = jobs_svc.export_artifact(job_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail="No finished export for this job.")
+    path, filename = found
+    media = dataspace_table_svc.EXPORT_FORMATS.get(
+        path.suffix.lstrip("."), ("", "application/octet-stream")
+    )[1]
+    return FileResponse(
+        path, media_type=media, filename=filename, headers={"Cache-Control": "no-store"}
+    )
+
+
+_TABLE_PATH_QUERY = Query(
+    ...,
+    description=(
+        "Data Space path of a table / data file: /<account>/<folder…>/<file> "
+        "or /<account>/<DATABASE>/<SCHEMA>/<TABLE>."
+    ),
+)
+
+
+@router.get(
+    "/dataspace/table",
+    response_model=OdsTableDetail,
+    summary="Describe one Data Space table (fields, row count, size, last modified, DDL)",
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_ods_table(
+    path: str = _TABLE_PATH_QUERY,
+    refresh: bool = Query(False, description="Bypass the 60 s detail cache."),
+) -> OdsTableDetail:
+    """Return the table's stats and field list — metadata only, never row data."""
+    try:
+        return dataspace_table_svc.describe_table(path, refresh=refresh)
+    except dataspace_table_svc.TableServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get(
+    "/dataspace/table/sample",
+    response_model=OdsTableSample,
+    summary="Return the first rows of a Data Space table",
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_ods_table_sample(
+    path: str = _TABLE_PATH_QUERY,
+    limit: int = Query(100, ge=1, le=1000, description="Rows to return (max 1000)."),
+) -> OdsTableSample:
+    """Return a sample of the table's rows (values as JSON scalars)."""
+    try:
+        return dataspace_table_svc.sample_table(path, limit)
+    except dataspace_table_svc.TableServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get(
+    "/dataspace/table/count",
+    response_model=OdsTableCount,
+    summary="Exact row count of a Data Space table (may scan the data)",
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_ods_table_count(path: str = _TABLE_PATH_QUERY) -> OdsTableCount:
+    """Count the rows exactly (``COUNT(*)`` / full text scan / parquet footers)."""
+    try:
+        return dataspace_table_svc.count_rows(path)
+    except dataspace_table_svc.TableServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get(
+    "/dataspace/table/export",
+    summary="Download a Data Space table as csv / xlsx / pdf / docx",
+    response_class=FileResponse,
+    responses={200: {"description": "The exported file (attachment)."}},
+)
+def api_ods_table_export(
+    path: str = _TABLE_PATH_QUERY,
+    format: str = Query(
+        "csv", pattern="^(csv|xlsx|pdf|docx)$", description="csv | xlsx | pdf | docx."
+    ),
+    delimiter: str = Query(",", max_length=3, description="CSV delimiter (one char, or 'tab')."),
+    header_case: str = Query(
+        "asis", pattern="^(asis|upper|lower)$", description="Header case: asis | upper | lower."
+    ),
+    limit: int | None = Query(
+        None, ge=1, description="Row cap (clamped to the per-format synchronous limit)."
+    ),
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_PIPELINE_DATA)),
+) -> FileResponse:
+    """Export (up to the synchronous row cap) and stream the file as an attachment.
+
+    Larger exports: ``POST /api/v1/dataspace/table/export-jobs`` (a
+    background ``export`` job). Every export is audited
+    (``dataspace.export``).
+    """
+    try:
+        result = dataspace_table_svc.export_table(
+            path,
+            fmt=format,
+            delimiter=delimiter,
+            header_case=header_case,
+            limit=limit,
+            actor=ctx.user_id or "web",
+        )
+    except dataspace_table_svc.TableServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return FileResponse(
+        result.path,
+        media_type=result.media_type,
+        filename=result.filename,
+        headers={
+            "X-Ovid2-Export-Rows": str(result.rows),
+            "X-Ovid2-Export-Truncated": "1" if result.truncated else "0",
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.post(
+    "/dataspace/table/export-jobs",
+    response_model=JobSubmitResponse,
+    status_code=201,
+    summary="Queue a full-table export (csv / xlsx) as a background job",
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_ods_table_export_job(
+    request: OdsExportJobRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.SUBMIT_JOBS)),
+) -> JobSubmitResponse:
+    """Enqueue an ``export`` job; download the result from ``/jobs/{id}/artifact``."""
+    try:
+        return jobs_svc.submit_export(request, actor=_actor(ctx))
+    except jobs_svc.SubmitError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

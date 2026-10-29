@@ -2625,6 +2625,36 @@
         "title": "MapperWrite",
         "type": "object"
       },
+      "OdsColumnModel": {
+        "description": "One field of a table on the Data Space table detail page.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nullable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nullable"
+          },
+          "type": {
+            "default": "",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "OdsColumnModel",
+        "type": "object"
+      },
       "OdsDimensionCatalog": {
         "description": "Response for ``GET /api/v1/dataspace/dimensions``.",
         "properties": {
@@ -2689,6 +2719,18 @@
             "title": "Kind",
             "type": "string"
           },
+          "modified_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ISO-8601 UTC last-modified time.",
+            "title": "Modified At"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -2697,6 +2739,18 @@
             "description": "The child's full Data Space path (``/<conn>/<\u2026>``).",
             "title": "Path",
             "type": "string"
+          },
+          "row_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Row count when reported for free.",
+            "title": "Row Count"
           },
           "size_bytes": {
             "anyOf": [
@@ -2722,6 +2776,40 @@
           "path"
         ],
         "title": "OdsEntryModel",
+        "type": "object"
+      },
+      "OdsExportJobRequest": {
+        "description": "Payload for ``POST /api/v1/dataspace/table/export-jobs`` (full-table export).",
+        "properties": {
+          "delimiter": {
+            "default": ",",
+            "description": "CSV delimiter (one char, or 'tab').",
+            "maxLength": 3,
+            "title": "Delimiter",
+            "type": "string"
+          },
+          "format": {
+            "default": "csv",
+            "description": "csv | xlsx.",
+            "title": "Format",
+            "type": "string"
+          },
+          "header_case": {
+            "default": "asis",
+            "description": "asis | upper | lower.",
+            "title": "Header Case",
+            "type": "string"
+          },
+          "path": {
+            "description": "Data Space path of the table.",
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "OdsExportJobRequest",
         "type": "object"
       },
       "OdsListing": {
@@ -2856,6 +2944,278 @@
           "path"
         ],
         "title": "OdsResolveResult",
+        "type": "object"
+      },
+      "OdsTableCount": {
+        "description": "Response for ``GET /api/v1/dataspace/table/count`` \u2014 an exact row count.",
+        "properties": {
+          "exact": {
+            "default": true,
+            "title": "Exact",
+            "type": "boolean"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "row_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Count"
+          },
+          "supported": {
+            "default": true,
+            "title": "Supported",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "OdsTableCount",
+        "type": "object"
+      },
+      "OdsTableDetail": {
+        "description": "Response for ``GET /api/v1/dataspace/table?path=\u2026`` \u2014 one table's stats.\n\nEverything is metadata-cheap (warehouse ``INFORMATION_SCHEMA``, file\n``stat``, parquet footers, a CSV header). ``row_count_exact=False``\nflags an estimate; ``GET /api/v1/dataspace/table/count`` returns the\nexact number.",
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/OdsColumnModel"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "connection": {
+            "title": "Connection",
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "ddl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Table definition (databases only).",
+            "title": "Ddl"
+          },
+          "delimiter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delimiter"
+          },
+          "export_limits": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Synchronous export row cap per format.",
+            "title": "Export Limits",
+            "type": "object"
+          },
+          "format": {
+            "default": "unknown",
+            "description": "csv / parquet / json / table / view / unknown.",
+            "title": "Format",
+            "type": "string"
+          },
+          "kind": {
+            "default": "table",
+            "description": "``table`` | ``view`` | ``file``.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "location": {
+            "default": "",
+            "description": "Listing path under the storage account.",
+            "title": "Location",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "modified_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modified At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parts": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Part files of a directory table.",
+            "title": "Parts"
+          },
+          "path": {
+            "description": "Data Space path of the table.",
+            "title": "Path",
+            "type": "string"
+          },
+          "previewable": {
+            "default": true,
+            "description": "False when rows cannot be read.",
+            "title": "Previewable",
+            "type": "boolean"
+          },
+          "row_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Count"
+          },
+          "row_count_exact": {
+            "default": true,
+            "title": "Row Count Exact",
+            "type": "boolean"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
+          "supported": {
+            "default": true,
+            "description": "False when the storage type cannot describe tables.",
+            "title": "Supported",
+            "type": "boolean"
+          },
+          "type": {
+            "default": "",
+            "description": "Storage type.",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "connection",
+          "name"
+        ],
+        "title": "OdsTableDetail",
+        "type": "object"
+      },
+      "OdsTableSample": {
+        "description": "Response for ``GET /api/v1/dataspace/table/sample`` \u2014 the first rows.",
+        "properties": {
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "limit": {
+            "default": 0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "items": {},
+              "type": "array"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "supported": {
+            "default": true,
+            "title": "Supported",
+            "type": "boolean"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "OdsTableSample",
         "type": "object"
       },
       "OverwriteConfirm": {
@@ -4806,6 +5166,18 @@
             "title": "Kind",
             "type": "string"
           },
+          "modified_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ISO-8601 UTC last-modified time.",
+            "title": "Modified At"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -4814,6 +5186,30 @@
             "description": "Round-trippable prefix for the next listing.",
             "title": "Path",
             "type": "string"
+          },
+          "row_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Row count when reported for free.",
+            "title": "Row Count"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Size when the store reports it.",
+            "title": "Size Bytes"
           }
         },
         "required": [
@@ -6121,6 +6517,305 @@
         ]
       }
     },
+    "/api/v1/dataspace/table": {
+      "get": {
+        "description": "Return the table's stats and field list \u2014 metadata only, never row data.",
+        "operationId": "api_ods_table_api_v1_dataspace_table_get",
+        "parameters": [
+          {
+            "description": "Data Space path of a table / data file: /<account>/<folder\u2026>/<file> or /<account>/<DATABASE>/<SCHEMA>/<TABLE>.",
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "description": "Data Space path of a table / data file: /<account>/<folder\u2026>/<file> or /<account>/<DATABASE>/<SCHEMA>/<TABLE>.",
+              "title": "Path",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Bypass the 60 s detail cache.",
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Bypass the 60 s detail cache.",
+              "title": "Refresh",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdsTableDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Describe one Data Space table (fields, row count, size, last modified, DDL)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/dataspace/table/count": {
+      "get": {
+        "description": "Count the rows exactly (``COUNT(*)`` / full text scan / parquet footers).",
+        "operationId": "api_ods_table_count_api_v1_dataspace_table_count_get",
+        "parameters": [
+          {
+            "description": "Data Space path of a table / data file: /<account>/<folder\u2026>/<file> or /<account>/<DATABASE>/<SCHEMA>/<TABLE>.",
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "description": "Data Space path of a table / data file: /<account>/<folder\u2026>/<file> or /<account>/<DATABASE>/<SCHEMA>/<TABLE>.",
+              "title": "Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdsTableCount"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Exact row count of a Data Space table (may scan the data)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/dataspace/table/export": {
+      "get": {
+        "description": "Export (up to the synchronous row cap) and stream the file as an attachment.\n\nLarger exports: ``POST /api/v1/dataspace/table/export-jobs`` (a\nbackground ``export`` job). Every export is audited\n(``dataspace.export``).",
+        "operationId": "api_ods_table_export_api_v1_dataspace_table_export_get",
+        "parameters": [
+          {
+            "description": "Data Space path of a table / data file: /<account>/<folder\u2026>/<file> or /<account>/<DATABASE>/<SCHEMA>/<TABLE>.",
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "description": "Data Space path of a table / data file: /<account>/<folder\u2026>/<file> or /<account>/<DATABASE>/<SCHEMA>/<TABLE>.",
+              "title": "Path",
+              "type": "string"
+            }
+          },
+          {
+            "description": "csv | xlsx | pdf | docx.",
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "csv",
+              "description": "csv | xlsx | pdf | docx.",
+              "pattern": "^(csv|xlsx|pdf|docx)$",
+              "title": "Format",
+              "type": "string"
+            }
+          },
+          {
+            "description": "CSV delimiter (one char, or 'tab').",
+            "in": "query",
+            "name": "delimiter",
+            "required": false,
+            "schema": {
+              "default": ",",
+              "description": "CSV delimiter (one char, or 'tab').",
+              "maxLength": 3,
+              "title": "Delimiter",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Header case: asis | upper | lower.",
+            "in": "query",
+            "name": "header_case",
+            "required": false,
+            "schema": {
+              "default": "asis",
+              "description": "Header case: asis | upper | lower.",
+              "pattern": "^(asis|upper|lower)$",
+              "title": "Header Case",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Row cap (clamped to the per-format synchronous limit).",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Row cap (clamped to the per-format synchronous limit).",
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The exported file (attachment)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download a Data Space table as csv / xlsx / pdf / docx",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/dataspace/table/export-jobs": {
+      "post": {
+        "description": "Enqueue an ``export`` job; download the result from ``/jobs/{id}/artifact``.",
+        "operationId": "api_ods_table_export_job_api_v1_dataspace_table_export_jobs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OdsExportJobRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobSubmitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Queue a full-table export (csv / xlsx) as a background job",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/dataspace/table/sample": {
+      "get": {
+        "description": "Return a sample of the table's rows (values as JSON scalars).",
+        "operationId": "api_ods_table_sample_api_v1_dataspace_table_sample_get",
+        "parameters": [
+          {
+            "description": "Data Space path of a table / data file: /<account>/<folder\u2026>/<file> or /<account>/<DATABASE>/<SCHEMA>/<TABLE>.",
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "description": "Data Space path of a table / data file: /<account>/<folder\u2026>/<file> or /<account>/<DATABASE>/<SCHEMA>/<TABLE>.",
+              "title": "Path",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Rows to return (max 1000).",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "description": "Rows to return (max 1000).",
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdsTableSample"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Return the first rows of a Data Space table",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
     "/api/v1/engines": {
       "get": {
         "description": "Return every JSON engine config discoverable via the XDG search path.",
@@ -7150,6 +7845,42 @@
           }
         },
         "summary": "Get one job by id",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/jobs/{job_id}/artifact": {
+      "get": {
+        "description": "Stream a finished ``export`` job's file; 404 until the job is done.",
+        "operationId": "api_job_artifact_api_v1_jobs__job_id__artifact_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The exported file (attachment)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download the file produced by a finished export job",
         "tags": [
           "v1"
         ]
