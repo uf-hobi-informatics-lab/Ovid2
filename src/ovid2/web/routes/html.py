@@ -73,217 +73,20 @@ router = APIRouter()
 
 
 # ---------------------------------------------------------------------------
-# Console landing (``/``) + Dashboard (``/dashboard``)
+# Dashboard (``/``)
 #
-# ``/`` is the terminal-styled console: the same bird's-eye data as the
-# dashboard (health / cooking / runs / queue / KPIs) plus a client-side
-# command palette. The classic card-grid dashboard is preserved verbatim
-# at ``/dashboard``; only its top-level route path and the nav link
-# target moved (see ``base.html``). Every route here stays
+# ``/`` is the card-grid dashboard. The former terminal-styled console
+# landing page was removed; ``/dashboard`` permanently redirects here so
+# old bookmarks keep working. The Ctrl-K command palette (``cmdk.js``)
+# is built client-side from the RBAC-filtered nav drawer, so no
+# server-side palette roster is needed. Every route here stays
 # ``include_in_schema=False`` so the OpenAPI snapshot is unaffected.
 # ---------------------------------------------------------------------------
 
 
-# Static navigable targets for the command palette. Kept module-level so
-# the shape is obvious and the ``console`` handler stays thin. Each entry
-# is ``{"label", "url", "kind": "page", "keywords"}``; dynamic ``run``
-# entries are appended per-request from the run tracker.
-_PALETTE_PAGES: tuple[dict[str, str], ...] = (
-    {
-        "label": "Submit run",
-        "url": "/submit",
-        "kind": "page",
-        "keywords": "submit new run job",
-        "capability": "submit_jobs",
-    },
-    {
-        "label": "Pipelines",
-        "url": "/pipelines",
-        "kind": "page",
-        "keywords": "pipelines routes",
-        "capability": "view_pipeline_data",
-    },
-    {
-        "label": "Runs",
-        "url": "/runs",
-        "kind": "page",
-        "keywords": "runs jobs history batches queue",
-        "capability": "view_runs",
-    },
-    {
-        "label": "Data Space",
-        "url": "/dataspace",
-        "kind": "page",
-        "keywords": "dataspace data space",
-        "capability": "view_pipeline_data",
-    },
-    {
-        "label": "Storage accounts",
-        "url": "/storage",
-        "kind": "page",
-        "keywords": "storage accounts connections addresses",
-        "capability": "view_pipeline_data",
-    },
-    {
-        "label": "Warehouses",
-        "url": "/warehouses",
-        "kind": "page",
-        "keywords": "warehouses engines",
-        "capability": "view_pipeline_data",
-    },
-    {
-        "label": "Secrets",
-        "url": "/secrets",
-        "kind": "page",
-        "keywords": "secrets credentials",
-        "capability": "manage_secrets",
-    },
-    {
-        "label": "Users",
-        "url": "/users",
-        "kind": "page",
-        "keywords": "users access roles admin",
-        "capability": "manage_users",
-    },
-    {
-        "label": "CDMs",
-        "url": "/cdms",
-        "kind": "page",
-        "keywords": "cdm common data model",
-        "capability": "view_public",
-    },
-    {
-        "label": "Settings",
-        "url": "/settings",
-        "kind": "page",
-        "keywords": "settings preferences",
-        "capability": "admin_all",
-    },
-    {
-        "label": "Setup wizard",
-        "url": "/install",
-        "kind": "page",
-        "keywords": "install setup wizard",
-        "capability": "admin_all",
-    },
-    {
-        "label": "Health",
-        "url": "/health",
-        "kind": "page",
-        "keywords": "health doctor diagnostics",
-        "capability": "view_public",
-    },
-    {
-        "label": "Dashboard",
-        "url": "/dashboard",
-        "kind": "page",
-        "keywords": "dashboard cards overview",
-        "capability": "view_public",
-    },
-    {
-        "label": "API docs",
-        "url": "/docs",
-        "kind": "page",
-        "keywords": "api docs openapi swagger",
-        "capability": "view_public",
-    },
-)
-
-
-def _build_palette_targets(request: Request, runs: object) -> list[dict[str, str]]:
-    """Assemble the command-palette target list, filtered by capability.
-
-    Combines the static page roster (:data:`_PALETTE_PAGES`) with one
-    ``kind == "run"`` entry per recent run so operators can jump
-    straight to a run's detail page by typing its batch id or pipeline.
-    Built only from the already-fetched ``runs`` response — no extra
-    service call and no pipeline import.
-
-    Each page entry carries a ``capability`` the current role must hold;
-    targets the role lacks are omitted (UX parity with the nav — the
-    routes themselves are gated separately in todos 13/14). When auth is
-    disabled the synthetic admin holds every capability, so every target
-    is emitted (today's behaviour). Run entries require ``view_runs``.
-
-    Returns a JSON-serialisable ``list[dict[str, str]]`` (the emitted
-    dicts carry only ``label`` / ``url`` / ``kind`` / ``keywords`` — the
-    internal ``capability`` key is stripped).
-    """
-    from ovid2.web.templating import has_cap
-
-    targets: list[dict[str, str]] = []
-    for page in _PALETTE_PAGES:
-        capability = page.get("capability", "view_public")
-        if not has_cap(request, capability):
-            continue
-        targets.append({k: v for k, v in page.items() if k != "capability"})
-    if not has_cap(request, "view_runs"):
-        return targets
-    run_rows = getattr(runs, "runs", None) or []
-    for run in run_rows:
-        batch_id = getattr(run, "batch_id", None)
-        if not batch_id:
-            continue
-        instance_id = getattr(run, "instance_id", None)
-        pipeline = getattr(run, "pipeline", None) or ""
-        targets.append(
-            {
-                "label": f"run {batch_id}",
-                "url": f"/runs/{instance_id or batch_id}",
-                "kind": "run",
-                "keywords": f"{pipeline} {batch_id}".strip(),
-            }
-        )
-    return targets
-
-
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
-def console(request: Request) -> HTMLResponse:
-    """Render the terminal-styled console landing page.
-
-    Serves the same bird's-eye context as the dashboard plus a
-    server-built ``palette_targets`` list for the client-side command
-    palette. Panels refresh via HTMX polling ``/partials/console``.
-    """
-    from ovid2.web.services import metrics_svc
-
-    health = health_svc.collect_health()
-    runs = runs_svc.list_runs(limit=10, offset=0)
-    jobs = jobs_svc.list_jobs(limit=10, offset=0)
-    cooking = metrics_svc.briefing_cooking()
-    return templates.TemplateResponse(
-        request,
-        "console.html",
-        {
-            "health": health,
-            "runs": runs,
-            "jobs": jobs,
-            "cooking": cooking,
-            "poll_ms": DASHBOARD_POLL_MS,
-            "palette_targets": _build_palette_targets(request, runs),
-        },
-    )
-
-
-@router.get("/partials/console", response_class=HTMLResponse, include_in_schema=False)
-def console_partial(request: Request) -> HTMLResponse:
-    """HTMX polling target — refreshed console bird's-eye panels."""
-    from ovid2.web.services import metrics_svc
-
-    health = health_svc.collect_health()
-    runs = runs_svc.list_runs(limit=10, offset=0)
-    jobs = jobs_svc.list_jobs(limit=10, offset=0)
-    cooking = metrics_svc.briefing_cooking()
-    return templates.TemplateResponse(
-        request,
-        "_console_body.html",
-        {"health": health, "runs": runs, "jobs": jobs, "cooking": cooking},
-    )
-
-
-@router.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
 def dashboard(request: Request) -> HTMLResponse:
-    """Render the classic card-grid dashboard (moved from ``/``)."""
+    """Render the card-grid dashboard — the control panel's landing page."""
     from ovid2.web.services import metrics_svc
 
     health = health_svc.collect_health()
@@ -301,6 +104,12 @@ def dashboard(request: Request) -> HTMLResponse:
             "poll_ms": DASHBOARD_POLL_MS,
         },
     )
+
+
+@router.get("/dashboard", include_in_schema=False)
+def dashboard_legacy_redirect() -> RedirectResponse:
+    """Permanently redirect the old ``/dashboard`` URL to ``/``."""
+    return RedirectResponse(url="/", status_code=308)
 
 
 @router.get("/partials/dashboard", response_class=HTMLResponse, include_in_schema=False)

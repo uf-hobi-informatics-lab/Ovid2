@@ -88,6 +88,7 @@
   <script src="/static/appearance.js" defer></script>
   <script src="/static/cmdk.js" defer></script>
   <script src="/static/nav.js" defer></script>
+  <script src="/static/help_tip.js" defer></script>
   {# D3 v7 self-hosted; used by /static/live.js and the display bus.
      Loaded before live.js so window.d3 is available when the module
      bootstraps. #}
@@ -99,8 +100,8 @@
 
   {# Derive active-nav marker from the request path (first match wins). #}
   {% set path = request.url.path %}
-  {% set nav_active = 'console' %}
-  {% if path == '/dashboard' %}{% set nav_active = 'dashboard' %}
+  {% set nav_active = '' %}
+  {% if path == '/' %}{% set nav_active = 'dashboard' %}
   {% elif path.startswith('/submit') %}{% set nav_active = 'submit' %}
   {% elif path.startswith('/jobs') %}{% set nav_active = 'runs' %}
   {% elif path.startswith('/runs') %}{% set nav_active = 'runs' %}
@@ -154,10 +155,7 @@
   <aside id="site-nav" class="drawer" role="navigation" aria-label="Primary">
     <nav class="drawer-nav">
       <div class="side-group">Operate</div>
-      <a href="/" class="nav-item {% if nav_active == 'console' %}active{% endif %}" data-nav="console">
-        {{ icons.icon("dashboard", size=18, cls="nav-icon") }}<span class="nav-label">Console</span>
-      </a>
-      <a href="/dashboard" class="nav-item {% if nav_active == 'dashboard' %}active{% endif %}" data-nav="dashboard">
+      <a href="/" class="nav-item {% if nav_active == 'dashboard' %}active{% endif %}" data-nav="dashboard">
         {{ icons.icon("dashboard", size=18, cls="nav-icon") }}<span class="nav-label">Dashboard</span>
       </a>
       {% if has_cap(request, 'submit_jobs') %}

@@ -15,6 +15,7 @@
   additional media queries.
 #}
 
+{% import "_help.html" as help %}
 {% set queued  = jobs.jobs|selectattr('status', 'equalto', 'queued')|list|length if jobs and jobs.jobs else 0 %}
 {% set running = jobs.jobs|selectattr('status', 'equalto', 'running')|list|length if jobs and jobs.jobs else 0 %}
 {% set failed  = jobs.jobs|selectattr('status', 'equalto', 'failed')|list|length if jobs and jobs.jobs else 0 %}
@@ -53,7 +54,7 @@
   </section>
 
   <section class="card">
-    <h2 class="small muted" style="margin: 0; text-transform: uppercase; letter-spacing: 0.06em;">Queued</h2>
+    <h2 class="small muted" style="margin: 0; text-transform: uppercase; letter-spacing: 0.06em;">Queued {{ help.tip("Jobs waiting for a worker slot. Running and failed counts cover the recent job window.") }}</h2>
     <div class="kpi"><span class="kpi-value">{{ queued }}</span><span class="kpi-label">waiting</span></div>
     <p class="small muted" style="margin: 0;">{{ running }} running &middot; {{ failed }} failed (recent)</p>
     <p class="more"><a href="/runs">jobs &rarr;</a></p>
@@ -74,7 +75,7 @@
 
 <div class="grid two-col">
   <section class="card">
-    <h2>Environment checks</h2>
+    <h2>Environment checks {{ help.tip("Host-side doctor checks (Docker, Spark image, config, credentials). The worst severity is shown; open the full report for every check and its fix hint.") }}</h2>
     <p><span class="badge severity-{{ health.worst }}">worst: {{ health.worst|upper }}</span></p>
     <ul class="check-list compact">
       {% for check in health.checks[:6] %}
@@ -88,7 +89,7 @@
   </section>
 
   <section class="card">
-    <h2>Queue &amp; recent jobs</h2>
+    <h2>Queue &amp; recent jobs {{ help.tip("The ten most recent jobs submitted through the web / API job queue, newest first. Click a batch to open its live run console.") }}</h2>
     {% if jobs and jobs.jobs %}
       <div class="table-wrap">
         <table class="runs-table">
@@ -130,7 +131,7 @@
 
 <div class="grid one-col" style="margin-top: 1rem;">
   <section class="card">
-    <h2>Recent runs (tracker)</h2>
+    <h2>Recent runs (tracker) {{ help.tip("Batches registered with the batch tracker — every pipeline run records its received time and status here, including scheduler-triggered runs.") }}</h2>
     {% if runs.runs %}
       <div class="table-wrap">
         <table class="runs-table">

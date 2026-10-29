@@ -4,11 +4,11 @@ All notable changes to the public Ovid2 distribution are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 the project is pre-1.0 and does not yet follow semantic versioning.
 
-The `dev` branch is regenerated from the upstream repository on every
+The `main` branch is regenerated from the upstream repository on every
 upstream push; each sync commit references the upstream commit it was built
 from.
 
-## [Unreleased] — `dev`
+## [Unreleased]
 
 ### Fixed — CI green on every gate
 

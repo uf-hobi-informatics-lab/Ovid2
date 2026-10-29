@@ -2,7 +2,7 @@
 
 Exercises the role-aware navigation drawer, the user chip + Logout link, and
 the capability-filtered command palette rendered by ``base.html`` /
-``console.html`` through a FastAPI ``TestClient``. The cookie / session setup
+``dashboard.html`` through a FastAPI ``TestClient``. The cookie / session setup
 mirrors ``test_rest_gating.py``; ``settings_svc.get_settings`` is
 monkeypatched to toggle ``auth.enabled``.
 
@@ -11,7 +11,7 @@ Covered acceptance criteria:
 * guest GET ``/`` HTML omits the ``/secrets`` / ``/settings`` / ``/submit``
   nav links and shows a Logout link.
 * admin GET ``/`` shows every nav group.
-* the embedded command-palette JSON omits forbidden targets for a guest.
+* the Ctrl-K palette is nav-derived (no server-side roster).
 * enabled=False GET ``/`` shows all nav (no regression).
 """
 
@@ -99,7 +99,7 @@ def _set_cookie(client: TestClient, cookie: str | None) -> None:
 def _nav_region(body: str) -> str:
     """Return just the primary nav drawer markup from a rendered page.
 
-    The console page body also contains contextual ``/submit`` etc. links
+    The dashboard page body also contains contextual ``/submit`` etc. links
     (help text + tiles) that are *not* the nav; scoping assertions to the
     ``<aside id="site-nav">`` drawer keeps the visibility checks precise.
     """
@@ -177,52 +177,21 @@ def test_admin_nav_shows_all_groups(
 
 
 @pytest.mark.unit
-def test_guest_palette_omits_forbidden_targets(
+def test_landing_has_no_server_palette_roster(
     monkeypatch: pytest.MonkeyPatch, app_client: TestClient
 ) -> None:
-    """The embedded palette JSON omits targets a guest's role cannot use."""
-    import json
-    import re
+    """The palette is built client-side from the nav (``cmdk.js``).
 
+    The console's server-side palette JSON was removed with the console;
+    RBAC filtering of palette targets is inherited from the nav drawer,
+    which the guest/admin tests above already cover.
+    """
     _enable_auth(monkeypatch, enabled=True)
     _set_cookie(app_client, _cookie_for_role(Role.GUEST, "guest-palette"))
     body = app_client.get("/").text
-    match = re.search(
-        r'<script id="ovid2-palette-data" type="application/json">(.*?)</script>',
-        body,
-        re.DOTALL,
-    )
-    assert match is not None, "palette data script not found"
-    targets = json.loads(match.group(1))
-    urls = {t["url"] for t in targets}
-    assert "/secrets" not in urls
-    assert "/settings" not in urls
-    assert "/submit" not in urls
-    assert "/install" not in urls
-    # Public palette targets survive.
-    assert "/cdms" in urls
-    assert "/health" in urls
-
-
-@pytest.mark.unit
-def test_admin_palette_includes_privileged_targets(
-    monkeypatch: pytest.MonkeyPatch, app_client: TestClient
-) -> None:
-    """An admin palette contains the privileged targets a guest lacked."""
-    import json
-    import re
-
-    _enable_auth(monkeypatch, enabled=True)
-    _set_cookie(app_client, _cookie_for_role(Role.SYSTEM_ADMIN, "admin-palette"))
-    body = app_client.get("/").text
-    match = re.search(
-        r'<script id="ovid2-palette-data" type="application/json">(.*?)</script>',
-        body,
-        re.DOTALL,
-    )
-    assert match is not None
-    urls = {t["url"] for t in json.loads(match.group(1))}
-    assert {"/secrets", "/settings", "/submit", "/install"} <= urls
+    assert "ovid2-palette-data" not in body
+    assert 'id="command-palette"' in body
+    assert "/static/cmdk.js" in body
 
 
 # ---------------------------------------------------------------------------

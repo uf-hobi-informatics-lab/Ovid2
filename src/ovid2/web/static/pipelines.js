@@ -1,15 +1,19 @@
-// Pipelines list page: client-side filter + per-type collapse.
+// Pipelines list page: client-side filter, kind tiles, and live count.
 //
-// Progressive enhancement: the server renders every row and every group
+// Progressive enhancement: the server renders every card and every group
 // open, so with JavaScript disabled the page is fully usable. This module
-// only hides/shows already-rendered rows and toggles the empty-state note.
-// No third-party dependencies, same-origin only.
+// only hides/shows already-rendered cards (``.pipeline-row``), keeps the
+// per-kind stat tiles in sync with the type select, and updates the
+// "N of M shown" counter. No third-party dependencies, same-origin only.
 
 const bar = document.querySelector("[data-pipeline-filters]");
 if (bar) {
   const inputs = Array.from(bar.querySelectorAll("[data-filter]"));
   const rows = Array.from(document.querySelectorAll(".pipeline-row"));
   const groups = Array.from(document.querySelectorAll(".pipeline-group"));
+  const tiles = Array.from(document.querySelectorAll("[data-kind-tile]"));
+  const kindSelect = bar.querySelector('[data-filter="kind"]');
+  const counter = bar.querySelector("[data-pl-count]");
   const noMatches = document.getElementById("pf-no-matches");
 
   const criteria = () => {
@@ -37,11 +41,18 @@ if (bar) {
       row.hidden = !show;
       if (show) visibleTotal += 1;
     }
-    // Hide a whole group block when its rows are all filtered out.
+    // Hide a whole group block when its cards are all filtered out.
     for (const group of groups) {
       const groupRows = group.querySelectorAll(".pipeline-row");
       const anyVisible = Array.from(groupRows).some((r) => !r.hidden);
       group.hidden = !anyVisible;
+    }
+    for (const tile of tiles) {
+      tile.setAttribute("aria-pressed", c.kind === tile.dataset.kindTile ? "true" : "false");
+    }
+    if (counter) {
+      counter.textContent =
+        visibleTotal === rows.length ? `${rows.length} total` : `${visibleTotal} of ${rows.length} shown`;
     }
     if (noMatches) noMatches.hidden = visibleTotal !== 0;
   };
@@ -49,6 +60,15 @@ if (bar) {
   for (const el of inputs) {
     const evt = el.tagName === "SELECT" ? "change" : "input";
     el.addEventListener(evt, apply);
+  }
+  // Kind tiles toggle the type filter (click again to clear).
+  for (const tile of tiles) {
+    tile.addEventListener("click", () => {
+      if (!kindSelect) return;
+      const kind = tile.dataset.kindTile;
+      kindSelect.value = kindSelect.value === kind ? "" : kind;
+      apply();
+    });
   }
   apply();
 }

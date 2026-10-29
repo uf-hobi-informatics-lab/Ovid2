@@ -4,77 +4,92 @@
 {# ``form`` carries submitted values back on an error re-render so a
    scaffold failure never wipes the name / template the operator chose. #}
 {% set f = form or {} %}
-<section class="page">
-  <p><a href="/pipelines">&larr; all pipelines</a></p>
-  <h1>New pipeline</h1>
+{% import "_icons.html" as icons %}
+{% import "_help.html" as help %}
+<section class="page wz-workspace sc-page">
+  <div class="wz-head">
+    <a class="wz-back" href="/pipelines">{{ icons.icon("chevron-left", size=15) }} All pipelines</a>
+    <h1 class="sc-title">New pipeline
+      {% call help.tip_block(label="About pipelines") %}
+        A <strong>pipeline</strong> reads from an input storage account,
+        runs on a warehouse, and writes to an output storage account.
+        <strong>ETL</strong> pipelines are scaffolded from a template: a fresh
+        copy of an existing pipeline package (its formatters, dictionaries,
+        and fixer chains) that you then personalise. The other types don't
+        bind a pipeline package &mdash; they open the pipeline editor directly.
+      {% endcall %}
+    </h1>
+  </div>
 
   {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
 
-  <p class="note">
-    A <strong>pipeline</strong> reads from an input storage account,
-    runs on a warehouse, and writes to an output storage account. Pick
-    a pipeline type below. <strong>ETL</strong> pipelines are scaffolded
-    from a template: a fresh copy of an existing pipeline package (its
-    formatters, dictionaries, and fixer chains) that you then
-    personalise. The other types don't bind a pipeline package &mdash;
-    they open the pipeline editor directly.
-  </p>
-
-  <h2>ETL &mdash; from a template</h2>
-  <p class="note">
-    Choose a template and give the new pipeline a name. The scaffolder
-    copies the template's pipeline package under that name (its identity
-    fields &mdash; DB name, HARVEST datamart id, DATAVANT key &mdash;
-    are reset to placeholders) and opens the pipeline editor so you can
-    wire storage + warehouse.
-  </p>
-
-  {% if templates %}
-    <form method="post" action="/pipeline-packages/new" class="edit-form">
-      <div class="form-row">
-        <label for="name">Pipeline / pipeline name</label>
-        <input type="text" id="name" name="name" required
-               pattern="[A-Za-z0-9._-]+" value="{{ f.get('name', '') }}"
-               placeholder="e.g. myhospital">
+  <section class="wz-step builder-card sc-card">
+    <header class="wz-step-head">
+      <span class="wz-step-icon">{{ icons.icon("workflow", size=20) }}</span>
+      <div>
+        <h2>ETL &mdash; from a template
+          {% call help.tip_block() %}
+            The scaffolder copies the template's pipeline package under the
+            new name (its identity fields &mdash; DB name, HARVEST datamart id,
+            DATAVANT key &mdash; are reset to placeholders) and opens the
+            pipeline editor so you can wire storage + warehouse.
+          {% endcall %}
+        </h2>
+        <p class="wz-step-sub">Scaffold a fresh, personalisable pipeline package.</p>
       </div>
-      <div class="table-wrap">
-        <table class="runs-table">
-          <thead>
-            <tr><th></th><th>Template</th><th>Source</th><th>Target CDM</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            {% for t in templates %}
-              <tr>
-                <td>
-                  <input type="radio" name="template" value="{{ t.id }}"
-                         id="tmpl_{{ t.id }}"
-                         {% if t.id == f.get('template') or (not f.get('template') and loop.first) %}checked{% endif %}>
-                </td>
-                <td><label for="tmpl_{{ t.id }}" class="mono">{{ t.label }}</label></td>
-                <td class="mono small">{{ t.source_pipeline }}</td>
-                <td class="mono small">{{ t.cdm }}</td>
-                <td class="small">{{ t.description }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      <div class="form-row">
-        <button type="submit" class="button primary">Create &amp; personalise</button>
-        <a href="/pipelines" class="button">Cancel</a>
-      </div>
-    </form>
-  {% else %}
-    <p class="empty">No pipeline templates are registered.</p>
-  {% endif %}
+    </header>
 
-  <h2>Other pipeline types</h2>
-  <p class="note">
-    <strong>Analysis</strong>, <strong>DQ checks</strong>,
-    <strong>Copy</strong>, and <strong>Move</strong> pipelines run
-    against existing pipeline packages (analysis / dq_checks) or move
-    data verbatim (copy / move) and do not scaffold a new package.
-  </p>
-  <p><a class="button" href="/pipelines/new">Open the pipeline editor &rarr;</a></p>
+    {% if templates %}
+      <form method="post" action="/pipeline-packages/new" class="sc-form">
+        <div class="form-row">
+          <label for="name">Pipeline name</label>
+          <input type="text" id="name" name="name" required
+                 pattern="[A-Za-z0-9._-]+" value="{{ f.get('name', '') }}"
+                 placeholder="e.g. myhospital">
+        </div>
+        <div class="picker-list wz-tiles" role="radiogroup" aria-label="Template">
+          {% for t in templates %}
+            <label class="picker-option" for="tmpl_{{ t.id }}">
+              <input type="radio" name="template" value="{{ t.id }}"
+                     id="tmpl_{{ t.id }}"
+                     {% if t.id == f.get('template') or (not f.get('template') and loop.first) %}checked{% endif %}>
+              <span class="picker-option-body">
+                <span class="picker-option-title mono">{{ t.label }}</span>
+                <span class="picker-option-sub small">{{ t.source_pipeline }} &rarr; {{ t.cdm }}</span>
+              </span>
+              {% if t.description %}<span class="wz-opt-tip">{{ help.tip(t.description) }}</span>{% endif %}
+            </label>
+          {% endfor %}
+        </div>
+        <div class="sc-actions">
+          <a href="/pipelines" class="button">Cancel</a>
+          <button type="submit" class="button primary">{{ icons.icon("check", size=15) }} Create &amp; personalise</button>
+        </div>
+      </form>
+    {% else %}
+      <p class="empty">No pipeline templates are registered.</p>
+    {% endif %}
+  </section>
+
+  <section class="wz-step builder-card sc-card">
+    <header class="wz-step-head">
+      <span class="wz-step-icon">{{ icons.icon("layers", size=20) }}</span>
+      <div>
+        <h2>Other pipeline types
+          {{ help.tip("Analysis and DQ checks run against existing pipeline packages; Copy and Move transfer data verbatim. None of them scaffold a new package.") }}
+        </h2>
+        <p class="wz-step-sub">Configure directly in the pipeline editor.</p>
+      </div>
+    </header>
+    <div class="sc-kinds">
+      {% for k, label, ico in [("analysis", "Analysis", "chart"), ("dq_checks", "DQ checks", "shield-check"), ("copy", "Copy", "copy"), ("move", "Move", "move")] %}
+        <a class="wz-kind-tile" data-kind="{{ k }}" href="/pipelines/new">
+          <span class="wz-kind-tile-icon">{{ icons.icon(ico, size=22) }}</span>
+          <span class="wz-kind-tile-label">{{ label }}</span>
+        </a>
+      {% endfor %}
+    </div>
+    <p class="sc-actions"><a class="button primary" href="/pipelines/new">Open the pipeline editor {{ icons.icon("arrow-right", size=15) }}</a></p>
+  </section>
 </section>
 {% endblock %}

@@ -1,6 +1,6 @@
 # Ovid2
 
-> **🚧 `dev` branch — under active development.** Ovid2 is alpha software.
+> **🚧 Under active development.** Ovid2 is alpha software.
 > Interfaces, configuration shapes, and on-disk formats may change without
 > notice. Do not point production workloads at it without reviewing the
 > [status](#status) section first.
@@ -655,7 +655,7 @@ ovid2/
 ### Developer install (recommended)
 
 ```bash
-git clone -b dev https://github.com/uf-hobi-informatics-lab/Ovid2.git ovid2
+git clone https://github.com/uf-hobi-informatics-lab/Ovid2.git ovid2
 cd ovid2
 
 # uv is the recommended env manager
@@ -672,6 +672,20 @@ uv run pre-commit install
 Optional extras: `spark` (local PySpark), `web` (control panel), `mcp`
 (agent server), `azure` (Azure Blob), `access` (host-side Access table
 listing), `dev` (lint/type/test tooling).
+
+### Dev instances on a shared server
+
+Each developer can run a private web panel + worker with its own port
+(leased from `8100-8199`), state tree, session cookie and Docker image tag:
+
+```bash
+ovid2 dev up [NAME] [--mcp]     # prints the URL
+ovid2 dev ls --all              # every instance on the host
+eval "$(ovid2 dev env NAME)"    # point the CLI at that instance
+ovid2 dev down NAME [--purge]
+```
+
+See [`docs/dev-instances.md`](docs/dev-instances.md).
 
 ### System install (operator)
 
@@ -1059,7 +1073,7 @@ uv run pre-commit run --all            # everything the commit hooks run
 
 ## Contributing & security
 
-Issues and pull requests are welcome against the `dev` branch — see
+Issues and pull requests are welcome against the `main` branch — see
 [`CONTRIBUTING.md`](CONTRIBUTING.md). Development happens in an upstream
 repository and is mirrored here; accepted PRs are applied upstream and
 appear in the next sync.

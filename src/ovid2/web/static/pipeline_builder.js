@@ -12,6 +12,13 @@
  * write their choices into hidden ``*_connection`` / ``*_location``
  * inputs, which we observe via a MutationObserver + input events.
  *
+ * It also drives the five-step wizard (Type -> Source -> Engine ->
+ * Destination -> Automation): one step visible at a time, a progress
+ * rail whose per-step state comes from the tagged requirement list, and
+ * icon tiles that drive the hidden ``<select name="kind">``. Navigation
+ * is non-blocking — any step can be opened; Save validates everything.
+ * With JS off the template renders every step stacked.
+ *
  * Dependency-free ES module, matching live.js / browse.js conventions.
  */
 
@@ -144,6 +151,8 @@ class PipelineBuilder {
     if (!this.form || !this.canvas || !this.svg) return;
     this.bind();
     this.syncStorageToggles();
+    this.setupWizard();
+    this.syncKindTiles();
     this.render();
   }
 
@@ -293,48 +302,170 @@ class PipelineBuilder {
     return node ? node.style.display !== "none" : false;
   }
 
-  /* Compute the list of outstanding requirements. Empty => complete. */
+  /* Compute the list of outstanding requirements. Empty => complete.
+   * Each entry is ``{step, text}`` — ``step`` keys the wizard rail
+   * (type / source / engine / destination / automation) so a step with
+   * an outstanding requirement is flagged on the progress rail. */
   requirements() {
     const kind = this.value("kind") || "etl";
     const reqs = [];
+    const add = (step, text) => reqs.push({ step, text });
     const name = this.value("name");
     if (!name) {
-      reqs.push("give the pipeline a name");
+      add("type", "give the pipeline a name");
     } else if (!/^[A-Za-z0-9._-]+$/.test(name)) {
-      reqs.push("use only letters, numbers, . _ - in the name");
+      add("type", "use only letters, numbers, . _ - in the name");
     }
     if (kind === "etl" && this.visible("template-block")) {
       const anyTmpl = this.form.querySelector('input[name="template"]:checked');
-      if (!anyTmpl) reqs.push("pick an ETL template");
+      if (!anyTmpl) add("type", "pick an ETL template");
     }
     if (kind === "analysis" && !this.value("package")) {
-      reqs.push("pick a pipeline package to analyse");
+      add("type", "pick a pipeline package to analyse");
     }
     if (kind === "dq_checks") {
       const anyCycle = this.form.querySelector('input[name="packages"]:checked');
-      if (!anyCycle) reqs.push("pick at least one EDC report cycle");
+      if (!anyCycle) add("type", "pick at least one EDC report cycle");
     }
     // copy/move transfer named tables verbatim (no ``all``). Require an
     // explicit list unless the operator kept the tables "open" (chosen
     // on the Submit form at run time).
     if ((kind === "copy" || kind === "move") && !this.isTablesOpen()) {
       if (!this.value("tables")) {
-        reqs.push("list the tables to copy, or keep them open");
+        add("type", "list the tables to copy, or keep them open");
       }
     }
     if (!this.isOpen("input") && !this.value("input_connection")) {
-      reqs.push("choose input storage (or keep it open)");
+      add("source", "choose input storage (or keep it open)");
     }
+    if (!this.value("engine")) add("engine", "choose an engine");
     if (!this.isOpen("output") && !this.value("output_connection")) {
-      reqs.push("choose output storage (or keep it open)");
+      add("destination", "choose output storage (or keep it open)");
     }
-    if (!this.value("engine")) reqs.push("choose an engine");
     // A watch trigger cannot run against an open input.
     const trigger = document.getElementById("trigger_type");
     if (trigger && trigger.value === "watch" && this.isOpen("input")) {
-      reqs.push("watch needs a bound input — bind the input or pick another trigger");
+      add("automation", "watch needs a bound input — bind the input or pick another trigger");
     }
     return reqs;
+  }
+
+  /* ---------------- wizard (stepper) ---------------- */
+
+  setupWizard() {
+    this.steps = Array.from(this.form.querySelectorAll(".wz-step[data-step]"));
+    this.stepKeys = this.steps.map((s) => s.dataset.step);
+    this.visited = new Set();
+    this.nav = this.form.querySelector("[data-wz-nav]");
+    if (!this.steps.length) return;
+    // Switch from the stacked no-JS layout to one-step-at-a-time.
+    this.root.classList.add("wz-js");
+    if (this.nav) this.nav.hidden = false;
+    const tiles = this.form.querySelector("[data-kind-tiles]");
+    if (tiles) tiles.hidden = false;
+
+    this.form.addEventListener("click", (evt) => {
+      const t = evt.target.closest ? evt.target : null;
+      if (!t) return;
+      const go = t.closest("[data-goto]");
+      if (go) { this.goTo(go.dataset.goto); return; }
+      if (t.closest("[data-wz-prev]")) { this.step(-1); return; }
+      if (t.closest("[data-wz-next]")) { this.step(1); return; }
+      const tile = t.closest("[data-kind-tile]");
+      if (tile) this.pickKind(tile.dataset.kindTile);
+    });
+    // Arrow-key roving on the kind tiles (radiogroup semantics).
+    if (tiles) {
+      tiles.addEventListener("keydown", (evt) => {
+        if (!["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp"].includes(evt.key)) return;
+        const all = Array.from(tiles.querySelectorAll("[data-kind-tile]"));
+        const i = all.indexOf(document.activeElement);
+        if (i < 0) return;
+        evt.preventDefault();
+        const delta = evt.key === "ArrowRight" || evt.key === "ArrowDown" ? 1 : -1;
+        const next = all[(i + delta + all.length) % all.length];
+        next.focus();
+        this.pickKind(next.dataset.kindTile);
+      });
+    }
+    // On an error re-render, open the first step that needs attention.
+    const reqs = this.requirements();
+    const first = reqs.length && this.form.querySelector(".flash.error") ? reqs[0].step : "type";
+    this.goTo(first, { focus: false });
+  }
+
+  pickKind(kind) {
+    const sel = document.getElementById("kind");
+    if (!sel || sel.value === kind) { this.syncKindTiles(); return; }
+    sel.value = kind;
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+    this.syncKindTiles();
+  }
+
+  syncKindTiles() {
+    const kind = this.value("kind") || "etl";
+    for (const tile of this.form.querySelectorAll("[data-kind-tile]")) {
+      const on = tile.dataset.kindTile === kind;
+      tile.setAttribute("aria-checked", on ? "true" : "false");
+      tile.tabIndex = on ? 0 : -1;
+    }
+  }
+
+  step(delta) {
+    const i = this.stepKeys.indexOf(this.current);
+    const j = Math.min(Math.max(i + delta, 0), this.stepKeys.length - 1);
+    this.goTo(this.stepKeys[j]);
+  }
+
+  goTo(key, opts) {
+    if (!this.stepKeys.includes(key)) return;
+    if (this.current) this.visited.add(this.current);
+    this.current = key;
+    for (const s of this.steps) {
+      const on = s.dataset.step === key;
+      s.classList.toggle("is-current", on);
+      s.setAttribute("aria-hidden", on ? "false" : "true");
+    }
+    const i = this.stepKeys.indexOf(key);
+    const last = i === this.stepKeys.length - 1;
+    if (this.nav) {
+      const prev = this.nav.querySelector("[data-wz-prev]");
+      const next = this.nav.querySelector("[data-wz-next]");
+      const create = this.nav.querySelector("[data-wz-create]");
+      const pos = this.nav.querySelector("[data-wz-pos]");
+      if (prev) prev.disabled = i === 0;
+      if (next) next.hidden = last;
+      if (create) create.hidden = !last;
+      if (pos) pos.textContent = "Step " + (i + 1) + " of " + this.stepKeys.length;
+    }
+    this.canvas.setAttribute("data-focus", key);
+    this.render();
+    if (!opts || opts.focus !== false) {
+      const target = this.steps[i].querySelector("h2");
+      if (target) { target.tabIndex = -1; target.focus({ preventScroll: true }); }
+      const top = this.form.getBoundingClientRect().top + window.scrollY - 80;
+      if (window.scrollY > top) window.scrollTo({ top, behavior: "smooth" });
+    }
+  }
+
+  renderRail(reqs) {
+    if (!this.stepKeys) return;
+    const pending = new Set(reqs.map((r) => r.step));
+    for (const item of this.form.querySelectorAll("[data-rail]")) {
+      const key = item.dataset.rail;
+      let state = "todo";
+      if (key === this.current) state = "current";
+      else if (pending.has(key)) state = this.visited.has(key) ? "attention" : "todo";
+      else state = "done";
+      item.setAttribute("data-state", state);
+      item.classList.toggle("has-issue", pending.has(key));
+      const btn = item.querySelector("button");
+      if (btn) btn.setAttribute("aria-current", key === this.current ? "step" : "false");
+    }
+    if (this.nav) {
+      const create = this.nav.querySelector("[data-wz-create]");
+      if (create) create.disabled = reqs.length !== 0;
+    }
   }
 
   renderNode(role, connName, connType, location) {
@@ -402,6 +533,8 @@ class PipelineBuilder {
 
     const reqs = this.requirements();
     const complete = reqs.length === 0;
+    this.renderRail(reqs);
+    this.syncKindTiles();
     this.canvas.setAttribute("data-complete", complete ? "true" : "false");
     if (this.saveBtn) this.saveBtn.disabled = !complete;
     if (this.wordmark) {
@@ -425,7 +558,17 @@ class PipelineBuilder {
         for (const r of reqs) {
           const li = document.createElement("li");
           li.className = "builder-req small";
-          li.textContent = r;
+          // Each outstanding item jumps to the wizard step that owns it.
+          if (this.stepKeys && this.stepKeys.includes(r.step)) {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "builder-req-link";
+            btn.textContent = r.text;
+            btn.addEventListener("click", () => this.goTo(r.step));
+            li.appendChild(btn);
+          } else {
+            li.textContent = r.text;
+          }
           this.reqList.appendChild(li);
         }
       }

@@ -46,6 +46,10 @@ pre-commit install --hook-type pre-push
 Want to try it end-to-end without Docker? See
 [`docs/quickstart-local.md`](docs/quickstart-local.md).
 
+Sharing a server with other developers? Start your own isolated web panel +
+worker with `ovid2 dev up` (own port, state, cookie and image tag) — see
+[`docs/dev-instances.md`](docs/dev-instances.md).
+
 ## The quality bar
 
 A change is **not** done until all of the following pass. This mirrors CI

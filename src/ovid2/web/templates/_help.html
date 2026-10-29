@@ -1,0 +1,41 @@
+{#
+  Inline "?" help tip — replaces long descriptive paragraphs.
+
+  Renders a small circular "?" button; hovering, focusing, or tapping it
+  reveals a themed tooltip bubble carrying the explanatory text. Works
+  with JavaScript disabled (pure CSS ``:hover`` / ``:focus-within``);
+  ``/static/help_tip.js`` adds tap-to-toggle, outside-click close, Esc,
+  and viewport-edge flipping.
+
+  Usage
+  -----
+
+      {% import "_help.html" as help %}
+      <h2>Input storage {{ help.tip("Where the pipeline reads from.") }}</h2>
+
+      {% call help.tip_block() %}
+        Rich <strong>HTML</strong> body with <code>code</code>.
+      {% endcall %}
+
+  Accessibility: the button is ``aria-describedby`` the bubble
+  (``role="tooltip"``) so screen readers announce the text on focus; the
+  bubble is never ``display: none`` (it is visually hidden via opacity /
+  visibility) so the description stays in the accessibility tree.
+#}
+
+{%- macro _tip(body, label="More information", align="") -%}
+{%- set tip_id = "help-" ~ range(100000, 999999) | random -%}
+<span class="help-tip{{ ' help-tip-' ~ align if align else '' }}" data-help-tip>
+  <button type="button" class="help-tip-btn" aria-label="{{ label }}"
+          aria-describedby="{{ tip_id }}" aria-expanded="false">?</button>
+  <span class="help-tip-bubble" role="tooltip" id="{{ tip_id }}">{{ body }}</span>
+</span>
+{%- endmacro -%}
+
+{%- macro tip(text, label="More information", align="") -%}
+{{ _tip(text, label=label, align=align) }}
+{%- endmacro -%}
+
+{%- macro tip_block(label="More information", align="") -%}
+{{ _tip(caller(), label=label, align=align) }}
+{%- endmacro -%}
