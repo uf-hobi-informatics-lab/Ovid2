@@ -8,7 +8,7 @@
 #
 # Usage:
 #   scripts/ci_checks.sh [GATE ...]          # run in the current Python env
-#   scripts/ci_checks.sh --docker [GATE ...] # run inside a python:3.12 image
+#   scripts/ci_checks.sh --docker [GATE ...] # run inside a python:3.14 image
 #                                            # with the CI dependency set
 # Gates: lint, typecheck, contract, unit   (default: all four, in order)
 #
@@ -18,7 +18,7 @@
 # --docker builds (once, cached by a hash of pyproject.toml) an image that
 # mirrors the CI install, so local results match CI even when the host
 # Python or its packages differ. Override the base image with
-# OVID2_CI_PYTHON_IMAGE (default python:3.12-slim).
+# OVID2_CI_PYTHON_IMAGE (default python:3.14-slim).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -28,7 +28,7 @@ UNIT_MARKERS="not contract and not integration and not real_connection and not r
 
 if [ "${1:-}" = "--docker" ]; then
     shift
-    base="${OVID2_CI_PYTHON_IMAGE:-python:3.12-slim}"
+    base="${OVID2_CI_PYTHON_IMAGE:-python:3.14-slim}"
     tag="ovid2-ci:$(sha256sum pyproject.toml | cut -c1-12)"
     if ! docker image inspect "$tag" >/dev/null 2>&1; then
         ctx="$(mktemp -d)"

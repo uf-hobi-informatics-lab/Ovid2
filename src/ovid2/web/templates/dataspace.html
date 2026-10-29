@@ -1,79 +1,117 @@
 {% extends "base.html" %}
-{% block title %}Data Space &middot; {{ listing.path }}{% endblock %}
+{% block title %}Data Space &middot; {{ target.path }}{% endblock %}
 {% block content %}
 {#
-  Ovid Data Space — every storage account is a tree of plain directories.
+  Ovid Data Space explorer.
 
-  ``/`` lists storage accounts; ``/<account>/<folder…>`` lists a folder
-  (disc / s3 / azure_blob / gcs) or DATABASE/SCHEMA (warehouses). The
-  complete path of a folder / schema is the batch id of a run that reads
-  it, and an address pointing at it is the exact location its data is
-  read from / written to.
+  Left: a collapsible tree of every storage account the user can see,
+  grouped by storage type (or flat, sorted by name). Accounts, folders,
+  databases and schemas expand lazily (GET /api/v1/dataspace?path=…).
+  Right: the detail pane — the root overview, a folder / schema
+  listing, or a table's detail (stats, fields, sample, definition,
+  export). The URL tracks the selection (/dataspace/<account>/<path…>)
+  so any view is deep-linkable. static/dataspace_explorer.js drives it.
+
+  Server-rendered here: the shell, the storage-account list (so the tree
+  paints instantly), and the initial path.
 #}
-<section class="page-header">
-  <h1 class="mono">
-    <a href="/dataspace">/</a>{% for name, href in crumbs %}<a href="/dataspace{{ href }}">{{ name }}</a>{% if not loop.last %}<span class="muted">/</span>{% endif %}{% endfor %}
-  </h1>
-  {% if listing.connection %}
-    <p class="muted small">
-      Storage account <strong class="mono">{{ listing.connection }}</strong>
-      ({{ listing.type }})
-      {% if listing.location %}&middot; location <span class="mono">{{ listing.location }}</span>{% endif %}
-      &middot; batch id <span class="mono" data-role="ods-batch">{{ listing.batch_id }}</span>
-      {% if listing.address_name %}
-        &middot; address <a class="mono" href="/addresses/{{ listing.address_name }}">{{ listing.address_name }}</a>
-      {% endif %}
-    </p>
-  {% else %}
-    <p class="muted">
-      Every storage account is a tree of plain directories &mdash; disc,
-      object stores and warehouses alike. Open a folder or schema; its full
-      path is the batch id of a run that reads it.
-    </p>
-  {% endif %}
+<section class="page ds-page">
+  <div class="page-header">
+    <h1 class="ds-crumbs mono" data-role="ds-crumbs">
+      <a href="/dataspace" data-ds-nav="/">Data Space</a>{% for name, href in crumbs %}<span class="ds-crumb-sep">/</span><a href="/dataspace{{ href }}" data-ds-nav="{{ href }}">{{ name }}</a>{% endfor %}
+    </h1>
+  </div>
+
+  <div class="ds-layout">
+    {# ---------------------------------------------------------- tree #}
+    <aside class="ds-nav card" aria-label="Storage accounts">
+      <div class="ds-toolbar">
+        <div class="ds-seg" role="group" aria-label="Group by">
+          <button type="button" class="ds-seg-btn" data-ds-group="type" aria-pressed="true">By type</button>
+          <button type="button" class="ds-seg-btn" data-ds-group="none" aria-pressed="false">A&ndash;Z</button>
+        </div>
+        <button type="button" class="ds-icon-btn" data-ds-sort title="Sort by name" aria-label="Toggle sort order">
+          <span data-role="ds-sort-label">A&rarr;Z</span>
+        </button>
+        <button type="button" class="ds-icon-btn" data-ds-expand-all title="Expand all groups">&#x229E;</button>
+        <button type="button" class="ds-icon-btn" data-ds-collapse-all title="Collapse all">&#x229F;</button>
+      </div>
+      <input type="search" class="ds-filter" data-ds-filter placeholder="Filter accounts / loaded items&hellip;"
+             aria-label="Filter storage accounts">
+      <ul class="tree-root ds-tree" role="tree" data-ds-tree aria-label="Data Space"></ul>
+      <noscript>
+        <ul>
+          {% for a in accounts %}<li><a href="/dataspace{{ a.path }}">{{ a.name }}</a> ({{ a.type }})</li>{% endfor %}
+        </ul>
+      </noscript>
+    </aside>
+
+    {# -------------------------------------------------------- detail #}
+    <div class="ds-main" data-ds-main aria-live="polite">
+      <div class="card ds-loading">Loading&hellip;</div>
+    </div>
+  </div>
 </section>
 
-<section>
-  {% if not listing.supported %}
-    <p class="muted">{{ listing.message or "Browsing is not available for this storage type." }}</p>
-  {% elif listing.entries %}
-    <table class="data">
-      <thead>
-        <tr><th>Name</th><th>Kind</th><th>Type</th><th class="num">Size</th></tr>
-      </thead>
-      <tbody>
-        {% for e in listing.entries %}
-          <tr>
-            <td class="mono">
-              {% if e.kind in ("account", "dir") %}
-                <a href="/dataspace{{ e.path }}">{{ e.name }}{% if e.kind == "dir" %}/{% endif %}</a>
-              {% else %}
-                {{ e.name }}
-              {% endif %}
-            </td>
-            <td>{{ e.kind }}</td>
-            <td class="mono small">{{ e.type }}</td>
-            <td class="num small">{{ e.size_bytes if e.size_bytes is not none else "" }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% else %}
-    <p class="muted">{{ listing.message or "(empty)" }}</p>
-  {% endif %}
-</section>
+{# ------------------------------------------------------- export modal #}
+<div class="modal-backdrop" data-ds-export-modal hidden>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="ds-export-title">
+    <div class="modal-header">
+      <h2 class="card-title" id="ds-export-title">Export <span class="mono" data-role="ds-export-name"></span></h2>
+      <button type="button" class="button small" data-ds-export-close aria-label="Close">&times;</button>
+    </div>
+    <form class="ds-export-form" data-ds-export-form>
+      <fieldset class="ds-field">
+        <legend>Format</legend>
+        <div class="kind-chips">
+          <label class="kind-chip"><input type="radio" name="format" value="csv" checked><span class="kind-chip-label">CSV</span></label>
+          <label class="kind-chip"><input type="radio" name="format" value="xlsx"><span class="kind-chip-label">Excel (.xlsx)</span></label>
+          <label class="kind-chip"><input type="radio" name="format" value="pdf"><span class="kind-chip-label">PDF</span></label>
+          <label class="kind-chip"><input type="radio" name="format" value="docx"><span class="kind-chip-label">Word (.docx)</span></label>
+        </div>
+      </fieldset>
+      <fieldset class="ds-field" data-ds-csv-only>
+        <legend>Delimiter</legend>
+        <div class="kind-chips">
+          <label class="kind-chip"><input type="radio" name="delimiter" value="," checked><span class="kind-chip-label mono">, comma</span></label>
+          <label class="kind-chip"><input type="radio" name="delimiter" value=";"><span class="kind-chip-label mono">; semicolon</span></label>
+          <label class="kind-chip"><input type="radio" name="delimiter" value="tab"><span class="kind-chip-label mono">&#x21E5; tab</span></label>
+          <label class="kind-chip"><input type="radio" name="delimiter" value="|"><span class="kind-chip-label mono">| pipe</span></label>
+          <label class="kind-chip"><input type="radio" name="delimiter" value="custom"><span class="kind-chip-label">custom</span></label>
+          <input type="text" name="delimiter_custom" maxlength="1" size="2" class="ds-delim-custom mono" aria-label="Custom delimiter" hidden>
+        </div>
+      </fieldset>
+      <fieldset class="ds-field">
+        <legend>Header case</legend>
+        <div class="kind-chips">
+          <label class="kind-chip"><input type="radio" name="header_case" value="asis" checked><span class="kind-chip-label">As stored</span></label>
+          <label class="kind-chip"><input type="radio" name="header_case" value="upper"><span class="kind-chip-label mono">UPPER</span></label>
+          <label class="kind-chip"><input type="radio" name="header_case" value="lower"><span class="kind-chip-label mono">lower</span></label>
+        </div>
+      </fieldset>
+      <fieldset class="ds-field">
+        <legend>Rows</legend>
+        <label class="ds-inline">
+          First <input type="number" name="limit" min="1" class="ds-limit mono" data-ds-limit> rows
+          <span class="muted small" data-role="ds-limit-note"></span>
+        </label>
+        {% if can_submit %}
+        <label class="ds-inline" data-ds-job-row>
+          <input type="checkbox" name="as_job" data-ds-as-job>
+          Export the <strong>whole table</strong> as a background job (CSV / Excel only)
+        </label>
+        {% endif %}
+      </fieldset>
+      <p class="flash error small" data-role="ds-export-error" hidden></p>
+      <p class="flash small" data-role="ds-export-ok" hidden></p>
+      <div class="modal-footer">
+        <button type="button" class="button" data-ds-export-close>Cancel</button>
+        <button type="submit" class="button primary" data-ds-export-go>Export</button>
+      </div>
+    </form>
+  </div>
+</div>
 
-{% if catalog %}
-<section>
-  <h2>Storage types</h2>
-  <table class="data">
-    <thead><tr><th>Type</th><th>Addresses</th></tr></thead>
-    <tbody>
-      {% for dim in catalog.dimensions %}
-        <tr><td class="mono">{{ dim.name }}</td><td>{{ dim.address_count }}</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
-{% endif %}
+<script type="application/json" id="ds-boot">{{ boot | tojson }}</script>
+<script type="module" src="/static/dataspace_explorer.js"></script>
 {% endblock %}

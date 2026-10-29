@@ -557,8 +557,8 @@ forbidden; adapters are framework-level. Spec schema:
 
 | Category | Technology |
 |----------|------------|
-| Language | Python — runs on 3.10+ (packaging floor); dev/CI target 3.11+ (tested on 3.11 and 3.12) |
-| Big Data | Apache Spark 3.3 (PySpark) via `bitnamilegacy/spark:3.3` (image); host-dev extra pins `pyspark>=3.5,<4` |
+| Language | Python — runs on 3.11+ (packaging floor); runtime image + dev target 3.14 (CI tests 3.11–3.14) |
+| Big Data | Apache Spark 4.1 (PySpark, Scala 2.13) on `python:3.14-slim` + OpenJDK 21 (image); host-dev extra pins `pyspark>=4.1,<4.2` |
 | Compute engines | PySpark, Databricks Connect, Snowpark |
 | Containers | Docker + Docker Compose |
 | Storage drivers | disc, s3, azure_blob, snowflake, access, gcs, databricks, postgres, mssql |
@@ -634,12 +634,13 @@ ovid2/
 
 ## Requirements
 
-- **Python 3.10+** (dev/CI target 3.11+; tested on 3.11 and 3.12).
+- **Python 3.11+** (runtime image and dev target 3.14; CI tests 3.11–3.14).
+  Python 3.15 is not supported yet (`snowflake-snowpark-python` caps at <3.15).
 - **Docker** with the Compose plugin (or `docker-compose`) for containerised
   runs. Not needed for `ovid2 etl --local`.
-- A **JDK** (11 or 17) for local Spark runs.
+- A **JDK** (17 or 21) for local Spark runs (Spark 4 dropped Java 8/11).
 - A **PySpark cluster** — Ovid2 ships a Docker image (`ovid2:latest`, built on
-  `bitnamilegacy/spark:3.3`) that provides one, or point the CLI at an existing
+  `python:3.14-slim` + PySpark 4.1) that provides one, or point the CLI at an existing
   cluster via `OVID2_SPARK_MODE=local` / `OVID2_SPARK_MASTER_URL`.
 - Credentials for whichever storage backends you use (e.g. a **Snowflake**
   account with RSA key-pair auth).
@@ -661,7 +662,7 @@ cd ovid2
 uv sync --extra dev --extra spark
 
 # Or with pip:
-python3.11 -m venv .venv && . .venv/bin/activate
+python3.14 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev,spark]"
 
 # Install pre-commit hooks (ruff, mypy, contract tests)

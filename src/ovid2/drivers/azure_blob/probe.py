@@ -357,6 +357,7 @@ def list_dir_from_config(
                         kind="file",
                         path=rel,
                         size_bytes=int(size) if size is not None else None,
+                        modified_at=_iso(getattr(item, "last_modified", None)),
                     )
                 )
     except Exception as exc:
@@ -442,6 +443,85 @@ def list_tables_from_config(
     ]
 
 
+def _iso(value: Any) -> str | None:
+    """Render an SDK ``datetime`` as ISO-8601 UTC (``None`` passes)."""
+    from ovid2.drivers._tabular import iso_utc
+
+    return iso_utc(value) if value is not None else None
+
+
+def tabular_source_from_config(
+    args: dict[str, Any],
+    secrets: dict[str, Any],
+    location: dict[str, Any],
+) -> Any:
+    """Return an :class:`~ovid2.drivers._tabular.ObjectStoreSource` over the container.
+
+    Paths are blob names relative to ``location.path`` (the same paths
+    :func:`list_dir_from_config` returns). Blobs are read with ranged
+    ``download_blob(offset, length)``.
+
+    Raises:
+        NotImplementedError: SDK absent / no container.
+    """
+    from ovid2.drivers._tabular import ObjectStoreSource
+
+    try:
+        from azure.core.exceptions import ResourceNotFoundError
+        from azure.storage.blob import BlobPrefix
+    except ImportError as exc:
+        raise NotImplementedError("azure-storage-blob is not installed on this host.") from exc
+    container = location.get("container") or args.get("container_default")
+    if not container:
+        raise NotImplementedError(
+            "No container set on the storage account (location.container "
+            "or connection container_default)."
+        )
+    mode = resolve_connection_auth_mode(dict(secrets))
+    account = str(args.get("account_name") or "")
+    suffix = str(args.get("endpoint_suffix") or "core.windows.net")
+    url = f"https://{account}.blob.{suffix}" if account else ""
+    client = _build_client(mode, dict(args), dict(secrets), url)
+    container_client = client.get_container_client(str(container))
+
+    def head(key: str) -> tuple[int, str | None] | None:
+        try:
+            props = container_client.get_blob_client(key).get_blob_properties()
+        except ResourceNotFoundError:
+            return None
+        return int(props.size or 0), _iso(props.last_modified)
+
+    def listing(prefix: str) -> tuple[list[str], list[tuple[str, int, str | None]]]:
+        dirs: list[str] = []
+        files: list[tuple[str, int, str | None]] = []
+        for item in container_client.walk_blobs(name_starts_with=prefix or None, delimiter="/"):
+            full = str(getattr(item, "name", ""))
+            name = full[len(prefix) :]
+            if isinstance(item, BlobPrefix) or full.endswith("/"):
+                name = name.rstrip("/")
+                if name:
+                    dirs.append(name)
+            elif name and "/" not in name:
+                files.append(
+                    (
+                        name,
+                        int(getattr(item, "size", 0) or 0),
+                        _iso(getattr(item, "last_modified", None)),
+                    )
+                )
+        return dirs, files
+
+    def fetch(key: str, start: int, end: int) -> bytes:
+        if end <= start:
+            return b""
+        downloader = container_client.download_blob(key, offset=start, length=end - start)
+        return bytes(downloader.readall())
+
+    return ObjectStoreSource(
+        head=head, listing=listing, fetch=fetch, base=str(location.get("path") or "")
+    )
+
+
 __all__ = [
     "_AUTH_HINTS",
     "_PROBE_TIMEOUT_SECONDS",
@@ -450,4 +530,5 @@ __all__ = [
     "list_dir_from_config",
     "list_tables_from_config",
     "probe_auth_from_config",
+    "tabular_source_from_config",
 ]

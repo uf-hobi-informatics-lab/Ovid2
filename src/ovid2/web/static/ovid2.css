@@ -4857,6 +4857,18 @@ body.modal-open { overflow: hidden; }
 }
 .modal-panel .storage-card { margin-top: 0.9rem; }
 
+/* Run-page overwrite-conflict popup (_terminal_pane.html + mount.js). */
+.overwrite-modal .modal-panel { border-color: var(--err); }
+.overwrite-modal .overwrite-table-list {
+  max-height: 14rem;
+  overflow-y: auto;
+  margin: 0.4rem 0 0.6rem;
+  padding: 0.5rem 0.5rem 0.5rem 1.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+}
+.overwrite-modal .overwrite-table-list:empty { display: none; }
+
 
 /* ==================================================================
    Job builder (/submit) — navigator left, job graph right.
@@ -5155,6 +5167,152 @@ body.modal-open { overflow: hidden; }
    items in the builder are horizontal. */
 .job-builder label.kind-chip,
 .job-builder label.check-item { flex-direction: row; align-items: center; font-size: var(--fs-sm); }
+
+
+/* ==================================================================
+   Data Space explorer (/dataspace) — tree left, detail right.
+   See templates/dataspace.html + static/dataspace_explorer.js.
+   Reuses the storage-tree (.tree-*), logo tints (.logo-*), modal and
+   kind-chip styles from the job builder.
+   ================================================================== */
+
+.ds-page { max-width: 1600px; }
+.ds-crumbs { font-size: var(--fs-lg); display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem; }
+.ds-crumbs a { color: var(--fg); text-decoration: none; }
+.ds-crumbs a:hover { color: var(--accent); text-decoration: underline; }
+.ds-crumb-sep { color: var(--fg-subtle); padding: 0 0.15rem; }
+
+.ds-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .ds-layout { grid-template-columns: 1fr; }
+  .ds-nav { position: static; max-height: 50vh; }
+}
+
+.ds-nav {
+  position: sticky; top: 0.5rem;
+  display: flex; flex-direction: column; gap: 0.5rem;
+  max-height: calc(100vh - var(--topbar-h, 56px) - 2rem);
+  padding: 0.75rem;
+}
+.ds-toolbar { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+.ds-seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-pill); overflow: hidden; }
+.ds-seg-btn {
+  border: none; background: transparent; color: var(--fg-muted);
+  padding: 0.25rem 0.7rem; font: inherit; font-size: var(--fs-sm); cursor: pointer;
+}
+.ds-seg-btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+.ds-icon-btn {
+  border: 1px solid var(--border); background: var(--bg-elev); color: var(--fg-muted);
+  border-radius: var(--radius-md); padding: 0.2rem 0.5rem; font: inherit; font-size: var(--fs-sm);
+  cursor: pointer; min-width: 2rem;
+}
+.ds-icon-btn:hover, .ds-seg-btn:hover:not([aria-pressed="true"]) { color: var(--fg); background: var(--accent-subtle); }
+.ds-filter {
+  width: 100%; box-sizing: border-box;
+  padding: 0.35rem 0.6rem; border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--bg-elev); color: var(--fg); font: inherit; font-size: var(--fs-sm);
+}
+.ds-list-filter { max-width: 22rem; margin-bottom: 0.5rem; }
+.ds-tree { overflow: auto; flex: 1 1 auto; min-height: 8rem; }
+.ds-tree .tree-item[hidden] { display: none; }
+.ds-node-icon { flex: none; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; }
+.ds-group-row { margin-top: 0.15rem; }
+.ds-group-label { font-weight: 600; text-transform: none; }
+.ds-tree .is-selected > .tree-row { background: var(--accent-subtle); }
+.ds-tree .is-selected > .tree-row > .tree-label { color: var(--accent); font-weight: 600; }
+.ds-tree .tree-item:focus-visible > .tree-row,
+.ds-tree .tree-label:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.ds-main { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+.ds-main .card { margin: 0; }
+.ds-loading { color: var(--fg-muted); }
+
+.ds-title-row { display: flex; align-items: flex-start; gap: 0.75rem; flex-wrap: wrap; }
+.ds-title-icon { flex: none; display: inline-flex; padding-top: 0.15rem; }
+.ds-title-text { flex: 1 1 auto; min-width: 0; }
+.ds-title-text h2 { margin: 0 0 0.35rem; word-break: break-all; }
+.ds-actions { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
+.ds-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.ds-chip {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0.12rem 0.55rem; border: 1px solid var(--border); border-radius: var(--radius-pill);
+  background: var(--bg-elev); color: var(--fg-muted); font-size: var(--fs-xs);
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-decoration: none;
+}
+a.ds-chip:hover { border-color: var(--accent); color: var(--fg); }
+.ds-note { margin: 0.6rem 0 0; }
+
+.ds-kpis { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.6rem; margin-top: 0.9rem; }
+.ds-kpi {
+  flex-direction: column; align-items: flex-start; gap: 0.15rem; margin: 0;
+  padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--bg-elev);
+}
+.ds-kpi .kpi-value { font-size: 1.25rem; word-break: break-word; }
+.ds-count-btn { margin-top: 0.3rem; }
+
+.ds-tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border); margin-bottom: 0.75rem; flex-wrap: wrap; }
+.ds-tab {
+  border: none; background: transparent; color: var(--fg-muted);
+  padding: 0.45rem 0.85rem; font: inherit; cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.ds-tab:hover { color: var(--fg); }
+.ds-tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); font-weight: 600; }
+
+.ds-sample-bar { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.ds-sample-wrap { max-height: 32rem; overflow: auto; }
+table.ds-sample th { position: sticky; top: 0; background: var(--card-bg); z-index: 1; white-space: nowrap; }
+table.ds-sample td { white-space: nowrap; max-width: 28rem; overflow: hidden; text-overflow: ellipsis; font-size: var(--fs-sm); }
+.ds-null { color: var(--fg-subtle); font-style: italic; font-size: var(--fs-xs); }
+.ds-ddl {
+  margin: 0; padding: 0.85rem 1rem; max-height: 32rem; overflow: auto;
+  background: var(--code-bg); color: var(--code-fg); border-radius: var(--radius-md);
+  font-size: var(--fs-sm); white-space: pre;
+}
+.ds-ddl-actions { display: flex; justify-content: flex-end; margin-bottom: 0.4rem; }
+
+table.ds-list a.ds-row-link { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--fg); text-decoration: none; }
+table.ds-list a.ds-row-link:hover { color: var(--accent); }
+table.ds-list tr[hidden] { display: none; }
+.ds-sort-btn { border: none; background: transparent; color: inherit; font: inherit; font-weight: inherit; cursor: pointer; padding: 0; }
+.ds-sort-btn:hover { color: var(--accent); }
+
+.ds-type-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.6rem; margin-top: 0.6rem; }
+.ds-type-card {
+  display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-elev);
+}
+.ds-type-name { font-weight: 600; }
+.ds-type-icon { flex: none; display: inline-flex; }
+.ds-root-group { border-top: 1px solid var(--border); padding: 0.4rem 0; }
+.ds-root-group:first-child { border-top: none; }
+.ds-root-group > summary { cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0; }
+.ds-account-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.5rem; padding: 0.4rem 0; }
+.ds-account-card {
+  display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.7rem; min-width: 0;
+  border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-elev);
+  color: var(--fg); text-decoration: none;
+}
+.ds-account-card:hover { border-color: var(--accent); }
+.ds-account-body { display: flex; flex-direction: column; min-width: 0; }
+.ds-account-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ds-export-form { display: flex; flex-direction: column; gap: 0.75rem; }
+.ds-field { border: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.ds-field[hidden] { display: none; }
+.ds-field legend { font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fg-muted); margin-bottom: 0.35rem; }
+.ds-inline { display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.ds-inline[hidden] { display: none; }
+.ds-limit { width: 9rem; }
+.ds-delim-custom { width: 2.5rem; text-align: center; }
+.ds-delim-custom[hidden] { display: none; }
 
 
 /* ==================================================================

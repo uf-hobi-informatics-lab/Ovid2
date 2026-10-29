@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -74,7 +74,7 @@ def build_report(
         "output_address": output_address,
         "datamart_id": datamart_id,
         "refresh_date": refresh_date,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "results_uri": results_uri,
         "summary": {
             "checks_total": len(outcomes),

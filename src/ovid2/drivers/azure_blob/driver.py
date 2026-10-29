@@ -16,8 +16,8 @@ so any caller still routing through
 :data:`ovid2.config.addresses.ADDRESS_TYPE_MAP` keeps working
 unchanged.
 
-Container requirements: the ABFS driver ships as part of the Bitnami
-Spark base image today, so :meth:`AzureBlobDriver.container_requirements`
+Container requirements: the ABFS driver (hadoop-azure) is baked into
+the runtime image's ``$SPARK_HOME/jars`` today, so :meth:`AzureBlobDriver.container_requirements`
 returns an empty tuple — a :class:`JavaPackage` declaration is
 deferred until the E2 ``spark.jars.packages`` wiring lands.
 """
@@ -27,6 +27,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from ovid2.drivers._table_listing import PrefixTableListingMixin
+from ovid2.drivers._tabular import TabularIntrospectionMixin
 from ovid2.drivers.azure_blob.metadata import (
     build_address_config,
     resolve_address_auth_mode,
@@ -42,6 +43,7 @@ from ovid2.drivers.azure_blob.probe import (
     list_dir_from_config,
     list_tables_from_config,
     probe_auth_from_config,
+    tabular_source_from_config,
 )
 from ovid2.drivers.base import (
     ConnectionFieldSpec,
@@ -56,7 +58,7 @@ if TYPE_CHECKING:
     from ovid2.drivers.azure_blob.spark import AzureBlobIO
 
 
-class AzureBlobDriver(PrefixTableListingMixin, Driver):
+class AzureBlobDriver(TabularIntrospectionMixin, PrefixTableListingMixin, Driver):
     """Native driver for the ``azure_blob`` peripheral.
 
     Constructor keeps the uniform ``(args, secrets, location)`` shape
@@ -107,6 +109,10 @@ class AzureBlobDriver(PrefixTableListingMixin, Driver):
         return list_tables_from_config(
             dict(self.args), dict(self.secrets), dict(self.location), sub_prefix
         )
+
+    def _tabular_source(self) -> Any:
+        """Ranged-read :class:`ObjectStoreSource` for the Data Space explorer."""
+        return tabular_source_from_config(dict(self.args), dict(self.secrets), dict(self.location))
 
     # ------------------------------------------------------------------
     # Introspection (debug / display)

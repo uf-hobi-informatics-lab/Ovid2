@@ -52,9 +52,16 @@ def test_browse_descends(web_client, isolated_xdg: Path, disc_tree: Path) -> Non
     r = web_client.get("/api/v1/storage/local_disc/browse", params={"prefix": "demo/20260101"})
     assert r.status_code == 200
     entries = r.json()["entries"]
-    assert entries == [
-        {"name": "demographic.csv", "kind": "file", "path": "demo/20260101/demographic.csv"}
-    ]
+    assert len(entries) == 1
+    entry = entries[0]
+    assert (entry["name"], entry["kind"], entry["path"]) == (
+        "demographic.csv",
+        "file",
+        "demo/20260101/demographic.csv",
+    )
+    # Listing metadata now passes through the broker (was dropped before).
+    assert entry["size_bytes"] == 1
+    assert entry["modified_at"] and entry["modified_at"].endswith("Z")
 
 
 @pytest.mark.unit
@@ -77,7 +84,15 @@ def test_browse_unknown_storage_404(web_client, isolated_xdg: Path) -> None:  # 
 
 @pytest.mark.unit
 def test_browse_unsupported_type_marks_supported_false(web_client, isolated_xdg: Path) -> None:  # type: ignore[no-untyped-def]
-    """A postgres storage account has no list_dir → supported=False."""
+    """A postgres account without psycopg installed → supported=False (not a 500).
+
+    Postgres gained native browsing (``ovid2.drivers.postgres``); on a host
+    without the ``postgres`` extra the capability is reported absent.
+    """
+    import importlib.util
+
+    if importlib.util.find_spec("psycopg2") or importlib.util.find_spec("psycopg"):
+        pytest.skip("psycopg installed — browsing is supported here.")
     conndir = isolated_xdg / "config" / "ovid2" / "connections"
     conndir.mkdir(parents=True, exist_ok=True)
     (conndir / "pg.json").write_text(

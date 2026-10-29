@@ -41,10 +41,26 @@ from ovid2.core.isolation import OvidInstance
 logger = logging.getLogger(__name__)
 
 
-#: Absolute path of the ``libnss_wrapper.so`` shim shipped inside the
-#: Bitnami Spark base image. See :func:`nss_wrapper_env` below and
-#: :meth:`OvidInstance.ensure_nss_files` for the design rationale.
-NSS_WRAPPER_LIB: str = "/opt/bitnami/common/lib/libnss_wrapper.so"
+#: Absolute path of the ``libnss_wrapper.so`` shim inside the runtime
+#: image (Debian ``libnss-wrapper``, symlinked to a multiarch-neutral
+#: location by ``docker/Dockerfile``). See :func:`nss_wrapper_env` below
+#: and :meth:`OvidInstance.ensure_nss_files` for the design rationale.
+NSS_WRAPPER_LIB: str = "/usr/local/lib/libnss_wrapper.so"
+
+#: ``$SPARK_HOME`` inside the runtime image — a symlink to the pip
+#: ``pyspark`` package (``docker/Dockerfile`` pins ``ENV SPARK_HOME``).
+#: Every container-side Spark path derives from it.
+SPARK_HOME_IN_CONTAINER: str = "/opt/spark"
+
+#: ``spark-class`` launcher used to run the standalone Master / Worker
+#: in the foreground (see :func:`ovid2.core.compose.build_compose_dict`).
+SPARK_CLASS_IN_CONTAINER: str = f"{SPARK_HOME_IN_CONTAINER}/bin/spark-class"
+
+#: Per-executor scratch dir a standalone Worker writes app dirs into.
+SPARK_WORK_DIR_IN_CONTAINER: str = f"{SPARK_HOME_IN_CONTAINER}/work"
+
+#: Spark daemon log dir.
+SPARK_LOGS_DIR_IN_CONTAINER: str = f"{SPARK_HOME_IN_CONTAINER}/logs"
 
 #: In-container path for the synthetic ``passwd`` overlay.
 NSS_PASSWD_IN_CONTAINER: str = "/etc/nss_wrapper/passwd"  # noqa: S105 — a path, not a secret
@@ -72,7 +88,7 @@ def nss_wrapper_env(instance: OvidInstance) -> tuple[list[str], list[str]]:
     ``getpwuid()`` returning ``NULL`` inside the container, which
     breaks Java's ``System.getProperty("user.home")`` and prevents any
     ``SparkSession`` from launching. ``libnss_wrapper.so`` (already
-    shipped by Bitnami at :data:`NSS_WRAPPER_LIB`) intercepts the
+    installed in the image at :data:`NSS_WRAPPER_LIB`) intercepts the
     ``getpwuid`` / ``getgrgid`` calls and consults the passwd/group
     overlay files we bind-mount instead.
 
@@ -303,7 +319,9 @@ def build_docker_command(args: Any, instance: OvidInstance) -> list[str]:
     # would fail with ``ModuleNotFoundError: No module named 'ovid2_pipelines'``.
     pythonpath_env: list[str] = [
         "-e",
-        "PYTHONPATH=/app/src:/app/pipelines:/opt/bitnami/spark/python:/opt/bitnami/spark/python/lib/py4j-0.10.9.5-src.zip",
+        # pyspark + py4j are regular site-packages in the image, so only the
+        # bind-mounted source trees need adding.
+        "PYTHONPATH=/app/src:/app/pipelines",
     ]
 
     # Bind-mount the host's XDG config tree so the driver sees the same
@@ -429,7 +447,7 @@ def build_docker_command(args: Any, instance: OvidInstance) -> list[str]:
     nss_env_flags, nss_mount_flags = nss_wrapper_env(instance)
 
     # Bind-mount the per-invocation Spark scratch dirs onto
-    # ``/opt/bitnami/spark/{work,logs}`` for the same reason the
+    # ``$SPARK_HOME/{work,logs}`` for the same reason the
     # master + workers do (see :func:`ovid2.core.compose._volume_mounts`
     # for the full rationale). The driver itself only writes here in
     # local Spark mode, but a plain ``ovid2 tools test-engine`` inside
@@ -440,9 +458,9 @@ def build_docker_command(args: Any, instance: OvidInstance) -> list[str]:
     instance.ensure_directories()
     spark_scratch_mounts: list[str] = [
         "-v",
-        f"{instance.spark_work_dir}:/opt/bitnami/spark/work:rw",
+        f"{instance.spark_work_dir}:{SPARK_WORK_DIR_IN_CONTAINER}:rw",
         "-v",
-        f"{instance.spark_logs_dir}:/opt/bitnami/spark/logs:rw",
+        f"{instance.spark_logs_dir}:{SPARK_LOGS_DIR_IN_CONTAINER}:rw",
     ]
 
     cmd: list[str] = [
@@ -903,7 +921,7 @@ def start_spark_cluster(
 
     max_retries = 30
     for _ in range(max_retries):
-        # ``curl`` is not present in the Bitnami Spark image the master and
+        # ``curl`` is not installed in the runtime image the master and
         # workers run; use ``wget`` (which the compose healthcheck already
         # relies on) to probe the master UI instead. ``-q`` silences the
         # progress meter; ``-O -`` prints the body to stdout; we grep for

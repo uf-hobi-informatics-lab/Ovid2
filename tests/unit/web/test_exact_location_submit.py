@@ -283,3 +283,67 @@ def test_submit_page_shows_derived_batch_for_saved_address(setup: str, web_clien
     assert 'data-batch="inbox/landing/2026_03"' in body
     assert 'id="batch-field" readonly' in body
     assert 'name="sf_schema"' not in body and 'name="sf_database"' not in body
+
+
+# ------------------------------------------------- run-page popup (fetch)
+
+
+@pytest.mark.unit
+def test_launch_fetch_409_then_confirm(setup: str, web_client, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """The run-page ▶ (fetch) gets JSON 409 for the popup; confirm queues the draft."""
+    set_output_tables(monkeypatch, ["DEMOGRAPHIC", "ENCOUNTER"])
+    draft = jobs_svc.create_draft(_req(setup))
+    url = f"/jobs/{draft.job_id}/launch"
+    r = web_client.post(url, headers={"X-Requested-With": "fetch"}, follow_redirects=False)
+    assert r.status_code == 409, r.text
+    body = r.json()
+    assert body["status"] == "overwrite_required"
+    assert body["existing_tables"] == ["DEMOGRAPHIC", "ENCOUNTER"]
+    assert body["output_address"] == "out_exact"
+    assert body["confirm_url"] == url
+    assert jobs_svc.get_job(draft.job_id).status == "draft"  # type: ignore[union-attr]
+    # The popup's "Overwrite and run" re-POSTs with confirm_overwrite=true.
+    r = web_client.post(
+        url,
+        data={"confirm_overwrite": "true"},
+        headers={"X-Requested-With": "fetch"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "queued"
+    detail = jobs_svc.get_job(draft.job_id)
+    assert detail is not None and detail.extra_args.get("overwrite") is True
+
+
+@pytest.mark.unit
+def test_rerun_fetch_409_then_confirm(setup: str, web_client, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    set_output_tables(monkeypatch, [])
+    first = jobs_svc.submit(_req(setup))
+    jobs_svc.mark_terminal(first.job_id, status=jobs_svc.STATUS_DONE)
+    set_output_tables(monkeypatch, ["DEMOGRAPHIC"])
+    url = f"/jobs/{first.job_id}/rerun"
+    r = web_client.post(url, headers={"X-Requested-With": "fetch"}, follow_redirects=False)
+    assert r.status_code == 409 and r.json()["status"] == "overwrite_required"
+    assert r.json()["confirm_url"] == url
+    r = web_client.post(
+        url,
+        data={"confirm_overwrite": "true"},
+        headers={"X-Requested-With": "fetch"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 201, r.text
+    detail = jobs_svc.get_job(r.json()["job_id"])
+    assert detail is not None and detail.extra_args.get("overwrite") is True
+
+
+@pytest.mark.unit
+def test_run_page_carries_overwrite_popup(setup: str, web_client, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Draft and finished run pages both ship the (hidden) overwrite popup."""
+    set_output_tables(monkeypatch, [])
+    draft = jobs_svc.create_draft(_req(setup))
+    page = web_client.get(f"/runs/{draft.instance_id}").text
+    assert "data-overwrite-modal" in page and "data-overwrite-confirm" in page
+    done = jobs_svc.submit(_req(setup))
+    jobs_svc.mark_terminal(done.job_id, status=jobs_svc.STATUS_DONE)
+    page = web_client.get(f"/runs/{done.instance_id}").text
+    assert "data-overwrite-modal" in page and 'data-action="rerun"' in page

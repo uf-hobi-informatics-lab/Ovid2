@@ -22,11 +22,11 @@ from __future__ import annotations
 
 import logging
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 # ``datetime.UTC`` is 3.11+; ``timezone.utc`` works everywhere we support.
-_UTC = timezone.utc
+_UTC = UTC
 
 logger = logging.getLogger(__name__)
 

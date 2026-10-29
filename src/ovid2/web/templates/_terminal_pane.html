@@ -288,6 +288,47 @@
     <span class="term-total mono">—</span>
   </footer>
 
+  {% if job %}
+  {#
+    Overwrite-conflict popup (address = exact location). When ▶ launch /
+    ▶ rerun answers ``409 overwrite_required`` (the output already holds
+    tables), mount.js fills this in and shows it instead of navigating
+    to the full-page confirmation. "Overwrite and run" re-POSTs the same
+    action with ``confirm_overwrite=true``; Cancel sends nothing.
+  #}
+  <div class="modal-backdrop overwrite-modal" data-overwrite-modal hidden>
+    <div class="modal-panel" role="alertdialog" aria-modal="true"
+         aria-labelledby="overwrite-modal-title"
+         aria-describedby="overwrite-modal-body">
+      <div class="modal-header">
+        <h2 id="overwrite-modal-title" class="card-title">Overwrite existing data?</h2>
+        <button type="button" class="icon-button" data-overwrite-cancel
+                aria-label="Close">{{ icons.icon("close", size=18) }}</button>
+      </div>
+      <div id="overwrite-modal-body">
+        <p>
+          The output <strong class="mono" data-overwrite-address></strong>
+          already contains <strong data-overwrite-count></strong>.
+          Every address is the exact location its data is written to, so
+          this run will <strong>replace</strong> them.
+        </p>
+        <ul class="overwrite-table-list mono small" data-overwrite-tables></ul>
+        <p class="note small">
+          To keep the existing data, cancel and choose a different output
+          folder / schema.
+        </p>
+        <p class="flash-error small" data-overwrite-error hidden></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="button" data-overwrite-cancel>Cancel</button>
+        <button type="button" class="button danger" data-overwrite-confirm>
+          Overwrite and run
+        </button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <noscript>
     <div class="term-noscript">
       JavaScript disabled &mdash;

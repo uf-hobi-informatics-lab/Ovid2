@@ -72,12 +72,12 @@ def test_ensure_directories_creates_spark_work_and_logs(
 ) -> None:
     """``ensure_directories`` creates the per-invocation Spark work/logs dirs.
 
-    Root cause guarded here: the Bitnami base image ships
-    ``/opt/bitnami/spark/{work,logs}`` as ``0775 ovid2:root``. With
+    Root cause guarded here: the image's ``$SPARK_HOME/{work,logs}``
+    (``/opt/spark/…``) may not be writable for the host uid. With
     ``--user $UID:$GID``, an arbitrary host uid cannot write to
     either, and every worker executor launch dies with
     ``IOException: Failed to create directory
-    /opt/bitnami/spark/work/app-<id>/<executor>/``. The master then
+    /opt/spark/work/app-<id>/<executor>/``. The master then
     marks the app FAILED after 10 retries and the driver crashes
     mid-``getOrCreate()``. Fix: bind-mount host-owned ``0o777`` dirs
     onto both container paths. This test guards the host-side dir

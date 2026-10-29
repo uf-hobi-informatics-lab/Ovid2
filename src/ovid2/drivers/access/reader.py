@@ -22,6 +22,9 @@ import contextlib
 import glob
 import os
 import tempfile
+import warnings
+from collections.abc import Iterator
+from typing import Any
 
 #: UCanAccess JDBC driver class name (baked into the ETL image jars and,
 #: for the web tier, resolved from :func:`ucanaccess_jars`).
@@ -37,7 +40,7 @@ SYSTEM_SCHEMAS: frozenset[str] = frozenset({"information_schema", "system_lobs",
 
 
 #: Default container / image path where the UCanAccess jars are baked.
-#: Derived from ``$SPARK_HOME`` (the Bitnami base image sets it) rather
+#: Derived from ``$SPARK_HOME`` (the runtime image sets it) rather
 #: than hardcoding the image layout; overridable via
 #: ``$OVID2_UCANACCESS_JARS``.
 def _default_jar_dir() -> str | None:
@@ -145,6 +148,25 @@ def ucanaccess_jars() -> list[str]:
     return unique
 
 
+def _import_jaydebeapi() -> Any:
+    """Import :mod:`jaydebeapi`, muting its 3.12+ ``SyntaxWarning``.
+
+    jaydebeapi 1.2.3 (latest) has a non-raw ``'\\d+'`` regex literal;
+    Python 3.12+ emits ``SyntaxWarning: invalid escape sequence`` when
+    the module is first compiled, and environments that run with
+    ``-W error`` (our test suite) turn that into an import failure.
+    The literal is harmless at runtime (``re`` sees ``\\d``).
+
+    Raises:
+        ImportError: When jaydebeapi is not installed.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=SyntaxWarning, module=r"jaydebeapi.*")
+        warnings.filterwarnings("ignore", category=SyntaxWarning, message=r".*invalid escape")
+        import jaydebeapi
+    return jaydebeapi
+
+
 def list_tables_no_spark(file_path: str) -> list[str]:
     """Enumerate the user tables in an Access file *without* Spark.
 
@@ -169,7 +191,7 @@ def list_tables_no_spark(file_path: str) -> list[str]:
         RuntimeError: When the JDBC driver cannot open the file.
     """
     try:
-        import jaydebeapi
+        jaydebeapi = _import_jaydebeapi()
     except ImportError as exc:  # pragma: no cover - env-dependent
         raise NotImplementedError(
             "listing Access tables in the web tier requires the "
@@ -215,11 +237,111 @@ def list_tables_no_spark(file_path: str) -> list[str]:
     return sorted(tables, key=str.lower)
 
 
+def _connect(file_path: str) -> Any:
+    """Open ``file_path`` over UCanAccess (raises ``NotImplementedError`` if unavailable)."""
+    try:
+        jaydebeapi = _import_jaydebeapi()
+    except ImportError as exc:  # pragma: no cover - env-dependent
+        raise NotImplementedError(
+            "reading Access tables in the web tier requires the 'access' extra "
+            "(pip install 'ovid2[access]')."
+        ) from exc
+    jars = ucanaccess_jars()
+    if not jars:  # pragma: no cover - env-dependent
+        raise NotImplementedError(
+            "UCanAccess jars not found; set $OVID2_UCANACCESS_JARS to a jar directory."
+        )
+    return jaydebeapi.connect(UCANACCESS_DRIVER, jdbc_url(file_path), [], jars)
+
+
+def _quote_access(name: str) -> str:
+    """Bracket-quote an Access identifier (``]`` doubled)."""
+    return "[" + name.replace("]", "]]") + "]"
+
+
+def describe_table_no_spark(file_path: str, table: str) -> dict[str, Any]:
+    """Return ``{columns: [(name, type, nullable)], row_count}`` for one table.
+
+    Columns come from ``DatabaseMetaData.getColumns``; the row count is
+    a ``SELECT COUNT(*)`` (Access files are local and small enough).
+
+    Raises:
+        NotImplementedError: jaydebeapi / jars unavailable.
+        FileNotFoundError: Unknown table.
+    """
+    connection = _connect(file_path)
+    try:
+        metadata = connection.jconn.getMetaData()
+        rs = metadata.getColumns(None, None, table.upper(), "%")
+        columns: list[tuple[str, str, bool | None]] = []
+        try:
+            while rs.next():
+                size = rs.getInt("COLUMN_SIZE")
+                type_name = str(rs.getString("TYPE_NAME") or "")
+                if size and type_name.upper() in ("VARCHAR", "CHAR", "LONGVARCHAR"):
+                    type_name = f"{type_name}({size})"
+                columns.append(
+                    (str(rs.getString("COLUMN_NAME")), type_name, rs.getInt("NULLABLE") != 0)
+                )
+        finally:
+            rs.close()
+        if not columns:
+            raise FileNotFoundError(
+                f"Table {table!r} not found in {os.path.basename(file_path)!r}."
+            )
+        cursor = connection.cursor()
+        try:
+            cursor.execute("SELECT COUNT(*) FROM " + _quote_access(table))
+            row = cursor.fetchone()
+        finally:
+            cursor.close()
+        return {"columns": columns, "row_count": int(row[0]) if row else None}
+    finally:
+        with contextlib.suppress(Exception):
+            connection.close()
+
+
+def iter_rows_no_spark(
+    file_path: str, table: str, limit: int | None, batch_size: int
+) -> tuple[list[str], Iterator[list[tuple[Any, ...]]]]:
+    """Stream ``SELECT [TOP n] *`` from one Access table.
+
+    The connection stays open until the iterator is exhausted.
+    """
+    connection = _connect(file_path)
+    cursor = connection.cursor()
+    top = f"TOP {int(limit)} " if limit is not None else ""
+    try:
+        cursor.execute("SELECT " + top + "* FROM " + _quote_access(table))
+    except Exception:
+        cursor.close()
+        connection.close()
+        raise
+    columns = [str(d[0]) for d in (cursor.description or [])]
+
+    def _batches() -> Iterator[list[tuple[Any, ...]]]:
+        try:
+            while True:
+                rows = cursor.fetchmany(max(1, batch_size))
+                if not rows:
+                    return
+                yield [tuple(r) for r in rows]
+        finally:
+            with contextlib.suppress(Exception):
+                cursor.close()
+            with contextlib.suppress(Exception):
+                connection.close()
+
+    return columns, _batches()
+
+
 __all__ = [
     "SYSTEM_SCHEMAS",
     "SYSTEM_TABLE_PREFIXES",
     "UCANACCESS_DRIVER",
+    "describe_table_no_spark",
     "is_system_table",
+    "iter_rows_no_spark",
     "jdbc_url",
     "list_tables_no_spark",
     "ucanaccess_jars",

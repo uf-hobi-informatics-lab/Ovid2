@@ -7,6 +7,7 @@ can swap only what changed.
 
 from __future__ import annotations
 
+from datetime import UTC
 from typing import Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
@@ -1038,9 +1039,9 @@ def runs_list_partial(
 
 def _now_epoch_ms() -> int:
     """Server wall-clock in epoch milliseconds (UTC)."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    return int(datetime.now(timezone.utc).timestamp() * 1000)
+    return int(datetime.now(UTC).timestamp() * 1000)
 
 
 def _form_text(value: object) -> str:
@@ -1077,7 +1078,7 @@ def _iso_to_epoch_ms(value: str | None) -> int | None:
     """
     if not value:
         return None
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     text = str(value).strip()
     if text.endswith("Z"):
@@ -1087,7 +1088,7 @@ def _iso_to_epoch_ms(value: str | None) -> int | None:
     except ValueError:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return int(dt.timestamp() * 1000)
 
 
@@ -3653,9 +3654,14 @@ async def settings_post(request: Request, _csrf: None = Depends(require_csrf)) -
 # ---------------------------------------------------------------------------
 
 
-@router.get("/dataspace", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/dataspace",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
 def dataspace_root_page(request: Request) -> HTMLResponse:
-    """Render the Data Space root (every storage account)."""
+    """Render the Data Space explorer at the root (every storage account)."""
     return _dataspace_page(request, "/")
 
 
@@ -3663,28 +3669,55 @@ def dataspace_root_page(request: Request) -> HTMLResponse:
     "/dataspace/{ods_path:path}",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
 )
 def dataspace_path_page(request: Request, ods_path: str) -> HTMLResponse:
-    """Render one folder / schema of the Data Space (``/<account>/<path…>``)."""
+    """Render the explorer opened at ``/<account>/<path…>`` (folder, schema or table).
+
+    The page is a client-side explorer (``static/dataspace_explorer.js``):
+    a collapsible tree of every storage account (grouped by storage type
+    or sorted by name) plus a detail pane. The server renders the shell,
+    the storage-account list and the initial path; the browser fetches
+    folder listings and table details from ``/api/v1/dataspace*``.
+    """
     return _dataspace_page(request, "/" + ods_path.strip("/"))
 
 
 def _dataspace_page(request: Request, path: str) -> HTMLResponse:
-    """Shared renderer: every data space is a tree of plain directories."""
+    """Shared renderer for the Data Space explorer shell."""
     try:
-        listing = dataspace_svc.list_path(path)
+        target = dataspace_svc.resolve_path(path)
+        accounts = dataspace_svc.list_path("/")
     except dataspace_svc.OdsServiceError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     crumbs: list[tuple[str, str]] = []
     acc = ""
-    for part in [p for p in listing.path.split("/") if p]:
+    for part in [p for p in target.path.split("/") if p]:
         acc += "/" + part
         crumbs.append((part, acc))
-    catalog = dataspace_svc.get_dimension_catalog() if listing.connection is None else None
+    from ovid2.web.services import dataspace_table_svc
+    from ovid2.web.templating import has_cap
+
+    can_submit = has_cap(request, "submit_jobs")
     return templates.TemplateResponse(
         request,
         "dataspace.html",
-        {"listing": listing, "crumbs": crumbs, "catalog": catalog},
+        {
+            "target": target,
+            "accounts": accounts.entries,
+            "crumbs": crumbs,
+            "can_submit": can_submit,
+            "boot": {
+                "path": target.path,
+                "connection": target.connection,
+                "type": target.type,
+                "accounts": [
+                    {"name": a.name, "path": a.path, "type": a.type} for a in accounts.entries
+                ],
+                "export_limits": dataspace_table_svc.export_limits(),
+                "can_submit": can_submit,
+            },
+        },
     )
 
 

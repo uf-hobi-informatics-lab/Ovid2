@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -68,7 +68,7 @@ def test_cron_route_populates_next_fire(
     assert detail is not None
     assert detail.next_fire_at is not None
     when = datetime.fromisoformat(detail.next_fire_at)
-    assert when > datetime.now(timezone.utc)
+    assert when > datetime.now(UTC)
 
 
 @pytest.mark.unit
@@ -84,7 +84,7 @@ def test_interval_next_fire(isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch)
     assert detail is not None
     assert detail.next_fire_at is not None
     when = datetime.fromisoformat(detail.next_fire_at)
-    delta = when - datetime.now(timezone.utc)
+    delta = when - datetime.now(UTC)
     # Interval-based routes fire ``interval`` from now on first save.
     assert timedelta(minutes=14) <= delta <= timedelta(minutes=16)
 
@@ -301,7 +301,7 @@ def test_due_pipelines(isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch) -> N
         create_only=True,
     )
     # Advance the clock 2 minutes into the future.
-    future = datetime.now(timezone.utc) + timedelta(minutes=2)
+    future = datetime.now(UTC) + timedelta(minutes=2)
     due = pipelines_svc.due_pipelines(now=future)
     assert any(d.name == "r_due" for d in due)
 

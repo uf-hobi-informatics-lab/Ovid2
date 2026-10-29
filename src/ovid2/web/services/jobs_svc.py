@@ -30,7 +30,7 @@ import logging
 import os
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -47,6 +47,7 @@ from ovid2.web.models import (
     JobListResponse,
     JobSubmitRequest,
     JobSubmitResponse,
+    OdsExportJobRequest,
     normalize_kind,
 )
 from ovid2.web.services import pipelines_meta_svc
@@ -101,7 +102,7 @@ class OverwriteRequired(SubmitError):
 
 def _now_iso() -> str:
     """Return the current UTC time as an ISO-8601 string."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _new_instance_id() -> str:
@@ -112,7 +113,7 @@ def _new_instance_id() -> str:
     ``ovid2.core`` (see ``tests/contract/test_web_no_pipeline_imports.py``).
     Format: ``YYYYMMDD-HHMMSS-<6hex>``.
     """
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     return f"{stamp}-{uuid.uuid4().hex[:6]}"
 
 
@@ -287,6 +288,12 @@ def discard_draft(job_id: str, *, actor: str = "web") -> None:
 
 def _insert_job(request: JobSubmitRequest, *, actor: str, status: str) -> JobSubmitResponse:
     """Shared validate-and-insert path for :func:`submit` / :func:`create_draft`."""
+    _job_only = get_kind(request.kind)
+    if _job_only is not None and _job_only.job_only:
+        raise SubmitError(
+            f"kind='{_job_only.name}' jobs are created from their own surface "
+            "(POST /api/v1/dataspace/table/export-jobs), not POST /runs."
+        )
     _fold_legacy_sf_location(request)
     _resolve_connection_endpoints(request, actor=actor)
     _derive_batch_id(request)
@@ -384,6 +391,108 @@ def _insert_job(request: JobSubmitRequest, *, actor: str, status: str) -> JobSub
         instance_id,
     )
     return JobSubmitResponse(job_id=job_id, instance_id=instance_id, status=status)
+
+
+def export_artifact_path(job_id: str, fmt: str) -> Path:
+    """Return where an ``export`` job writes its file (mode-0700 folder)."""
+    from ovid2.web.services import dataspace_table_svc
+
+    folder = dataspace_table_svc.export_dir() / f"job-{job_id}"
+    folder.mkdir(mode=0o700, exist_ok=True)
+    return folder / f"export.{dataspace_table_svc.EXPORT_FORMATS[fmt][0]}"
+
+
+def submit_export(request: OdsExportJobRequest, *, actor: str = "web") -> JobSubmitResponse:
+    """Queue a full-table export of one Data Space table (``export`` kind).
+
+    The worker runs ``ovid2 tools export-table`` on the host (no
+    container); the finished file is served by
+    ``GET /api/v1/jobs/{job_id}/artifact``. Only ``csv`` / ``xlsx`` are
+    accepted — a full table as a PDF / Word document is not useful.
+
+    Raises:
+        SubmitError: Bad path / format / delimiter.
+    """
+    from ovid2 import dataspace
+    from ovid2.dataspace.path import OdsPathError
+    from ovid2.dataspace.resolver import OdsResolutionError
+
+    if request.format not in ("csv", "xlsx"):
+        raise SubmitError("Background exports support csv and xlsx only.")
+    if request.header_case not in ("asis", "upper", "lower"):
+        raise SubmitError("header_case must be asis / upper / lower.")
+    delimiter = request.delimiter or ","
+    if delimiter.lower() in ("tab", "\\t", "\t"):
+        delimiter = "tab"
+    elif len(delimiter) != 1 or delimiter in ('"', "\r", "\n"):
+        raise SubmitError("The CSV delimiter must be a single character (or 'tab').")
+    try:
+        target = dataspace.resolve(request.path)
+    except (OdsPathError, OdsResolutionError) as exc:
+        raise SubmitError(str(exc)) from exc
+    if target.connection is None or not target.location:
+        raise SubmitError("A table path is /<account>/<folder…>/<table>.")
+
+    web_db.ensure_schema()
+    job_id = _new_job_id()
+    instance_id = _new_instance_id()
+    extra_args: dict[str, Any] = {
+        "kind": "export",
+        "connection": target.connection,
+        "location": target.location,
+        "format": request.format,
+        "delimiter": delimiter,
+        "header_case": request.header_case,
+        "artifact": str(export_artifact_path(job_id, request.format)),
+    }
+    table_name = target.location.rsplit("/", 1)[-1]
+    with web_db.connect() as conn:
+        conn.execute(
+            "INSERT INTO web_jobs "
+            "(job_id, submitted_at, submitted_by, parent_job_id, pipeline, batch_id, "
+            "input_address, output_address, tables_json, transformations_json, "
+            "extra_args_json, status, cancel_requested, instance_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)",
+            (
+                job_id,
+                _now_iso(),
+                actor,
+                None,
+                "export",
+                target.batch_id,
+                target.path.as_str(),
+                f"download:{request.format}",
+                json.dumps([table_name]),
+                json.dumps([]),
+                json.dumps(extra_args),
+                STATUS_QUEUED,
+                instance_id,
+            ),
+        )
+    web_db.audit(
+        actor=actor,
+        action="dataspace.export_job",
+        target=target.path.as_str(),
+        detail_json=json.dumps({"job_id": job_id, "format": request.format}),
+    )
+    return JobSubmitResponse(job_id=job_id, instance_id=instance_id, status=STATUS_QUEUED)
+
+
+def export_artifact(job_id: str) -> tuple[Path, str] | None:
+    """Return ``(file, download_name)`` for a finished ``export`` job, else ``None``."""
+    job = get_job(job_id)
+    if job is None or normalize_kind(job.extra_args.get("kind")) != "export":
+        return None
+    if job.status != STATUS_DONE:
+        return None
+    path = Path(str(job.extra_args.get("artifact") or ""))
+    if not path.is_file():
+        return None
+    from ovid2.drivers._table_listing import strip_table_extension
+
+    leaf = str(job.extra_args.get("location") or "export").rsplit("/", 1)[-1]
+    stem = "".join(c if (c.isalnum() or c in "._-") else "_" for c in strip_table_extension(leaf))
+    return path, f"{stem or 'export'}{path.suffix}"
 
 
 def _fold_legacy_sf_location(request: JobSubmitRequest) -> None:
@@ -739,6 +848,8 @@ def rerun(job_id: str, *, actor: str = "web", confirm_overwrite: bool = False) -
         raise SubmitError(
             f"Job '{job_id}' is {row['status']!s}; wait for it to finish or cancel it first."
         )
+    if '"kind": "export"' in str(row.get("extra_args_json") or ""):
+        raise SubmitError("Export jobs are not rerun; start a new export from the Data Space page.")
 
     extra_json = _row_overwrite_gate(row, confirm_overwrite=confirm_overwrite)
     new_job_id = _new_job_id()

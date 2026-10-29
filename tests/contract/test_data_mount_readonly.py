@@ -41,7 +41,7 @@ def _stub_nss_files(monkeypatch: pytest.MonkeyPatch) -> None:
     per-invocation ``passwd`` / ``group`` overlay that lets containers
     run as the host uid) and :meth:`OvidInstance.ensure_directories`
     (to materialise the per-invocation Spark work / logs dirs bound at
-    ``/opt/bitnami/spark/{work,logs}``). Stubbing both here keeps this
+    ``$SPARK_HOME/{work,logs}``). Stubbing both here keeps this
     mount-contract test hermetic.
     """
     monkeypatch.setattr(

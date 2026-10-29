@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 from ovid2.core.engines.base import BaseEngine, EngineTestResult
@@ -282,6 +283,31 @@ class _SnowparkFunctions:
             return self._F.random()
         return self._F.random(seed)
 
+    # --- Portable extensions (health / EDC checks) ----------------------
+
+    def length(self, c: Any) -> Any:
+        return self._F.length(c)
+
+    def to_double(self, c: Any) -> Any:
+        # ``CAST(x AS DOUBLE)`` raises on a non-numeric string in
+        # Snowflake; ``TRY_TO_DOUBLE`` returns NULL — the Spark (ANSI off)
+        # contract. ``TRY_TO_DOUBLE`` only accepts text, so cast first
+        # (native NUMBER columns become their decimal rendering).
+        return self._F.builtin("TRY_TO_DOUBLE")(c.cast("string"))
+
+
+#: Portable type-name -> ``snowflake.snowpark.types`` class name, consumed
+#: by :meth:`SnowparkEngine.create_typed_dataframe`. Mirrors
+#: :data:`ovid2.core.engines.pyspark._PORTABLE_SPARK_TYPES`.
+_PORTABLE_SNOWPARK_TYPES: dict[str, str] = {
+    "string": "StringType",
+    "double": "DoubleType",
+    "boolean": "BooleanType",
+    "long": "LongType",
+    "date": "DateType",
+    "timestamp": "TimestampType",
+}
+
 
 class SnowparkEngineSession:
     """Adapter that presents a :class:`snowflake.snowpark.Session` as an
@@ -330,6 +356,9 @@ class SnowparkEngine(BaseEngine):
         self._native: SnowparkNativeSession | None = None
         self._session: SnowparkEngineSession | None = None
         self._functions: EngineFunctions | None = None
+        #: Scratch-schema fallback databases remembered from the first
+        #: :meth:`prepare_workspace` call (see that method).
+        self._workspace_fallbacks: tuple[str, ...] = ()
 
     def _build_configs(self) -> dict[str, Any]:
         """Assemble the Snowpark session-builder config dict.
@@ -481,8 +510,16 @@ class SnowparkEngine(BaseEngine):
         return self._session
 
     def stop_session(self) -> None:
-        """Close the Snowpark session if one has been created."""
+        """Close the Snowpark session if one has been created.
+
+        Staging strategies' per-run cleanups (``@~`` stage files,
+        transient tables, external stages) run first, over the still-open
+        session — after ``close()`` they could only fail.
+        """
         if self._native is not None:
+            from ovid2.core.engines.stager import run_session_cleanups
+
+            run_session_cleanups(self._native)
             with contextlib.suppress(Exception):
                 self._native.close()
             self._native = None
@@ -556,7 +593,7 @@ class SnowparkEngine(BaseEngine):
                 return value
         return None
 
-    def prepare_workspace(self) -> None:
+    def prepare_workspace(self, fallback_databases: Sequence[str] = ()) -> None:
         """Bind the session to a writable database + schema for temp objects.
 
         Snowpark temporary views (``create_or_replace_temp_view``) and
@@ -575,19 +612,59 @@ class SnowparkEngine(BaseEngine):
         lands in a namespace the operator's role can write to. Operators
         who set the engine's ``database`` field already get a writable
         current database; this hook then simply reuses it.
+
+        When neither the env override nor the session names a writable
+        database, ``fallback_databases`` (the run's Snowflake output /
+        input address databases, output first) are tried in order. The
+        fallbacks are remembered, so the per-table re-bind
+        (``core/pipeline.py``) calls with no argument and still resolves
+        the same schema.
+
+        Args:
+            fallback_databases: Candidate databases for the scratch
+                schema, tried in order after the session's own database.
         """
         from ovid2.drivers.snowflake.staging.disc import (
             _ensure_writable_staging_schema,
         )
 
+        if fallback_databases:
+            self._workspace_fallbacks = tuple(fallback_databases)
+
         native = self._native
         if native is None:
             native = self.get_session().native  # type: ignore[attr-defined]
 
-        staging_schema = _ensure_writable_staging_schema(native)
+        staging_schema = _ensure_writable_staging_schema(
+            native, fallback_databases=self._workspace_fallbacks
+        )
         database = staging_schema.partition(".")[0]
         native.sql(f"USE DATABASE {database}").collect()  # noqa: OVID2001 session state
         native.sql(f"USE SCHEMA {staging_schema}").collect()  # noqa: OVID2001 session state
+
+    def create_typed_dataframe(
+        self,
+        rows: list[tuple[Any, ...]],
+        schema: list[tuple[str, str]],
+    ) -> Any:
+        """Build a Snowpark DataFrame from Python rows + a portable schema.
+
+        See :meth:`BaseEngine.create_typed_dataframe`. Every column is
+        nullable.
+
+        Raises:
+            ValueError: On an unknown portable type name.
+        """
+        from snowflake.snowpark import types as T
+
+        fields = []
+        for name, type_name in schema:
+            cls_name = _PORTABLE_SNOWPARK_TYPES.get(type_name)
+            if cls_name is None:
+                raise ValueError(f"create_typed_dataframe: unknown portable type {type_name!r}")
+            fields.append(T.StructField(name, getattr(T, cls_name)(), True))
+        native = self.native()
+        return native.create_dataframe(rows, schema=T.StructType(fields))
 
     def get_functions(self) -> EngineFunctions:
         """Return the cached Snowpark :class:`EngineFunctions` adapter."""

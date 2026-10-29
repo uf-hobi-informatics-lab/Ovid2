@@ -101,7 +101,6 @@ Operator requirements
 
 from __future__ import annotations
 
-import atexit
 import contextlib
 import logging
 import re
@@ -109,6 +108,7 @@ from typing import TYPE_CHECKING, Any
 
 from ovid2.core.engines.stager import (
     SnowparkStagingStrategy,
+    register_session_cleanup,
     register_snowpark_strategy,
 )
 
@@ -482,7 +482,9 @@ class SnowparkDatabricksStrategy(SnowparkStagingStrategy):
                         exc,
                     )
 
-        atexit.register(_cleanup)
+        # Runs over the live session in ``SnowparkEngine.stop_session``
+        # (atexit is only the backstop — by then the session is closed).
+        register_session_cleanup(_native_session(session), _cleanup)
 
     def _register_bounce_prefix(
         self,

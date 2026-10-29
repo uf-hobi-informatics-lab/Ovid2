@@ -901,7 +901,7 @@ class TestExtractErrorFromLog:
             "supports families ['spark']). Snowpark DataFrames live "
             "inside Snowflake and cannot read/write non-Snowflake "
             "peripherals; use '--engine pyspark' for cross-peripheral "
-            "copies (the Bitnami base image ships the JDBC + "
+            "copies (the ovid2 runtime image ships the JDBC + "
             "hadoop-aws + ABFS drivers).\n"
         )
         got = _extract_error_from_log(self._write(tmp_path, content))
@@ -1043,7 +1043,7 @@ class TestExtractErrorFromLog:
             " Container ovid2-master-20260806-210407-b8f985 Created \n"
             " Container ovid2-master-20260806-210407-b8f985 Started \n"
             "Traceback (most recent call last):\n"
-            '  File "/opt/bitnami/python/bin/ovid2", line 6, in <module>\n'
+            '  File "/usr/local/bin/ovid2", line 6, in <module>\n'
             "    sys.exit(main())\n"
             '  File "/app/src/ovid2/cli/__main__.py", line 137, in main\n'
             "    return int(entry(args))\n"

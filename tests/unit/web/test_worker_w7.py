@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -38,7 +38,7 @@ def test_dispatch_fires_due_interval_route(
     )
     pipelines_svc.write_pipeline("r_int", payload, actor="test", create_only=True)
     # Force next_fire_at into the past so the tick fires immediately.
-    past = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+    past = (datetime.now(UTC) - timedelta(minutes=5)).isoformat()
     from ovid2.web import db as web_db
 
     pipelines_svc._ensure_state_schema()
@@ -78,7 +78,7 @@ def test_dispatch_respects_disabled_flag(
         trigger=PipelineTrigger(type="interval", interval_minutes=1),
     )
     pipelines_svc.write_pipeline("r_off", payload, actor="test", create_only=True)
-    past = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+    past = (datetime.now(UTC) - timedelta(minutes=5)).isoformat()
     from ovid2.web import db as web_db
 
     with web_db.connect() as conn:

@@ -120,13 +120,13 @@ def test_volume_mounts_includes_spark_work_and_logs(
 ) -> None:
     """Per-invocation ``spark_work_dir`` + ``spark_logs_dir`` are bound rw.
 
-    Root cause guarded here: the Bitnami base image ships
-    ``/opt/bitnami/spark/{work,logs}`` as ``0775 ovid2:root``. With
+    Root cause guarded here: the image's ``$SPARK_HOME/{work,logs}``
+    (``/opt/spark/…``) may not be writable for the host uid. With
     ``--user $UID:$GID`` (needed so ``secrets.d/*.json`` mode ``0o600``
     is readable, per AGENTS.md §7), an arbitrary host uid cannot write
     to either baked-in path. Every worker JVM then fails executor
     launch with ``IOException: Failed to create directory
-    /opt/bitnami/spark/work/app-<id>/<executor>/``. After
+    /opt/spark/work/app-<id>/<executor>/``. After
     ``MAX_EXECUTOR_RETRIES`` (10) failures the master flags the app
     FAILED and the driver crashes mid-``SparkSession.builder.getOrCreate()``
     with the classic ``Master removed our application: FAILED`` +
@@ -142,9 +142,9 @@ def test_volume_mounts_includes_spark_work_and_logs(
 
     mounts = compose_module._volume_mounts(instance=_instance)
     joined = "\n".join(mounts)
-    assert f"{_instance.spark_work_dir}:/opt/bitnami/spark/work:rw" in joined, (
+    assert f"{_instance.spark_work_dir}:/opt/spark/work:rw" in joined, (
         f"spark_work_dir not bound: {joined!r}"
     )
-    assert f"{_instance.spark_logs_dir}:/opt/bitnami/spark/logs:rw" in joined, (
+    assert f"{_instance.spark_logs_dir}:/opt/spark/logs:rw" in joined, (
         f"spark_logs_dir not bound: {joined!r}"
     )

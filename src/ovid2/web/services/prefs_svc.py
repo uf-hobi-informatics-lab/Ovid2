@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
@@ -200,6 +200,6 @@ def save_appearance(user_id: str, payload: Any) -> dict[str, Any]:
             "VALUES (?, ?, ?) "
             "ON CONFLICT(user_id) DO UPDATE SET "
             "appearance_json = excluded.appearance_json, updated_at = excluded.updated_at",
-            (user_id, json.dumps(doc, sort_keys=True), datetime.now(timezone.utc).isoformat()),
+            (user_id, json.dumps(doc, sort_keys=True), datetime.now(UTC).isoformat()),
         )
     return doc

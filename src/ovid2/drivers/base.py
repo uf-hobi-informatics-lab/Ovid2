@@ -40,6 +40,7 @@ Design rules:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -192,19 +193,167 @@ class StorageEntry:
             ``stat``, blob / object size, Snowflake ``SHOW TABLES``
             ``bytes``). ``None`` when unknown — never computed by
             scanning data.
+        modified_at: ISO-8601 UTC timestamp of the last modification
+            when the listing reports it for free (file ``mtime``, object
+            ``LastModified``, warehouse ``last_altered``). ``None`` when
+            unknown.
+        row_count: Row count when the listing reports it for free
+            (Snowflake ``SHOW TABLES`` ``rows``). ``None`` when unknown.
     """
 
     name: str
     kind: str  # ``dir`` | ``file`` | ``table``
     path: str
     size_bytes: int | None = None
+    modified_at: str | None = None
+    row_count: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        """Return a JSON-serialisable dict (``size_bytes`` only when known)."""
+        """Return a JSON-serialisable dict (optional fields only when known)."""
         payload: dict[str, Any] = {"name": self.name, "kind": self.kind, "path": self.path}
         if self.size_bytes is not None:
             payload["size_bytes"] = self.size_bytes
+        if self.modified_at is not None:
+            payload["modified_at"] = self.modified_at
+        if self.row_count is not None:
+            payload["row_count"] = self.row_count
         return payload
+
+
+# ---------------------------------------------------------------------------
+# Table introspection value objects (Data Space explorer)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ColumnInfo:
+    """One column / field of a table.
+
+    Attributes:
+        name: Column name as stored.
+        type: Backend-reported type (``VARCHAR(16777216)``, ``int64``),
+            or an inferred one for headered text files (``string``,
+            ``integer``, ``decimal``, ``date``).
+        nullable: ``True`` / ``False`` when the backend reports it,
+            ``None`` when unknown (text files).
+    """
+
+    name: str
+    type: str = ""
+    nullable: bool | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serialisable dict."""
+        return {"name": self.name, "type": self.type, "nullable": self.nullable}
+
+
+@dataclass(frozen=True)
+class TableInfo:
+    """Metadata of one table / data file, as shown on the table detail page.
+
+    Every field except ``name`` / ``path`` is optional: a backend fills
+    what it can report *cheaply* (metadata queries, file footers,
+    ``stat``) and never scans the data to do so. A full row count for
+    headered text files is :meth:`Driver.count_rows`, run on demand.
+
+    Attributes:
+        name: Table or file name.
+        path: The round-trippable listing path (same as the
+            :class:`StorageEntry` path it came from).
+        kind: ``table`` | ``view`` | ``file``.
+        format: ``csv`` | ``parquet`` | ``json`` | ``table`` | ``view`` |
+            ``unknown``.
+        columns: The fields, in storage order.
+        row_count: Row count when cheaply known.
+        row_count_exact: ``False`` when ``row_count`` is an estimate.
+        size_bytes: Storage size.
+        modified_at: ISO-8601 UTC last-modified timestamp.
+        created_at: ISO-8601 UTC creation timestamp (warehouses).
+        ddl: The table definition (warehouses / databases only).
+        delimiter: Detected field delimiter (text files only).
+        parts: Number of part files (Spark-written directory tables).
+        previewable: ``False`` when rows cannot be read (unknown file
+            type); the explorer then shows stats only.
+        message: Human-facing note (why something is missing).
+    """
+
+    name: str
+    path: str
+    kind: str = "table"
+    format: str = "unknown"
+    columns: tuple[ColumnInfo, ...] = ()
+    row_count: int | None = None
+    row_count_exact: bool = True
+    size_bytes: int | None = None
+    modified_at: str | None = None
+    created_at: str | None = None
+    ddl: str | None = None
+    delimiter: str | None = None
+    parts: int | None = None
+    previewable: bool = True
+    message: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serialisable dict."""
+        return {
+            "name": self.name,
+            "path": self.path,
+            "kind": self.kind,
+            "format": self.format,
+            "columns": [c.to_dict() for c in self.columns],
+            "row_count": self.row_count,
+            "row_count_exact": self.row_count_exact,
+            "size_bytes": self.size_bytes,
+            "modified_at": self.modified_at,
+            "created_at": self.created_at,
+            "ddl": self.ddl,
+            "delimiter": self.delimiter,
+            "parts": self.parts,
+            "previewable": self.previewable,
+            "message": self.message,
+        }
+
+
+@dataclass(frozen=True)
+class TableSample:
+    """The first rows of a table, stringified for display / export.
+
+    Attributes:
+        columns: Column names, in order.
+        rows: Row values (``None`` for SQL ``NULL`` / empty cells).
+        truncated: ``True`` when the table holds more rows than returned.
+    """
+
+    columns: tuple[str, ...]
+    rows: tuple[tuple[Any, ...], ...] = ()
+    truncated: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serialisable dict (values coerced to JSON scalars)."""
+        return {
+            "columns": list(self.columns),
+            "rows": [[json_scalar(v) for v in row] for row in self.rows],
+            "truncated": self.truncated,
+        }
+
+
+def json_scalar(value: Any) -> Any:
+    """Coerce one cell value into a JSON-friendly scalar.
+
+    ``None`` / ``bool`` / ``int`` / ``float`` / ``str`` pass through;
+    dates, decimals, bytes and everything else are stringified so a
+    sample / export never fails on an exotic type.
+    """
+    if value is None or isinstance(value, (bool, int, str)):
+        return value
+    if isinstance(value, float):
+        return value if value == value and value not in (float("inf"), float("-inf")) else None
+    if isinstance(value, (bytes, bytearray)):
+        return value.hex() if len(value) <= 64 else value[:64].hex() + "…"
+    iso = getattr(value, "isoformat", None)
+    if callable(iso):
+        return str(iso())
+    return str(value)
 
 
 # ---------------------------------------------------------------------------
@@ -300,6 +449,22 @@ class Driver(ABC):
         Used by D6 route validation. Default is ``None`` (untyped).
         Snowflake overrides to inspect a ``cdm`` key on the location.
         """
+        return None
+
+    @classmethod
+    def workspace_database(cls, location: dict[str, Any] | None) -> str | None:
+        """Return the warehouse database this location lives in, if any.
+
+        Compute engines that create scratch objects *inside* a warehouse
+        (Snowpark's temp views / transient staging tables) use this as a
+        fallback namespace when their own configuration names no
+        database. Pure metadata: no credentials, no I/O. The address is
+        never written through this — it only names a database the role
+        is expected to be able to use.
+
+        Default ``None`` (file / object stores have no database).
+        """
+        del location
         return None
 
     # ------------------------------------------------------------------
@@ -564,6 +729,80 @@ class Driver(ABC):
         return {}
 
     # ------------------------------------------------------------------
+    # Table introspection (control plane — Data Space explorer)
+    # ------------------------------------------------------------------
+    #
+    # Four optional capabilities, all keyed on the *listing path* a
+    # ``file`` / ``table`` :class:`StorageEntry` carries (``entry.path``
+    # from :meth:`list_dir`). They run in the executor tier (``ovid2
+    # tools describe-table`` / ``sample-table`` / ``count-rows`` /
+    # ``export-table``) and never need an engine session: file stores
+    # read headers / parquet footers with pyarrow, warehouses run
+    # metadata queries. The default raises ``NotImplementedError`` —
+    # the web tier renders "not available for <type>".
+
+    def describe_table(self, path: str) -> TableInfo:
+        """Return the metadata of the table / data file at listing ``path``.
+
+        Must be cheap: metadata queries, file ``stat``, parquet footers,
+        a CSV header line. Never a full data scan.
+
+        Raises:
+            NotImplementedError: Default — capability absent.
+            FileNotFoundError: When ``path`` does not exist.
+            ValueError: When ``path`` is not a table / data file.
+        """
+        raise NotImplementedError(f"Driver '{self.type_name}' does not implement describe_table.")
+
+    def sample_rows(self, path: str, limit: int = 100) -> TableSample:
+        """Return at most ``limit`` leading rows of the table at ``path``.
+
+        Raises:
+            NotImplementedError: Default — capability absent.
+        """
+        raise NotImplementedError(f"Driver '{self.type_name}' does not implement sample_rows.")
+
+    def iter_rows(
+        self, path: str, limit: int | None = None, *, batch_size: int = 5000
+    ) -> tuple[list[str], Iterator[list[tuple[Any, ...]]]]:
+        """Stream the rows of the table at ``path`` (for export).
+
+        Returns ``(columns, batches)`` where ``batches`` yields lists of
+        row tuples. ``limit=None`` streams the whole table.
+
+        The default derives a bounded stream from :meth:`sample_rows`
+        (so a driver implementing only ``sample_rows`` still exports up
+        to ``limit`` rows); drivers override with a true stream.
+
+        Raises:
+            NotImplementedError: When neither is implemented, or when
+                ``limit`` is ``None`` and only ``sample_rows`` exists.
+        """
+        if limit is None:
+            raise NotImplementedError(
+                f"Driver '{self.type_name}' does not implement full-table streaming."
+            )
+        sample = self.sample_rows(path, limit)
+        rows = list(sample.rows)
+
+        def _batches() -> Iterator[list[tuple[Any, ...]]]:
+            for i in range(0, len(rows), max(1, batch_size)):
+                yield rows[i : i + batch_size]
+
+        return list(sample.columns), _batches()
+
+    def count_rows(self, path: str) -> int:
+        """Return the exact row count of the table at ``path``.
+
+        May scan the data (a CSV line count, ``SELECT COUNT(*)``) — the
+        explorer only calls it when the operator presses *Count rows*.
+
+        Raises:
+            NotImplementedError: Default — capability absent.
+        """
+        raise NotImplementedError(f"Driver '{self.type_name}' does not implement count_rows.")
+
+    # ------------------------------------------------------------------
     # Legacy bridge
     # ------------------------------------------------------------------
 
@@ -583,9 +822,14 @@ class Driver(ABC):
 
 
 __all__ = [
+    "ColumnInfo",
     "ConnectionFieldSpec",
     "Driver",
     "FieldSpec",
     "LocationField",
     "ProbeResult",
+    "StorageEntry",
+    "TableInfo",
+    "TableSample",
+    "json_scalar",
 ]

@@ -257,6 +257,9 @@ class StorageBrowseEntry(BaseModel):
     name: str
     kind: str = Field(..., description="``dir`` | ``file`` | ``table``.")
     path: str = Field(..., description="Round-trippable prefix for the next listing.")
+    size_bytes: int | None = Field(None, description="Size when the store reports it.")
+    modified_at: str | None = Field(None, description="ISO-8601 UTC last-modified time.")
+    row_count: int | None = Field(None, description="Row count when reported for free.")
 
 
 class StorageBrowseResponse(BaseModel):
@@ -1975,6 +1978,80 @@ class OdsEntryModel(BaseModel):
     path: str = Field(..., description="The child's full Data Space path (``/<conn>/<…>``).")
     type: str = Field("", description="Storage type (disc / snowflake / s3 / …).")
     size_bytes: int | None = None
+    modified_at: str | None = Field(None, description="ISO-8601 UTC last-modified time.")
+    row_count: int | None = Field(None, description="Row count when reported for free.")
+
+
+class OdsColumnModel(BaseModel):
+    """One field of a table on the Data Space table detail page."""
+
+    name: str
+    type: str = ""
+    nullable: bool | None = None
+
+
+class OdsTableDetail(BaseModel):
+    """Response for ``GET /api/v1/dataspace/table?path=…`` — one table's stats.
+
+    Everything is metadata-cheap (warehouse ``INFORMATION_SCHEMA``, file
+    ``stat``, parquet footers, a CSV header). ``row_count_exact=False``
+    flags an estimate; ``GET /api/v1/dataspace/table/count`` returns the
+    exact number.
+    """
+
+    path: str = Field(..., description="Data Space path of the table.")
+    connection: str
+    type: str = Field("", description="Storage type.")
+    location: str = Field("", description="Listing path under the storage account.")
+    name: str
+    kind: str = Field("table", description="``table`` | ``view`` | ``file``.")
+    format: str = Field("unknown", description="csv / parquet / json / table / view / unknown.")
+    columns: list[OdsColumnModel] = Field(default_factory=list)
+    row_count: int | None = None
+    row_count_exact: bool = True
+    size_bytes: int | None = None
+    modified_at: str | None = None
+    created_at: str | None = None
+    ddl: str | None = Field(None, description="Table definition (databases only).")
+    delimiter: str | None = None
+    parts: int | None = Field(None, description="Part files of a directory table.")
+    supported: bool = Field(True, description="False when the storage type cannot describe tables.")
+    previewable: bool = Field(True, description="False when rows cannot be read.")
+    message: str | None = None
+    export_limits: dict[str, int] = Field(
+        default_factory=dict, description="Synchronous export row cap per format."
+    )
+
+
+class OdsTableSample(BaseModel):
+    """Response for ``GET /api/v1/dataspace/table/sample`` — the first rows."""
+
+    path: str
+    columns: list[str] = Field(default_factory=list)
+    rows: list[list[Any]] = Field(default_factory=list)
+    truncated: bool = False
+    limit: int = 0
+    supported: bool = True
+    message: str | None = None
+
+
+class OdsExportJobRequest(BaseModel):
+    """Payload for ``POST /api/v1/dataspace/table/export-jobs`` (full-table export)."""
+
+    path: str = Field(..., description="Data Space path of the table.")
+    format: str = Field("csv", description="csv | xlsx.")
+    delimiter: str = Field(",", max_length=3, description="CSV delimiter (one char, or 'tab').")
+    header_case: str = Field("asis", description="asis | upper | lower.")
+
+
+class OdsTableCount(BaseModel):
+    """Response for ``GET /api/v1/dataspace/table/count`` — an exact row count."""
+
+    path: str
+    row_count: int | None = None
+    exact: bool = True
+    supported: bool = True
+    message: str | None = None
 
 
 class OdsListing(BaseModel):

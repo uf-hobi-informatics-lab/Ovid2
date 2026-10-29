@@ -58,7 +58,7 @@ RESERVED_CONTAINER_PATHS: frozenset[str] = frozenset(
 )
 
 #: Container paths that are illegal on their own (``/`` shadows the
-#: entire container fs; ``/tmp`` is a Bitnami-managed writable tmpfs
+#: entire container fs; ``/tmp`` is the image's writable scratch dir
 #: whose contents the pipeline relies on).
 FORBIDDEN_CONTAINER_PATHS: frozenset[str] = frozenset({"/", "/tmp"})  # noqa: S108 — a denylist
 

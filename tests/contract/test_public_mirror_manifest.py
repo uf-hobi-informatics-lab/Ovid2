@@ -19,14 +19,10 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
-
-try:  # Python 3.11+
-    import tomllib
-except ModuleNotFoundError:  # pragma: no cover - Python 3.10
-    import tomli as tomllib  # type: ignore[no-redef]
 
 _ROOT = Path(__file__).resolve().parents[2]
 _PUBLIC = _ROOT / "scripts" / "public"

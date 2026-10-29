@@ -34,7 +34,13 @@ def disc_account(isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyP
     def _browse(name: str, prefix: str | None = None) -> StorageBrowseResponse:
         driver = DiscDriver(args={"host_path": str(root)}, secrets={}, location={})
         entries = [
-            StorageBrowseEntry(name=e.name, kind=e.kind, path=e.path)
+            StorageBrowseEntry(
+                name=e.name,
+                kind=e.kind,
+                path=e.path,
+                size_bytes=e.size_bytes,
+                modified_at=e.modified_at,
+            )
             for e in driver.list_dir(prefix)
         ]
         return StorageBrowseResponse(
@@ -102,8 +108,19 @@ class TestResolve:
 class TestHtml:
     def test_root_and_folder_pages_render(self, web_client, disc_account) -> None:
         r = web_client.get("/dataspace")
-        assert r.status_code == 200 and "/inbox" in r.text
+        assert r.status_code == 200
+        assert "/inbox" in r.text  # account in the boot JSON + <noscript> list
+        assert "dataspace_explorer.js" in r.text
         r = web_client.get("/dataspace/inbox/landing/2026_03")
         assert r.status_code == 200
-        assert "DEMOGRAPHIC.csv" in r.text
-        assert "inbox/landing/2026_03" in r.text
+        # The explorer opens at the deep-linked path (crumbs + boot JSON).
+        assert '"path": "/inbox/landing/2026_03"' in r.text
+        assert 'data-ds-nav="/inbox/landing/2026_03"' in r.text
+
+    def test_table_deep_link_renders_shell(self, web_client, disc_account) -> None:
+        r = web_client.get("/dataspace/inbox/landing/2026_03/DEMOGRAPHIC.csv")
+        assert r.status_code == 200
+        assert "data-ds-export-modal" in r.text
+
+    def test_bad_path_400(self, web_client, disc_account) -> None:
+        assert web_client.get("/dataspace/a/@b").status_code == 400

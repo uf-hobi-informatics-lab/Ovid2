@@ -101,7 +101,19 @@ def probe_auth_from_config(
         )
 
 
-__all__ = ["list_dir_from_config", "list_tables_from_config", "probe_auth_from_config"]
+__all__ = [
+    "list_dir_from_config",
+    "list_tables_from_config",
+    "probe_auth_from_config",
+    "tabular_source_from_config",
+]
+
+
+def _iso(value: Any) -> str | None:
+    """Render a boto3 ``datetime`` as ISO-8601 UTC (``None`` passes)."""
+    from ovid2.drivers._tabular import iso_utc
+
+    return iso_utc(value) if value is not None else None
 
 
 def list_dir_from_config(
@@ -183,6 +195,7 @@ def list_dir_from_config(
                         kind="file",
                         path=rel,
                         size_bytes=int(size) if size is not None else None,
+                        modified_at=_iso(obj.get("LastModified")),
                     )
                 )
     except Exception as exc:
@@ -275,3 +288,67 @@ def list_tables_from_config(
         )
         for name in sorted(totals, key=str.lower)
     ]
+
+
+def tabular_source_from_config(
+    args: dict[str, Any],
+    secrets: dict[str, Any],
+    location: dict[str, Any],
+) -> Any:
+    """Return an :class:`~ovid2.drivers._tabular.ObjectStoreSource` over the bucket.
+
+    Paths are keys relative to ``location.path`` — the same paths
+    :func:`list_dir_from_config` returns. Objects are read with ranged
+    ``GetObject`` so parquet footers / CSV headers never download the
+    whole object.
+
+    Raises:
+        NotImplementedError: boto3 absent / no bucket.
+    """
+    from ovid2.drivers._tabular import ObjectStoreSource
+
+    try:
+        import boto3
+    except ImportError as exc:
+        raise NotImplementedError("boto3 is not installed on this host.") from exc
+    bucket = location.get("bucket") or args.get("bucket_default")
+    if not bucket:
+        raise NotImplementedError(
+            "No bucket set on the storage account (location.bucket or connection bucket_default)."
+        )
+    client = _build_s3_client(boto3, args, secrets)
+
+    def head(key: str) -> tuple[int, str | None] | None:
+        try:
+            meta = client.head_object(Bucket=bucket, Key=key)
+        except Exception as exc:
+            code = str(getattr(exc, "response", {}).get("Error", {}).get("Code", ""))
+            if code in ("404", "NoSuchKey", "NotFound"):
+                return None
+            raise
+        return int(meta.get("ContentLength") or 0), _iso(meta.get("LastModified"))
+
+    def listing(prefix: str) -> tuple[list[str], list[tuple[str, int, str | None]]]:
+        dirs: list[str] = []
+        files: list[tuple[str, int, str | None]] = []
+        paginator = client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix, Delimiter="/"):
+            for cp in page.get("CommonPrefixes", []) or []:
+                name = str(cp.get("Prefix", ""))[len(prefix) :].rstrip("/")
+                if name:
+                    dirs.append(name)
+            for obj in page.get("Contents", []) or []:
+                name = str(obj.get("Key", ""))[len(prefix) :]
+                if name and "/" not in name:
+                    files.append((name, int(obj.get("Size") or 0), _iso(obj.get("LastModified"))))
+        return dirs, files
+
+    def fetch(key: str, start: int, end: int) -> bytes:
+        if end <= start:
+            return b""
+        body = client.get_object(Bucket=bucket, Key=key, Range=f"bytes={start}-{end - 1}")["Body"]
+        return bytes(body.read())
+
+    return ObjectStoreSource(
+        head=head, listing=listing, fetch=fetch, base=str(location.get("path") or "")
+    )

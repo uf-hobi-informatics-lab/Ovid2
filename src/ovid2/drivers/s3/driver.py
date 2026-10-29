@@ -14,8 +14,8 @@ consumes so any caller still routing through
 unchanged.
 
 Container requirements: S3 needs ``hadoop-aws`` + the AWS SDK bundle
-on the JVM classpath. Those jars are baked into the Bitnami Spark
-base image today, so :meth:`S3Driver.container_requirements` returns
+on the JVM classpath. Those jars are baked into the runtime image's
+``$SPARK_HOME/jars`` today, so :meth:`S3Driver.container_requirements` returns
 an empty tuple — the declaration is a follow-up (adding a
 :class:`JavaPackage` here would require the collector's
 ``spark.jars.packages`` wiring, which is the E2 milestone).
@@ -26,6 +26,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from ovid2.drivers._table_listing import PrefixTableListingMixin
+from ovid2.drivers._tabular import TabularIntrospectionMixin
 from ovid2.drivers.base import (
     ConnectionFieldSpec,
     Driver,
@@ -47,6 +48,7 @@ from ovid2.drivers.s3.probe import (
     list_dir_from_config,
     list_tables_from_config,
     probe_auth_from_config,
+    tabular_source_from_config,
 )
 
 if TYPE_CHECKING:
@@ -54,7 +56,7 @@ if TYPE_CHECKING:
     from ovid2.drivers.s3.spark import S3IO
 
 
-class S3Driver(PrefixTableListingMixin, Driver):
+class S3Driver(TabularIntrospectionMixin, PrefixTableListingMixin, Driver):
     """Native driver for the ``s3`` peripheral.
 
     Constructor keeps the uniform ``(args, secrets, location)`` shape
@@ -109,6 +111,10 @@ class S3Driver(PrefixTableListingMixin, Driver):
         return list_tables_from_config(
             dict(self.args), dict(self.secrets), dict(self.location), sub_prefix
         )
+
+    def _tabular_source(self) -> Any:
+        """Ranged-read :class:`ObjectStoreSource` for the Data Space explorer."""
+        return tabular_source_from_config(dict(self.args), dict(self.secrets), dict(self.location))
 
     # ------------------------------------------------------------------
     # Introspection (debug / display)

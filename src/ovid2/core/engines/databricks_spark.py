@@ -23,6 +23,7 @@ never needs to gate on capabilities.
 from __future__ import annotations
 
 import contextlib
+from datetime import UTC
 from typing import TYPE_CHECKING, Any
 
 from ovid2.core.engines.base import BaseEngine, EngineTestResult
@@ -149,12 +150,12 @@ class DatabricksSparkEngine(BaseEngine):
         UI still ticks, but no per-task numbers.
         """
         import time
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from ovid2.core.engines.metrics import EngineMetricsSample
 
         now_ms = int(time.monotonic() * 1000)
-        wall = datetime.now(timezone.utc).isoformat()
+        wall = datetime.now(UTC).isoformat()
 
         if self._session is None:
             return EngineMetricsSample(t_ms=now_ms, wall_iso=wall, engine_family=self.family.value)

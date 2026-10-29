@@ -61,15 +61,16 @@ cleans before the session naturally ends. Skipped when
 
 from __future__ import annotations
 
-import atexit
 import contextlib
 import logging
 import os
 import re
+from datetime import UTC
 from typing import TYPE_CHECKING, Any
 
 from ovid2.core.engines.stager import (
     SnowparkStagingStrategy,
+    register_session_cleanup,
     register_snowpark_strategy,
 )
 
@@ -322,7 +323,9 @@ class SnowparkAzureBlobStrategy(SnowparkStagingStrategy):
                         exc,
                     )
 
-        atexit.register(_cleanup)
+        # Runs over the live session in ``SnowparkEngine.stop_session``
+        # (atexit is only the backstop — by then the session is closed).
+        register_session_cleanup(_native_session(session), _cleanup)
 
     def _register_stage(self, session: EngineSession, stage_name: str) -> None:
         self._stages.setdefault(id(session), []).append(stage_name)
@@ -680,7 +683,7 @@ def _generate_container_sas(
     Raises:
         ValueError: When the account name cannot be resolved.
     """
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from azure.storage.blob import (
         ContainerSasPermissions,
@@ -696,7 +699,7 @@ def _generate_container_sas(
     if not account:
         raise ValueError("SnowparkAzureBlobStrategy: cannot generate SAS without an account name.")
 
-    expiry = datetime.now(timezone.utc) + timedelta(hours=12)
+    expiry = datetime.now(UTC) + timedelta(hours=12)
     return generate_container_sas(
         account_name=account,
         container_name=container,

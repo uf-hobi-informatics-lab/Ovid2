@@ -45,6 +45,9 @@ FORBIDDEN_PREFIXES: tuple[str, ...] = (
     "/data/",
     "/ovid_credentials/",
     "/opt/bitnami/",
+    # Runtime-image ``$SPARK_HOME`` — only ``core/docker.py`` (which owns
+    # ``SPARK_HOME_IN_CONTAINER``) and ``core/compose.py`` may spell it.
+    "/opt/spark/",
 )
 # Bare forms (``"/app"``, ``"/data"``, ``"/ovid_credentials"``) count too.
 FORBIDDEN_EXACT: frozenset[str] = frozenset(
@@ -52,6 +55,7 @@ FORBIDDEN_EXACT: frozenset[str] = frozenset(
         "/app",
         "/data",
         "/ovid_credentials",
+        "/opt/spark",
     }
 )
 

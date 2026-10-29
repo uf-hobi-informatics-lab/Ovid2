@@ -69,14 +69,15 @@ the hook is skipped (useful for post-mortem inspection).
 
 from __future__ import annotations
 
-import atexit
 import logging
 import os
 import re
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, cast
 
 from ovid2.core.engines.stager import (
     SnowparkStagingStrategy,
+    register_session_cleanup,
     register_snowpark_strategy,
 )
 
@@ -487,7 +488,9 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
                         exc,
                     )
 
-        atexit.register(_cleanup)
+        # Runs over the live session in ``SnowparkEngine.stop_session``
+        # (atexit is only the backstop — by then the session is closed).
+        register_session_cleanup(_native_session(session), _cleanup)
 
     def _register_temp_table(
         self,
@@ -683,7 +686,10 @@ def _writable_current_database(current_db: Any) -> str | None:
     return name
 
 
-def _ensure_writable_staging_schema(native: Any) -> str:
+def _ensure_writable_staging_schema(
+    native: Any,
+    fallback_databases: Sequence[str] = (),
+) -> str:
     """Return a fully-qualified ``<db>.<schema>`` we can CREATE TABLE in.
 
     The strategy stages disc data through a transient table (see
@@ -697,23 +703,31 @@ def _ensure_writable_staging_schema(native: Any) -> str:
     1. ``$OVID2_SNOWPARK_STAGING_SCHEMA`` — operator override.
        Interpreted as either ``<db>.<schema>`` (used verbatim after
        an existence probe) or a bare ``<schema>`` (paired with the
-       session's current *writable* database).
+       session's current *writable* database, else the first
+       fallback database).
     2. ``<current_database>.OVID2_SNOWPARK_STAGING`` — created on
        demand. Requires ``CREATE SCHEMA`` on the current database.
        Idempotent (``CREATE SCHEMA IF NOT EXISTS``); the schema
        persists across runs so parallel invocations don't race on
        creation.
+    3. ``<fallback>.OVID2_SNOWPARK_STAGING`` for each of
+       ``fallback_databases`` in order (the run's Snowflake output /
+       input address databases). A fallback whose ``CREATE SCHEMA``
+       fails is skipped with a warning and the next one is tried.
 
     The account-shared system databases in
     :data:`_NON_WRITABLE_SYSTEM_DATABASES` (notably ``SNOWFLAKE`` — the
     fallback :func:`_ensure_current_database` injects for ``@~``
-    resolution) are treated as "no writable database bound": both
-    paths reject them via :func:`_writable_current_database` and raise
+    resolution) are treated as "no writable database bound": every
+    path rejects them via :func:`_writable_current_database` and raises
     an actionable error rather than attempting a doomed
     ``CREATE SCHEMA`` on a read-only shared database.
 
     Args:
         native: The real Snowpark session.
+        fallback_databases: Candidate databases tried after the
+            session's own database. Duplicates and system databases are
+            ignored.
 
     Returns:
         A fully-qualified ``<db>.<schema>`` string safe to use
@@ -721,19 +735,27 @@ def _ensure_writable_staging_schema(native: Any) -> str:
 
     Raises:
         RuntimeError: When no writable schema can be resolved. The
-            message names the resolution paths so the operator can
-            pick one.
+            message names the resolution paths (and every database
+            tried) so the operator can pick one.
     """
+    try:
+        session_db = native.get_current_database()
+    except Exception:
+        session_db = None
+    current_db = _writable_current_database(session_db)
+
+    fallbacks: list[str] = []
+    for raw in fallback_databases:
+        name = _writable_current_database(raw)
+        if name and name.upper() not in {f.upper() for f in fallbacks}:
+            fallbacks.append(name)
+
     override = os.environ.get("OVID2_SNOWPARK_STAGING_SCHEMA", "").strip()
     if override:
         if "." in override:
             return override
-        try:
-            current_db = native.get_current_database()
-        except Exception:
-            current_db = None
-        current_db = _writable_current_database(current_db)
-        if not current_db:
+        bound = current_db or (fallbacks[0] if fallbacks else None)
+        if not bound:
             raise RuntimeError(
                 "OVID2_SNOWPARK_STAGING_SCHEMA is set to a bare schema "
                 f"({override!r}) but the session has no writable current "
@@ -741,25 +763,55 @@ def _ensure_writable_staging_schema(native: Any) -> str:
                 "system database). Set the env var to '<db>.<schema>', or "
                 "configure the Snowpark engine's `database` field."
             )
-        return f"{current_db}.{override}"
+        return f"{bound}.{override}"
 
-    try:
-        current_db = native.get_current_database()
-    except Exception:
-        current_db = None
-    current_db = _writable_current_database(current_db)
-    if not current_db:
-        raise RuntimeError(
-            "SnowparkDiscStrategy: cannot resolve a writable staging "
-            "schema — the session has no writable current database "
-            "(it is unset or resolves to the shared read-only SNOWFLAKE "
-            "system database, where CREATE SCHEMA is forbidden). Set the "
-            "Snowpark engine's `database` field to a database your role "
-            "can create schemas in (e.g. the same database your output "
-            "address writes to), or export "
-            "OVID2_SNOWPARK_STAGING_SCHEMA=<db>.<schema>."
-        )
-    schema_fqn = f"{current_db}.OVID2_SNOWPARK_STAGING"
+    if current_db:
+        # The session's own database is authoritative: a failure here is
+        # a privilege problem the operator configured, not something a
+        # silent fallback should paper over.
+        return _create_staging_schema(native, current_db)
+
+    tried: list[str] = []
+    for candidate in fallbacks:
+        try:
+            return _create_staging_schema(native, candidate)
+        except RuntimeError as exc:
+            tried.append(candidate)
+            logger.warning(
+                "SnowparkDiscStrategy: fallback staging database %s unusable (%s); "
+                "trying the next candidate.",
+                candidate,
+                exc,
+            )
+
+    tried_note = f" Tried fallback database(s): {', '.join(tried)}." if tried else ""
+    raise RuntimeError(
+        "SnowparkDiscStrategy: cannot resolve a writable staging "
+        "schema — the session has no writable current database "
+        "(it is unset or resolves to the shared read-only SNOWFLAKE "
+        "system database, where CREATE SCHEMA is forbidden), and no "
+        "Snowflake input/output address database was usable." + tried_note + " Set the "
+        "Snowpark engine's `database` field to a database your role "
+        "can create schemas in (e.g. the same database your output "
+        "address writes to), or export "
+        "OVID2_SNOWPARK_STAGING_SCHEMA=<db>.<schema>."
+    )
+
+
+def _create_staging_schema(native: Any, database: str) -> str:
+    """``CREATE SCHEMA IF NOT EXISTS <database>.OVID2_SNOWPARK_STAGING``.
+
+    Args:
+        native: The real Snowpark session.
+        database: A writable (non-system) database name.
+
+    Returns:
+        The fully-qualified staging schema name.
+
+    Raises:
+        RuntimeError: When the schema cannot be created.
+    """
+    schema_fqn = f"{database}.OVID2_SNOWPARK_STAGING"
     try:
         native.sql(f"CREATE SCHEMA IF NOT EXISTS {schema_fqn}").collect()
         logger.info(
@@ -770,7 +822,7 @@ def _ensure_writable_staging_schema(native: Any) -> str:
     except Exception as exc:
         raise RuntimeError(
             f"SnowparkDiscStrategy: cannot create staging schema "
-            f"{schema_fqn} ({exc}). Grant CREATE SCHEMA on {current_db}, "
+            f"{schema_fqn} ({exc}). Grant CREATE SCHEMA on {database}, "
             "or export OVID2_SNOWPARK_STAGING_SCHEMA=<existing_writable_schema>."
         ) from exc
 

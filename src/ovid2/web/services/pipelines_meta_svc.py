@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import importlib
 import pkgutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -115,7 +115,7 @@ def _file_info(path: Path) -> PipelineFileInfo | None:
         name=path.name,
         size_bytes=int(stat.st_size),
         line_count=line_count,
-        mtime=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+        mtime=datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
     )
 
 

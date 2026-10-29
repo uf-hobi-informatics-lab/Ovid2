@@ -54,10 +54,7 @@ def test_script_defines_every_gate() -> None:
 def test_public_mirror_ships_the_script() -> None:
     if not _MANIFEST.is_file():
         pytest.skip("public-mirror tooling not present")
-    try:
-        import tomllib
-    except ModuleNotFoundError:  # Python 3.10
-        import tomli as tomllib  # type: ignore[no-redef]
+    import tomllib
 
     manifest = tomllib.loads(_MANIFEST.read_text(encoding="utf-8"))
     rel = "scripts/ci_checks.sh"

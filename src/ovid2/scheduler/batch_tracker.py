@@ -37,7 +37,7 @@ import logging
 import os
 import sqlite3
 import threading
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -284,7 +284,7 @@ class SqliteBatchTracker:
 
     def register_batch(self, batch_id: str, path: str) -> None:
         """Register a new batch with status ``NEW``."""
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
         with self._lock:
             self._conn.execute(
                 "INSERT OR IGNORE INTO data_batch "
@@ -303,7 +303,7 @@ class SqliteBatchTracker:
         _validate_status(status)
         if timestamp_field is not None:
             _validate_timestamp_field(timestamp_field)
-            now_iso = datetime.now(timezone.utc).isoformat()
+            now_iso = datetime.now(UTC).isoformat()
             sql = f"UPDATE data_batch SET status = ?, {timestamp_field} = ? WHERE batch_id = ?"
             params: tuple[Any, ...] = (status, now_iso, batch_id)
         else:
@@ -315,7 +315,7 @@ class SqliteBatchTracker:
 
     def get_ready_batches(self, min_wait_minutes: int = 10) -> list[dict[str, str]]:
         """Return NEW batches older than ``min_wait_minutes``, oldest first."""
-        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=int(min_wait_minutes))).isoformat()
+        cutoff = (datetime.now(UTC) - timedelta(minutes=int(min_wait_minutes))).isoformat()
         with self._lock:
             cursor = self._conn.execute(
                 "SELECT batch_id, path FROM data_batch "

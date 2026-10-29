@@ -37,6 +37,7 @@ import importlib
 import json
 import time
 from collections.abc import Iterator
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
@@ -364,11 +365,11 @@ def test_idle_expiry_forces_relogin(make_harness: Any, monkeypatch: pytest.Monke
 
     # Advance time well past the 45-minute idle TTL. sessions_svc reads the
     # wall clock via datetime.now(UTC); monkeypatch its clock forward.
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from ovid2.web.services import sessions_svc
 
-    real_now = datetime.now(timezone.utc)
+    real_now = datetime.now(UTC)
     future = real_now + timedelta(minutes=46)
 
     class _FrozenDatetime(datetime):

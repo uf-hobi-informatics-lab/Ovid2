@@ -17,6 +17,9 @@ Ships several commands:
 - ``new-pipeline`` — scaffold a new pipeline package from a pipeline
   template (copies an existing pipeline and rewrites its identity).
 - ``ods`` — Ovid Data Space read-only helpers.
+- ``describe-table`` / ``sample-table`` / ``count-rows`` /
+  ``export-table`` — Data Space explorer table ops (see
+  :mod:`ovid2.tools.table_ops`).
 
 ``raw_upload`` writes one table per file (``RAW_<pipeline>_<batch>_<file>``)
 so the output address can persist a per-run raw snapshot.
@@ -215,6 +218,12 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 
     # ``ovid2 tools ods ...`` — Ovid Data Space read-only helpers.
     _register_ods(tool_subparsers)
+
+    # ``ovid2 tools describe-table | sample-table | count-rows |
+    # export-table`` — Data Space explorer table ops (executor tier).
+    from ovid2.tools import table_ops as _table_ops
+
+    _table_ops.register(tool_subparsers)
 
     def _fallback(_args: argparse.Namespace) -> int:
         parser.print_help(sys.stderr)
@@ -707,7 +716,16 @@ def _ods_ls_entry(args: argparse.Namespace) -> int:
         "supported": supported,
         "message": message,
         "children": [
-            {"name": e.name, "kind": e.kind, "path": e.path, "type": e.type} for e in entries
+            {
+                "name": e.name,
+                "kind": e.kind,
+                "path": e.path,
+                "type": e.type,
+                "size_bytes": e.size_bytes,
+                "modified_at": e.modified_at,
+                "row_count": e.row_count,
+            }
+            for e in entries
         ],
     }
     sys.stdout.write(_json.dumps(payload) + "\n")

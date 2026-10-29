@@ -73,7 +73,17 @@ def _brokered_lister(
         response = storage_browse_svc.browse_storage(connection, prefix)
     except storage_browse_svc.StorageBrowseError as exc:
         raise OdsServiceError(str(exc)) from exc
-    entries = [{"name": e.name, "kind": e.kind, "path": e.path} for e in response.entries]
+    entries = [
+        {
+            "name": e.name,
+            "kind": e.kind,
+            "path": e.path,
+            "size_bytes": e.size_bytes,
+            "modified_at": e.modified_at,
+            "row_count": e.row_count,
+        }
+        for e in response.entries
+    ]
     return response.supported, entries, response.message
 
 
@@ -102,7 +112,13 @@ def list_path(path: str = "/") -> OdsListing:
         message=message,
         entries=[
             OdsEntryModel(
-                name=e.name, kind=e.kind, path=e.path, type=e.type, size_bytes=e.size_bytes
+                name=e.name,
+                kind=e.kind,
+                path=e.path,
+                type=e.type,
+                size_bytes=e.size_bytes,
+                modified_at=e.modified_at,
+                row_count=e.row_count,
             )
             for e in entries
         ],

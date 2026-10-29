@@ -99,6 +99,9 @@ def browse_storage(name: str, prefix: str | None = None) -> StorageBrowseRespons
             name=str(e.get("name", "")),
             kind=str(e.get("kind", "")),
             path=str(e.get("path", "")),
+            size_bytes=_int_or_none(e.get("size_bytes")),
+            modified_at=(str(e["modified_at"]) if e.get("modified_at") else None),
+            row_count=_int_or_none(e.get("row_count")),
         )
         for e in (result.get("entries") or [])
     ]
@@ -110,6 +113,16 @@ def browse_storage(name: str, prefix: str | None = None) -> StorageBrowseRespons
         message=result.get("message"),
         entries=entries,
     )
+
+
+def _int_or_none(raw: object) -> int | None:
+    """Return ``raw`` as an ``int`` or ``None`` (bools / junk rejected)."""
+    if isinstance(raw, bool) or raw is None:
+        return None
+    try:
+        return int(raw)  # type: ignore[call-overload,no-any-return]
+    except (TypeError, ValueError):
+        return None
 
 
 if __name__ == "__main__":  # pragma: no cover

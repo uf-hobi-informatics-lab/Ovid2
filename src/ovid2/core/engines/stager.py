@@ -23,7 +23,7 @@ may or may not be able to write directly.
 * For **Spark-family** engines the two operations are trivial:
   :meth:`Driver.read` / :meth:`Driver.write` are already Spark-native
   and can be called directly against any registered driver — the
-  Bitnami base image ships the connectors (JDBC, hadoop-aws, ABFS)
+  runtime image ships the connectors (JDBC, hadoop-aws, ABFS)
   every driver's ``spark.py`` module depends on.
 
 * For **Snowpark**, DataFrames live inside Snowflake compute; the only
@@ -71,6 +71,7 @@ via :func:`stager_class_for_engine_type` and consult
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -794,6 +795,62 @@ class SnowparkEngineStager(EngineStager):
 
 
 # ---------------------------------------------------------------------------
+# Session-scoped cleanup (stage files / transient tables)
+# ---------------------------------------------------------------------------
+
+#: ``id(native session)`` -> run-once cleanup callables registered by the
+#: Snowpark staging strategies. Drained by :func:`run_session_cleanups`.
+_SESSION_CLEANUPS: dict[int, list[Callable[[], None]]] = {}
+
+
+def register_session_cleanup(native: Any, fn: Callable[[], None]) -> Callable[[], None]:
+    """Schedule ``fn`` to run before ``native``'s session closes.
+
+    Staging strategies leave per-run artefacts (``@~`` stage files,
+    transient tables, external stages) that must be removed *over the
+    live session*. :meth:`SnowparkEngine.stop_session` calls
+    :func:`run_session_cleanups` just before closing the session; an
+    :mod:`atexit` hook is also registered as a backstop for runs that
+    never reach ``stop_session`` (crash, ``SIGKILL`` excepted). The
+    wrapper runs at most once, so whichever fires first wins.
+
+    Args:
+        native: The real Snowpark session the cleanup talks to.
+        fn: Zero-arg cleanup callable. Must not raise (strategies log).
+
+    Returns:
+        The run-once wrapper (the callable actually registered).
+    """
+    import atexit
+
+    done = {"ran": False}
+
+    def _once() -> None:
+        if done["ran"]:
+            return
+        done["ran"] = True
+        fn()
+
+    _SESSION_CLEANUPS.setdefault(id(native), []).append(_once)
+    atexit.register(_once)
+    return _once
+
+
+def run_session_cleanups(native: Any) -> None:
+    """Run (and forget) every cleanup registered for ``native``.
+
+    Never raises: a failing cleanup is logged and the rest still run.
+    """
+    import logging
+
+    for fn in _SESSION_CLEANUPS.pop(id(native), []):
+        try:
+            fn()
+        except Exception as exc:
+            logging.getLogger(__name__).warning("session cleanup failed: %s", exc)
+
+
+# ---------------------------------------------------------------------------
 # Registration helper (used by Phase C/D strategies)
 # ---------------------------------------------------------------------------
 
@@ -885,7 +942,9 @@ __all__ = [
     "SnowparkEngineStager",
     "SnowparkStagingStrategy",
     "SparkEngineStager",
+    "register_session_cleanup",
     "register_snowpark_strategy",
+    "run_session_cleanups",
     "stager_class_for_engine_family",
     "stager_class_for_engine_type",
 ]

@@ -34,11 +34,11 @@ read ``$XDG_CONFIG_HOME/ovid2/secrets.d/*.json`` (mode ``0o600``, owned
 by the invoking user).
 
 The per-invocation ``spark_work_dir`` and ``spark_logs_dir`` exist for
-the same reason as the nss-wrapper overlay: the Bitnami base image
-ships ``/opt/bitnami/spark/work`` and ``/opt/bitnami/spark/logs`` as
-``0775 ovid2:root``, so an arbitrary host uid cannot write to them.
-Every worker JVM would then fail ``IOException: Failed to create
-directory /opt/bitnami/spark/work/app-<id>/<executor>/`` at executor
+the same reason as the nss-wrapper overlay: the image's
+``$SPARK_HOME/work`` and ``$SPARK_HOME/logs`` (``/opt/spark/…``) must be
+writable by an arbitrary host uid, or
+every worker JVM would fail ``IOException: Failed to create
+directory $SPARK_HOME/work/app-<id>/<executor>/`` at executor
 launch, ``MAX_EXECUTOR_RETRIES`` (10) failures later the standalone
 master would mark the app FAILED, and the driver would crash mid-
 ``SparkSession.builder.getOrCreate()`` with ``Master removed our
@@ -117,12 +117,12 @@ class OvidInstance:
         compose_file: Path to the generated docker-compose file.
         spark_tmp_dir: Path to the instance-scoped Spark temp dir.
         spark_work_dir: Host path bind-mounted onto
-            ``/opt/bitnami/spark/work`` in master + workers + driver.
+            ``$SPARK_HOME/work`` in master + workers + driver.
             The Spark ``Worker`` process creates
             ``app-<id>/<executor>/`` subdirs here at executor-launch
             time; it must be writable by the invoking host uid.
         spark_logs_dir: Host path bind-mounted onto
-            ``/opt/bitnami/spark/logs`` in master + workers + driver.
+            ``$SPARK_HOME/logs`` in master + workers + driver.
             The Spark ``Worker`` process opens its log file here at
             startup; same permission requirement as ``spark_work_dir``.
         event_log:    Path to the JSONL event log for this instance.
@@ -182,10 +182,11 @@ class OvidInstance:
     ) -> tuple[Path, Path]:
         """Write the nss-wrapper ``passwd`` and ``group`` overlay files.
 
-        Bitnami's Spark image ships ``libnss_wrapper.so`` at
-        ``/opt/bitnami/common/lib/``. Bind-mounting these two files into
+        The runtime image ships ``libnss_wrapper.so`` (Debian
+        ``libnss-wrapper``) at ``ovid2.core.docker.NSS_WRAPPER_LIB``.
+        Bind-mounting these two files into
         the container at ``/etc/nss_wrapper/{passwd,group}`` and setting
-        ``LD_PRELOAD=/opt/bitnami/common/lib/libnss_wrapper.so`` +
+        ``LD_PRELOAD=<NSS_WRAPPER_LIB>`` +
         ``NSS_WRAPPER_PASSWD`` + ``NSS_WRAPPER_GROUP`` in the container
         environment lets an arbitrary uid resolve via ``getpwuid`` — which
         Java calls under ``System.getProperty("user.home")`` at every
@@ -231,12 +232,11 @@ class OvidInstance:
         - :data:`WORK_DIR` and :data:`DOCKER_DATA_DIR`.
         - :attr:`spark_tmp_dir` — legacy HOME/temp mount for the driver.
         - :attr:`spark_work_dir` and :attr:`spark_logs_dir` — mounted at
-          ``/opt/bitnami/spark/{work,logs}`` in the containers so the
+          ``$SPARK_HOME/{work,logs}`` in the containers so the
           Spark worker process (running as the invoking host uid) can
           create ``app-<id>/<executor>/`` subdirs and open its log
-          file. The Bitnami base image ships both paths as
-          ``0775 ovid2:root`` and the ``--user $UID:$GID`` override
-          leaves an arbitrary host uid without write access. These
+          file even when the baked-in dirs are not writable for the
+          ``--user $UID:$GID`` override. These
           two mounts short-circuit the failure regardless of what
           mode the baked-in dirs carry.
 

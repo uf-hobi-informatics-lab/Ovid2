@@ -45,7 +45,7 @@ import logging
 import os
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TextIO
 
@@ -304,7 +304,7 @@ def _render_vocab_yaml(spec: _VocabSpec, version: str) -> dict[str, Any]:
         "header": True,
         "required": False,
         "tags": list(spec.tags),
-        "_generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "_generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
     }
 
 

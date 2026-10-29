@@ -207,3 +207,101 @@ def test_no_na_downgrade_when_a_listed_table_populated() -> None:
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+# --------------------------------------------------------------------------- #
+# Engine-portable registration (non-Spark engines read through the stager)    #
+# --------------------------------------------------------------------------- #
+
+
+class _RecordingStager:
+    def __init__(self) -> None:
+        self.calls: list[tuple[Any, str]] = []
+
+    def materialise(
+        self, driver: Any, pipeline: str, batch_id: str, file_name: str, *a: Any, **kw: Any
+    ) -> Any:
+        self.calls.append((driver, file_name))
+        return _FakeDataFrame(file_name)
+
+
+class _FakeSnowparkEngine:
+    session_is_spark = False
+
+    def __init__(self) -> None:
+        self.stager = _RecordingStager()
+        self.typed: list[tuple[list[tuple[Any, ...]], list[tuple[str, str]]]] = []
+
+    def get_stager(self) -> _RecordingStager:
+        return self.stager
+
+    def get_functions(self) -> Any:
+        return object()
+
+    def create_typed_dataframe(
+        self, rows: list[tuple[Any, ...]], schema: list[tuple[str, str]]
+    ) -> Any:
+        self.typed.append((rows, schema))
+        return "typed-frame"
+
+
+@pytest.mark.unit
+def test_non_spark_engine_reads_through_stager_and_skips_temp_views() -> None:
+    bus = _CapturingBus()
+    engine = _FakeSnowparkEngine()
+    runner = HealthCheckRunner(
+        session=object(),
+        cdm=object(),  # type: ignore[arg-type]
+        pipeline="p",
+        batch_id="b",
+        event_bus=bus,  # type: ignore[arg-type]
+        engine=engine,  # type: ignore[arg-type]
+    )
+    driver = object()
+    available = runner.register_input_tables(driver, ["DEMOGRAPHIC"])  # type: ignore[arg-type]
+    assert available == frozenset({"DEMOGRAPHIC"})
+    assert engine.stager.calls == [(driver, "demographic")]
+    frame = runner.frames["DEMOGRAPHIC"]
+    assert frame.registered_as is None  # no session temp view on Snowpark
+
+
+@pytest.mark.unit
+def test_results_frame_built_by_engine_with_portable_schema() -> None:
+    from ovid2.transformations.quality.results import METRIC_ROW_COLUMNS
+    from ovid2.transformations.quality.runner import RESULTS_SCHEMA
+
+    engine = _FakeSnowparkEngine()
+    runner = HealthCheckRunner(
+        session=object(),
+        cdm=object(),  # type: ignore[arg-type]
+        pipeline="p",
+        batch_id="b",
+        instance_id="run-1",
+        event_bus=_CapturingBus(),  # type: ignore[arg-type]
+        engine=engine,  # type: ignore[arg-type]
+    )
+    assert runner.build_results_dataframe([]) == "typed-frame"
+    _rows, schema = engine.typed[0]
+    assert schema == RESULTS_SCHEMA
+    assert tuple(name for name, _t in RESULTS_SCHEMA) == METRIC_ROW_COLUMNS
+
+
+@pytest.mark.unit
+def test_base_frame_counts_are_memoised_derived_are_not() -> None:
+    runner = _runner(_CapturingBus())
+
+    class _Counted:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def count(self) -> int:
+            self.calls += 1
+            return 7
+
+    base, derived = _Counted(), _Counted()
+    runner.frames["DEMOGRAPHIC"] = base
+    assert runner._count(base) == runner._count(base) == 7
+    assert base.calls == 1
+    runner._count(derived)
+    runner._count(derived)
+    assert derived.calls == 2

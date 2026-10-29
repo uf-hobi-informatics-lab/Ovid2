@@ -117,13 +117,13 @@ def test_build_docker_command_mounts_spark_work_and_logs(
 ) -> None:
     """Per-invocation Spark work + logs dirs are bound onto the driver.
 
-    Root cause guarded here: the Bitnami base image ships
-    ``/opt/bitnami/spark/{work,logs}`` as ``0775 ovid2:root``. Any
+    Root cause guarded here: the image's ``$SPARK_HOME/{work,logs}``
+    (``/opt/spark/…``) may not be writable for the host uid. Any
     plain-Python ``SparkSession.builder.getOrCreate()`` inside the
     driver container that then forks executors (local mode) or that
     tries to open a Spark log file would fail with
     ``IOException: Failed to create directory
-    /opt/bitnami/spark/work/…`` when running as ``--user $UID:$GID``.
+    /opt/spark/work/…`` when running as ``--user $UID:$GID``.
     Fix: bind-mount the per-invocation
     :attr:`OvidInstance.spark_work_dir` and
     :attr:`OvidInstance.spark_logs_dir` at both container paths (rw).
@@ -136,10 +136,10 @@ def test_build_docker_command_mounts_spark_work_and_logs(
     instance = OvidInstance(instance_id="20260101-000000-abcdef")
     cmd = docker_module.build_docker_command(_make_args(), instance)
     joined = " ".join(cmd)
-    assert f"{instance.spark_work_dir}:/opt/bitnami/spark/work:rw" in joined, (
+    assert f"{instance.spark_work_dir}:/opt/spark/work:rw" in joined, (
         f"missing spark_work_dir bind in argv: {joined!r}"
     )
-    assert f"{instance.spark_logs_dir}:/opt/bitnami/spark/logs:rw" in joined, (
+    assert f"{instance.spark_logs_dir}:/opt/spark/logs:rw" in joined, (
         f"missing spark_logs_dir bind in argv: {joined!r}"
     )
 

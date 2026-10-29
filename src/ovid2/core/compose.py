@@ -31,6 +31,9 @@ from ovid2.core.docker import (
     NSS_GROUP_IN_CONTAINER,
     NSS_PASSWD_IN_CONTAINER,
     NSS_WRAPPER_LIB,
+    SPARK_CLASS_IN_CONTAINER,
+    SPARK_LOGS_DIR_IN_CONTAINER,
+    SPARK_WORK_DIR_IN_CONTAINER,
 )
 from ovid2.core.isolation import OvidInstance
 
@@ -105,13 +108,12 @@ def _volume_mounts(
     # materialised.
     mounts.append(f"{instance.nss_passwd_file}:{NSS_PASSWD_IN_CONTAINER}:ro")
     mounts.append(f"{instance.nss_group_file}:{NSS_GROUP_IN_CONTAINER}:ro")
-    # Per-invocation Spark scratch dirs. The Bitnami base image ships
-    # ``/opt/bitnami/spark/work`` and ``/opt/bitnami/spark/logs`` as
-    # ``0775 ovid2:root``; with ``--user $UID:$GID`` overriding the
-    # container process, an arbitrary host uid cannot write to
-    # either. The worker JVM then fails every executor launch with
-    # ``IOException: Failed to create directory
-    # /opt/bitnami/spark/work/app-<id>/<executor>/`` and the standalone
+    # Per-invocation Spark scratch dirs (``$SPARK_HOME/work`` and
+    # ``$SPARK_HOME/logs``). With ``--user $UID:$GID`` overriding the
+    # container process, an arbitrary host uid may not be able to write
+    # to the baked-in dirs. The worker JVM then fails every executor
+    # launch with ``IOException: Failed to create directory
+    # $SPARK_HOME/work/app-<id>/<executor>/`` and the standalone
     # master flags the app FAILED after ``MAX_EXECUTOR_RETRIES`` (10)
     # failures, crashing the driver mid-``getOrCreate()`` with the
     # classic ``Master removed our application: FAILED`` +
@@ -121,8 +123,8 @@ def _volume_mounts(
     # circuits the failure regardless of what mode the baked-in dirs
     # carry, so this fix works on images that predate the corresponding
     # ``chmod`` line in ``docker/Dockerfile``.
-    mounts.append(f"{instance.spark_work_dir}:/opt/bitnami/spark/work:rw")
-    mounts.append(f"{instance.spark_logs_dir}:/opt/bitnami/spark/logs:rw")
+    mounts.append(f"{instance.spark_work_dir}:{SPARK_WORK_DIR_IN_CONTAINER}:rw")
+    mounts.append(f"{instance.spark_logs_dir}:{SPARK_LOGS_DIR_IN_CONTAINER}:rw")
     for m in extra_mounts or []:
         mounts.append(m.as_compose_volume())
     return mounts
@@ -215,11 +217,10 @@ def build_compose_dict(
             "8080",
             "7077",
         ],
+        # Host / ports are passed as ``Master`` CLI flags below; the
+        # ``SPARK_MODE`` / ``SPARK_MASTER_*`` env vars only ever drove the
+        # Bitnami entrypoint script, which upstream Spark does not have.
         "environment": [
-            "SPARK_MODE=master",
-            f"SPARK_MASTER_HOST={instance.master_name}",
-            "SPARK_MASTER_PORT=7077",
-            "SPARK_MASTER_WEBUI_PORT=8080",
             *nss_env,
         ],
         "volumes": volumes,
@@ -240,7 +241,7 @@ def build_compose_dict(
         # only receive the first word ("exec"), producing a silent exit 0.
         "entrypoint": ["/bin/bash", "-c"],
         "command": [
-            "exec /opt/bitnami/spark/bin/spark-class "
+            f"exec {SPARK_CLASS_IN_CONTAINER} "
             "org.apache.spark.deploy.master.Master "
             f"--host {instance.master_name} --port 7077 --webui-port 8080"
         ],
@@ -268,11 +269,9 @@ def build_compose_dict(
             "container_name": worker_service,
             "user": user_str,
             "depends_on": {master_service: {"condition": "service_healthy"}},
+            # Master URL / cores / memory go on the ``Worker`` command line
+            # below (the Bitnami-only ``SPARK_MODE`` env is gone).
             "environment": [
-                "SPARK_MODE=worker",
-                f"SPARK_MASTER_URL={master_url}",
-                f"SPARK_WORKER_CORES={DEFAULT_WORKER_CORES}",
-                f"SPARK_WORKER_MEMORY={DEFAULT_WORKER_MEMORY}",
                 # Src-layout: the mounted repo is at ``/app`` but the
                 # importable package lives at ``/app/src/ovid2``. Point
                 # workers at both the source tree and the ``ovid2_pipelines``
@@ -290,7 +289,7 @@ def build_compose_dict(
             # service comment for why.
             "entrypoint": ["/bin/bash", "-c"],
             "command": [
-                "exec /opt/bitnami/spark/bin/spark-class "
+                f"exec {SPARK_CLASS_IN_CONTAINER} "
                 f"org.apache.spark.deploy.worker.Worker {master_url} "
                 f"--cores {DEFAULT_WORKER_CORES} --memory {DEFAULT_WORKER_MEMORY}"
             ],

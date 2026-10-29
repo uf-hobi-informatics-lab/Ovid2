@@ -28,7 +28,7 @@ subprocess.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from ovid2.web import db as web_db
 from ovid2.web.models import PipelineConfigDetail
@@ -47,7 +47,7 @@ __all__ = [
 
 def _now_iso() -> str:
     """Return the current UTC time as an ISO-8601 string."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def last_checked_at(pipeline: str, input_address: str) -> str | None:
