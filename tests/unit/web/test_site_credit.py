@@ -59,6 +59,15 @@ def test_shell_footer_carries_credit(app_client: TestClient) -> None:
     assert "No auth" not in footer[footer.index('class="site-credit"') :]
 
 
+def test_drawer_carries_always_visible_credit(app_client: TestClient) -> None:
+    """The left drawer pins a copy of the credit (visible without scrolling)."""
+    body = app_client.get("/").text
+    drawer = body[body.index('class="drawer"') :]
+    drawer = drawer[: drawer.index("</aside>")]
+    assert 'class="drawer-credit"' in drawer
+    assert _CREDIT in drawer
+
+
 @pytest.mark.parametrize("name", ["login.html", "pending.html"])
 def test_standalone_pages_carry_credit(name: str) -> None:
     """Login and pending pages (which skip base.html) also show the credit."""

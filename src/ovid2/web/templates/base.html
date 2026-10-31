@@ -232,6 +232,11 @@
             aria-label="Collapse navigation rail" title="Collapse / expand">
       {{ icons.icon("chevron-right", size=16) }}
     </button>
+
+    {# Always-visible copy of the attribution credit, pinned to the foot of
+       the drawer (the site footer only shows after scrolling long pages).
+       Hidden in the collapsed icon rail. #}
+    <div class="drawer-credit">{% include "_credit.html" %}</div>
   </aside>
 
   <main id="main" class="main" tabindex="-1">

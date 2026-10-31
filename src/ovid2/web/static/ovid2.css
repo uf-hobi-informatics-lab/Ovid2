@@ -2419,7 +2419,7 @@ html.right-panel-open .site-footer {
   font-size: var(--fs-xs);
   letter-spacing: 0.02em;
   color: var(--fg-subtle, var(--fg-muted));
-  opacity: 0.55;
+  opacity: 0.75;
   transition: opacity var(--dur-med, 200ms) var(--ease, ease),
               color var(--dur-med, 200ms) var(--ease, ease);
 }
@@ -2430,6 +2430,22 @@ html.right-panel-open .site-footer {
   outline: none;
 }
 .site-credit-org { font-weight: 600; }
+/* Drawer copy: sits at the very bottom of the left nav, always on screen. */
+.drawer-credit {
+  margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  background: var(--drawer-bg);
+  padding: 0.6rem 1.25rem 0.8rem;
+  border-top: 1px solid var(--drawer-border);
+  line-height: 1.35;
+}
+.drawer-credit .site-credit {
+  margin-top: 0;
+  font-size: 0.68rem;
+  color: var(--drawer-fg-muted);
+}
+.drawer-credit .site-credit:is(:hover, :focus-visible) { color: var(--drawer-fg); }
 .site-credit-standalone {
   margin: 1.25rem auto 0;
   text-align: center;
@@ -3401,7 +3417,8 @@ td.danger { color: var(--err); font-weight: 600; }
 @media (max-width: 1199.98px) and (min-width: 900px) {
   html.drawer-collapsed .drawer { width: var(--drawer-rail-w); }
   html.drawer-collapsed .drawer .nav-label,
-  html.drawer-collapsed .drawer .side-group { display: none; }
+  html.drawer-collapsed .drawer .side-group,
+  html.drawer-collapsed .drawer .drawer-credit { display: none; }
   html.drawer-collapsed .drawer .nav-item {
     justify-content: center;
     padding: 0.55rem 0;
@@ -3424,7 +3441,8 @@ td.danger { color: var(--err); font-weight: 600; }
 @media (min-width: 900px) {
   html.drawer-open .drawer { width: var(--drawer-rail-w); }
   html.drawer-open .drawer .nav-label,
-  html.drawer-open .drawer .side-group { display: none; }
+  html.drawer-open .drawer .side-group,
+  html.drawer-open .drawer .drawer-credit { display: none; }
   html.drawer-open .drawer .nav-item {
     justify-content: center;
     padding: 0.55rem 0;
@@ -3488,7 +3506,8 @@ td.danger { color: var(--err); font-weight: 600; }
   .drawer-collapse { display: none; }
   html.drawer-collapsed .drawer { width: min(85vw, 320px); }  /* ignore rail state on mobile */
   html.drawer-collapsed .drawer .nav-label,
-  html.drawer-collapsed .drawer .side-group { display: block; }
+  html.drawer-collapsed .drawer .side-group,
+  html.drawer-collapsed .drawer .drawer-credit { display: block; }
   html.drawer-collapsed .drawer .nav-item { justify-content: flex-start; padding: 0.55rem 1.25rem; }
 }
 
