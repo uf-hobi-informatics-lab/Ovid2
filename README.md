@@ -1,3 +1,11 @@
+Developed and maintained by **OneFlorida+**
+
+**Contacts:**
+- Alexander T. Loiacono - atloiaco@ufl.edu
+- Abdelali Nouina - abdelali@ufl.edu
+
+Last Updated: 2026-10-22
+
 # Ovid2
 
 > **🚧 Under active development.** Ovid2 is alpha software.

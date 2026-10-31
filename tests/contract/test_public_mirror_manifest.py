@@ -90,12 +90,26 @@ def test_every_pipeline_is_excluded_or_public() -> None:
 
 
 def test_overlay_is_leak_free() -> None:
-    deny = [re.compile(p, re.IGNORECASE) for p in _manifest()["leak_gate"]["deny"]]
+    """The public overlay trips no deny rule outside ``[[leak_gate.allow]]`` lines.
+
+    Overlay files land at the same relative path in the published tree, so
+    allow entries are keyed by the path relative to ``overlay/`` — the same
+    way ``publish.py``'s leak gate applies them.
+    """
+    gate = _manifest()["leak_gate"]
+    deny = [re.compile(p, re.IGNORECASE) for p in gate["deny"]]
+    allow: dict[str, list[re.Pattern[str]]] = {}
+    for entry in gate.get("allow", []):
+        allow.setdefault(entry["path"], []).append(re.compile(entry["line"]))
+    overlay = _PUBLIC / "overlay"
     hits = []
-    for path in sorted((_PUBLIC / "overlay").rglob("*")):
+    for path in sorted(overlay.rglob("*")):
         if not path.is_file():
             continue
+        allowed_lines = allow.get(path.relative_to(overlay).as_posix(), [])
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if any(a.search(line) for a in allowed_lines):
+                continue
             for pattern in deny:
                 if pattern.search(line):
                     hits.append(f"{path.relative_to(_ROOT)}:{lineno}: {pattern.pattern}")
