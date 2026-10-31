@@ -2409,6 +2409,35 @@ html.right-panel-open .site-footer {
   padding-right: calc(var(--rail-w) + var(--right-panel-w) + 1.5rem);
 }
 
+/* Attribution credit (templates/_credit.html). Intentionally quiet: the
+   smallest type step in the theme's subtlest text token, faded further,
+   brightening on hover / focus for the curious. Only existing per-theme
+   tokens are used, so it follows every theme switch automatically. */
+.site-credit {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.02em;
+  color: var(--fg-subtle, var(--fg-muted));
+  opacity: 0.55;
+  transition: opacity var(--dur-med, 200ms) var(--ease, ease),
+              color var(--dur-med, 200ms) var(--ease, ease);
+}
+.site-credit:hover,
+.site-credit:focus-visible {
+  opacity: 1;
+  color: var(--fg-muted);
+  outline: none;
+}
+.site-credit-org { font-weight: 600; }
+.site-credit-standalone {
+  margin: 1.25rem auto 0;
+  text-align: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .site-credit { transition: none; }
+}
+
 /* ------------------------------------------------------------------ *
  * 4b. Right tools rail + expandable panel
  *
@@ -6364,6 +6393,14 @@ html[data-theme="spaceship"] .site-footer::before {
   color: var(--accent-fg);
   font-weight: 800;
 }
+/* Credit rides the statusline as a right-aligned segment. */
+html[data-theme="spaceship"] .site-footer .site-credit {
+  display: inline;
+  float: right;
+  margin-top: 0;
+  font-size: inherit;
+  letter-spacing: inherit;
+}
 
 @keyframes sx-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 
@@ -6575,6 +6612,8 @@ html[data-theme="super-mario-world"] :is(.page > p, .page > .note, .page-header,
   text-decoration: underline;
 }
 html[data-theme="super-mario-world"] .site-footer { color: var(--fg); }
+html[data-theme="super-mario-world"] .site-credit { color: var(--fg); opacity: 0.5; }
+html[data-theme="super-mario-world"] .site-credit:is(:hover, :focus-visible) { opacity: 0.9; }
 
 /* ------------------------------------------------------------------ *
  * 15.tatooine  Twin suns over the dunes. Inspired-by only: palette and

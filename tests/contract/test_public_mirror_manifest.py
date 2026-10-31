@@ -102,6 +102,35 @@ def test_overlay_is_leak_free() -> None:
     assert not hits, "public overlay contains denylisted terms:\n  " + "\n  ".join(hits)
 
 
+def test_leak_gate_allow_entries_are_exact_and_live() -> None:
+    """``[[leak_gate.allow]]`` exceptions are line-scoped and never stale.
+
+    Each entry must name one concrete file (no glob characters), that file
+    must exist, and its ``line`` regex must still match at least one line —
+    and that line must actually trip the denylist (otherwise the exception
+    is unnecessary and should be removed).
+    """
+    gate = _manifest()["leak_gate"]
+    deny = [re.compile(p, re.IGNORECASE) for p in gate["deny"]]
+    problems = []
+    for entry in gate.get("allow", []):
+        rel = entry["path"]
+        if any(ch in rel for ch in "*?["):
+            problems.append(f"{rel}: allow path must be an exact file, not a glob")
+            continue
+        target = _ROOT / rel
+        if not target.is_file():
+            problems.append(f"{rel}: allow path does not exist")
+            continue
+        line_re = re.compile(entry["line"])
+        hits = [ln for ln in target.read_text(encoding="utf-8").splitlines() if line_re.search(ln)]
+        if not hits:
+            problems.append(f"{rel}: allow line {entry['line'][:60]!r} matches nothing")
+        elif not any(p.search(ln) for ln in hits for p in deny):
+            problems.append(f"{rel}: allow line matches but trips no deny rule (remove it)")
+    assert not problems, "manifest [[leak_gate.allow]] problems:\n  " + "\n  ".join(problems)
+
+
 def test_pre_push_hook_runs_publish_on_python_311_plus() -> None:
     """The pre-push hook must not run ``publish.py`` on a bare ``python3``.
 
