@@ -157,3 +157,47 @@ def test_static_build(tmp_path: Path) -> None:
     html = (out / "02-concepts" / "storage.html").read_text(encoding="utf-8")
     assert 'href="../static/manual.css"' in html
     assert "http://" not in html.split("<main")[0]  # no external assets in <head>
+
+
+def test_wiki_export(mini: Path, tmp_path: Path) -> None:
+    from ovid2.manual.wiki import export_wiki, wiki_page_name
+
+    (mini / "b-two/index.md").write_text(
+        "---\ntitle: Third\n---\n\nBack to [first](../a-one/index.md#details).\n", encoding="utf-8"
+    )
+    out = tmp_path / "wiki"
+    (out / ".git").mkdir(parents=True)
+    (out / "Stale.md").write_text("old", encoding="utf-8")
+    result = export_wiki(out, manual=load_manual(mini))
+
+    assert result.pages == ["First", "Second", "Third"]
+    assert not (out / "Stale.md").exists() and (out / ".git").is_dir()
+    assert {"Home.md", "_Sidebar.md", "_Footer.md"} <= {p.name for p in out.iterdir()}
+    assert (out / "assets" / "d.svg").is_file()
+    first = (out / "First.md").read_text(encoding="utf-8")
+    assert "[link](Second#details)" in first
+    assert "[chapter](Third)" in first
+    assert "![diagram](assets/d.svg)" in first
+    assert "> [!WARNING]\n> **Mind the gap**" in first
+    assert "- **Term** — Definition." in first
+    assert "- **[x](Second)**" in first and 'class="card' not in first
+    assert "```bash\necho hi\n```" in first
+    assert "Next: [Second](Second)" in first
+    assert "[first](First#details)" in (out / "Third.md").read_text(encoding="utf-8")
+    assert "[One](First)" in (out / "Home.md").read_text(encoding="utf-8")
+    assert wiki_page_name("Connections & addresses") == "Connections-addresses"
+
+
+def test_wiki_export_strict_rejects_broken_links(mini: Path, tmp_path: Path) -> None:
+    from ovid2.manual.wiki import export_wiki
+
+    with pytest.raises(ValueError, match=r"nope\.md"):
+        export_wiki(tmp_path / "wiki", manual=load_manual(mini))
+
+
+def test_wiki_export_real_manual(tmp_path: Path) -> None:
+    from ovid2.manual.wiki import export_wiki
+
+    result = export_wiki(tmp_path / "wiki")
+    assert not result.broken
+    assert len(result.pages) == len(load_manual().pages)

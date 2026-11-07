@@ -78,6 +78,18 @@ ovid2 manual check            # every page loads; links, anchors and assets reso
 ovid2 manual build --out site # strict build; fails on any broken link
 ```
 
+## The GitHub wiki
+
+`ovid2 manual wiki --out <dir>` exports the manual as a GitHub wiki: one
+page per manual page, named from its title, plus `Home`, `_Sidebar` and
+`_Footer`. Links, card grids, definition lists and callouts are converted
+to plain GitHub Markdown, and images are copied to `assets/`.
+
+The public-mirror publish runs this export on the sanitised tree after
+every push of `main`, then pushes the result to the GitHub wiki. Never
+edit the wiki directly, because the next publish overwrites it. Edit the
+source here instead.
+
 Contract tests run the same checks on every commit:
 
 - `test_manual_links.py`;

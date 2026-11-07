@@ -13,6 +13,8 @@ into HTML:
 - :mod:`ovid2.manual.search` — the client-side search index.
 - :mod:`ovid2.manual.static_site` — renders the whole manual to a
   self-contained static site (``ovid2 manual build``).
+- :mod:`ovid2.manual.wiki` — exports the manual as a GitHub wiki
+  (``ovid2 manual wiki``).
 - :mod:`ovid2.manual.reference` — regenerates the *Reference* chapter
   from the live registries (``ovid2 manual gen-reference``). Its heavy
   imports are function-local; the web tier never imports it.

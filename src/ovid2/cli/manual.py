@@ -7,6 +7,8 @@ Subcommands:
   internal link / anchor, and the freshness of the generated reference.
 - ``ovid2 manual gen-reference [--check]`` — regenerate the *Reference*
   chapter from the live registries (``--check`` only reports drift).
+- ``ovid2 manual wiki [--out wiki/]`` — export a GitHub wiki tree
+  (:mod:`ovid2.manual.wiki`).
 - ``ovid2 manual serve [--port 8765]`` — build into a temp dir and serve
   it locally (``http.server``) for a quick preview.
 
@@ -51,6 +53,13 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     gen.set_defaults(_command="manual", _entry=_entry_gen)
 
+    wiki = action.add_parser("wiki", help="Export the manual as a GitHub wiki tree.")
+    wiki.add_argument(
+        "--out", default="wiki", help="Output directory (a wiki clone; *.md + assets/ replaced)."
+    )
+    wiki.add_argument("--no-strict", action="store_true", help="Export even when links are broken.")
+    wiki.set_defaults(_command="manual", _entry=_entry_wiki)
+
     serve = action.add_parser("serve", help="Build to a temp dir and serve it locally.")
     serve.add_argument("--port", type=int, default=8765, help="Port to listen on.")
     serve.add_argument("--host", default="127.0.0.1", help="Interface to bind.")
@@ -67,6 +76,19 @@ def _entry_build(args: argparse.Namespace) -> int:
         print(f"[ovid2] {exc}", file=sys.stderr)
         return 1
     print(f"[ovid2] manual: {count} pages → {out}/index.html")
+    return 0
+
+
+def _entry_wiki(args: argparse.Namespace) -> int:
+    from ovid2.manual.wiki import export_wiki
+
+    out = Path(args.out).resolve()
+    try:
+        result = export_wiki(out, strict=not args.no_strict)
+    except ValueError as exc:
+        print(f"[ovid2] {exc}", file=sys.stderr)
+        return 1
+    print(f"[ovid2] manual wiki: {len(result.pages)} pages + Home/_Sidebar/_Footer → {out}")
     return 0
 
 

@@ -693,6 +693,15 @@ Regenerate the Reference chapter from the registries.
 | --- | --- | --- | --- |
 | `--check` | Report stale pages without writing (exit 1). |  |  |
 
+### `ovid2 manual wiki`
+
+Export the manual as a GitHub wiki tree.
+
+| Argument | Description | Choices | Default |
+| --- | --- | --- | --- |
+| `--out` `OUT` | Output directory (a wiki clone; *.md + assets/ replaced). |  | `wiki` |
+| `--no-strict` | Export even when links are broken. |  |  |
+
 ### `ovid2 manual serve`
 
 Build to a temp dir and serve it locally.
