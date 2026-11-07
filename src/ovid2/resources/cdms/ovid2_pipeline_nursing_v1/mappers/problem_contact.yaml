@@ -1,0 +1,21 @@
+# Ported verbatim from legacy mapping_scripts/nursing_mappers/problem_contact_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: problem_contact
+ops:
+- op: legacy_select
+  columns:
+  - CONTACT_ID:
+      encrypt: CONTACT_ID
+  - PROVIDER_ID:
+      encrypt: PROVIDER_ID
+  - CONDITION_STATUS
+  - PROBLEM_CONTACT_SEQUENCE
+  - CONTACT_DATETIME
+  - CONDITION_OCCURRENCE_ID:
+      encrypt: CONDITION_OCCURRENCE_ID
+  - CONDITION_START
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true

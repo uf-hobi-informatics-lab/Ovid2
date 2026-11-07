@@ -30,8 +30,8 @@ class CaseMapOp(BaseMapOp):
         ctx: MapOpContext,
     ) -> DataFrame:
         """Return ``df`` with the named column in the requested case."""
-        from pyspark.sql.functions import col as sf_col
-        from pyspark.sql.functions import initcap, lower, upper
+        from ovid2.core.engines.dsl import col as sf_col
+        from ovid2.core.engines.dsl import initcap, lower, upper
 
         column = str(params["column"])
         mode = str(params.get("mode", "upper")).lower()

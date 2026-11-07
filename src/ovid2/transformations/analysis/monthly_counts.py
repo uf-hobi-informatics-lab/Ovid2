@@ -14,8 +14,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from pyspark.sql.functions import col, count, date_format, to_date
-
+from ovid2.core.engines.dsl import col, count, date_format, to_date
 from ovid2.core.events import log_event
 from ovid2.transformations.base import BaseTransformer
 

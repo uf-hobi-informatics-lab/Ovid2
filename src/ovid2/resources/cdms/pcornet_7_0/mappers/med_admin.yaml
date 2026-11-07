@@ -1,0 +1,47 @@
+# Ported verbatim from legacy mapping_scripts/pcornet_mappers/med_admin_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: med_admin
+ops:
+- op: legacy_select
+  columns:
+  - MEDADMINID:
+      encrypt: MEDADMINID
+  - PATID:
+      encrypt: PATID
+  - ENCOUNTERID:
+      encrypt: ENCOUNTERID
+  - PRESCRIBINGID:
+      encrypt: PRESCRIBINGID
+  - MEDADMIN_PROVIDERID:
+      encrypt: MEDADMIN_PROVIDERID
+  - MEDADMIN_START_DATE
+  - MEDADMIN_START_TIME
+  - MEDADMIN_STOP_DATE
+  - MEDADMIN_STOP_TIME
+  - MEDADMIN_TYPE:
+      dict: med_admin_medadmin_type_dict
+      col: MEDADMIN_TYPE
+  - MEDADMIN_CODE
+  - MEDADMIN_DOSE_ADMIN
+  - MEDADMIN_DOSE_ADMIN_UNIT:
+      dict: med_admin_medadmin_dose_admin_unit_dict
+      col: MEDADMIN_DOSE_ADMIN_UNIT
+      upper: false
+  - MEDADMIN_ROUTE:
+      dict: med_admin_medadmin_route_dict
+      col: MEDADMIN_ROUTE
+  - MEDADMIN_SOURCE:
+      dict: med_admin_medadmin_source_dict
+      col: MEDADMIN_SOURCE
+  - RAW_MEDADMIN_MED_NAME
+  - RAW_MEDADMIN_CODE
+  - RAW_MEDADMIN_DOSE_ADMIN
+  - RAW_MEDADMIN_DOSE_ADMIN_UNIT
+  - RAW_MEDADMIN_ROUTE
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true
+  append_additional_fields:
+    join_field: MEDADMINID

@@ -36,12 +36,12 @@ def test_list_cdms_is_sorted() -> None:
 
 @pytest.mark.unit
 def test_list_cdms_flags_yaml_authored() -> None:
-    """PCORnet is YAML-authored; pipeline-family CDMs are Python-declared."""
+    """Every registered CDM is YAML-authored (pipeline families since the legacy port)."""
     rows = {r.name: r for r in cdms_svc.list_cdms()}
     assert rows["pcornet_7_0"].has_yaml is True
-    assert rows["ovid2_pipeline_veritas_v1"].has_yaml is False
-    assert rows["ovid2_pipeline_nursing_v1"].has_yaml is False
-    assert rows["ovid2_pipeline_tumor_v1"].has_yaml is False
+    assert rows["ovid2_pipeline_veritas_v1"].has_yaml is True
+    assert rows["ovid2_pipeline_nursing_v1"].has_yaml is True
+    assert rows["ovid2_pipeline_tumor_v1"].has_yaml is True
 
 
 @pytest.mark.unit
@@ -104,12 +104,12 @@ def test_get_cdm_detail_flavour_of_null_includes_sentinels() -> None:
 
 
 @pytest.mark.unit
-def test_get_cdm_detail_pipeline_family_no_yaml() -> None:
-    """Pipeline-family CDMs report ``has_yaml=False`` and no yaml_dir."""
+def test_get_cdm_detail_pipeline_family_yaml() -> None:
+    """Pipeline-family CDMs are generated from the legacy tables_specs.csv."""
     detail = cdms_svc.get_cdm_detail("ovid2_pipeline_veritas_v1")
     assert detail is not None
-    assert detail.has_yaml is False
-    assert detail.yaml_dir is None
+    assert detail.has_yaml is True
+    assert detail.yaml_dir is not None and detail.yaml_dir.endswith("ovid2_pipeline_veritas_v1")
 
 
 @pytest.mark.unit

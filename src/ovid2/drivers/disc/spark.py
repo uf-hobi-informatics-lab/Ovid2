@@ -14,12 +14,14 @@ rest idle — the exact bottleneck ``coalesce(1)`` produces, just
 less extreme. Legacy Ovid avoided that with an
 ``awk``-based merge at *natural* partitioning.
 
-We now do the same thing, plus a small refinement: rather than
-skipping the header of every part in the merge step, we write the
-header exactly once (to ``_header.csv``) and write every part
-with ``header=False``. The finalize step is then a plain ``cat``
-of ``[_header.csv, part-*.csv]`` — no per-line predicate, single
-sequential I/O pass on local disk.
+We now do the same thing, plus two refinements: the header is
+written exactly once (to ``_header.csv``) straight from the
+DataFrame schema — no extra Spark job — and every part is written
+with ``header=False``. The finalize step then concatenates
+``[_header.csv, part-*.csv]`` *in parallel*: each input's offset is
+a prefix sum of the file sizes, so the parts are copied concurrently
+into a pre-sized output with ``os.copy_file_range``. The output is
+byte-identical to a sequential ``cat``.
 
 Parallelism is left to Spark by default. Set
 ``$OVID2_DISC_WRITE_PARTITIONS`` (a positive int) to reintroduce
@@ -37,7 +39,6 @@ from __future__ import annotations
 import glob
 import os
 import shutil
-import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -243,9 +244,9 @@ def _write_csv(
     """Write CSV via Spark.
 
     When ``single_file`` is ``True`` (the disc default), the body
-    parts are written *without* a header and the header is captured
-    once via ``limit(0)``; the finalize step is then a plain ``cat``
-    of ``[_header.csv, part-*.csv]``. When ``False``, the writer
+    parts are written *without* a header, the header is derived from
+    the schema, and the finalize step concatenates
+    ``[_header.csv, part-*.csv]`` in parallel. When ``False``, the writer
     emits the Spark-native part directory with headers on every part
     (mirrors what ``s3`` / ``azure_blob`` do by default).
     """
@@ -283,64 +284,97 @@ def _write_csv(
         .save(work_directory)
     )
 
-    # 2) Materialise the header exactly once into a sibling staging dir,
-    #    then move it into work_directory so the merge step sees the
-    #    fixed ``_header.csv`` filename.
+    # 2) Write the header line (from the schema; no Spark job).
     _write_header(casted, work_directory, delimiter)
 
-    # 3) Concat header + parts server-side (local disk here). ``cat``
-    #    is the fastest single-pass merger available; the previous
-    #    Python ``shutil.copyfileobj`` merger was single-threaded and
-    #    also had to strip a header from every subsequent part.
+    # 3) Concat header + parts in parallel at precomputed offsets.
     _merge_csv_part_files(work_directory, output_file_path)
     shutil.rmtree(work_directory, ignore_errors=True)
+
+
+def _header_line(columns: list[str], delimiter: str) -> bytes:
+    """Return the CSV header line Spark would emit for ``columns``.
+
+    The body is written with ``quote=""`` (Spark disables quoting), so
+    the header is the plain delimiter-joined column list terminated by
+    ``\n`` — exactly what the previous ``limit(0).coalesce(1)`` header
+    job produced, without launching a Spark job.
+    """
+
+    # With ``quote=""`` Spark's univocity writer uses ``\x00`` as the quote
+    # character and wraps any value containing the delimiter / a line
+    # break in it. Mirror that so the header stays byte-identical.
+    def _render(name: str) -> str:
+        if delimiter in name or "\n" in name or "\r" in name:
+            return f"\x00{name}\x00"
+        return name
+
+    return (delimiter.join(_render(c) for c in columns) + "\n").encode("utf-8")
 
 
 def _write_header(df: DataFrame, work_directory: str, delimiter: str) -> None:
     """Emit exactly one header line into ``{work_directory}/_header.csv``.
 
-    Uses ``limit(0)`` so no body rows are materialised. The Spark
-    writer still produces a directory with a single ``part-*.csv``
-    file containing only the header row — we rename that to the
-    known ``_header.csv`` path so the finalize step is
-    order-deterministic.
-
-    Idempotent: overwrites any prior ``_header_stage`` directory.
+    Derived from the (already analysed) DataFrame schema on the driver —
+    no Spark job. Idempotent: overwrites any prior header file.
     """
-    header_stage = os.path.join(work_directory, "_header_stage")
-    (
-        df.limit(0)
-        .coalesce(1)
-        .write.format("csv")
-        .option("header", True)
-        .option("nullValue", None)
-        .option("delimiter", delimiter)
-        .option("quote", "")
-        .mode("overwrite")
-        .save(header_stage)
-    )
-    parts = sorted(glob.glob(os.path.join(header_stage, "part-*.csv")))
-    if not parts:
-        raise FileNotFoundError(f"Spark produced no header part-file under {header_stage}.")
-    header_dst = os.path.join(work_directory, "_header.csv")
-    # Move the first part; there is only one because of coalesce(1)/limit(0).
     Path(work_directory).mkdir(parents=True, exist_ok=True)
-    shutil.move(parts[0], header_dst)
-    shutil.rmtree(header_stage, ignore_errors=True)
+    header_dst = os.path.join(work_directory, "_header.csv")
+    with open(header_dst, "wb") as fh:
+        fh.write(_header_line(list(df.columns), delimiter))
+
+
+#: Parallel merge worker cap. The merge is I/O bound; a handful of
+#: concurrent ``copy_file_range`` streams saturates local / NFS disks.
+_MERGE_MAX_WORKERS: int = 16
+
+
+def _copy_range(src: str, dst_fd: int, offset: int, size: int) -> None:
+    """Copy ``size`` bytes of ``src`` into ``dst_fd`` at ``offset``.
+
+    Uses :func:`os.copy_file_range` (in-kernel, zero-copy on Linux) and
+    falls back to ``pread``/``pwrite`` chunks where it is unsupported
+    (cross-filesystem on old kernels, non-Linux hosts).
+    """
+    with open(src, "rb") as in_fh:
+        in_fd = in_fh.fileno()
+        copied = 0
+        copy_range = getattr(os, "copy_file_range", None)
+        if copy_range is not None:
+            try:
+                while copied < size:
+                    n = copy_range(in_fd, dst_fd, size - copied, copied, offset + copied)
+                    if n == 0:
+                        break
+                    copied += n
+            except OSError:
+                copied = 0
+        chunk = 8 * 1024 * 1024
+        while copied < size:
+            data = os.pread(in_fd, min(chunk, size - copied), copied)
+            if not data:
+                break
+            os.pwrite(dst_fd, data, offset + copied)
+            copied += len(data)
+    if copied != size:
+        raise OSError(f"Short copy merging {src}: {copied}/{size} bytes")
 
 
 def _merge_csv_part_files(work_directory: str, output_file_path: str) -> None:
     """Concatenate ``_header.csv`` + ``part-*.csv`` into one file.
 
-    Uses ``cat`` via :func:`subprocess.run` with ``shell=False`` and
-    an explicit sorted file list — no glob expansion in the shell,
-    no untrusted arguments. Falls back to a pure-Python concat when
-    ``cat`` is absent (e.g. Windows dev laptops); the fallback is
-    slower but semantically identical.
+    Each input's byte offset in the output is known up front (prefix sum
+    of file sizes), so the parts are copied **in parallel** into a
+    pre-sized output file with :func:`os.copy_file_range`. The result is
+    byte-identical to a sequential ``cat header part-00000 part-00001 …``
+    (inputs are sorted the same way), but no longer serialises the whole
+    table through one stream.
 
     Raises:
-        FileNotFoundError: If Spark produced no ``part-*.csv`` files.
+        FileNotFoundError: If the header or every ``part-*.csv`` is missing.
     """
+    from concurrent.futures import ThreadPoolExecutor
+
     header = os.path.join(work_directory, "_header.csv")
     if not os.path.isfile(header):
         raise FileNotFoundError(
@@ -351,21 +385,24 @@ def _merge_csv_part_files(work_directory: str, output_file_path: str) -> None:
         raise FileNotFoundError(f"No part files produced by Spark in {work_directory}.")
 
     inputs = [header, *part_files]
-    cat = shutil.which("cat")
-    if cat is not None:
-        with open(output_file_path, "wb") as out_fh:
-            subprocess.run(
-                [cat, *inputs],
-                check=True,
-                stdout=out_fh,
-            )
-        return
+    sizes = [os.path.getsize(p) for p in inputs]
+    offsets: list[int] = []
+    running = 0
+    for size in sizes:
+        offsets.append(running)
+        running += size
 
-    # Pure-Python fallback (portable, slower).
-    with open(output_file_path, "wb") as out_fh:
-        for path in inputs:
-            with open(path, "rb") as in_fh:
-                shutil.copyfileobj(in_fh, out_fh)
+    fd = os.open(output_file_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+    try:
+        os.ftruncate(fd, running)
+        jobs = [(p, o, s) for p, o, s in zip(inputs, offsets, sizes, strict=True) if s > 0]
+        workers = max(1, min(_MERGE_MAX_WORKERS, len(jobs)))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = [pool.submit(_copy_range, p, fd, o, s) for p, o, s in jobs]
+            for future in futures:
+                future.result()
+    finally:
+        os.close(fd)
 
 
 __all__ = [

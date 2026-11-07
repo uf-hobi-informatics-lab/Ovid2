@@ -6621,7 +6621,7 @@
     },
     "/api/v1/dataspace/table/export": {
       "get": {
-        "description": "Export (up to the synchronous row cap) and stream the file as an attachment.\n\nLarger exports: ``POST /api/v1/dataspace/table/export-jobs`` (a\nbackground ``export`` job). Every export is audited\n(``dataspace.export``).",
+        "description": "Export (up to the synchronous row cap) and stream the file as an attachment.\n\nLarger exports: ``POST /api/v1/dataspace/table/export-jobs`` (a\nbackground ``export`` job). Every export is audited\n(``dataspace.export``). Agents need a single-use human approval.",
         "operationId": "api_ods_table_export_api_v1_dataspace_table_export_get",
         "parameters": [
           {
@@ -6717,7 +6717,7 @@
     },
     "/api/v1/dataspace/table/export-jobs": {
       "post": {
-        "description": "Enqueue an ``export`` job; download the result from ``/jobs/{id}/artifact``.",
+        "description": "Enqueue an ``export`` job; download the result from ``/jobs/{id}/artifact``.\n\nAgents need a single-use human approval for the table.",
         "operationId": "api_ods_table_export_job_api_v1_dataspace_table_export_jobs_post",
         "requestBody": {
           "content": {
@@ -6759,7 +6759,7 @@
     },
     "/api/v1/dataspace/table/sample": {
       "get": {
-        "description": "Return a sample of the table's rows (values as JSON scalars).",
+        "description": "Return a sample of the table's rows (values as JSON scalars).\n\nAgents (MCP / assistant) need a single-use human approval per table\n(``202 awaiting_approval``); humans are unaffected.",
         "operationId": "api_ods_table_sample_api_v1_dataspace_table_sample_get",
         "parameters": [
           {

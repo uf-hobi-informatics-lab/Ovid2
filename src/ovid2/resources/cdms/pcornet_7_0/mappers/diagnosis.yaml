@@ -1,0 +1,47 @@
+# Ported verbatim from legacy mapping_scripts/pcornet_mappers/diagnosis_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: diagnosis
+ops:
+- op: legacy_select
+  columns:
+  - DIAGNOSISID:
+      encrypt: DIAGNOSISID
+  - PATID:
+      encrypt: PATID
+  - ENCOUNTERID:
+      encrypt: ENCOUNTERID
+  - ENC_TYPE:
+      dict: diagnosis_enc_type_dict
+      col: ENC_TYPE
+  - ADMIT_DATE
+  - PROVIDERID:
+      encrypt: PROVIDERID
+  - DX
+  - DX_TYPE:
+      dict: diagnosis_dx_type_dict
+      col: DX_TYPE
+  - DX_DATE
+  - DX_SOURCE:
+      dict: diagnosis_dx_source_dict
+      col: DX_SOURCE
+  - DX_ORIGIN:
+      dict: diagnosis_dx_origin_dict
+      col: DX_ORIGIN
+  - PDX:
+      dict: diagnosis_pdx_dict
+      col: PDX
+  - DX_POA:
+      dict: diagnosis_dx_poa_dict
+      col: DX_POA
+  - RAW_DX
+  - RAW_DX_TYPE
+  - RAW_DX_SOURCE
+  - RAW_PDX
+  - RAW_DX_POA
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true
+  append_additional_fields:
+    join_field: DIAGNOSISID

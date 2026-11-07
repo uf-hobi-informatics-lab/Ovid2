@@ -10,9 +10,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from pyspark.sql.functions import col, count, lit
-from pyspark.sql.functions import round as spark_round
-
+from ovid2.core.engines.dsl import col, count, lit
+from ovid2.core.engines.dsl import round as spark_round
 from ovid2.core.events import log_event
 from ovid2.transformations.base import BaseTransformer
 

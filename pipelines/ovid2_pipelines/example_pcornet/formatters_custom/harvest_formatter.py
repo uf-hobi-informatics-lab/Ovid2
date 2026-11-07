@@ -39,7 +39,7 @@ class HarvestFormatter(BaseFormatter):
 
     def format(self, df: "DataFrame") -> "DataFrame":  # noqa: A003 — CDM API
         """Build the one-row harvest DataFrame from the encounter feed."""
-        from pyspark.sql.functions import max as spark_max
+        from ovid2.core.engines.dsl import max as spark_max
 
         from ovid2.utils.common import format_date_col
         from ovid2_pipelines.example_pcornet import pipeline_settings as ps

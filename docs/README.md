@@ -1,18 +1,18 @@
 # docs/
 
-Documentation lives here. During P1 only the plan itself is captured; each
-phase adds the relevant reference document.
+**User-facing documentation lives in the Ovid2 Manual**, not here:
 
-## Roadmap
+- Source: `src/ovid2/resources/manual/` (Markdown, ordered by `manual.yaml`).
+- In the web panel: **System → Manual** (`/manual`).
+- Static site: `ovid2 manual build --out site/` (or `ovid2 manual serve`).
+- Authoring guide: the manual's *Developer guide → Writing documentation*.
 
-| File | Phase | Purpose |
-| --- | --- | --- |
-| ``plan.md``                   | P1 (this) | Overall refactoring plan and phases. |
-| ``architecture.md``           | P2        | Engine architecture, ABCs, lazy execution. |
-| ``formatter-spec.md``         | P4        | Full formatter YAML reference + adapter catalog. |
-| ``display-events.md``         | P3        | Event bus schema + renderer contracts. |
-| ``installer.md``              | P6        | Installation, XDG paths, systemd deployment. |
-| ``pipeline-migration-guide.md``| P7        | Step-by-step for porting a legacy pipeline. |
-| ``pipelines.md``              | reference | Pipeline kinds; which scaffold a package vs. run package-free (health / copy / move). |
-| ``ovid2_architecture.pdf``    | reference | Bundled architecture / features / roadmap reference PDF (with clickable ToC). Regenerate via ``python docs/generate_architecture_pdf.py``. |
-| ``generate_architecture_pdf.py`` | tool   | Idempotent generator for the PDF above. Depends only on ``reportlab``. |
+This directory keeps design and background documents, diagrams, and
+generators:
+
+| File | Purpose |
+| --- | --- |
+| `diagrams/` | Architecture diagrams (Mermaid sources + PNG/SVG renders; SVGs are copied into the manual's `assets/`). |
+| `formatter-spec.md`, `transforms.md`, `pipelines.md`, `engines.md`, `dataspace.md`, `auth.md`, `llm.md`, `installer.md`, `display-events.md`, `dev-instances.md`, `quickstart-local.md`, `parity.md` | Detailed subsystem notes. Their content is consolidated into the manual; keep them consistent when you change either. |
+| `plan.md`, `legacy-parity-plan.md`, `pipeline-migration-guide.md` | Planning / migration notes. |
+| `ovid2_architecture.pdf`, `generate_architecture_pdf.py` | Bundled architecture PDF and its generator. |

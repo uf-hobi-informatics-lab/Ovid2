@@ -58,12 +58,15 @@ Deployment:
         - No cross-table dependencies.  This fix is self-contained.
 """
 
-from typing import Any
+from __future__ import annotations
 
-from pyspark.sql import Column, DataFrame
-from pyspark.sql.functions import col, lit, when
+from typing import TYPE_CHECKING, Any
 
+from ovid2.core.engines.dsl import col, lit, when
 from ovid2.transformations.fixers.base import BaseFixer
+
+if TYPE_CHECKING:
+    from pyspark.sql import Column, DataFrame
 
 
 class RaceEthFixer(BaseFixer):

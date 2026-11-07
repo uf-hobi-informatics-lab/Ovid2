@@ -250,18 +250,24 @@ class SparkEngineStager(EngineStager):
 
     @classmethod
     def supports(cls, driver_type: str) -> bool:
-        # Every registered driver satisfies Spark today. We consult
-        # the registry rather than hard-coding the list so future
-        # driver additions are picked up automatically.
-        from ovid2.drivers.registry import DRIVERS
+        # A registered driver is Spark-reachable iff it declares a Spark
+        # data plane (``Driver.spark_capable``). The DuckDB-only hybrids
+        # (postgres / mssql / gcs / databricks) declare ``False`` so the
+        # pairing is refused at plan time instead of mid-run.
+        from ovid2.drivers.registry import DRIVERS, load_class
 
-        return driver_type in DRIVERS
+        if driver_type not in DRIVERS:
+            return False
+        try:
+            return bool(load_class(driver_type).spark_capable)
+        except (KeyError, ImportError, AttributeError):
+            return False
 
     @classmethod
     def supported_driver_types(cls) -> frozenset[str]:
         from ovid2.drivers.registry import DRIVERS
 
-        return frozenset(DRIVERS.keys())
+        return frozenset(t for t in DRIVERS if cls.supports(t))
 
     def materialise(
         self,
@@ -909,6 +915,12 @@ def stager_class_for_engine_family(family: str) -> type[EngineStager] | None:
     Returns:
         The stager class, or ``None`` when the family is unknown.
     """
+    if family == "duckdb" and "duckdb" not in _FAMILY_TO_STAGER:
+        # Lazy: the DuckDB stager module imports this one. Import-safe
+        # (no ``import duckdb`` at module level).
+        from ovid2.core.engines.duckdb_stager import DuckDBEngineStager
+
+        _FAMILY_TO_STAGER["duckdb"] = DuckDBEngineStager
     return _FAMILY_TO_STAGER.get(family)
 
 

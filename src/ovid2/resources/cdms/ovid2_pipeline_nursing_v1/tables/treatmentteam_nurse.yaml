@@ -1,0 +1,26 @@
+v: 1
+name: treatmentteam_nurse
+composite_key:
+- ENCOUNTER_ID
+domain_description: Ported from legacy mapping_scripts/nursing_mappers/tables_specs.csv.
+fields:
+- name: ENCOUNTER_ID
+  rdbms_type: RDBMS Text(x)
+  order: 1
+  sas_type: SAS Char(x)
+- name: PERSON_ID
+  rdbms_type: RDBMS Text(x)
+  order: 2
+  sas_type: SAS Char(x)
+- name: PROVIDER_ID
+  rdbms_type: RDBMS Text(x)
+  order: 3
+  sas_type: SAS Char(x)
+- name: TREATMENTTEAM_NURSE_START_DATETIME
+  rdbms_type: RDBMS Text(x)
+  order: 4
+  sas_type: SAS Char(x)
+- name: TREATMENTTEAM_NURSE_END_DATETIME
+  rdbms_type: RDBMS Text(x)
+  order: 5
+  sas_type: SAS Char(x)

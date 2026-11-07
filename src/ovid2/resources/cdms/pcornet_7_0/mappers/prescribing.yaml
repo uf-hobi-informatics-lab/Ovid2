@@ -1,0 +1,64 @@
+# Ported verbatim from legacy mapping_scripts/pcornet_mappers/prescribing_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: prescribing
+ops:
+- op: legacy_select
+  columns:
+  - PRESCRIBINGID:
+      encrypt: PRESCRIBINGID
+  - PATID:
+      encrypt: PATID
+  - ENCOUNTERID:
+      encrypt: ENCOUNTERID
+  - RX_PROVIDERID:
+      encrypt: RX_PROVIDERID
+  - RX_ORDER_DATE
+  - RX_ORDER_TIME
+  - RX_START_DATE
+  - RX_END_DATE
+  - RX_DOSE_ORDERED
+  - RX_DOSE_ORDERED_UNIT:
+      dict: prescribing_rx_dose_ordered_unit_dict
+      col: RX_DOSE_ORDERED_UNIT
+      upper: false
+  - RX_QUANTITY
+  - RX_DOSE_FORM:
+      dict: prescribing_rx_dose_form_dict
+      col: RX_DOSE_FORM
+  - RX_REFILLS
+  - RX_DAYS_SUPPLY
+  - RX_FREQUENCY:
+      dict: prescribing_rx_frequency_dict
+      col: RX_FREQUENCY
+  - RX_PRN_FLAG:
+      dict: prescribing_rx_prn_flag_dict
+      col: RX_PRN_FLAG
+  - RX_ROUTE:
+      dict: prescribing_rx_route_dict
+      col: RX_ROUTE
+  - RX_BASIS:
+      dict: prescribing_rx_basis_dict
+      col: RX_BASIS
+  - RXNORM_CUI
+  - RX_SOURCE:
+      dict: prescribing_rx_source_dict
+      col: RX_SOURCE
+  - RX_DISPENSE_AS_WRITTEN:
+      dict: prescribing_rx_dispense_as_written_dict
+      col: RX_DISPENSE_AS_WRITTEN
+  - RAW_RX_MED_NAME
+  - RAW_RX_FREQUENCY
+  - RAW_RXNORM_CUI
+  - RAW_RX_QUANTITY
+  - RAW_RX_NDC
+  - RAW_RX_DOSE_ORDERED
+  - RAW_RX_DOSE_ORDERED_UNIT
+  - RAW_RX_ROUTE
+  - RAW_RX_REFILLS
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true
+  append_additional_fields:
+    join_field: PRESCRIBINGID

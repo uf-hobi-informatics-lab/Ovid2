@@ -13,7 +13,7 @@ def test_get_engine_types(web_client, isolated_xdg: Path) -> None:
     assert r.status_code == 200
     data = r.json()
     types = {t["type"] for t in data}
-    assert types == {"pyspark", "databricks_spark", "snowpark"}
+    assert types == {"pyspark", "databricks_spark", "snowpark", "duckdb"}
 
 
 @pytest.mark.unit

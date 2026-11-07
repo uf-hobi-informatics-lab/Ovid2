@@ -52,6 +52,7 @@ _SUBCOMMANDS: list[tuple[str, str, str | None]] = [
     ("web-worker", "Dispatch ovid2 etl subprocesses from the web queue.", "ovid2.web.worker"),
     ("mcp", "Run the MCP server that wraps the web REST API.", "ovid2.mcp.cli"),
     ("dev", "Run isolated per-developer instances on a shared host.", "ovid2.cli.dev"),
+    ("manual", "Build, check or preview the Ovid2 Manual.", "ovid2.cli.manual"),
 ]
 
 

@@ -27,7 +27,20 @@ from ovid2.cli import dev
 #: Overrides deliberately inherited by dev instances: shared, read-mostly
 #: reference data / inputs, not per-instance state.
 _SHARED_OK: frozenset[str] = frozenset(
-    {"OVID2_MATERIAL_DIR", "OVID2_DATA_DIR", "OVID2_CREDENTIALS_DIR"}
+    {
+        "OVID2_MATERIAL_DIR",
+        "OVID2_DATA_DIR",
+        "OVID2_CREDENTIALS_DIR",
+        # Content-addressed Parquet copy of shared vocabulary files
+        # (keyed by source size+mtime): safe — and desirable — to share.
+        "OVID2_VOCAB_CACHE_DIR",
+        # Pre-installed DuckDB extensions (read-only, image-baked).
+        "OVID2_DUCKDB_EXTENSION_DIR",
+        # legacy_ovid profile: vendored legacy code + Datavant credential
+        # file name inside OVID2_CREDENTIALS_DIR (read-only shared inputs).
+        "OVID2_LEGACY_VENDOR_DIR",
+        "OVID2_DV_CREDENTIALS_FILE",
+    }
 )
 
 _SRC = Path(__file__).resolve().parents[2] / "src" / "ovid2"

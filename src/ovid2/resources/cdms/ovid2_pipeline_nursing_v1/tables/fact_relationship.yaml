@@ -1,0 +1,26 @@
+v: 1
+name: fact_relationship
+composite_key:
+- DOMAIN_CONCEPT_ID_1
+domain_description: Ported from legacy mapping_scripts/nursing_mappers/tables_specs.csv.
+fields:
+- name: DOMAIN_CONCEPT_ID_1
+  rdbms_type: RDBMS Text(x)
+  order: 1
+  sas_type: SAS Char(x)
+- name: FACT_ID_1
+  rdbms_type: RDBMS Text(x)
+  order: 2
+  sas_type: SAS Char(x)
+- name: DOMAIN_CONCEPT_ID_2
+  rdbms_type: RDBMS Text(x)
+  order: 3
+  sas_type: SAS Char(x)
+- name: FACT_ID_2
+  rdbms_type: RDBMS Text(x)
+  order: 4
+  sas_type: SAS Char(x)
+- name: RELATIONSHIP_CONCEPT_ID
+  rdbms_type: RDBMS Text(x)
+  order: 5
+  sas_type: SAS Char(x)

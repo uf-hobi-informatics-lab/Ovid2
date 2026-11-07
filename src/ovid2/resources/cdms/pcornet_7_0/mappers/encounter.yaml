@@ -1,0 +1,63 @@
+# Ported verbatim from legacy mapping_scripts/pcornet_mappers/encounter_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: encounter
+ops:
+- op: legacy_select
+  columns:
+  - ENCOUNTERID:
+      encrypt: ENCOUNTERID
+  - PATID:
+      encrypt: PATID
+  - ADMIT_DATE
+  - ADMIT_TIME
+  - DISCHARGE_DATE
+  - DISCHARGE_TIME
+  - PROVIDERID:
+      encrypt: PROVIDERID
+  - FACILITY_LOCATION
+  - ENC_TYPE:
+      dict: encounter_enc_type_dict
+      col: ENC_TYPE
+  - FACILITYID
+  - DISCHARGE_DISPOSITION:
+      dict: encounter_discharge_disposition_dict
+      col: DISCHARGE_DISPOSITION
+  - DISCHARGE_STATUS:
+      dict: encounter_discharge_status_dict
+      col: DISCHARGE_STATUS
+  - DRG
+  - DRG_TYPE:
+      dict: encounter_drg_type_dict
+      col: DRG_TYPE
+  - ADMITTING_SOURCE:
+      dict: encounter_admitting_source_dict
+      col: ADMITTING_SOURCE
+  - PAYER_TYPE_PRIMARY:
+      dict: encounter_payer_type_primary_dict
+      col: PAYER_TYPE_PRIMARY
+  - PAYER_TYPE_SECONDARY:
+      dict: encounter_payer_type_secondary_dict
+      col: PAYER_TYPE_SECONDARY
+  - FACILITY_TYPE:
+      dict: encounter_facility_type_dict
+      col: FACILITY_TYPE
+  - RAW_SITEID
+  - RAW_ENC_TYPE
+  - RAW_DISCHARGE_DISPOSITION
+  - RAW_DISCHARGE_STATUS
+  - RAW_DRG_TYPE
+  - RAW_ADMITTING_SOURCE
+  - RAW_FACILITY_TYPE
+  - RAW_PAYER_TYPE_PRIMARY
+  - RAW_PAYER_NAME_PRIMARY
+  - RAW_PAYER_ID_PRIMARY
+  - RAW_PAYER_TYPE_SECONDARY
+  - RAW_PAYER_NAME_SECONDARY
+  - RAW_PAYER_ID_SECONDARY
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true
+  append_additional_fields:
+    join_field: ENCOUNTERID

@@ -1,0 +1,327 @@
+# Ported verbatim from legacy mapping_scripts/tumor_mappers/tumor_date_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: tumor_date
+ops:
+- op: legacy_select
+  columns:
+  - PATID:
+      encrypt: PATID
+  - Ambiguous_Terminology_DX_N442
+  - Histologic_Type_ICD-O-3_N522
+  - Histological Type Description
+  - Casefinding_Source_N501
+  - Date_Conclusive_DX_N443
+  - Date_of_Diagnosis_N390
+  - Date_of_Mult_Tumors_N445
+  - Diagnostic_Confirmation_N490
+  - Grade_N440
+  - Grade Description
+  - Grade_Path_System_N449
+  - Grade_Path_Value_N441
+  - Laterality_N410
+  - Morph_Coding_Sys--Current_N470
+  - Morph_Coding_Sys--Originl_N480
+  - Mult_Tum_Rpt_as_One_Prim_N444
+  - Multiplicity_Counter_N446
+  - Primary_Site_N400
+  - Site Code Description
+  - Topography Code
+  - Topography Description
+  - Site_Coding_Sys--Current_N450
+  - Site_Coding_Sys--Original_N460
+  - Type_of_Reporting_Source_N500
+  - Age_at_Diagnosis_N230
+  - Spanish/Hispanic_Origin_N190
+  - Ethnicity Description
+  - County_at_DX_Reported_N90
+  - Date_of_Birth_N240
+  - Race_1_N160
+  - Race 1 Description
+  - Race_2_N161
+  - Race2 Description
+  - Race Coding System Current
+  - Race Coding System Original
+  - Sex_N220
+  - Sex Description
+  - Vital_Status_N1760
+  - Cause_of_Death_N1910
+  - Date_of_Last_Contact_N1750
+  - Recurrence_Date--1st_N1860
+  - Recurrence_Type--1st_N1880
+  - First Recurrence Type Description
+  - Class_of_Case_N610
+  - Class of Case Description
+  - Date_of_1st_Contact_N580
+  - Primary_Payer_at_DX_N630
+  - Sequence_Number--Hospital_N560
+  - Adenoid_Cystic_Basaloid_Pattern_N3803
+  - Adenopathy_N3804
+  - AFP_Post-Orchiectomy_Lab_Value_N3805
+  - AFP_Post-Orchiectomy_Range_N3806
+  - AFP_Pre-Orchiectomy_Lab_Value_N3807
+  - AFP_Pre-Orchiectomy_Range_N3808
+  - AFP_Pretreatment_Interpretation_N3809
+  - AFP_Pretreatment_Lab_Value_N3810
+  - AJCC_TNM_Clin_M_N1003
+  - AJCC_TNM_Clin_N_N1002
+  - AJCC_TNM_Clin_N_Suffix_N1034
+  - AJCC_TNM_Clin_Stage_Group_N1004
+  - AJCC_TNM_Clin_T_N1001
+  - AJCC_TNM_Clin_T_Suffix_N1031
+  - AJCC_TNM_Path_M_N1013
+  - AJCC_TNM_Path_N_N1012
+  - AJCC_TNM_Path_N_Suffix_N1035
+  - AJCC_TNM_Path_Stage_Group_N1014
+  - AJCC_TNM_Path_T_N1011
+  - AJCC_TNM_Path_T_Suffix_N1032
+  - AJCC_TNM_Post_Therapy_Path_(yp)_M_N1023
+  - AJCC_TNM_Post_Therapy_Path_(yp)_N_N1022
+  - AJCC_TNM_Post_Therapy_Path_(yp)_N_Suffix_N1036
+  - AJCC_TNM_Post_Therapy_Path_(yp)_Stage_Group_N1024
+  - AJCC_TNM_Post_Therapy_Path_(yp)_T_N1021
+  - AJCC_TNM_Post_Therapy_Path_(yp)_T_Suffix_N1033
+  - Anemia_N3811
+  - B_symptoms_N3812
+  - Bilirubin_Pretreatment_Total_Lab_Value_N3813
+  - Bilirubin_Pretreatment_Unit_of_Measure_N3814
+  - Bone_Invasion_N3815
+  - Brain_Molecular_Markers_N3816
+  - Breslow_Tumor_Thickness_N3817
+  - CA-125_Pretreatment_Interpretation_N3818
+  - CEA_Pretreatment_Interpretation_N3819
+  - CEA_Pretreatment_Lab_Value_N3820
+  - Chromosome_19q:_Loss_of_Heterozygosity_(LOH)_N3802
+  - Chromosome_1p:_Loss_of_Heterozygosity_(LOH)_N3801
+  - Chromosome_3_Status_N3821
+  - Chromosome_8q_Status_N3822
+  - Circumferential_Resection_Margin_(CRM)_N3823
+  - Creatinine_Pretreatment_Lab_Value_N3824
+  - Creatinine_Pretreatment_Unit_of_Measure_N3825
+  - CS_Extension_N2810
+  - EOD--Lymph_Node_Involv_N810
+  - CS_Lymph_Nodes_Eval_N2840
+  - CS_Mets_at_DX_N2850
+  - CS_Mets_Eval_N2860
+  - CS_Site-Specific_Factor_1_N2880
+  - CS_Site-Specific_Factor_2_N2890
+  - CS_Site-Specific_Factor_3_N2900
+  - CS_Site-Specific_Factor_4_N2910
+  - CS_Site-Specific_Factor_5_N2920
+  - CS_Site-Specific_Factor_6_N2930
+  - CS_Site-Specific_Factor_7_N2861
+  - CS_Site-Specific_Factor_8_N2862
+  - CS_Site-Specific_Factor_9_N2863
+  - CS_Site-Specific_Factor10_N2864
+  - CS_Site-Specific_Factor11_N2865
+  - CS_Site-Specific_Factor12_N2866
+  - CS_Site-Specific_Factor13_N2867
+  - CS_Site-Specific_Factor14_N2868
+  - CS_Site-Specific_Factor15_N2869
+  - CS_Site-Specific_Factor16_N2870
+  - CS_Site-Specific_Factor17_N2871
+  - CS_Site-Specific_Factor18_N2872
+  - CS_Site-Specific_Factor19_N2873
+  - CS_Site-Specific_Factor20_N2874
+  - CS_Site-Specific_Factor21_N2875
+  - CS_Site-Specific_Factor22_N2876
+  - CS_Site-Specific_Factor23_N2877
+  - CS_Site-Specific_Factor24_N2878
+  - CS_Site-Specific_Factor25_N2879
+  - CS_Tumor_Size_N2800
+  - CS_Tumor_Size/Ext_Eval_N2820
+  - Date_of_Sentinel_Lymph_Node_Biopsy_N832
+  - Date_Regional_Lymph_Node_Dissection_N682
+  - Derived_AJCC-6_M_N2980
+  - Derived_AJCC-6_N_N2960
+  - Derived_AJCC-6_Stage_Grp_N3000
+  - Derived_AJCC-6_T_N2940
+  - Derived_AJCC-7_M_N3420
+  - Derived_AJCC-7_N_N3410
+  - Derived_AJCC-7_Stage_Grp_N3430
+  - Derived_AJCC-7_T_N3400
+  - EOD_Mets_N776
+  - EOD_Primary_Tumor_N772
+  - EOD_Prostate_Pathologic_Extension_N3919
+  - EOD_Regional_Nodes_N774
+  - Esophagus_and_EGJ_Tumor_Epicenter_N3829
+  - Estrogen_Receptor_Percent_Positive_or_Range__N3826
+  - Estrogen_Receptor_Summary_N3827
+  - Estrogen_Receptor_Total_Allred_Score_N3828
+  - Local Extent of Disease
+  - Extranodal_Extension_Clin_(non-Head_and_Neck)_N3830
+  - Extranodal_Extension_Head_and_Neck_Clinical_N3831
+  - Extranodal_Extension_Head_and_Neck_Pathological_N3832
+  - Extranodal_Extension_Path_(non-Head_and_Neck)_N3833
+  - Extravascular_Matrix_Patterns__N3834
+  - Fibrosis_Score_N3835
+  - FIGO_Stage_N3836
+  - Gestational_Trophoblastic_Prognostic_Scoring_Index_N3837
+  - Gleason_Patterns_Clinical_N3838
+  - Gleason_Patterns_Pathological_N3839
+  - Gleason_Score_Clinical_N3840
+  - Gleason_Score_Pathological_N3841
+  - Gleason_Tertiary_Pattern_N3842
+  - Grade_Clinical_N3843
+  - Grade_Pathological_N3844
+  - Grade_Post_Therapy_Path_(yp)_N3845
+  - hCG_Post-Orchiectomy_Lab_Value_N3846
+  - hCG_Post-Orchiectomy_Range_N3847
+  - hCG_Pre-Orchiectomy_Lab_Value_N3848
+  - hCG_Pre-Orchiectomy_Range_N3849
+  - HER2_IHC_Summary__N3850
+  - HER2_ISH_Dual_Probe_Copy_Number_N3851
+  - HER2_ISH_Dual_Probe_Ratio_N3852
+  - HER2_ISH_Single_Probe_Copy_Number_N3853
+  - HER2_ISH_Summary_N3854
+  - HER2_Overall_Summary__N3855
+  - Heritable_Trait_N3856
+  - High_Risk_Cytogenetics_N3857
+  - High_Risk_Histologic_Features_N3858
+  - HIV_Status_N3859
+  - International_Normalized_Ratio_Prothrombin_Time_N3860
+  - Invasion_Beyond_Capsule_N3864
+  - Ipsilateral_Adrenal_Gland_Involvement_N3861
+  - JAK2_N3862
+  - Ki-67_N3863
+  - KIT_Gene_Immunohistochemistry__N3865
+  - KRAS_N3866
+  - LDH_Lab_Value_N3932
+  - LDH_Level_N3869
+  - LDH_Post-Orchiectomy_Range_N3867
+  - LDH_Pre-Orchiectomy_Range_N3868
+  - LDH_Upper_Limits_of_Normal_N3870
+  - LN_Assessment_Method_Femoral-Inguinal_N3871
+  - LN_Assessment_Method_Para-Aortic_N3872
+  - LN_Assessment_Method_Pelvic_N3873
+  - LN_Distant_Assessment_Method_N3874
+  - LN_Distant:_Mediastinal,_Scalene_N3875
+  - LN_Head_and_Neck_Levels_I-III_N3876
+  - LN_Head_and_Neck_Levels_IV-V_N3877
+  - LN_Head_and_Neck_Levels_VI-VII_N3878
+  - LN_Head_and_Neck_Other_N3879
+  - LN_Isolated_Tumor_Cells_(ITC)_N3880
+  - LN_Laterality_N3881
+  - LN_Positive_Axillary_Level_I-II_N3882
+  - LN_Size_N3883
+  - LN Status Femoral-Inguinal, Para-Aortic, Pelvic
+  - Lymphocytosis_N3885
+  - Lymphovascular_Invasion_N1182
+  - Major_Vein_Involvement_N3886
+  - Measured_Basal_Diameter_N3887
+  - Measured_Thickness_N3888
+  - Methylation_of_O6-Methylguanine-Methyltransferase_N3889
+  - CS_Mets_at_Dx-Bone_N2851
+  - CS_Mets_at_Dx-Brain_N2852
+  - Mets_at_Dx-Distant_LN_N1114
+  - CS_Mets_at_Dx-Liver_N2853
+  - CS_Mets_at_Dx-Lung_N2854
+  - Mets_at_DX-Other_N1117
+  - Microsatellite_Instability_(MSI)_N3890
+  - Microvascular_Density__N3891
+  - Mitotic_Count_Uveal_Melanoma_N3892
+  - Mitotic_Rate_Melanoma_N3893
+  - Multigene_Signature_Method_N3894
+  - Multigene_Signature_Results_N3895
+  - NCCN_International_Prognostic_Index_(IPI)_N3896
+  - NRAS_Mutational_Analysis_N3941
+  - Number_of_Cores_Examined_N3897
+  - Number_of_Cores_Positive_N3898
+  - Number_of_Examined_Para-Aortic_Nodes_N3899
+  - Number_of_Examined_Pelvic_Nodes_N3900
+  - Number_of_Positive_Para-Aortic_Nodes_N3901
+  - Number_of_Positive_Pelvic_Nodes_N3902
+  - Oncotype_Dx_Recurrence_Score-DCIS_N3903
+  - Oncotype_Dx_Recurrence_Score-Invasive_N3904
+  - Oncotype_Dx_Risk_Level-DCIS_N3905
+  - Oncotype_Dx_Risk_Level-Invasive_N3906
+  - Organomegaly_N3907
+  - Pediatric_Stage_N1120
+  - Percent_Necrosis_Post_Neoadjuvant_N3908
+  - Perineural_Invasion_N3909
+  - Peripheral_Blood_Involvement_N3910
+  - Peritoneal_Cytology_N3911
+  - Pleural_Effusion_N3913
+  - Primary_Sclerosing_Cholangitis__N3917
+  - Profound_Immune_Suppression_N3918
+  - Progesterone_Receptor_Percent_Positive_or_Range_N3914
+  - Progesterone_Receptor_Summary_N3915
+  - Progesterone_Receptor_Total_Allred_Score_N3916
+  - PSA_(Prostatic_Specific_Antigen)_Lab_Value_N3920
+  - Regional_Nodes_Examined_N830
+  - Regional_Nodes_Positive_N820
+  - Residual_Tumor_Volume_Post_Cytoreduction__N3921
+  - Response_to_Neoadjuvant_Therapy_N3922
+  - S_Category_Clinical_N3923
+  - S_Category_Pathological_N3924
+  - Sarcomatoid_Features_N3925
+  - Schema_Discriminator_1_N3926
+  - Schema_Discriminator_2_N3927
+  - Schema_ID_N3800
+  - SEER_Summary_Stage_1977_N760
+  - SEER_Summary_Stage_2000_N759
+  - Sentinel_Lymph_Nodes_Examined_N834
+  - Sentinel_Lymph_Nodes_Positive_N835
+  - Separate_Tumor_Nodules_N3929
+  - Serum_Albumin_Pretreatment_Level_N3930
+  - Serum_Beta-2_Microglobulin_Pretreatment_Level_N3931
+  - Summary_Stage_2018_N764
+  - Thrombocytopenia_N3933
+  - TNM_Clin_Descriptor_N980
+  - TNM_Clin_M_N960
+  - TNM_Clin_N_N950
+  - TNM_Clin_T_N940
+  - TNM_Edition_Number_N1060
+  - TNM_Path_Descriptor_N920
+  - Tumor_Deposits_N3934
+  - Tumor_Growth_Pattern_N3935
+  - Tumor_Marker_1_N1150
+  - Tumor_Marker_2_N1160
+  - Tumor_Marker_3_N1170
+  - Tumor_Size_Clinical_N752
+  - Tumor_Size_Pathologic_N754
+  - Tumor_Size_Summary_N756
+  - Ulceration_N3936
+  - Visceral_and_Parietal_Pleural_Invasion_N3937
+  - Readm_Same_Hosp_30_Days_N3190
+  - Reason_for_No_Radiation_N1430
+  - Reason_for_No_Surgery_N1340
+  - RX_Date_BRM_N1240
+  - RX_Date_Chemo_N1220
+  - Non-cancer Directed Surgery Date
+  - RX_Date_Hormone_N1230
+  - RX_Date_Mst_Defn_Srg_N3170
+  - Surgery Discharge Date Summary
+  - Surgery Date Summary
+  - RX_Date_Systemic_N3230
+  - RX_Summ--BRM_N1410
+  - RX_Summ--Chemo_N1390
+  - Non-cancer Directed Surgery Code
+  - RX_Summ--Hormone_N1400
+  - RX_Summ--Palliative_Proc_N3270
+  - RX_Summ--Reconstruct_1st_N1330
+  - RX_Summ--Scope_Reg_LN_Sur_N1292
+  - Surg Region Sites Summary
+  - Cancer Directed Surgery Code
+  - RX_Summ--Surgical_Margins_N1320
+  - RX_Summ--Systemic/Sur_Seq_N1639
+  - RX_Summ--Transplnt/Endocr_N3250
+  - Grade_Post_Therapy_Clin_(yc)_N1068
+  - Marital_Status_at_DX_N150
+  - Marital Status at Dx Description
+  - AJCC_TNM_Post_Therapy_Clin_(yc)_Stage_Group_N1067
+  - RX_Hosp--Reg_LN_Removed_N676
+  - Cancer_Status_N1770
+  - RX_Summ--Other_N1420
+  - Rad--Regional_RX_Modality_N1570
+  - Boost Treatment Modality
+  - RX_Date_Radiation_N1210
+  - RX_Date_Rad_Ended_N3220
+  - RX_Date_Other_N1250
+  - 'Regional Dose: Cgy'
+  - Boost Dose Cgy
+  - BEHAVIOR_CODE_ICD_O3_N523
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true

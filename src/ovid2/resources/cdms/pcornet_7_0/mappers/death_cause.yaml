@@ -1,0 +1,28 @@
+# Ported verbatim from legacy mapping_scripts/pcornet_mappers/death_cause_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: death_cause
+ops:
+- op: legacy_select
+  columns:
+  - PATID:
+      encrypt: PATID
+  - DEATH_CAUSE
+  - DEATH_CAUSE_CODE:
+      dict: death_cause_death_cause_code_dict
+      col: DEATH_CAUSE_CODE
+  - DEATH_CAUSE_TYPE:
+      dict: death_cause_death_cause_type_dict
+      col: DEATH_CAUSE_TYPE
+  - DEATH_CAUSE_SOURCE:
+      dict: death_cause_death_cause_source_dict
+      col: DEATH_CAUSE_SOURCE
+  - DEATH_CAUSE_CONFIDENCE:
+      dict: death_cause_death_cause_confidence_dict
+      col: DEATH_CAUSE_CONFIDENCE
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true
+  append_additional_fields:
+    join_field: PATID

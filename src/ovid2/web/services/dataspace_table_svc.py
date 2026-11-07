@@ -40,7 +40,7 @@ from ovid2.web.models import (
     OdsTableDetail,
     OdsTableSample,
 )
-from ovid2.web.services._broker import BrokerError, run_tool_json
+from ovid2.web.services._broker import BrokerError, SecretScope, run_tool_json
 
 logger = logging.getLogger(__name__)
 
@@ -124,8 +124,14 @@ def _resolve_table(path: str) -> tuple[str, str, str]:
 
 
 def _run(tool_args: list[str], timeout: float) -> dict[str, Any]:
+    """Run a table op scoped to the one connection it names (``argv[1]``)."""
+    connection = tool_args[1] if len(tool_args) > 1 else ""
     try:
-        return run_tool_json(tool_args, timeout=timeout)
+        return run_tool_json(
+            tool_args,
+            scope=SecretScope(connections=(connection,) if connection else ()),
+            timeout=timeout,
+        )
     except BrokerError as exc:
         logger.warning("Data Space table op %s failed: %s", tool_args[:1], exc)
         raise TableServiceError(str(exc)) from exc

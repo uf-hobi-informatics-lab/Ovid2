@@ -65,13 +65,16 @@ Deployment:
           needed.
 """
 
-from typing import Any
+from __future__ import annotations
 
-from pyspark.sql import DataFrame
-from pyspark.sql import functions as F
-from pyspark.sql.column import Column
+from typing import TYPE_CHECKING, Any
 
+from ovid2.core.engines import dsl as F
 from ovid2.transformations.fixers.base import BaseFixer
+
+if TYPE_CHECKING:
+    from pyspark.sql import DataFrame
+    from pyspark.sql.column import Column
 
 
 def _is_numeric_value(column: Column) -> Column:
@@ -87,7 +90,8 @@ def _is_numeric_value(column: Column) -> Column:
     Returns:
         A boolean Column expression.
     """
-    return F.trim(column).cast("double").isNotNull()
+    result: Column = F.trim(column).cast("double").isNotNull()
+    return result
 
 
 def _is_null_or_empty_or_ni(column: Column) -> Column:
@@ -102,7 +106,8 @@ def _is_null_or_empty_or_ni(column: Column) -> Column:
     Returns:
         A boolean Column expression.
     """
-    return column.isNull() | (F.trim(column) == "") | (F.upper(F.trim(column)) == "NI")
+    result: Column = column.isNull() | (F.trim(column) == "") | (F.upper(F.trim(column)) == "NI")
+    return result
 
 
 class NormRangeNormalizationFixer(BaseFixer):

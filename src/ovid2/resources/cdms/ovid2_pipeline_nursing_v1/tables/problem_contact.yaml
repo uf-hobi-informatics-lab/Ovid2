@@ -1,0 +1,30 @@
+v: 1
+name: problem_contact
+composite_key:
+- PROVIDER_ID
+domain_description: Ported from legacy mapping_scripts/nursing_mappers/tables_specs.csv.
+fields:
+- name: PROVIDER_ID
+  rdbms_type: RDBMS Text(x)
+  order: 1
+  sas_type: SAS Char(x)
+- name: CONDITION_STATUS
+  rdbms_type: RDBMS Text(x)
+  order: 2
+  sas_type: SAS Char(x)
+- name: PROBLEM_CONTACT_SEQUENCE
+  rdbms_type: RDBMS Text(x)
+  order: 3
+  sas_type: SAS Char(x)
+- name: CONTACT_DATETIME
+  rdbms_type: RDBMS Text(x)
+  order: 4
+  sas_type: SAS Char(x)
+- name: CONDITION_OCCURRENCE_ID
+  rdbms_type: RDBMS Text(x)
+  order: 5
+  sas_type: SAS Char(x)
+- name: CONDITION_START
+  rdbms_type: RDBMS Text(x)
+  order: 6
+  sas_type: SAS Char(x)

@@ -116,6 +116,7 @@
   {% elif path.startswith('/settings') %}{% set nav_active = 'settings' %}
   {% elif path.startswith('/install') %}{% set nav_active = 'install' %}
   {% elif path.startswith('/health') %}{% set nav_active = 'health' %}
+  {% elif path.startswith('/manual') %}{% set nav_active = 'manual' %}
   {% endif %}
 
   <a class="skip-link" href="#main">Skip to main content</a>
@@ -222,6 +223,9 @@
       <div class="side-group">System</div>
       <a href="/health" class="nav-item {% if nav_active == 'health' %}active{% endif %}" data-nav="health">
         {{ icons.icon("health", size=18, cls="nav-icon") }}<span class="nav-label">Health</span>
+      </a>
+      <a href="/manual" class="nav-item {% if nav_active == 'manual' %}active{% endif %}" data-nav="manual">
+        {{ icons.icon("book", size=18, cls="nav-icon") }}<span class="nav-label">Manual</span>
       </a>
       <a href="/docs" class="nav-item" title="OpenAPI docs" data-nav="api">
         {{ icons.icon("api", size=18, cls="nav-icon") }}<span class="nav-label">API</span>

@@ -35,7 +35,6 @@ hook return an empty tuple.
 
 from __future__ import annotations
 
-import contextlib
 import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
@@ -239,11 +238,24 @@ def build_legacy_driver_class(type_name: str) -> type[Driver]:
         # ---------- Data plane ----------
 
         def _build_legacy_address(self) -> BaseAddress:
-            """Lazily import + construct the matching legacy address class."""
+            """Lazily import + construct the matching legacy address class.
+
+            Raises:
+                NotImplementedError: When this type has no Spark data
+                    plane (``spark_capable`` is ``False``). The message
+                    names the engine that *does* work, so the failure is
+                    actionable rather than a registry-internal
+                    ``ValueError``.
+            """
             import importlib
 
             from ovid2.config.addresses import ADDRESS_TYPE_MAP
 
+            if not type(self).spark_capable:
+                raise NotImplementedError(
+                    f"Driver '{self.type_name}' has no Spark data plane; "
+                    "run it with --engine duckdb."
+                )
             src_name, src_args = self.as_legacy_src_args()
             if src_name not in ADDRESS_TYPE_MAP:
                 raise ValueError(
@@ -309,10 +321,23 @@ def build_legacy_driver_class(type_name: str) -> type[Driver]:
             )
 
     _LegacyDriverAdapter.type_name = type_name
+    _LegacyDriverAdapter.spark_capable = _legacy_type_is_spark_capable(type_name)
     _LegacyDriverAdapter.__name__ = f"LegacyDriverAdapter_{type_name}"
     _LegacyDriverAdapter.__qualname__ = _LegacyDriverAdapter.__name__
     _CLASS_CACHE[type_name] = _LegacyDriverAdapter
     return _LegacyDriverAdapter
+
+
+def _legacy_type_is_spark_capable(type_name: str) -> bool:
+    """Return whether the legacy ``BaseAddress`` bridge exists for ``type_name``.
+
+    The adapter's Spark ``read`` / ``write`` delegate to the class named
+    in :data:`ovid2.config.addresses.ADDRESS_TYPE_MAP`; a type without an
+    entry there cannot run on Spark.
+    """
+    from ovid2.config.addresses import ADDRESS_TYPE_MAP, CONNECTION_TO_SRC_NAME
+
+    return CONNECTION_TO_SRC_NAME.get(type_name, type_name) in ADDRESS_TYPE_MAP
 
 
 #: Adapter class memoization. Keeps ``load_class(type)`` idempotent.
@@ -363,10 +388,21 @@ def register_all_legacy_drivers() -> None:
         "ovid2.drivers.gcs",
     )
     for module_path in _NATIVE_DRIVER_MODULES:
-        # A broken native driver falls back to the legacy adapter
-        # for that type on the next loop iteration.
-        with contextlib.suppress(Exception):
+        # A broken native driver falls back to the legacy adapter for
+        # that type on the next loop iteration — but loudly: a silent
+        # fallback changes behaviour (no browse / introspection, legacy
+        # probe) without anyone noticing. Only ImportError is tolerated;
+        # any other exception is a real bug and propagates. Pinned by
+        # tests/contract/test_driver_data_plane_declared.py.
+        try:
             __import__(module_path)
+        except ImportError as exc:
+            logger.warning(
+                "Native driver module %s failed to import (%s); falling back "
+                "to the legacy adapter for that type.",
+                module_path,
+                exc,
+            )
 
     for type_name in CONNECTION_TYPE_MAP:
         # Skip types already registered by a native driver module (D3+).
@@ -408,5 +444,7 @@ __all__ = [
 # useful message from load_class(). This branch is only hit if
 # the connections registry itself failed to import, which is a
 # separate bug worth surfacing on the next probe attempt.
-with contextlib.suppress(Exception):
+try:
     register_all_legacy_drivers()
+except Exception:
+    logger.exception("Driver registry population failed; DRIVERS may be incomplete.")

@@ -36,6 +36,9 @@ _PYSPARK_ALLOWED: frozenset[str] = frozenset(
         # Concrete engine + wrappers.
         "src/ovid2/core/engines/pyspark.py",
         "src/ovid2/core/engines/databricks_spark.py",
+        # Engine-dispatching column DSL: resolves to pyspark.sql.functions
+        # only when the active engine is Spark-family (lazy import).
+        "src/ovid2/core/engines/dsl.py",
         # Transitional grace list — these files predate the abstraction
         # and get ported incrementally. Every entry below is a call-out
         # for the follow-up "port to EngineFunctions" pass; do NOT add
@@ -70,6 +73,7 @@ _PYSPARK_ALLOWED: frozenset[str] = frozenset(
         "src/ovid2/mappers/ops/regex_replace.py",
         "src/ovid2/mappers/ops/translate_by_dict.py",
         "src/ovid2/mappers/ops/translate_by_concept.py",
+        "src/ovid2/mappers/ops/legacy_select.py",
         "src/ovid2/transformations/base.py",
         "src/ovid2/transformations/deduplicate.py",
         "src/ovid2/transformations/format.py",
@@ -92,9 +96,16 @@ _PYSPARK_ALLOWED: frozenset[str] = frozenset(
 #: directories is temporarily allowed to import pyspark. Each entry is
 #: a scheduled follow-up port to :class:`EngineFunctions`.
 _PYSPARK_ALLOWED_TREES: tuple[str, ...] = (
-    # 23 common fixers — currently Spark-family only. To be ported by
-    # threading ``ctx["functions"]`` through the fixer context.
+    # 23 common fixers. Ported to the engine-dispatching DSL
+    # (``ovid2.core.engines.dsl``) with the DuckDB engine — the remaining
+    # imports are ``TYPE_CHECKING``-only annotations;
+    # ``test_no_runtime_pyspark_in_shared.py`` forbids runtime ones.
     "src/ovid2/transformations/fixers/common/",
+    # Legacy-Ovid byte-parity layer (``ETL_PROFILE = "legacy_ovid"``).
+    # Spark-only by definition: parity is measured against the legacy
+    # Spark CSV writer/reader and legacy Python UDF evaluation. See
+    # the adr-legacy-parity-port design note.
+    "src/ovid2/legacy/",
 )
 
 

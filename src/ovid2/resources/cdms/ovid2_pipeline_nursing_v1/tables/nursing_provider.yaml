@@ -1,0 +1,14 @@
+v: 1
+name: nursing_provider
+composite_key:
+- PROVIDER_ID
+domain_description: Ported from legacy mapping_scripts/nursing_mappers/tables_specs.csv.
+fields:
+- name: PROVIDER_ID
+  rdbms_type: RDBMS Text(x)
+  order: 1
+  sas_type: SAS Char(x)
+- name: PROVIDER_TYPE
+  rdbms_type: RDBMS Text(x)
+  order: 2
+  sas_type: SAS Char(x)

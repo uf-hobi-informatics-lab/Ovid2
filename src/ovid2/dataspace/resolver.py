@@ -226,12 +226,17 @@ def driver_lister(
 def list_children(
     path: str | OdsPath,
     *,
-    lister: Lister = driver_lister,
+    lister: Lister,
 ) -> tuple[bool, list[OdsEntry], str | None]:
     """List one level under a Data Space path.
 
     ``/`` lists storage accounts; anything deeper lists the folder /
     schema through the storage account's ``list_dir``.
+
+    ``lister`` is **required** (no default): the executor passes
+    :func:`driver_lister` (resolves secrets in-process); the web tier
+    passes its broker-backed lister. A default would let control-plane
+    code dereference credentials in-process by omission.
 
     Returns:
         ``(supported, entries, message)``.

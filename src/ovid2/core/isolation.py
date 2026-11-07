@@ -62,7 +62,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from ovid2.config.settings import WORK_DIR
+from ovid2.config.settings import SPARK_LOCAL_ROOT, WORK_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +121,9 @@ class OvidInstance:
             The Spark ``Worker`` process creates
             ``app-<id>/<executor>/`` subdirs here at executor-launch
             time; it must be writable by the invoking host uid.
+        spark_local_dir: Host path (under ``SPARK_LOCAL_ROOT``, real
+            disk) bind-mounted at ``SPARK_LOCAL_DIR_IN_CONTAINER`` and
+            used as ``SPARK_LOCAL_DIRS`` for shuffle / spill.
         spark_logs_dir: Host path bind-mounted onto
             ``$SPARK_HOME/logs`` in master + workers + driver.
             The Spark ``Worker`` process opens its log file here at
@@ -146,6 +149,8 @@ class OvidInstance:
         self.spark_tmp_dir: Path = DOCKER_DATA_DIR / f"spark_tmp-{self.instance_id}"
         self.spark_work_dir: Path = DOCKER_DATA_DIR / f"spark_work-{self.instance_id}"
         self.spark_logs_dir: Path = DOCKER_DATA_DIR / f"spark_logs-{self.instance_id}"
+        # Shuffle / spill scratch on real disk (not tmpfs, not overlayfs).
+        self.spark_local_dir: Path = SPARK_LOCAL_ROOT / self.instance_id
         self.event_log: Path = WORK_DIR / f"events-{self.instance_id}.jsonl"
         self.nss_dir: Path = WORK_DIR / f"nss-{self.instance_id}"
 
@@ -251,12 +256,13 @@ class OvidInstance:
         self.spark_tmp_dir.mkdir(parents=True, exist_ok=True)
         self.spark_work_dir.mkdir(parents=True, exist_ok=True)
         self.spark_logs_dir.mkdir(parents=True, exist_ok=True)
+        self.spark_local_dir.mkdir(parents=True, exist_ok=True)
         # ``0o777`` because the master and worker containers may all
         # run as the invoking host uid but the executor JVMs the
         # workers fork write files with a slightly different umask;
         # a permissive mode avoids any ownership races when the same
         # subdir is touched by multiple containers.
-        for path in (self.spark_work_dir, self.spark_logs_dir):
+        for path in (self.spark_work_dir, self.spark_logs_dir, self.spark_local_dir):
             try:
                 path.chmod(0o777)
             except OSError as exc:
@@ -276,6 +282,7 @@ class OvidInstance:
         shutil.rmtree(self.spark_tmp_dir, ignore_errors=True)
         shutil.rmtree(self.spark_work_dir, ignore_errors=True)
         shutil.rmtree(self.spark_logs_dir, ignore_errors=True)
+        shutil.rmtree(self.spark_local_dir, ignore_errors=True)
         shutil.rmtree(self.nss_dir, ignore_errors=True)
 
     def __repr__(self) -> str:

@@ -31,6 +31,21 @@ class DeduplicateTransformer(BaseTransformer):
             Deduplicated DataFrame (lazy).
         """
         table_name = context.get("table_name")
+        pipeline = context.get("pipeline")
+        from ovid2.legacy.profile import is_legacy_ovid
+
+        if is_legacy_ovid(pipeline):
+            # Legacy: formatter W → awk dedup on the *text* (or R → W for
+            # tables legacy never deduplicated). The result is the
+            # ``deduplicated_<t>.csv`` text; ``LEGACY_TEXT_KEY`` tells the map
+            # stage (reader side R) and the runner (raw text writer) so the
+            # text is never re-written through W.
+            from ovid2.legacy.csv_roundtrip import LEGACY_TEXT_KEY
+            from ovid2.legacy.dedup import legacy_deduplicate
+
+            context[LEGACY_TEXT_KEY] = True
+            return legacy_deduplicate(df, str(table_name or ""), pipeline)
+
         if table_name is None:
             return df.dropDuplicates()
         cdm = context.get("cdm")

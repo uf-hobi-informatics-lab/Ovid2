@@ -69,18 +69,10 @@ class TranslateByConceptOp(BaseMapOp):
         ctx: MapOpContext,
     ) -> DataFrame:
         """Broadcast-join ``params['column']`` against the vocabulary view."""
-        from pyspark.sql.functions import broadcast, col, upper
-
-        try:
-            from pyspark.errors import AnalysisException
-        except ImportError:  # pyspark < 3.4
-            from pyspark.sql.utils import (  # type: ignore[attr-defined]
-                AnalysisException,
-            )
-
         # Local import — go through the registry API only. Enforced by
         # the ``test_semantic_isolation.py`` contract.
         from ovid2 import semantic as semantic_pkg
+        from ovid2.core.engines.dsl import broadcast, col, upper
 
         column = str(params["column"])
         vocabulary_name = str(params["vocabulary"])
@@ -107,7 +99,9 @@ class TranslateByConceptOp(BaseMapOp):
 
         try:
             vocab_df = ctx.spark.table(view_name)
-        except AnalysisException:
+        except Exception as exc:
+            if not _is_missing_table(exc):
+                raise
             logger.warning(
                 "translate_by_concept: vocabulary view '%s' is not registered in Spark; "
                 "skipping op for %s.%s (vocabulary=%s). Ensure the CDM's shared_views "
@@ -150,7 +144,7 @@ class TranslateByConceptOp(BaseMapOp):
 
         if keep_unmatched:
             # Coalesce back to the original source value on miss.
-            from pyspark.sql.functions import coalesce
+            from ovid2.core.engines.dsl import coalesce
 
             result_expr = coalesce(translated_expr, col(f"{input_alias}.{column}"))
         else:
@@ -164,3 +158,14 @@ class TranslateByConceptOp(BaseMapOp):
         select_exprs.append(result_expr.alias(target_column))
 
         return joined.select(*select_exprs)
+
+
+def _is_missing_table(exc: Exception) -> bool:
+    """Return ``True`` when ``exc`` means "no such table / view" on any engine."""
+    if isinstance(exc, LookupError):  # DuckDB engine view registry
+        return True
+    name = type(exc).__name__
+    if name == "AnalysisException":  # pyspark (any version)
+        return True
+    text = str(exc).lower()
+    return "not found" in text or "does not exist" in text or "table_or_view_not_found" in text

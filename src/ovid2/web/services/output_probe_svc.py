@@ -75,13 +75,17 @@ def existing_output_tables(address_name: str) -> OutputProbe:
 
     Never raises; broker failures map to ``known=False``.
     """
-    from ovid2.web.services._broker import BrokerError, run_tool_json
+    from ovid2.web.services._broker import BrokerError, SecretScope, run_tool_json
     from ovid2.web.services.storage_browse_svc import _browse_deadline_seconds
 
     if not (address_name or "").strip():
         return OutputProbe(known=False, tables=[], message="no output address")
     try:
-        result = run_tool_json(["probe-output", address_name], timeout=_browse_deadline_seconds())
+        result = run_tool_json(
+            ["probe-output", address_name],
+            scope=SecretScope(addresses=(address_name,)),
+            timeout=_browse_deadline_seconds(),
+        )
     except BrokerError as exc:
         logger.warning("probe-output for '%s' failed: %s", address_name, exc)
         return OutputProbe(known=False, tables=[], message=str(exc))

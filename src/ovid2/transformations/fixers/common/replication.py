@@ -64,12 +64,15 @@ Deployment:
           ``ENC_TYPE`` columns (even if their values are stale or null).
 """
 
-from typing import Any
+from __future__ import annotations
 
-from pyspark.sql import DataFrame
-from pyspark.sql.functions import broadcast, col
+from typing import TYPE_CHECKING, Any
 
+from ovid2.core.engines.dsl import broadcast, col
 from ovid2.transformations.fixers.base import BaseFixer
+
+if TYPE_CHECKING:
+    from pyspark.sql import DataFrame
 
 
 class ReplicationFixer(BaseFixer):

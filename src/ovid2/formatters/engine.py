@@ -16,6 +16,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from ovid2.formatters.adapters import ADAPTERS, AdapterContext
+from ovid2.formatters.adapters._sources import is_empty_source
 from ovid2.formatters.base import BaseFormatter
 from ovid2.formatters.spec import FormatterSpec, find_and_load
 from ovid2.schema.cdm import load_cdm_table_columns
@@ -92,7 +93,7 @@ def execute_spec(spec: FormatterSpec, ctx: AdapterContext) -> DataFrame:
     # CDM-shaped artefact rather than crashing the run. This mirrors the
     # legacy behaviour where a missing optional input produced an empty
     # output table.
-    if spec.projections and not df.columns:
+    if spec.projections and is_empty_source(df):
         return _empty_projected_df(df, spec)
 
     # Projections: dict[column] = SQL expression.
@@ -132,9 +133,9 @@ def _empty_projected_df(df: DataFrame, spec: FormatterSpec) -> DataFrame:
         An empty DataFrame with one nullable ``string`` column per
         projection key, in declaration order.
     """
-    from pyspark.sql.types import StringType, StructField, StructType
-
-    schema = StructType([StructField(column, StringType(), True) for column in spec.projections])
+    # A DDL string schema is accepted by every engine session (Spark,
+    # Snowpark adapter, DuckDB) — no pyspark types needed.
+    schema = ", ".join(f"`{column}` string" for column in spec.projections)
     return df.sparkSession.createDataFrame([], schema=schema)
 
 

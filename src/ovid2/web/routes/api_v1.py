@@ -215,6 +215,28 @@ def _gate_agent_overwrite(ctx: AuthContext | None, confirm: bool, output: str) -
         )
 
 
+#: Approval action for an agent reading Data Space row values.
+AGENT_ROW_ACCESS_ACTION = "dataspace.agent_row_access"
+
+
+def _gate_agent_row_access(ctx: AuthContext | None, target: str) -> None:
+    """Require a single-use human approval before an *agent* reads rows.
+
+    Row values (sample / export / export-job artifact) are the data
+    plane and may be PHI. Humans are unaffected; an agent principal
+    (``mcp:`` / ``llm:``) gets ``202 awaiting_approval`` with an
+    ``approval_id`` until a human approves this exact ``target``; the
+    approval is consumed by the next successful call. Pinned by
+    ``tests/contract/test_destructive_ops_require_approval.py``.
+    """
+    if _is_agent(ctx):
+        _gate(
+            AGENT_ROW_ACCESS_ACTION,
+            f"rows:{target}",
+            requested_by=ctx.user_id if ctx else "agent",
+        )
+
+
 @router.get(
     "/health",
     response_model=HealthResponse,
@@ -1815,10 +1837,13 @@ def api_ods_resolve(
     summary="Download the file produced by a finished export job",
     response_class=FileResponse,
     responses={200: {"description": "The exported file (attachment)."}},
-    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
 )
-def api_job_artifact(job_id: str) -> FileResponse:
+def api_job_artifact(
+    job_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_PIPELINE_DATA)),
+) -> FileResponse:
     """Stream a finished ``export`` job's file; 404 until the job is done."""
+    _gate_agent_row_access(ctx, f"job:{job_id}")
     found = jobs_svc.export_artifact(job_id)
     if found is None:
         raise HTTPException(status_code=404, detail="No finished export for this job.")
@@ -1861,13 +1886,18 @@ def api_ods_table(
     "/dataspace/table/sample",
     response_model=OdsTableSample,
     summary="Return the first rows of a Data Space table",
-    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
 )
 def api_ods_table_sample(
     path: str = _TABLE_PATH_QUERY,
     limit: int = Query(100, ge=1, le=1000, description="Rows to return (max 1000)."),
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_PIPELINE_DATA)),
 ) -> OdsTableSample:
-    """Return a sample of the table's rows (values as JSON scalars)."""
+    """Return a sample of the table's rows (values as JSON scalars).
+
+    Agents (MCP / assistant) need a single-use human approval per table
+    (``202 awaiting_approval``); humans are unaffected.
+    """
+    _gate_agent_row_access(ctx, path)
     try:
         return dataspace_table_svc.sample_table(path, limit)
     except dataspace_table_svc.TableServiceError as exc:
@@ -1912,8 +1942,9 @@ def api_ods_table_export(
 
     Larger exports: ``POST /api/v1/dataspace/table/export-jobs`` (a
     background ``export`` job). Every export is audited
-    (``dataspace.export``).
+    (``dataspace.export``). Agents need a single-use human approval.
     """
+    _gate_agent_row_access(ctx, path)
     try:
         result = dataspace_table_svc.export_table(
             path,
@@ -1948,7 +1979,11 @@ def api_ods_table_export_job(
     request: OdsExportJobRequest,
     ctx: AuthContext = Depends(require_capability(Capability.SUBMIT_JOBS)),
 ) -> JobSubmitResponse:
-    """Enqueue an ``export`` job; download the result from ``/jobs/{id}/artifact``."""
+    """Enqueue an ``export`` job; download the result from ``/jobs/{id}/artifact``.
+
+    Agents need a single-use human approval for the table.
+    """
+    _gate_agent_row_access(ctx, request.path)
     try:
         return jobs_svc.submit_export(request, actor=_actor(ctx))
     except jobs_svc.SubmitError as exc:

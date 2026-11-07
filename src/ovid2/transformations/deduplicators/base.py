@@ -187,6 +187,10 @@ class Deduplicator:
 
         fns = engine.get_functions()
         if DEDUP_NULL_KEY_PASSTHROUGH:
+            one_pass_fn = getattr(engine, "drop_duplicates_keep_incomplete_keys", None)
+            one_pass = one_pass_fn(df, list(self.key_fields)) if callable(one_pass_fn) else None
+            if one_pass is not None:
+                return one_pass
             predicate = self._build_full_key_predicate_portable(fns)
             with_full_key = df.filter(predicate)
             without_full_key = df.filter(~predicate)

@@ -31,7 +31,7 @@ from ovid2.drivers.base import ProbeResult
 
 if TYPE_CHECKING:
     from ovid2.connections.base import ConnectionTestResult
-    from ovid2.drivers.base import Driver
+    from ovid2.drivers.base import DriverControl as Driver
 
 logger = logging.getLogger(__name__)
 

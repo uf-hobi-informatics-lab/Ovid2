@@ -53,8 +53,11 @@ def disc_tables(isolated_xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPa
 
     calls: list[list[str]] = []
 
-    def _fake_run_tool_json(tool_args: list[str], *, timeout: float = 30.0) -> dict[str, Any]:
+    def _fake_run_tool_json(
+        tool_args: list[str], *, scope: Any = None, timeout: float = 30.0
+    ) -> dict[str, Any]:
         del timeout
+        assert scope is not None and scope.connections == (tool_args[1],)
         calls.append(list(tool_args))
         op = tool_args[0]
         connection = tool_args[1]
@@ -312,3 +315,63 @@ class TestExportJob:
         )
         assert r.status_code == 400
         assert "export" in r.json()["detail"]
+
+
+class TestAgentRowAccessGate:
+    """Agents need a single-use human approval per table to read rows."""
+
+    @staticmethod
+    def _as_agent(monkeypatch: pytest.MonkeyPatch) -> None:
+        from ovid2.web.auth import deps
+        from ovid2.web.auth.roles import Role
+
+        monkeypatch.setattr(
+            deps,
+            "current_user",
+            lambda _req: deps.AuthContext(user_id="mcp:service", role=Role.SYSTEM_ADMIN),
+        )
+
+    def test_agent_sample_needs_single_use_approval(
+        self, web_client, disc_tables, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from ovid2.web.models import ApprovalDecision
+        from ovid2.web.services import approvals_svc
+
+        self._as_agent(monkeypatch)
+        params = {"path": TABLE, "limit": 3}
+        r = web_client.get("/api/v1/dataspace/table/sample", params=params)
+        assert r.status_code == 202, r.text
+        gate = r.json()["detail"]
+        assert gate["action"] == "dataspace.agent_row_access"
+        assert gate["target"] == f"rows:{TABLE}"
+        assert disc_tables.calls == []  # no executor ran before approval
+
+        approvals_svc.decide(gate["approval_id"], True, ApprovalDecision(decided_by="human"))
+        r = web_client.get("/api/v1/dataspace/table/sample", params=params)
+        assert r.status_code == 200, r.text
+        assert len(r.json()["rows"]) == 3
+
+        # Single use: the next agent call is gated again.
+        r = web_client.get("/api/v1/dataspace/table/sample", params=params)
+        assert r.status_code == 202
+
+    def test_agent_describe_and_count_are_not_gated(
+        self, web_client, disc_tables, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._as_agent(monkeypatch)
+        assert web_client.get("/api/v1/dataspace/table", params={"path": TABLE}).status_code == 200
+
+    def test_agent_export_is_gated(
+        self, web_client, disc_tables, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._as_agent(monkeypatch)
+        r = web_client.get("/api/v1/dataspace/table/export", params={"path": TABLE})
+        assert r.status_code == 202
+        r = web_client.post(
+            "/api/v1/dataspace/table/export-jobs", json={"path": TABLE, "format": "csv"}
+        )
+        assert r.status_code == 202
+
+    def test_human_sample_is_not_gated(self, web_client, disc_tables) -> None:
+        r = web_client.get("/api/v1/dataspace/table/sample", params={"path": TABLE, "limit": 2})
+        assert r.status_code == 200

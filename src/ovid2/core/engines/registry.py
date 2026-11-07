@@ -24,6 +24,7 @@ ENGINE_TYPE_MAP: dict[str, str] = {
     "pyspark": "ovid2.core.engines.pyspark.PySparkEngine",
     "databricks_spark": "ovid2.core.engines.databricks_spark.DatabricksSparkEngine",
     "snowpark": "ovid2.core.engines.snowpark.SnowparkEngine",
+    "duckdb": "ovid2.core.engines.duckdb.DuckDBEngine",
 }
 
 

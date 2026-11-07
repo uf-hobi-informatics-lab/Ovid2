@@ -217,6 +217,18 @@ class _SparkFunctions:
     def max(self, c: Any) -> Any:
         return self._F.max(c)  # noqa: OVID2001 aggregate function reference, not an eager action
 
+    def create_map(self, *cols: Any) -> Any:
+        return self._F.create_map(*cols)
+
+    def monotonically_increasing_id(self) -> Any:
+        return self._F.monotonically_increasing_id()
+
+    def year(self, c: Any) -> Any:
+        return self._F.year(c)
+
+    def row_number(self) -> Any:
+        return self._F.row_number()
+
     def map_from_dict(self, mapping: dict[str, Any], key_col: Any, default: Any = None) -> Any:
         """Emit a chained ``when(...).otherwise(...)`` mapping.
 
@@ -377,6 +389,12 @@ class PySparkEngine(BaseEngine):
             merged: dict[str, str] = {}
             for key, value in SPARK_CONFIG.items():
                 merged[key] = str(value)
+            # Host-sized driver heap chosen by the host-side launcher
+            # (``core.docker.effective_spark_config``); per-engine args
+            # below still win.
+            env_driver_memory = os.environ.get("OVID2_SPARK_DRIVER_MEMORY", "").strip()
+            if env_driver_memory:
+                merged["spark.driver.memory"] = env_driver_memory
             for key, value in self.args.items():
                 if key in ("app_name", "master_url"):
                     continue
@@ -553,126 +571,43 @@ class PySparkEngine(BaseEngine):
     # cheap in-JVM ``StatusTracker`` fields plus optional per-task
     # accumulators fed by a small ``SparkListener``. Never triggers a job.
 
-    def _ensure_metrics_listener(self) -> None:
-        """Attach a ``SparkListener`` that accumulates rows written.
+    def _io_totals(self) -> tuple[int, int, int] | None:
+        """Return cumulative ``(rows_written, input_bytes, output_bytes)``.
 
-        Called lazily the first time :meth:`get_metrics` runs; a no-op
-        after that. The listener lives inside the JVM and accumulates
-        ``taskEnd.taskMetrics.outputMetrics.recordsWritten`` into a
-        Python-visible counter. Failure to attach the listener (older
-        Spark, py4j quirks) is *not* an error — we just fall back to
-        the bytes-written figure that ``StatusTracker`` exposes
-        natively.
+        Polled from the JVM ``AppStatusStore`` stage summaries — the same
+        data the Spark UI's Stages tab shows. This replaces the previous
+        py4j ``SparkListener`` whose ``onTaskEnd`` callback crossed the
+        JVM -> Python bridge once *per task* (blocking Spark's listener
+        bus on every task of a large table). A poll is one py4j call per
+        sample, independent of task count. ``None`` when no JVM view is
+        available (thin clients).
         """
-        if getattr(self, "_metrics_listener_attached", False):
-            return
-        # Mark first so a broken listener path doesn't retry forever.
-        self._metrics_listener_attached = True
-        self._rows_written_counter: int = 0
-
+        if self._session is None:
+            return None
         try:
-            if self._session is None:
-                return
             sc = self._session.sparkContext
             jvm = sc._jvm
-            if jvm is None:  # pragma: no cover — defensive
-                return
-
-            # Build a Python-side listener class implementing the
-            # SparkListener interface via py4j's ``implements``.
-            engine = self
-
-            class _OvidMetricsListener:  # pragma: no cover — JVM-side callback
-                """Row-count accumulator wired into Spark's listener bus."""
-
-                def onTaskEnd(self, taskEnd: Any) -> None:  # noqa: N803
-                    # Never let a listener bug surface to Spark.
-                    with contextlib.suppress(Exception):
-                        tm = taskEnd.taskMetrics()
-                        if tm is None:
-                            return
-                        om = tm.outputMetrics()
-                        if om is None:
-                            return
-                        engine._rows_written_counter += int(om.recordsWritten())
-
-                # These methods are optional but must exist for py4j
-                # ``implements`` to satisfy the interface.
-                def onStageCompleted(self, _e: Any) -> None:
-                    pass
-
-                def onStageSubmitted(self, _e: Any) -> None:
-                    pass
-
-                def onTaskStart(self, _e: Any) -> None:
-                    pass
-
-                def onTaskGettingResult(self, _e: Any) -> None:
-                    pass
-
-                def onJobStart(self, _e: Any) -> None:
-                    pass
-
-                def onJobEnd(self, _e: Any) -> None:
-                    pass
-
-                def onEnvironmentUpdate(self, _e: Any) -> None:
-                    pass
-
-                def onBlockManagerAdded(self, _e: Any) -> None:
-                    pass
-
-                def onBlockManagerRemoved(self, _e: Any) -> None:
-                    pass
-
-                def onUnpersistRDD(self, _e: Any) -> None:
-                    pass
-
-                def onApplicationStart(self, _e: Any) -> None:
-                    pass
-
-                def onApplicationEnd(self, _e: Any) -> None:
-                    pass
-
-                def onExecutorMetricsUpdate(self, _e: Any) -> None:
-                    pass
-
-                def onExecutorAdded(self, _e: Any) -> None:
-                    pass
-
-                def onExecutorRemoved(self, _e: Any) -> None:
-                    pass
-
-                def onExecutorBlacklisted(self, _e: Any) -> None:
-                    pass
-
-                def onExecutorUnblacklisted(self, _e: Any) -> None:
-                    pass
-
-                def onNodeBlacklisted(self, _e: Any) -> None:
-                    pass
-
-                def onNodeUnblacklisted(self, _e: Any) -> None:
-                    pass
-
-                def onBlockUpdated(self, _e: Any) -> None:
-                    pass
-
-                def onSpeculativeTaskSubmitted(self, _e: Any) -> None:
-                    pass
-
-                def onOtherEvent(self, _e: Any) -> None:
-                    pass
-
-                class Java:
-                    implements = ["org.apache.spark.scheduler.SparkListenerInterface"]
-
-            self._metrics_listener_impl: object | None = _OvidMetricsListener()
-            sc._jsc.sc().addSparkListener(self._metrics_listener_impl)
+            gateway = sc._gateway
+            if jvm is None or gateway is None:
+                return None
+            store = sc._jsc.sc().statusStore()
+            stages = store.stageList(
+                jvm.java.util.ArrayList(),  # all statuses
+                False,  # details
+                False,  # withSummaries
+                gateway.new_array(jvm.double, 0),  # unsortedQuantiles
+                jvm.java.util.ArrayList(),  # taskStatus
+            )
+            rows = in_bytes = out_bytes = 0
+            iterator = stages.iterator()
+            while iterator.hasNext():
+                stage = iterator.next()
+                rows += int(stage.outputRecords())
+                in_bytes += int(stage.inputBytes())
+                out_bytes += int(stage.outputBytes())
+            return rows, in_bytes, out_bytes
         except Exception:
-            # Listener attach is best-effort. Metrics still work without
-            # rows_written; the tile just reads "—" for rows.
-            self._metrics_listener_impl = None
+            return None
 
     def get_metrics(self) -> EngineMetricsSample:
         """Read a cheap live snapshot from the Spark ``StatusTracker``.
@@ -684,8 +619,8 @@ class PySparkEngine(BaseEngine):
         - cumulative completed / failed task counts
         - a stage-completion counter (used for the ETA heuristic)
         - a friendly current-stage name (newest active stage)
-        - cumulative input / output bytes
-        - cumulative rows written (when the listener is attached)
+        - cumulative input / output bytes and rows written (polled from
+          the JVM ``AppStatusStore``; no per-task callbacks)
 
         All values are ``None`` when the session isn't up yet — the
         sampler starts before the driver's first job, so early samples
@@ -708,7 +643,6 @@ class PySparkEngine(BaseEngine):
             return EngineMetricsSample(t_ms=now_ms, wall_iso=wall, engine_family=self.family.value)
 
         try:
-            self._ensure_metrics_listener()
             snap = read_status_tracker(self._session.sparkContext)
             active_stage_ids = snap.active_stage_ids
             tasks_active = snap.tasks_active
@@ -717,10 +651,8 @@ class PySparkEngine(BaseEngine):
             current_stage_name = snap.current_stage
             executors_total = snap.executors_total
             executors_active = snap.executors_active
-            # The Python ``StatusTracker`` exposes no per-stage byte
-            # counters; the bytes tiles stay "—" until a listener feeds them.
-            input_bytes = 0
-            output_bytes = 0
+            io = self._io_totals()
+            rows_written, input_bytes, output_bytes = io if io is not None else (0, 0, 0)
 
             return EngineMetricsSample(
                 t_ms=now_ms,
@@ -736,7 +668,7 @@ class PySparkEngine(BaseEngine):
                 current_stage=current_stage_name,
                 input_bytes_total=input_bytes or None,
                 output_bytes_total=output_bytes or None,
-                rows_written_total=(int(getattr(self, "_rows_written_counter", 0)) or None),
+                rows_written_total=rows_written or None,
             )
         except Exception:
             # Any hiccup (JVM disconnected, tracker unavailable) →

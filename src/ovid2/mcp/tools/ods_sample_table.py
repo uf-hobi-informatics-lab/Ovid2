@@ -20,12 +20,26 @@ TOOL_NAME = "ods_sample_table"
 TOOL_DESCRIPTION = (
     "Return the first rows of an Ovid Data Space table / data file (row "
     "values — may contain patient data; use only when the operator asks to "
-    "see data). Response shape: OdsTableSample { path, columns: [str], "
-    "rows: [[value, …]], truncated, limit, supported, message }."
+    "see data). REQUIRES HUMAN APPROVAL: the first call returns "
+    "{status: 'awaiting_approval', approval_id, action: "
+    "'dataspace.agent_row_access', target}; ask the operator to approve "
+    "that id in the web panel, then call again (each approval is single-"
+    "use, per table). Approved response shape: OdsTableSample { path, "
+    "columns: [str], rows: [[value, …]], truncated, limit, supported, message }."
 )
 ARGS_MODEL = OdsSampleTableArgs
 
 
 async def run(client: WebApiClient, args: OdsSampleTableArgs) -> Any:
-    """Call ``GET /api/v1/dataspace/table/sample?path=…&limit=…``."""
-    return await client.get("/api/v1/dataspace/table/sample", path=args.path, limit=args.limit)
+    """Call ``GET /api/v1/dataspace/table/sample?path=…&limit=…``.
+
+    A ``202`` approval gate arrives as ``{"detail": {status:
+    "awaiting_approval", …}}``; it is unwrapped so the agent sees the
+    approval id at the top level.
+    """
+    result = await client.get("/api/v1/dataspace/table/sample", path=args.path, limit=args.limit)
+    if isinstance(result, dict) and isinstance(result.get("detail"), dict):
+        detail = result["detail"]
+        if detail.get("status") == "awaiting_approval":
+            return detail
+    return result

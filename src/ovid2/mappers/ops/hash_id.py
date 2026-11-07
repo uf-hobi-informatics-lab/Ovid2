@@ -45,8 +45,8 @@ class HashIdOp(BaseMapOp):
         ctx: MapOpContext,
     ) -> DataFrame:
         """Return ``df`` with the named column replaced by its hash."""
-        from pyspark.sql.functions import col as sf_col
-        from pyspark.sql.functions import concat_ws, lit, sha2, substring
+        from ovid2.core.engines.dsl import col as sf_col
+        from ovid2.core.engines.dsl import concat_ws, lit, sha2, substring
 
         column = str(params["column"])
         salt_key = str(params.get("salt_key", "id_salt"))

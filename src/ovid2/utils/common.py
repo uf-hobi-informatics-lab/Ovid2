@@ -14,12 +14,13 @@ from __future__ import annotations
 import os
 from base64 import b64encode
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 from Crypto.Hash import SHA1
-from pyspark.sql import DataFrame, SparkSession
-from pyspark.sql.functions import (
+
+from ovid2.config.settings import LEGACY_CREDENTIALS_DIR, SEED_FILE_NAME
+from ovid2.core.engines.dsl import (
     coalesce,
     col,
     current_timestamp,
@@ -32,10 +33,9 @@ from pyspark.sql.functions import (
     upper,
     when,
 )
-from pyspark.sql.pandas.functions import pandas_udf
-from pyspark.sql.types import StringType
 
-from ovid2.config.settings import LEGACY_CREDENTIALS_DIR, SEED_FILE_NAME
+if TYPE_CHECKING:
+    from pyspark.sql import DataFrame, SparkSession
 
 # ---------------------------------------------------------------------------
 # Time utilities — native Spark
@@ -264,7 +264,12 @@ def format_float_col(column: str | Any) -> Any:
 # Encryption utilities
 # ---------------------------------------------------------------------------
 
-# Pipeline encryption value mapping (see legacy Ovid for provenance).
+# Pipeline encryption value mapping — a byte-for-byte copy of legacy
+# ``CommonFuncitons._PARTNER_ENCRYPTION_VALUE_DICT``. The lookup is done on
+# ``pipeline.upper()``, so the lower-case keys (``kappa``, …) can never
+# match: exactly like legacy, those pipelines encrypt with the literal
+# prefix ``"None"`` (see :func:`encryption_prefix`). Do not "fix" this —
+# changing a prefix changes every encrypted id the pipeline has ever shipped.
 PIPELINE_ENCRYPTION_VALUES: dict[str, str] = {
     "BETA": "BETA",
     "ETA": "ETA",
@@ -286,6 +291,8 @@ PIPELINE_ENCRYPTION_VALUES: dict[str, str] = {
     "ZETA": "ZETA",
     "DELTA": "DELTA",
     "XI": "XI",
+    "PI": "PI",
+    "BAY": "BAY",
     "omop_pipeline_1": "omop_pipeline_1",
     "omop_pipeline_plus": "omop_pipeline_plus",
     "pcornert_pipeline_1": "pcornert_pipeline_1",
@@ -295,11 +302,35 @@ PIPELINE_ENCRYPTION_VALUES: dict[str, str] = {
     "TUMOR_SITE": "SITE",
 }
 
+#: Legacy XOR cipher key length cap (PyCryptodome ``Crypto.Cipher.XOR``).
+_XOR_KEY_MAX_BYTES: int = 32
+
+
+def encryption_prefix(pipeline: str) -> str:
+    """Return the plaintext prefix legacy Ovid prepends before encrypting an id.
+
+    Legacy builds ``f"{dict.get(partner.upper(), None)}"`` — an unknown
+    pipeline therefore yields the four-character string ``"None"``.
+
+    Args:
+        pipeline: Pipeline name (any case).
+
+    Returns:
+        The prefix string (never ``None``).
+    """
+    return f"{PIPELINE_ENCRYPTION_VALUES.get(pipeline.upper())}"
+
+
 _encryption_cache: dict[str, bytes] = {}
 
 
 def _xor_encrypt_exact(plaintext: bytes, key: bytes) -> bytes:
-    """Bytewise XOR-encrypt ``plaintext`` with a cyclic ``key``."""
+    """Bytewise XOR-encrypt ``plaintext`` with a cyclic ``key``.
+
+    Mirrors legacy ``xor_encrypt_exact``: the key is truncated to 32 bytes
+    (PyCryptodome's limit) before cycling.
+    """
+    key = key[:_XOR_KEY_MAX_BYTES]
     key_len = len(key)
     return bytes(plaintext[i] ^ key[i % key_len] for i in range(len(plaintext)))
 
@@ -318,6 +349,17 @@ def _seed_file_candidates() -> list[Path]:
     override = os.environ.get("OVID2_SEED_FILE")
     if override:
         candidates.append(Path(override))
+
+    # Executor scoped secrets directory (see ovid2.config.executor_env).
+    from ovid2.config.secrets import scoped_file
+
+    scoped = scoped_file(SEED_FILE_NAME)
+    if scoped is not None:
+        candidates.append(scoped)
+        if not scoped.is_file():
+            # Enforced scope: the run was not granted the seed — never
+            # fall back to the unscoped locations.
+            return candidates
 
     xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
     candidates.append(Path(xdg_cfg) / "ovid2" / "secrets.d" / SEED_FILE_NAME)
@@ -357,17 +399,14 @@ def encrypt_id(id_value: str | None, pipeline: str, hashing_key: bytes | None = 
 
     Returns:
         The base64-encoded encrypted ID, or ``None`` when ``id_value`` is
-        ``None``, or the raw ID when the pipeline is unknown.
+        ``None``. An unknown pipeline encrypts with the prefix ``"None"``
+        (legacy parity — see :func:`encryption_prefix`).
     """
     if id_value is None:
         return None
 
-    pipeline_prefix = PIPELINE_ENCRYPTION_VALUES.get(pipeline.upper())
-    if pipeline_prefix is None:
-        return id_value
-
     key = hashing_key if hashing_key is not None else _get_encryption_key()
-    plaintext = f"{pipeline_prefix}{id_value}".encode()
+    plaintext = f"{encryption_prefix(pipeline)}{id_value}".encode()
     return b64encode(_xor_encrypt_exact(plaintext, key)).decode()
 
 
@@ -384,17 +423,16 @@ def encrypt_id_udf(pipeline: str) -> Any:
     Returns:
         A Pandas UDF suitable for ``df.withColumn("PATID", udf("PATID"))``.
     """
-    hashing_key = _get_encryption_key()
-    pipeline_prefix = PIPELINE_ENCRYPTION_VALUES.get(pipeline.upper())
+    hashing_key = _get_encryption_key()[:_XOR_KEY_MAX_BYTES]
+    pipeline_prefix = encryption_prefix(pipeline)
     key_len = len(hashing_key)
 
     # pyspark's .pyi predates the type-hint-based pandas_udf form and
     # requires ``functionType``; the call is valid at runtime (Spark >= 3.0).
-    @pandas_udf(StringType())  # type: ignore[call-overload, untyped-decorator]
-    def _encrypt_batch(id_series: pd.Series) -> pd.Series:
-        if pipeline_prefix is None:
-            return id_series.astype(object)
+    from pyspark.sql.pandas.functions import pandas_udf
+    from pyspark.sql.types import StringType
 
+    def _encrypt_batch(id_series):  # type: ignore[no-untyped-def]
         results: list[str | None] = []
         for id_value in id_series:
             if id_value is None or (isinstance(id_value, float) and pd.isna(id_value)):
@@ -407,7 +445,11 @@ def encrypt_id_udf(pipeline: str) -> Any:
             results.append(b64encode(encrypted).decode())
         return pd.Series(results, dtype=object)
 
-    return _encrypt_batch
+    # Explicit eval type: string annotations (``from __future__ import
+    # annotations``) defeat PySpark's type-hint inference.
+    from pyspark.sql.functions import PandasUDFType  # type: ignore[attr-defined]
+
+    return pandas_udf(_encrypt_batch, StringType(), PandasUDFType.SCALAR)
 
 
 # ---------------------------------------------------------------------------

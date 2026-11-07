@@ -1,0 +1,22 @@
+# Ported verbatim from legacy mapping_scripts/pcornet_mappers/pcornet_trial_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: pcornet_trial
+ops:
+- op: legacy_select
+  columns:
+  - PATID:
+      encrypt: PATID
+  - TRIALID
+  - PARTICIPANTID
+  - TRIAL_SITEID
+  - TRIAL_ENROLL_DATE
+  - TRIAL_END_DATE
+  - TRIAL_WITHDRAW_DATE
+  - TRIAL_INVITE_CODE
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true
+  append_additional_fields:
+    join_field: PATID

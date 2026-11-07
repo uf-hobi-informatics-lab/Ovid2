@@ -22,8 +22,11 @@ import subprocess
 import sys
 import threading
 from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
+from ovid2.config.executor_env import build_minimal_env, prepare_scoped_secrets
+from ovid2.config.secret_refs import SecretScope
 from ovid2.web.settings import WORKER_ENV_ALLOWLIST
 
 __all__ = ["ExecError", "chat_stream", "child_env", "run_probe"]
@@ -37,24 +40,43 @@ _SLOTS_LOCK = threading.Lock()
 _ACTIVE = 0
 
 
-def _allowed(key: str) -> bool:
-    for pattern in WORKER_ENV_ALLOWLIST:
-        if pattern.endswith("*"):
-            if key.startswith(pattern[:-1]):
-                return True
-        elif key == pattern:
-            return True
-    return False
+def _llm_scope() -> SecretScope:
+    """Scope an LLM executor to the LLM connections' secrets only.
+
+    The executor may route a turn to any configured LLM (System 1 →
+    general fallback), so every LLM connection is in scope — but no
+    storage / warehouse / engine secret is.
+    """
+    from ovid2.config.llms import list_available_llms
+
+    try:
+        names = tuple(list_available_llms())
+    except (OSError, ValueError):
+        names = ()
+    return SecretScope(llms=names)
+
+
+@contextmanager
+def _scoped_child_env(extra_env: dict[str, str] | None = None) -> Iterator[dict[str, str]]:
+    """Yield :func:`child_env` plus a private ``OVID2_SECRETS_DIR``."""
+    scoped = prepare_scoped_secrets(_llm_scope(), label="llm")
+    try:
+        env = {**child_env(), **(extra_env or {})}
+        # Scoped copy written by executor_env (dir 0o700, files 0o600).
+        env["OVID2_SECRETS_DIR"] = str(scoped.path)
+        yield env
+    finally:
+        scoped.cleanup()
 
 
 def child_env() -> dict[str, str]:
-    """Return the allow-listed environment for an LLM executor child."""
-    env = {k: v for k, v in os.environ.items() if _allowed(k)}
-    # The MCP service token is never needed by the LLM executor.
-    env.pop("OVID2_MCP_API_TOKEN", None)
-    # Never inherit an ambient assistant token; chat_stream injects a fresh
-    # per-turn one explicitly.
-    env.pop("OVID2_LLM_API_TOKEN", None)
+    """Return the allow-listed environment for an LLM executor child.
+
+    Uses :func:`ovid2.config.executor_env.build_minimal_env`, which also
+    strips ``OVID2_MCP_API_TOKEN`` / ``OVID2_LLM_API_TOKEN`` (chat_stream
+    injects a fresh per-turn token explicitly) and ``OVID2_SECRETS_FILE``.
+    """
+    env = build_minimal_env(os.environ, WORKER_ENV_ALLOWLIST)
     env["PYTHONUNBUFFERED"] = "1"
     return env
 
@@ -66,14 +88,15 @@ def _argv(*args: str) -> list[str]:
 def run_probe(name: str, *, timeout: float) -> dict[str, Any]:
     """Run ``python -m ovid2.llm probe <name>`` and return its JSON result."""
     try:
-        completed = subprocess.run(
-            _argv("probe", name),
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-            env=child_env(),
-        )
+        with _scoped_child_env() as env:
+            completed = subprocess.run(
+                _argv("probe", name),
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+                env=env,
+            )
     except subprocess.TimeoutExpired as exc:
         raise ExecError(f"LLM probe timed out after {timeout:.0f}s.") from exc
     except OSError as exc:
@@ -135,8 +158,11 @@ def chat_stream(
     proc: subprocess.Popen[str] | None = None
     timed_out = threading.Event()
     saw_done = False
+    scoped = prepare_scoped_secrets(_llm_scope(), label="llm-chat")
     try:
         try:
+            env = {**child_env(), **(extra_env or {})}
+            env["OVID2_SECRETS_DIR"] = str(scoped.path)
             proc = subprocess.Popen(
                 _argv("chat"),
                 stdin=subprocess.PIPE,
@@ -144,7 +170,7 @@ def chat_stream(
                 stderr=subprocess.PIPE,
                 text=True,
                 bufsize=1,
-                env={**child_env(), **(extra_env or {})},
+                env=env,
             )
         except OSError as exc:
             yield {
@@ -207,6 +233,7 @@ def chat_stream(
                 }
             yield {"type": "done", "route": "none", "ok": False, "elapsed_ms": 0}
     finally:
+        scoped.cleanup()
         if proc is not None:
             if proc.poll() is None:
                 proc.kill()

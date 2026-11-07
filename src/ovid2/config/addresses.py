@@ -37,9 +37,10 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from ovid2.core.addresses.base import BaseAddress
+if TYPE_CHECKING:  # pragma: no cover - typing only; keeps the web tier off ovid2.core
+    from ovid2.core.addresses.base import BaseAddress
 
 logger = logging.getLogger(__name__)
 

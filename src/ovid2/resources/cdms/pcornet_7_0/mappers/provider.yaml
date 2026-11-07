@@ -1,0 +1,26 @@
+# Ported verbatim from legacy mapping_scripts/pcornet_mappers/provider_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: provider
+ops:
+- op: legacy_select
+  columns:
+  - PROVIDERID:
+      encrypt: PROVIDERID
+  - PROVIDER_SEX:
+      dict: provider_provider_sex_dict
+      col: PROVIDER_SEX
+  - PROVIDER_SPECIALTY_PRIMARY:
+      dict: provider_provider_specialty_primary_dict
+      col: PROVIDER_SPECIALTY_PRIMARY
+  - PROVIDER_NPI
+  - PROVIDER_NPI_FLAG:
+      dict: provider_provider_npi_flag_dict
+      col: PROVIDER_NPI_FLAG
+  - RAW_PROVIDER_SPECIALTY_PRIMARY
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true
+  append_additional_fields:
+    join_field: PROVIDERID

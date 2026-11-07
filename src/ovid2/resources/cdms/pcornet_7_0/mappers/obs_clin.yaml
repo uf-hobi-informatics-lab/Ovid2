@@ -1,0 +1,55 @@
+# Ported verbatim from legacy mapping_scripts/pcornet_mappers/obs_clin_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: obs_clin
+ops:
+- op: legacy_select
+  columns:
+  - OBSCLINID:
+      encrypt: OBSCLINID
+      suffix: OBS_CLIN
+  - PATID:
+      encrypt: PATID
+  - ENCOUNTERID:
+      encrypt: ENCOUNTERID
+  - OBSCLIN_PROVIDERID:
+      encrypt: OBSCLIN_PROVIDERID
+  - OBSCLIN_START_DATE
+  - OBSCLIN_START_TIME
+  - OBSCLIN_STOP_DATE
+  - OBSCLIN_STOP_TIME
+  - OBSCLIN_TYPE:
+      dict: obs_clin_obsclin_type_dict
+      col: OBSCLIN_TYPE
+  - OBSCLIN_CODE
+  - OBSCLIN_RESULT_QUAL:
+      dict: obs_clin_obsclin_result_qual_dict
+      col: OBSCLIN_RESULT_QUAL
+  - OBSCLIN_RESULT_TEXT
+  - OBSCLIN_RESULT_SNOMED
+  - OBSCLIN_RESULT_NUM
+  - OBSCLIN_RESULT_MODIFIER:
+      dict: obs_clin_obsclin_result_modifier_dict
+      col: OBSCLIN_RESULT_MODIFIER
+  - OBSCLIN_RESULT_UNIT:
+      dict: obs_clin_obsclin_result_unit_dict
+      col: OBSCLIN_RESULT_UNIT
+      upper: false
+  - OBSCLIN_SOURCE:
+      dict: obs_clin_obsclin_source_dict
+      col: OBSCLIN_SOURCE
+  - OBSCLIN_ABN_IND:
+      dict: obs_clin_obsclin_abn_ind_dict
+      col: OBSCLIN_ABN_IND
+  - RAW_OBSCLIN_NAME
+  - RAW_OBSCLIN_CODE
+  - RAW_OBSCLIN_TYPE
+  - RAW_OBSCLIN_RESULT
+  - RAW_OBSCLIN_MODIFIER
+  - RAW_OBSCLIN_UNIT
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true
+  append_additional_fields:
+    join_field: OBSCLINID

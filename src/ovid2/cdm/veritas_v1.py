@@ -1,14 +1,10 @@
-"""Ovid2 pipeline-family CDM: Veritas.
+"""Ovid2 pipeline-family CDM: veritas (legacy ``veritas_mappers`` family).
 
-Veritas pipeline feeds (Veritas-shaped feeds) do not conform to any published
-CDM — they are a small, Ovid-internal shape used by one data source.
-This handle registers just enough for the ETL engine to run against
-that shape without leaking PCORnet assumptions.
-
-The composite keys are intentionally empty at P10 landing time; they
-will be filled in as each Veritas table's dedup requirements are
-documented. Fixer chains referencing PCORnet-scoped fixers on Veritas
-pipelines will fail validation (see ``test_fixer_cdm_scope``).
+Materialised from YAML under ``src/ovid2/resources/cdms/ovid2_pipeline_veritas_v1/``,
+generated from the legacy ``mapping_scripts/veritas_mappers/tables_specs.csv``
+by ``scripts/legacy_port/gen_legacy_cdms.py``. Field order is the legacy
+column order. CDM-default mapper specs (ported legacy mappers) live in the
+same tree under ``mappers/``.
 """
 
 from __future__ import annotations
@@ -17,22 +13,13 @@ import contextlib
 
 from ovid2.cdm.handle import CdmHandle
 from ovid2.cdm.registry import register
+from ovid2.cdm.yaml_loader import load_cdm
 
-VERITAS_V1: CdmHandle = CdmHandle(
-    name="ovid2_pipeline_veritas_v1",
-    version="1.0",
-    composite_keys={},
-    reference_tables=frozenset(),
-    id_columns={},
-    flavour_of_null=frozenset({"", None}),
-    shared_views=(),
-    schema_source=None,
-    schema_loader=None,
-)
+VERITAS_V1: CdmHandle = load_cdm("ovid2_pipeline_veritas_v1")
 
 
 def _register_default() -> None:
-    """Idempotently register the Veritas handle."""
+    """Idempotently register the handle."""
     with contextlib.suppress(ValueError):
         register(VERITAS_V1)
 

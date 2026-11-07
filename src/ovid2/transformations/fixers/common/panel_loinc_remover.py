@@ -61,12 +61,15 @@ Deployment:
           exist in the DataFrame.
 """
 
-from typing import Any
+from __future__ import annotations
 
-from pyspark.sql import DataFrame
-from pyspark.sql.functions import broadcast, col, upper
+from typing import TYPE_CHECKING, Any
 
+from ovid2.core.engines.dsl import broadcast, col, upper
 from ovid2.transformations.fixers.base import BaseFixer
+
+if TYPE_CHECKING:
+    from pyspark.sql import DataFrame
 
 # The type value that indicates LOINC-coded rows in PCORnet CDM.
 _LOINC_TYPE_VALUE: str = "LC"

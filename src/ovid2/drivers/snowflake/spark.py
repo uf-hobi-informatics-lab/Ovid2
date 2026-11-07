@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import os
 import re
 import time
 from typing import TYPE_CHECKING, Any
@@ -73,6 +74,35 @@ _PEM_HEADER_RE = re.compile(r"-*(BEGIN|END) PRIVATE KEY-*\n?")
 #: (which is ``formatter.input_file_name``) is a real table name or a
 #: disc-style glob that would confuse the Snowflake compiler.
 _SQL_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
+
+#: Env var that pins the number of Spark partitions fed to the Snowflake
+#: connector. Unset (the default) keeps the DataFrame's natural
+#: partitioning — the old hard-coded ``repartition(10)`` forced a full
+#: shuffle and capped the write at 10 parallel tasks.
+SNOWFLAKE_WRITE_PARTITIONS_ENV: str = "OVID2_SNOWFLAKE_WRITE_PARTITIONS"
+
+
+def _write_partitions() -> int | None:
+    """Return the configured Snowflake write partition count, or ``None``.
+
+    Reads :data:`SNOWFLAKE_WRITE_PARTITIONS_ENV`; non-positive or
+    non-integer values are ignored (logged) so a typo never breaks a write.
+    """
+    raw = os.environ.get(SNOWFLAKE_WRITE_PARTITIONS_ENV, "").strip()
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("Ignoring non-integer %s=%r", SNOWFLAKE_WRITE_PARTITIONS_ENV, raw)
+        return None
+    return value if value > 0 else None
+
+
+def _maybe_repartition(df: DataFrame) -> DataFrame:
+    """Apply the operator-pinned partition count, if any (lazy)."""
+    partitions = _write_partitions()
+    return df.repartition(partitions) if partitions else df
 
 
 class SnowflakeAddress(BaseAddress):
@@ -258,17 +288,15 @@ class SnowflakeAddress(BaseAddress):
         returned unchanged and a warning is logged, matching the previous
         infer-and-warn behaviour.
 
-        Lazy: builds a new ``StructType`` and re-projects via
-        ``spark.createDataFrame(df.rdd, schema)`` — the single unavoidable
-        boundary the legacy writer also crossed; no ``collect`` happens.
+        Lazy: a single JVM-side projection (casts + ``alias(metadata=...)``);
+        no Python round-trip through ``df.rdd`` and no ``collect``.
         """
-        from pyspark.sql.functions import col, substring, to_date
+        from pyspark.sql.functions import col, substring, to_date, when
         from pyspark.sql.types import (
             DateType,
             DoubleType,
             StringType,
             StructField,
-            StructType,
         )
 
         write_spec = self._write_schema(table_name)
@@ -324,11 +352,23 @@ class SnowflakeAddress(BaseAddress):
             if original.upper() not in typed_names:
                 fields.append(StructField(original, StringType(), True))
 
-        # Order the projection to match the assembled schema.
-        ordered = [f.name for f in fields]
-        typed_df = typed_df.select(*ordered)
-        schema = StructType(fields)
-        return spark.createDataFrame(typed_df.rdd, schema)
+        # Order the projection to match the assembled schema and attach the
+        # ``maxlength`` metadata through ``Column.alias(metadata=...)``. The
+        # previous ``spark.createDataFrame(df.rdd, schema)`` rebuild pickled
+        # every row JVM -> Python -> JVM (the dominant cost of a PySpark
+        # Snowflake write); a pure projection keeps the plan in the JVM.
+        # ``when(c.isNotNull(), c)`` widens non-nullable columns (literals)
+        # to nullable so the connector never emits ``NOT NULL`` DDL — the
+        # rdd rebuild forced ``nullable=True`` on every field.
+        del spark  # retained in the signature for API stability
+        non_nullable = {f.name for f in typed_df.schema.fields if not f.nullable}
+        projected = []
+        for field in fields:
+            column = col(field.name)
+            if field.name in non_nullable:
+                column = when(column.isNotNull(), column)
+            projected.append(column.alias(field.name, metadata=dict(field.metadata or {})))
+        return typed_df.select(*projected)
 
     def _write_schema(self, table_name: str) -> list[tuple[str, str, int]]:
         """Return the CDM ``(name, kind, width)`` write spec for ``table_name``.
@@ -495,13 +535,13 @@ class SnowflakeAddress(BaseAddress):
         options["dbtable"] = table_name.upper()
 
         write_df = self._apply_cdm_schema(df, spark, table_name)
+        write_df = _maybe_repartition(write_df)
 
         backoff_seconds = _INITIAL_BACKOFF_SECONDS
         for attempt in range(1, _MAX_RETRIES + 1):
             try:
                 writer = (
-                    write_df.repartition(10)
-                    .write.format("snowflake")
+                    write_df.write.format("snowflake")
                     .options(**options)
                     .option("on_error", "CONTINUE")
                     .option("useSchema", sql_ident(schema_name))

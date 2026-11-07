@@ -188,3 +188,148 @@ def test_register_engine_view_uses_snowpark_view(monkeypatch: Any) -> None:
     )
 
     assert registered == ["condition_occurrence"], registered
+
+
+def _run_staged(engine: Any, formatter: Any, table: str, cdm: Any) -> None:
+    _run_pipeline_staged(
+        engine=engine,
+        input_address=object(),  # type: ignore[arg-type]
+        output_address=object(),  # type: ignore[arg-type]
+        table_name=table,
+        formatter=formatter,
+        transformations=[],
+        pipeline="acme_from_disc",
+        batch_id="b",
+        bus=_NullBus(),  # type: ignore[arg-type]
+        instance_id="test-instance",
+        cdm=cdm,
+        input_address_name="in",
+        output_address_name="out",
+        sf_overrides=None,
+        cdm_name="pcornet_7_0",
+    )
+
+
+class _MaterialisingEngine(_RecordingEngine):
+    """DuckDB-shaped double: exposes ``materialise`` like ``DuckDBEngine``."""
+
+    type_name = "duckdb"
+
+    def __init__(self, calls: list[str], session: Any, stager: Any) -> None:
+        super().__init__(calls, session, stager)
+        self.materialised: list[tuple[Any, str]] = []
+        self.result = _ViewDataFrame()
+
+    def materialise(self, df: Any, name: str) -> Any:
+        self._calls.append("engine.materialise")
+        self.materialised.append((df, name))
+        return self.result
+
+
+def test_reference_table_materialised_once_before_view_and_persist(monkeypatch: Any) -> None:
+    """Regression (ACME on DuckDB, 2026-11-04): reference tables were lazy views.
+
+    Every clinical table's cross-table fixers (``patid_orphans`` ->
+    ``demographic``, ``encounterid_orphans`` -> ``encounter``) then
+    re-executed the reference table's whole plan. The staged leg must
+    materialise it once — and register *and* persist that same frame.
+    """
+    import ovid2.drivers.registry as registry_mod
+
+    monkeypatch.setattr(registry_mod, "driver_from_address", lambda *a, **k: object())
+    calls: list[str] = []
+    persisted: list[Any] = []
+
+    class _Stager(_RecordingStager):
+        def persist(self, df: Any, *args: Any, **kwargs: Any) -> None:
+            persisted.append(df)
+
+    engine = _MaterialisingEngine(calls, object(), _Stager(calls))
+    cdm = type("Cdm", (), {"reference_tables": ("demographic", "encounter")})()
+    _run_staged(engine, _RecordingFormatter(calls), "encounter", cdm)
+    assert [name for _df, name in engine.materialised] == ["ref_encounter"]
+    assert persisted == [engine.result]
+
+    engine.materialised.clear()
+    _run_staged(engine, _RecordingFormatter(calls), "diagnosis", cdm)
+    assert engine.materialised == []
+
+
+def test_optional_primary_source_missing_yields_empty_table(monkeypatch: Any) -> None:
+    """Regression (ACME ``pcornet_trial`` on DuckDB, 2026-11-07).
+
+    An absent ``optional: true`` primary source (no ``*PREVENTABLE*``
+    file in the batch) must produce an empty table with a warning, as
+    the Spark placeholder read does — not fail the table.
+    """
+    import ovid2.drivers.registry as registry_mod
+
+    monkeypatch.setattr(registry_mod, "driver_from_address", lambda *a, **k: object())
+    calls: list[str] = []
+    events: list[Any] = []
+
+    class _MissingStager(_RecordingStager):
+        def materialise(self, *args: Any, **kwargs: Any) -> Any:
+            raise FileNotFoundError("No files found matching pattern '*PREVENTABLE*'")
+
+    class _SentinelFrame:
+        """DuckDB-like: cannot drop every column."""
+
+        columns = ["__ovid2_empty__"]
+
+        def drop(self, *cols: Any) -> Any:
+            raise ValueError("drop: cannot drop every column of a DuckDB frame")
+
+    class _Session:
+        def createDataFrame(self, data: Any, schema: Any = None) -> Any:
+            calls.append(f"createDataFrame:{schema}")
+            return _SentinelFrame()
+
+    class _Bus:
+        def emit(self, event: Any) -> None:
+            events.append(event)
+
+    formatter = _RecordingFormatter(calls)
+    formatter.primary_source_optional = True  # type: ignore[attr-defined]
+    engine = _RecordingEngine(calls, _Session(), _MissingStager(calls))
+    _run_pipeline_staged(
+        engine=engine,  # type: ignore[arg-type]
+        input_address=object(),  # type: ignore[arg-type]
+        output_address=object(),  # type: ignore[arg-type]
+        table_name="pcornet_trial",
+        formatter=formatter,  # type: ignore[arg-type]
+        transformations=[],
+        pipeline="acme_from_disc",
+        batch_id="b",
+        bus=_Bus(),  # type: ignore[arg-type]
+        instance_id="test-instance",
+        cdm=object(),  # type: ignore[arg-type]
+        input_address_name="in",
+        output_address_name="out",
+        sf_overrides=None,
+        cdm_name="pcornet_7_0",
+    )
+    assert "format" in calls and "persist" in calls, calls
+    assert any("producing an empty table" in str(e) for e in events), events
+
+
+def test_required_primary_source_missing_still_fails(monkeypatch: Any) -> None:
+    import pytest
+
+    import ovid2.drivers.registry as registry_mod
+
+    monkeypatch.setattr(registry_mod, "driver_from_address", lambda *a, **k: object())
+    calls: list[str] = []
+
+    class _MissingStager(_RecordingStager):
+        def materialise(self, *args: Any, **kwargs: Any) -> Any:
+            raise FileNotFoundError("missing")
+
+    engine = _RecordingEngine(calls, object(), _MissingStager(calls))
+    with pytest.raises(FileNotFoundError):
+        _run_staged(
+            engine,
+            _RecordingFormatter(calls),
+            "diagnosis",
+            type("C", (), {"reference_tables": ()})(),
+        )

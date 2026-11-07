@@ -33,14 +33,34 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ovid2.core.docker import is_inside_docker
 from ovid2.core.events import instance_finished, instance_started
 from ovid2.core.isolation import OvidInstance
 from ovid2.core.loaders import load_address, load_engine
 
+if TYPE_CHECKING:
+    from ovid2.drivers.base import DriverControl
+
 logger = logging.getLogger(__name__)
+
+#: Plane classification of every ``ovid2 tools`` subcommand the web tier
+#: may broker (``web/services/_broker.py``). **Control** tools return
+#: names / sizes / schemas / probe results — never row values — and
+#: their handlers below must not call a row-access or data-plane driver
+#: method. **Row access** tools return row values and run only through
+#: the scoped broker (sample / count) or a container (full export).
+#: Pinned by ``tests/contract/test_control_tier_no_row_access.py``.
+CONTROL_TOOLS: dict[str, str] = {
+    "probe-connection": "_probe_connection_entry",
+    "browse-storage": "_browse_storage_entry",
+    "probe-output": "_probe_output_entry",
+    "list-source-tables": "_list_source_tables_entry",
+    "test-engine": "_test_engine_entry",
+    "describe-table": "ovid2.tools.table_ops._describe_entry",
+}
+ROW_ACCESS_TOOLS: frozenset[str] = frozenset({"sample-table", "count-rows", "export-table"})
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -401,7 +421,7 @@ def _probe_connection_entry(args: argparse.Namespace) -> int:
             }
         else:
             secrets_payload = _connections.resolve_secrets(raw)
-            driver = instantiate(
+            driver: DriverControl = instantiate(
                 type_name,
                 args=dict(raw.get("args") or {}),
                 secrets=secrets_payload,
@@ -473,13 +493,13 @@ def _browse_storage_entry(args: argparse.Namespace) -> int:
             }
         else:
             secrets_payload = _connections.resolve_secrets(raw)
-            driver = instantiate(
+            browse_driver: DriverControl = instantiate(
                 type_name,
                 args=dict(raw.get("args") or {}),
                 secrets=secrets_payload,
             )
             try:
-                raw_entries = driver.list_dir(prefix)
+                raw_entries = browse_driver.list_dir(prefix)
                 result = {
                     "ok": True,
                     "supported": True,
@@ -707,7 +727,9 @@ def _ods_ls_entry(args: argparse.Namespace) -> int:
     from ovid2.dataspace.resolver import OdsResolutionError
 
     try:
-        supported, entries, message = dataspace.list_children(args.path)
+        supported, entries, message = dataspace.list_children(
+            args.path, lister=dataspace.driver_lister
+        )
     except (OdsPathError, OdsResolutionError, FileNotFoundError, ValueError) as exc:
         print(_json.dumps({"error": str(exc)}), file=sys.stderr)
         return 2

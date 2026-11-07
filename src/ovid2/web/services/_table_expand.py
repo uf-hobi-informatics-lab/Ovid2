@@ -154,7 +154,7 @@ def expand_source_tables(
                 f"(driver type '{_driver_type_for_address(address_name) or 'unknown'}')."
             ),
         )
-    from ovid2.web.services._broker import BrokerError, run_tool_json
+    from ovid2.web.services._broker import BrokerError, SecretScope, run_tool_json
     from ovid2.web.services.storage_browse_svc import _browse_deadline_seconds
 
     try:
@@ -167,6 +167,7 @@ def expand_source_tables(
                 "--batch_id",
                 batch_id,
             ],
+            scope=SecretScope(addresses=(address_name,)),
             timeout=_browse_deadline_seconds(),
         )
     except BrokerError as exc:

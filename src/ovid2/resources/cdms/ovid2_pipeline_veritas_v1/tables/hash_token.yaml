@@ -1,0 +1,142 @@
+v: 1
+name: hash_token
+composite_key:
+- PATID
+domain_description: Ported from legacy mapping_scripts/veritas_mappers/tables_specs.csv.
+fields:
+- name: PATID
+  rdbms_type: RDBMS Text(x)
+  order: 1
+  sas_type: SAS Char(x)
+- name: TOKEN_01
+  rdbms_type: RDBMS Text(x)
+  order: 2
+  sas_type: SAS Char(x)
+- name: TOKEN_02
+  rdbms_type: RDBMS Text(x)
+  order: 3
+  sas_type: SAS Char(x)
+- name: TOKEN_03
+  rdbms_type: RDBMS Text(x)
+  order: 4
+  sas_type: SAS Char(x)
+- name: TOKEN_04
+  rdbms_type: RDBMS Text(x)
+  order: 5
+  sas_type: SAS Char(x)
+- name: TOKEN_05
+  rdbms_type: RDBMS Text(x)
+  order: 6
+  sas_type: SAS Char(x)
+- name: TOKEN_06
+  rdbms_type: RDBMS Text(x)
+  order: 7
+  sas_type: SAS Char(x)
+- name: TOKEN_07
+  rdbms_type: RDBMS Text(x)
+  order: 8
+  sas_type: SAS Char(x)
+- name: TOKEN_08
+  rdbms_type: RDBMS Text(x)
+  order: 9
+  sas_type: SAS Char(x)
+- name: TOKEN_09
+  rdbms_type: RDBMS Text(x)
+  order: 10
+  sas_type: SAS Char(x)
+- name: TOKEN_12
+  rdbms_type: RDBMS Text(x)
+  order: 11
+  sas_type: SAS Char(x)
+- name: TOKEN_14
+  rdbms_type: RDBMS Text(x)
+  order: 12
+  sas_type: SAS Char(x)
+- name: TOKEN_15
+  rdbms_type: RDBMS Text(x)
+  order: 13
+  sas_type: SAS Char(x)
+- name: TOKEN_16
+  rdbms_type: RDBMS Text(x)
+  order: 14
+  sas_type: SAS Char(x)
+- name: TOKEN_17
+  rdbms_type: RDBMS Text(x)
+  order: 15
+  sas_type: SAS Char(x)
+- name: TOKEN_18
+  rdbms_type: RDBMS Text(x)
+  order: 16
+  sas_type: SAS Char(x)
+- name: TOKEN_23
+  rdbms_type: RDBMS Text(x)
+  order: 17
+  sas_type: SAS Char(x)
+- name: TOKEN_24
+  rdbms_type: RDBMS Text(x)
+  order: 18
+  sas_type: SAS Char(x)
+- name: TOKEN_25
+  rdbms_type: RDBMS Text(x)
+  order: 19
+  sas_type: SAS Char(x)
+- name: TOKEN_26
+  rdbms_type: RDBMS Text(x)
+  order: 20
+  sas_type: SAS Char(x)
+- name: TOKEN_29
+  rdbms_type: RDBMS Text(x)
+  order: 21
+  sas_type: SAS Char(x)
+- name: TOKEN_30
+  rdbms_type: RDBMS Text(x)
+  order: 22
+  sas_type: SAS Char(x)
+- name: TOKEN_101
+  rdbms_type: RDBMS Text(x)
+  order: 23
+  sas_type: SAS Char(x)
+- name: TOKEN_102
+  rdbms_type: RDBMS Text(x)
+  order: 24
+  sas_type: SAS Char(x)
+- name: TOKEN_103
+  rdbms_type: RDBMS Text(x)
+  order: 25
+  sas_type: SAS Char(x)
+- name: TOKEN_104
+  rdbms_type: RDBMS Text(x)
+  order: 26
+  sas_type: SAS Char(x)
+- name: TOKEN_105
+  rdbms_type: RDBMS Text(x)
+  order: 27
+  sas_type: SAS Char(x)
+- name: TOKEN_106
+  rdbms_type: RDBMS Text(x)
+  order: 28
+  sas_type: SAS Char(x)
+- name: TOKEN_107
+  rdbms_type: RDBMS Text(x)
+  order: 29
+  sas_type: SAS Char(x)
+- name: TOKEN_108
+  rdbms_type: RDBMS Text(x)
+  order: 30
+  sas_type: SAS Char(x)
+- name: TOKEN_109
+  rdbms_type: RDBMS Text(x)
+  order: 31
+  sas_type: SAS Char(x)
+- name: TOKEN_110
+  rdbms_type: RDBMS Text(x)
+  order: 32
+  sas_type: SAS Char(x)
+- name: TOKEN_111
+  rdbms_type: RDBMS Text(x)
+  order: 33
+  sas_type: SAS Char(x)
+- name: TOKEN_ENCRYPTION_KEY
+  rdbms_type: RDBMS Text(x)
+  order: 34
+  sas_type: SAS Char(x)

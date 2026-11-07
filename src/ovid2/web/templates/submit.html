@@ -281,8 +281,9 @@
               {% endif %}
             </div>
             <div class="field-grid">
-              <label id="workers-row">Workers
+              <label id="workers-row" title="Spark: worker containers in the run's cluster. DuckDB: tables run concurrently in one host-sized container (75% RAM, all CPUs).">Workers
                 <input type="number" name="workers" value="25" min="1" max="200">
+                <small class="muted">Spark: worker containers · DuckDB: concurrent tables</small>
               </label>
               <label id="sf-account-row">Snowflake ACCOUNT override
                 <input type="text" name="sf_account" placeholder="optional">

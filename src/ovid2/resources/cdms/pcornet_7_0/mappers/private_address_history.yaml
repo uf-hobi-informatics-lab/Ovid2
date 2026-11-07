@@ -1,0 +1,72 @@
+# Ported verbatim from legacy mapping_scripts/pcornet_mappers/private_address_history_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: private_address_history
+ops:
+- op: legacy_select
+  pre_join: geocoding
+  columns:
+  - ADDRESSID:
+      encrypt: ADDRESSID
+  - PATID:
+      encrypt: PATID
+  - ADDRESS_USE:
+      dict: private_address_history_address_use_dict
+      col: ADDRESS_USE
+  - ADDRESS_TYPE:
+      dict: private_address_history_address_type_dict
+      col: ADDRESS_TYPE
+  - ADDRESS_PREFERRED:
+      dict: private_address_history_address_preferred_dict
+      col: ADDRESS_PREFERRED
+  - ADDRESS_STREET
+  - ADDRESS_DETAIL
+  - ADDRESS_COUNTY:
+      coalesce:
+      - nonblank: ADDRESS_COUNTY
+      - dict_only: '@geo:get_county_from_zip'
+        col: ADDRESS_ZIP5
+      - lit: ''
+  - ADDRESS_CITY:
+      coalesce:
+      - nonblank: ADDRESS_CITY
+      - dict_only: '@geo:get_city_from_zip'
+        col: ADDRESS_ZIP5
+      - lit: ''
+  - ADDRESS_STATE:
+      coalesce:
+      - dict_only: private_address_history_address_state_dict
+        col: ADDRESS_STATE
+      - nonblank: ADDRESS_STATE
+      - dict_only: '@geo:get_state_from_zip'
+        col: ADDRESS_ZIP5
+      - lit: ''
+  - ADDRESS_ZIP5
+  - ADDRESS_ZIP9
+  - ADDRESS_PERIOD_START
+  - ADDRESS_PERIOD_END
+  - STATE_FIPS:
+      udf: get_state_fips_from_geocoding
+      args:
+      - GEOCODE_STATE
+      - STATE_FIPS_ZIP5
+  - COUNTY_FIPS:
+      udf: get_countyFips_from_geocoding
+      args:
+      - FULL_GEOCODE_COUNTY
+      - COUNTY_FIPS_ZIP5
+  - RUCA_ZIP:
+      dict: '@geo:get_ruca_zip_mapping'
+      col: ADDRESS_ZIP5
+      fallback:
+        lit: ''
+  - CURRENT_ADDRESS_FLAG:
+      dict: private_address_history_current_address_flag_dict
+      col: CURRENT_ADDRESS_FLAG
+  - RAW_ADDRESS_TEXT
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true
+  append_additional_fields:
+    join_field: ADDRESSID

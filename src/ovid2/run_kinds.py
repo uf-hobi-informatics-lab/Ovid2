@@ -274,7 +274,8 @@ KIND_REGISTRY: dict[str, KindSpec] = {
         uses_transformations=False,
         uses_cdm=False,
         tables_mode="none",
-        # Host-side executor subprocess — no container, no /data mount.
+        # Runs in a single driver container (no Spark cluster); ``/data``
+        # stays read-only — the artifact directory is mounted rw on its own.
         read_only_data_mount=True,
         create_flow="plain",
         job_only=True,

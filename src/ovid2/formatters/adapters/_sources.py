@@ -151,7 +151,7 @@ def _apply_exclude_patterns(
     pattern. For other address types this returns an empty string, so
     the exclusion silently becomes a no-op (documented behaviour).
     """
-    from pyspark.sql.functions import expr, input_file_name
+    from ovid2.core.engines.dsl import expr, input_file_name
 
     # Only meaningful for filesystem-based sources.
     disc_address = _maybe_disc(input_address)
@@ -189,9 +189,29 @@ def _maybe_disc(input_address: BaseAddress) -> DiscAddress | None:
     return input_address if isinstance(input_address, DiscAddress) else None
 
 
+#: Column carried by an "absent optional source" frame on engines that
+#: cannot represent a zero-column frame (DuckDB).
+EMPTY_SOURCE_SENTINEL = "__ovid2_empty__"
+
+
 def _empty_df(spark: SparkSession) -> DataFrame:
-    """Return a zero-column, zero-row DataFrame usable as a passthrough."""
-    return spark.createDataFrame([], schema="__ovid2_empty__ string").drop("__ovid2_empty__")
+    """Return a zero-row DataFrame marking an absent optional source.
+
+    Spark yields a zero-column frame. Engines that cannot drop every
+    column (DuckDB) keep the single :data:`EMPTY_SOURCE_SENTINEL`
+    column; :func:`is_empty_source` recognises both shapes.
+    """
+    df = spark.createDataFrame([], schema=f"{EMPTY_SOURCE_SENTINEL} string")
+    try:
+        return df.drop(EMPTY_SOURCE_SENTINEL)
+    except ValueError:
+        return df
+
+
+def is_empty_source(df: Any) -> bool:
+    """Return whether ``df`` is an absent-optional-source placeholder."""
+    columns = list(df.columns)
+    return not columns or columns == [EMPTY_SOURCE_SENTINEL]
 
 
 def _glob_to_java_regex(pattern: str) -> str:

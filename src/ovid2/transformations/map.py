@@ -62,14 +62,43 @@ class MapTransformer(BaseTransformer):
         if table_name is None or pipeline is None or spark is None or cdm is None:
             return df
 
-        # 1) Declarative spec.
+        # 1) Declarative spec (pipeline first; CDM default under legacy_ovid).
+        from ovid2.legacy.profile import is_legacy_ovid
+
+        legacy_profile = is_legacy_ovid(pipeline)
         try:
-            spec = load_spec(pipeline, table_name)
+            spec = load_spec(pipeline, table_name, cdm_name=cdm.name if legacy_profile else None)
         except MapperSpecNotFoundError:
             spec = None
 
         if spec is not None:
+            if legacy_profile:
+                # Legacy mapper read ``deduplicated_<t>.csv`` (R). After the
+                # dedup stage the frame already *is* that file's text, so
+                # only R applies; without it, the formatter file is W(df).
+                from ovid2.legacy.csv_roundtrip import (
+                    LEGACY_TEXT_KEY,
+                    legacy_read_normalise,
+                    legacy_write_normalise,
+                    remember_source_text,
+                )
+
+                text = df if context.pop(LEGACY_TEXT_KEY, False) else legacy_write_normalise(df)
+                reader = next(
+                    (str(o.params["reader"]) for o in spec.ops if o.params.get("reader")),
+                    "spark_read",
+                )
+                df = remember_source_text(legacy_read_normalise(text, reader=reader), text)
+            # Legacy then wrote ``mapped_<t>.csv`` (W) — that is the writer's
+            # job (output address / legacy fix-stage scratch), not ours.
             return run_spec(df, spec, spark=spark, cdm=cdm)
+
+        if legacy_profile:
+            # Legacy ran no mapper for this table → no mapped_<t>.csv; fail loudly.
+            raise MapperSpecNotFoundError(
+                f"legacy_ovid pipeline '{pipeline}' has no mapper spec for '{table_name}' "
+                f"(neither the pipeline nor the CDM '{cdm.name}' default)."
+            )
 
         # 2) Legacy class path (deprecated).
         legacy = self._load_legacy_mapper(table_name, pipeline)

@@ -537,10 +537,39 @@ def _pyspark_docker_argv(name: str, image: str) -> list[str]:
         "XDG_CONFIG_HOME=/etc",
         "-v",
         f"{xdg_home}/ovid2:/etc/ovid2:ro",
+        # Least privilege: the probe sees only its own engine's secrets
+        # (bound below by :func:`test_engine`); the config tree's
+        # ``secrets.d`` is always shadowed for this probe.
+        "--tmpfs",
+        "/etc/ovid2/secrets.d:ro,size=64k",
+        "-e",
+        f"OVID2_SECRETS_DIR={_PROBE_SECRETS_IN_CONTAINER}",
+        "-e",
+        "OVID2_SECRETS_SCOPE_MODE=enforce",
         image,
         "tools",
         "test-engine",
         name,
+    ]
+
+
+#: Container path the engine probe's granted secrets are bound under.
+_PROBE_SECRETS_IN_CONTAINER = "/ovid2-scoped-secrets"
+
+
+def _bind_scoped_secrets(argv: list[str], scoped_dir: str) -> list[str]:
+    """Insert a read-only bind of ``scoped_dir`` before the image token."""
+    if not argv or argv[0] != "docker":
+        return argv
+    try:
+        image_idx = argv.index("tools") - 1
+    except ValueError:
+        return argv
+    return [
+        *argv[:image_idx],
+        "-v",
+        f"{scoped_dir}:{_PROBE_SECRETS_IN_CONTAINER}:ro",
+        *argv[image_idx:],
     ]
 
 
@@ -620,13 +649,21 @@ def test_engine(name: str) -> EngineTestReport:
     if early is not None:
         return early
 
+    from ovid2.config.executor_env import scoped_executor_env
+    from ovid2.config.secret_refs import SecretScope
+    from ovid2.web.settings import WORKER_ENV_ALLOWLIST
+
     try:
-        completed = subprocess.run(
-            argv,
-            capture_output=True,
-            text=True,
-            timeout=_TEST_TIMEOUT_SECONDS,
-        )
+        with scoped_executor_env(
+            SecretScope(engines=(name,)), allowlist=WORKER_ENV_ALLOWLIST, label="test-engine"
+        ) as env:
+            completed = subprocess.run(
+                _bind_scoped_secrets(argv, env["OVID2_SECRETS_DIR"]),
+                capture_output=True,
+                text=True,
+                timeout=_TEST_TIMEOUT_SECONDS,
+                env=env,
+            )
     except subprocess.TimeoutExpired:
         return EngineTestReport(
             ok=False,

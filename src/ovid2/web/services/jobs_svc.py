@@ -209,6 +209,7 @@ def _row_overwrite_gate(row: dict[str, object], *, confirm_overwrite: bool) -> s
         output_address=str(row["output_address"]),
         tables=json.loads(str(row.get("tables_json") or "[]")) or ["all"],
     )
+    _validate_output_location(str(row["output_address"]))
     collisions = check_overwrite(str(row["output_address"]), probe_req, confirmed=confirmed)
     if collisions or confirm_overwrite:
         extra["overwrite"] = True
@@ -694,6 +695,32 @@ def _expand_all_tables(request: JobSubmitRequest) -> None:
     # ``unsupported`` keeps it so ``_validate_submit`` rejects it.
 
 
+def _validate_output_location(output_address: str) -> None:
+    """Reject an output address that cannot be written (e.g. Snowflake without a schema).
+
+    Every run kind writes into its output address, which is the exact
+    write location. A warehouse output that names a database but no
+    schema would otherwise run every table to completion and fail at the
+    final write. Unknown / legacy addresses are left to the executor.
+
+    Raises:
+        SubmitError: When the output location is not a valid write target.
+    """
+    from ovid2.drivers._layout import warehouse_output_location_error
+    from ovid2.web.services import addresses_svc
+
+    if not (output_address or "").strip():
+        return
+    detail = addresses_svc.get_address(output_address)
+    if detail is None or not detail.connection:
+        return
+    error = warehouse_output_location_error(
+        addresses_svc.connection_type(detail.connection), detail.location or {}
+    )
+    if error:
+        raise SubmitError(f"output_address '{output_address}': {error}")
+
+
 def _validate_submit(request: JobSubmitRequest) -> None:
     """Best-effort pre-flight checks. Raises :class:`SubmitError` on failure."""
     if not request.pipeline.strip():
@@ -725,6 +752,7 @@ def _validate_submit(request: JobSubmitRequest) -> None:
                 raise SubmitError(f"{label} '{value}' is not on the config search path.")
     if request.workers < 1 or request.workers > 200:
         raise SubmitError("workers must be between 1 and 200.")
+    _validate_output_location(request.output_address)
 
     # Kind-specific checks, driven by the run-kind registry.
     spec = get_kind(kind)

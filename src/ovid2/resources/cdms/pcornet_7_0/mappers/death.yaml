@@ -1,0 +1,25 @@
+# Ported verbatim from legacy mapping_scripts/pcornet_mappers/death_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: death
+ops:
+- op: legacy_select
+  columns:
+  - PATID:
+      encrypt: PATID
+  - DEATH_DATE
+  - DEATH_DATE_IMPUTE:
+      dict: death_death_date_impute_dict
+      col: DEATH_DATE_IMPUTE
+  - DEATH_SOURCE:
+      dict: death_death_source_dict
+      col: DEATH_SOURCE
+  - DEATH_MATCH_CONFIDENCE:
+      dict: death_death_match_confidence_dict
+      col: DEATH_MATCH_CONFIDENCE
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true
+  append_additional_fields:
+    join_field: PATID

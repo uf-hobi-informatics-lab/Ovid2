@@ -61,12 +61,15 @@ Deployment:
         - The date column in ``src1`` must exist in the DataFrame.
 """
 
-from typing import Any
+from __future__ import annotations
 
-from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, datediff, to_date, when
+from typing import TYPE_CHECKING, Any
 
+from ovid2.core.engines.dsl import col, datediff, to_date, when
 from ovid2.transformations.fixers.base import BaseFixer
+
+if TYPE_CHECKING:
+    from pyspark.sql import DataFrame
 
 
 class IllogicalDischargeDateFixer(BaseFixer):

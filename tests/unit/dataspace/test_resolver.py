@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from ovid2.dataspace import list_children, list_storage_accounts, resolve
+from ovid2.dataspace import driver_lister, list_children, list_storage_accounts, resolve
 from ovid2.dataspace.path import OdsPath
 from ovid2.dataspace.resolver import OdsResolutionError
 
@@ -68,11 +68,11 @@ class TestListing:
         assert [(a.name, a.kind, a.path, a.type) for a in accounts] == [
             ("inbox", "account", "/inbox", "disc")
         ]
-        supported, entries, _ = list_children("/")
+        supported, entries, _ = list_children("/", lister=driver_lister)
         assert supported and [e.name for e in entries] == ["inbox"]
 
     def test_folders_are_plain_directories(self, tree: Path) -> None:
-        supported, entries, _ = list_children("/inbox/landing")
+        supported, entries, _ = list_children("/inbox/landing", lister=driver_lister)
         assert supported
         assert [(e.name, e.kind, e.path) for e in entries] == [
             ("2026_03", "dir", "/inbox/landing/2026_03"),
@@ -80,7 +80,7 @@ class TestListing:
         ]
 
     def test_leaf_lists_files(self, tree: Path) -> None:
-        _, entries, _ = list_children("/inbox/landing/2026_03")
+        _, entries, _ = list_children("/inbox/landing/2026_03", lister=driver_lister)
         assert [(e.name, e.kind) for e in entries] == [("demographic.csv", "file")]
 
     def test_custom_lister_is_used_for_every_store(self, tree: Path) -> None:

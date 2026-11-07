@@ -14,6 +14,8 @@ Ships with:
 - ``regex_replace`` — regex substitution on one column.
 - ``literal`` — overwrite a column with a constant.
 - ``passthrough`` — explicit no-op.
+- ``legacy_select`` — reproduce a legacy-Ovid mapper ``select(...)`` verbatim
+  (``legacy_ovid`` profile).
 - ``apply_transforms`` — run a public-library transform chain (bridge to
   :mod:`ovid2.transforms`).
 """
@@ -23,6 +25,7 @@ from __future__ import annotations
 from ovid2.mappers.ops.apply_transforms import ApplyTransformsOp
 from ovid2.mappers.ops.case_map import CaseMapOp
 from ovid2.mappers.ops.hash_id import HashIdOp
+from ovid2.mappers.ops.legacy_select import LegacySelectOp
 from ovid2.mappers.ops.literal import LiteralOp
 from ovid2.mappers.ops.passthrough import PassthroughOp
 from ovid2.mappers.ops.regex_replace import RegexReplaceOp
@@ -33,6 +36,7 @@ __all__ = [
     "ApplyTransformsOp",
     "CaseMapOp",
     "HashIdOp",
+    "LegacySelectOp",
     "LiteralOp",
     "PassthroughOp",
     "RegexReplaceOp",

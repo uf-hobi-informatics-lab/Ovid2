@@ -1,0 +1,38 @@
+v: 1
+name: goal_contact
+composite_key:
+- GOAL_ID
+domain_description: Ported from legacy mapping_scripts/nursing_mappers/tables_specs.csv.
+fields:
+- name: GOAL_ID
+  rdbms_type: RDBMS Text(x)
+  order: 1
+  sas_type: SAS Char(x)
+- name: GOAL_CONTACT_SEQUENCE
+  rdbms_type: RDBMS Text(x)
+  order: 2
+  sas_type: SAS Char(x)
+- name: GOAL_EXP_END_DATE
+  rdbms_type: RDBMS Text(x)
+  order: 3
+  sas_type: SAS Char(x)
+- name: GOAL_OUTCOME
+  rdbms_type: RDBMS Text(x)
+  order: 4
+  sas_type: SAS Char(x)
+- name: GOAL_PROV_ID
+  rdbms_type: RDBMS Text(x)
+  order: 5
+  sas_type: SAS Char(x)
+- name: GOAL_EDIT_TIME
+  rdbms_type: RDBMS Text(x)
+  order: 6
+  sas_type: SAS Char(x)
+- name: GOAL_START_DATETIME
+  rdbms_type: RDBMS Text(x)
+  order: 7
+  sas_type: SAS Char(x)
+- name: GOAL_END_DATETIME
+  rdbms_type: RDBMS Text(x)
+  order: 8
+  sas_type: SAS Char(x)

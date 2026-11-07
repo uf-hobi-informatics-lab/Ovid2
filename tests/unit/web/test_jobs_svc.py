@@ -1227,3 +1227,58 @@ def test_explicit_tables_skip_broker(
     response = jobs_svc.submit(request)
     detail = jobs_svc.get_job(response.job_id)
     assert detail is not None and detail.tables == ["demographic"]
+
+
+def _snowflake_output(isolated_xdg: Path, name: str, path: str) -> None:
+    """Write a snowflake connection + an output address at ``path``."""
+    conndir = isolated_xdg / "config" / "ovid2" / "connections"
+    conndir.mkdir(parents=True, exist_ok=True)
+    (conndir / "acme-sf.json").write_text(
+        json.dumps({"type": "snowflake", "args": {"account": "acme-sf", "user": "U"}}),
+        encoding="utf-8",
+    )
+    configs = Path(os.environ["OVID2_CONFIGS_DIR"])
+    (configs / f"{name}.json").write_text(
+        json.dumps({"connection": "acme-sf", "location": {"path": path}}),
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.unit
+def test_submit_rejects_snowflake_output_without_schema(
+    registered_pipeline: str, isolated_xdg: Path
+) -> None:
+    """A Snowflake output naming only a database is rejected before queuing.
+
+    Regression: such a run executed every table and failed each one at
+    the final write with "snowflake output address has no schema".
+    """
+    _snowflake_output(isolated_xdg, "sf_db_only", "SANDBOX")
+    req = _make_request(registered_pipeline)
+    req.output_address = "sf_db_only"
+    with pytest.raises(jobs_svc.SubmitError, match="no schema"):
+        jobs_svc.submit(req)
+    web_db.ensure_schema()
+    with web_db.connect() as conn:
+        rows = conn.execute(
+            "SELECT 1 FROM web_jobs WHERE output_address = ?", ("sf_db_only",)
+        ).fetchall()
+    assert rows == []
+
+
+@pytest.mark.unit
+def test_submit_accepts_snowflake_output_with_schema(
+    registered_pipeline: str, isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``DATABASE/SCHEMA`` passes the output-location check."""
+    from ovid2.web.services import output_probe_svc
+
+    monkeypatch.setattr(
+        output_probe_svc,
+        "existing_output_tables",
+        lambda _name: output_probe_svc.OutputProbe(known=True, tables=[]),
+    )
+    _snowflake_output(isolated_xdg, "sf_db_schema", "SANDBOX/OVID_X")
+    req = _make_request(registered_pipeline)
+    req.output_address = "sf_db_schema"
+    assert jobs_svc.submit(req).status == "queued"

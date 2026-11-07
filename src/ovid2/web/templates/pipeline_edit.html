@@ -81,7 +81,7 @@
     <div class="form-row" id="engine-workers-row">
       <label for="engine">Warehouse</label>
       <input type="text" id="engine" name="engine" value="{{ pipeline_config.engine }}">
-      <label for="workers" id="workers-label">Workers</label>
+      <label for="workers" id="workers-label" title="Spark: worker containers in the run's cluster. DuckDB: tables run concurrently in one host-sized container.">Workers</label>
       <input type="number" id="workers" name="workers" min="1" max="200" value="{{ pipeline_config.workers }}">
     </div>
 

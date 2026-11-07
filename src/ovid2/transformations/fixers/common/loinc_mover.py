@@ -41,7 +41,7 @@ Deployment:
     1. Add the fix dict to ``MULTI_TABLE_FIXES`` (**not** ``FIXER_CHAINS``)
        in ``pipelines/<pipeline>/fixer_configs.py``::
 
-           from typing import Any
+           from typing import TYPE_CHECKING, Any
 
            MULTI_TABLE_FIXES: list[dict[str, Any]] = [
                {"fix": "loinc_mover", "version": "v2"},
@@ -73,12 +73,15 @@ Deployment:
           have completed.
 """
 
-from typing import Any
+from __future__ import annotations
 
-from pyspark.sql import DataFrame
-from pyspark.sql.functions import broadcast, col, lit
+from typing import TYPE_CHECKING, Any
 
+from ovid2.core.engines.dsl import broadcast, col, lit
 from ovid2.transformations.fixers.base import BaseFixer
+
+if TYPE_CHECKING:
+    from pyspark.sql import DataFrame
 
 # Maps table names to the classtype values that belong in that table (v1).
 _V1_CLASSTYPE_MAP: dict[str, list[str]] = {

@@ -1,0 +1,14 @@
+{#
+  The Ovid2 Manual inside the control panel shell.
+
+  The article fragment (sidebar · content · on-this-page) is rendered by
+  ``ovid2.manual.layout`` — the same markup the static site uses — and
+  styled by ``/static/manual.css`` with the panel's theme tokens.
+#}
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="/static/manual.css">
+<script src="/static/manual.js" defer></script>
+{{ fragment }}
+{% endblock %}

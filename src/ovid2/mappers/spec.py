@@ -185,12 +185,30 @@ def find_spec(pipeline: str, table: str) -> Path | None:
     return None
 
 
-def load_spec(pipeline: str, table: str) -> MapperSpec:
+def find_cdm_default_spec(cdm_name: str, table: str) -> Path | None:
+    """Locate a CDM-level default mapper spec.
+
+    Legacy Ovid shared one mapper family per CDM across every partner
+    (``mapping_scripts/<family>_mappers``). Those ports ship as
+    ``resources/cdms/<cdm>/mappers/<table>.yaml`` and are used by
+    ``legacy_ovid``-profile pipelines that do not override the table with
+    their own ``mappers/<table>.yaml``.
+    """
+    from ovid2.cdm.yaml_loader import cdm_yaml_root
+
+    candidate = cdm_yaml_root() / cdm_name / "mappers" / f"{table}.yaml"
+    return candidate if candidate.is_file() else None
+
+
+def load_spec(pipeline: str, table: str, *, cdm_name: str | None = None) -> MapperSpec:
     """Return the :class:`MapperSpec` for ``(pipeline, table)``.
 
+    Resolution: pipeline YAML → pipeline Python ``SPEC`` → (when
+    ``cdm_name`` is given) the CDM-level default at
+    ``resources/cdms/<cdm>/mappers/<table>.yaml``.
+
     Raises:
-        MapperSpecNotFoundError: When neither a YAML nor a Python spec
-            can be located.
+        MapperSpecNotFoundError: When no spec can be located.
     """
     path = find_spec(pipeline, table)
     if path is not None:
@@ -201,6 +219,10 @@ def load_spec(pipeline: str, table: str) -> MapperSpec:
     try:
         module = importlib.import_module(module_name)
     except ModuleNotFoundError as exc:
+        if cdm_name is not None:
+            default = find_cdm_default_spec(cdm_name, table)
+            if default is not None:
+                return load_from_yaml(default, pipeline=pipeline)
         raise MapperSpecNotFoundError(
             f"No mapper spec found for pipeline '{pipeline}', table '{table}'."
         ) from exc

@@ -23,9 +23,10 @@ def engines_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 @pytest.mark.unit
-def test_list_engine_types_returns_registered_three() -> None:
+def test_list_engine_types_returns_registered_four() -> None:
     assert _engines.list_engine_types() == [
         "databricks_spark",
+        "duckdb",
         "pyspark",
         "snowpark",
     ]

@@ -11,6 +11,7 @@ from ovid2.mappers.ops import (
     ApplyTransformsOp,
     CaseMapOp,
     HashIdOp,
+    LegacySelectOp,
     LiteralOp,
     PassthroughOp,
     RegexReplaceOp,
@@ -27,6 +28,7 @@ MAP_OPS: dict[str, type[BaseMapOp]] = {
     "literal": LiteralOp,
     "passthrough": PassthroughOp,
     "apply_transforms": ApplyTransformsOp,
+    "legacy_select": LegacySelectOp,
 }
 
 

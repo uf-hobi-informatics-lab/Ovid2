@@ -55,6 +55,9 @@ def _zcta_col(zcta_col: "Column", zcta_zip5_col: "Column") -> "Column":
 class Private_address_geocodeFormatter(BaseFormatter):
     """Formatter for the example_pcornet ``private_address_geocode`` table."""
 
+    #: Uses ``monotonically_increasing_id`` and Spark map-literal lookups.
+    requires_family = "spark"
+
     @property
     def table_name(self) -> str:
         """Return the CDM table name."""

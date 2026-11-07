@@ -125,6 +125,54 @@ def run_pipeline(
         )
     )
 
+    from ovid2.core.engines.dsl import use_engine
+
+    with use_engine(engine):
+        _run_pipeline_dispatch(
+            engine=engine,
+            input_address=input_address,
+            output_address=output_address,
+            table_name=table_name,
+            formatter=formatter,
+            transformations=transformations,
+            pipeline=pipeline,
+            batch_id=batch_id,
+            bus=bus,
+            instance_id=instance_id,
+            cdm=cdm,
+            input_address_name=input_address_name,
+            output_address_name=output_address_name,
+            sf_overrides=sf_overrides,
+            cdm_name=cdm_name,
+        )
+
+    bus.emit(
+        table_completed(
+            instance_id=instance_id, pipeline=pipeline, batch_id=batch_id, table=table_name
+        )
+    )
+
+
+def _run_pipeline_dispatch(
+    *,
+    engine: BaseEngine,
+    input_address: BaseAddress,
+    output_address: BaseAddress,
+    table_name: str,
+    formatter: BaseFormatter,
+    transformations: list[BaseTransformer],
+    pipeline: str,
+    batch_id: str,
+    bus: EventBus,
+    instance_id: str,
+    cdm: CdmHandle,
+    input_address_name: str | None,
+    output_address_name: str | None,
+    sf_overrides: dict[str, Any] | None,
+    cdm_name: str | None,
+) -> None:
+    """Route one table to the Spark or the staged (non-Spark) leg."""
+    _assert_formatter_family(engine, formatter)
     if engine.session_is_spark:
         _run_pipeline_spark(
             engine=engine,
@@ -158,11 +206,26 @@ def run_pipeline(
             cdm_name=cdm_name,
         )
 
-    bus.emit(
-        table_completed(
-            instance_id=instance_id, pipeline=pipeline, batch_id=batch_id, table=table_name
+
+def _assert_formatter_family(engine: BaseEngine, formatter: BaseFormatter) -> None:
+    """Refuse a formatter whose ``requires_family`` differs from the engine's.
+
+    YAML specs with ``adapter: custom`` are checked again inside the
+    adapter; this covers class-only formatters loaded straight from
+    ``formatters_custom``.
+    """
+    from ovid2.core.engines.protocols import EngineOperationUnsupported
+
+    required = getattr(formatter, "requires_family", None)
+    if not required:
+        return
+    family = getattr(engine.family, "value", engine.family)
+    if str(required).lower() != str(family).lower():
+        raise EngineOperationUnsupported(
+            engine.type_name,
+            f"formatter {type(formatter).__name__}",
+            f"requires engine family '{required}'; run this table on a {required} engine",
         )
-    )
 
 
 def _run_pipeline_spark(
@@ -242,7 +305,35 @@ def _run_pipeline_spark(
         cached_df.createOrReplaceTempView(table_name)
         df = cached_df
 
-    output_address.write(df, spark, pipeline, batch_id, table_name)
+    try:
+        output_address.write(df, spark, pipeline, batch_id, table_name)
+    finally:
+        # Per-table checkpoints (``engine.checkpoint``) are never reused
+        # by the next table; free their cached blocks now. Reference
+        # tables stay persisted — later tables' cross-table fixers read them.
+        _release_checkpoints(engine)
+
+
+def _release_checkpoints(engine: Any) -> None:
+    """Call ``engine.release_checkpoints()`` when the engine provides it."""
+    release = getattr(engine, "release_checkpoints", None)
+    if callable(release):
+        release()
+
+
+def _materialise_reference(engine: Any, df: Any, table_name: str) -> Any:
+    """Materialise a reference table on engines that expose ``materialise``.
+
+    Only the DuckDB engine defines ``materialise`` (execute once into
+    scratch Parquet, return a frame scanning it). Snowpark already
+    persists into a real table that later fixers read, so it is left
+    untouched. The returned frame is what gets both registered as the
+    view *and* persisted, so the plan runs exactly once.
+    """
+    materialise = getattr(engine, "materialise", None)
+    if not callable(materialise):
+        return df
+    return materialise(df, f"ref_{table_name}")  # noqa: OVID2001 deliberate reference-table warm-up
 
 
 def _run_pipeline_staged(
@@ -316,13 +407,36 @@ def _run_pipeline_staged(
     )
 
     # Materialise the main source into an engine-native DataFrame.
-    df = stager.materialise(
-        input_driver,
-        pipeline,
-        batch_id,
-        formatter.input_file_name,
-        table_name=table_name,
-    )
+    try:
+        df = stager.materialise(
+            input_driver,
+            pipeline,
+            batch_id,
+            formatter.input_file_name,
+            table_name=table_name,
+        )
+    except FileNotFoundError:
+        # Same contract as the Spark placeholder read
+        # (:func:`_read_primary_input`): an optional primary source that
+        # is absent for this batch yields an empty CDM-shaped table, not
+        # a failed one. The formatter's own ``read_source`` honours
+        # ``optional: true`` and returns the empty-source placeholder.
+        if not getattr(formatter, "primary_source_optional", False):
+            raise
+        bus.emit(
+            warning_event(
+                instance_id=instance_id,
+                message=(
+                    f"Optional primary source for table '{table_name}' "
+                    f"(glob '{formatter.input_file_name}') not found for "
+                    f"batch '{batch_id}'; producing an empty table."
+                ),
+                table=table_name,
+            )
+        )
+        from ovid2.formatters.adapters._sources import _empty_df
+
+        df = _empty_df(session)  # type: ignore[arg-type]
 
     # Re-bind the engine's writable workspace namespace before formatting.
     #
@@ -363,11 +477,24 @@ def _run_pipeline_staged(
             continue
         df = transform.transform(df, context)
 
+    # Reference tables (demographic / encounter / provider / harvest /
+    # death) are read back by later tables' cross-table fixers. Engines
+    # whose plans are re-executed per consumer (DuckDB: no shared DAG)
+    # materialise them once here — the analogue of the Spark leg's
+    # ``persist().count()`` warm-up. Without it every clinical table
+    # re-ran ``encounter``'s full format/map/fix/dedup plan (which itself
+    # embeds ``demographic`` and ``provider``) inside its own write.
+    if table_name in (getattr(cdm, "reference_tables", None) or ()):
+        df = _materialise_reference(engine, df, table_name)
+
     # Register the finished table so cross-table fixers / concept joins can
     # reference it by name. Snowpark exposes ``create_or_replace_temp_view``.
     _register_engine_view(session, table_name, df)
 
-    stager.persist(df, output_driver, pipeline, batch_id, table_name)
+    try:
+        stager.persist(df, output_driver, pipeline, batch_id, table_name)
+    finally:
+        _release_checkpoints(engine)
 
 
 def register_shared_tables(
@@ -452,6 +579,15 @@ def register_shared_tables(
             bus.emit(warning_event(instance_id="", message=message))
             continue
 
+        engine_reader = getattr(engine, "read_shared_view_file", None)
+        if not session_is_spark and callable(engine_reader):
+            # Engines that read local files natively (DuckDB) go through
+            # the columnar vocabulary cache instead of the stager.
+            df = engine_reader(Path(view.source_path), delimiter=view.delimiter, header=view.header)
+            df = df.toDF(*[column.lower() for column in df.columns])
+            _register_engine_view(spark, view.view_name, df)
+            continue
+
         if not session_is_spark:
             # Non-Spark engines (Snowpark) have no ``spark.read.csv``.
             # Route the local file through the engine's stager using a
@@ -466,13 +602,10 @@ def register_shared_tables(
             )
             continue
 
-        # The classic Spark path.
-        df = spark.read.csv(
-            str(view.source_path),
-            header=view.header,
-            sep=view.delimiter,
-            inferSchema=False,
-        )
+        # The classic Spark path — through the columnar vocabulary cache
+        # so multi-GB CONCEPT / CONCEPT_RELATIONSHIP text is parsed once
+        # per file version, not once per table per run.
+        df = _read_shared_view_spark(spark, view, bus)
         # OMOP shared views (e.g. the Athena CONCEPT.csv export) ship with
         # UPPERCASE headers (CONCEPT_ID, DOMAIN_ID, CONCEPT_CODE, …), but the
         # semantic-layer vocabularies and every ``semantic_join`` /
@@ -483,6 +616,52 @@ def register_shared_tables(
         # regardless of the source file's header casing.
         df = df.toDF(*[column.lower() for column in df.columns])
         df.createOrReplaceTempView(view.view_name)
+
+
+def _read_shared_view_spark(spark: Any, view: Any, bus: EventBus) -> Any:
+    """Read a file-sourced shared view on Spark, via the Parquet cache.
+
+    Returns a lazy DataFrame over the cached Parquet directory when one
+    exists for the file's current ``(size, mtime)``; otherwise converts
+    the CSV once (a deliberate one-time write — the cache build is the
+    only eager action here, and it replaces N later full-text parses)
+    and reads the result. Any cache failure falls back to the plain CSV
+    read, so a read-only material directory never breaks a run.
+    """
+    from ovid2.core import vocab_cache
+
+    source = Path(view.source_path)
+
+    def _csv() -> Any:
+        return spark.read.csv(
+            str(source),
+            header=view.header,
+            sep=view.delimiter,
+            inferSchema=False,
+        )
+
+    cached = vocab_cache.cached_parquet(source, delimiter=view.delimiter, header=view.header)
+    if cached is not None:
+        return spark.read.parquet(str(cached))
+
+    target = vocab_cache.build_target(source, delimiter=view.delimiter, header=view.header)
+    if target is None:
+        return _csv()
+    temp, final = target
+    try:
+        _csv().write.mode("overwrite").parquet(str(temp))
+        published = vocab_cache.publish(temp, final)
+    except Exception as exc:
+        vocab_cache.discard(temp)
+        bus.emit(
+            warning_event(
+                instance_id="",
+                message=f"Vocabulary Parquet cache build failed for {source.name}: {exc}; "
+                "reading the CSV directly.",
+            )
+        )
+        return _csv()
+    return spark.read.parquet(str(published))
 
 
 def _register_shared_view_from_address(

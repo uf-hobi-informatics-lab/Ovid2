@@ -15,10 +15,10 @@ from ovid2.core.engines import (
 
 
 @pytest.mark.unit
-def test_registry_lists_three_types() -> None:
-    """The registry ships three engine types out of the box."""
+def test_registry_lists_four_types() -> None:
+    """The registry ships four engine types out of the box."""
     types = list_engine_types()
-    assert set(types) == {"pyspark", "databricks_spark", "snowpark"}
+    assert set(types) == {"pyspark", "databricks_spark", "snowpark", "duckdb"}
     # Sorted for stable ordering in the web UI.
     assert types == sorted(types)
 

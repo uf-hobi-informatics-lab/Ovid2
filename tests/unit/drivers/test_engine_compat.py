@@ -701,12 +701,35 @@ class TestStagerCapabilityDiscovery:
 
         assert SnowparkEngineStager.supports("gcs") is True
 
-    def test_spark_stager_supports_every_registered_driver(self) -> None:
+    def test_spark_stager_supports_every_spark_capable_driver(self) -> None:
         from ovid2.core.engines.stager import SparkEngineStager
-        from ovid2.drivers.registry import DRIVERS
+        from ovid2.drivers.registry import DRIVERS, load_class
 
         for driver_type in sorted(DRIVERS):
-            assert SparkEngineStager.supports(driver_type) is True, driver_type
+            expected = load_class(driver_type).spark_capable
+            assert SparkEngineStager.supports(driver_type) is expected, driver_type
+
+    def test_pyspark_refuses_duckdb_only_driver_at_plan_time(self) -> None:
+        """postgres on pyspark is refused before any cluster starts."""
+        from unittest import mock
+
+        from ovid2.core.engines.stager import SparkEngineStager
+        from ovid2.drivers.engine_compat import _assert_stager_supports_drivers
+        from ovid2.drivers.registry import load_class
+
+        with (
+            mock.patch(
+                "ovid2.drivers.engine_compat._driver_class_for_address",
+                return_value=load_class("postgres"),
+            ),
+            pytest.raises(RuntimeError, match="driver 'postgres'"),
+        ):
+            _assert_stager_supports_drivers(
+                stager_cls=SparkEngineStager,
+                engine_family="spark",
+                engine_type="pyspark",
+                address_names=["PG_SRC"],
+            )
 
 
 # ---------------------------------------------------------------------------

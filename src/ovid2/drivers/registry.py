@@ -36,7 +36,7 @@ import importlib
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from ovid2.drivers.base import Driver
+    from ovid2.drivers.base import Driver, DriverControl, DriverDataPlane, DriverRowAccess
 
 # ---------------------------------------------------------------------------
 # Registry
@@ -264,6 +264,50 @@ def driver_from_connection(
     )
 
 
+# ---------------------------------------------------------------------------
+# Plane-narrowed factories
+# ---------------------------------------------------------------------------
+
+
+def connection_driver(connection_name: str, location: dict[str, Any] | None = None) -> Driver:
+    """Return the full driver for a connection, secrets resolved (executor only).
+
+    Prefer the plane-narrowed factories below; this exists for the few
+    call sites that legitimately need several planes.
+    """
+    return driver_from_connection(connection_name, location)
+
+
+def control_driver(connection_name: str, location: dict[str, Any] | None = None) -> DriverControl:
+    """Return a connection's driver narrowed to :class:`DriverControl`."""
+    return driver_from_connection(connection_name, location)
+
+
+def row_access_driver(
+    connection_name: str, location: dict[str, Any] | None = None
+) -> DriverRowAccess:
+    """Return a connection's driver narrowed to :class:`DriverRowAccess`."""
+    return driver_from_connection(connection_name, location)
+
+
+def data_driver(
+    address_name: str,
+    *,
+    pipeline: str | None = None,
+    sf_overrides: dict[str, Any] | None = None,
+    cdm_name: str | None = None,
+) -> DriverDataPlane:
+    """Return an address's driver narrowed to :class:`DriverDataPlane`."""
+    return driver_from_address(
+        address_name, pipeline=pipeline, sf_overrides=sf_overrides, cdm_name=cdm_name
+    )
+
+
+def control_driver_for_address(address_name: str) -> DriverControl:
+    """Return an address's driver narrowed to :class:`DriverControl`."""
+    return driver_from_address(address_name)
+
+
 def _split_legacy_src_args(
     type_name: str,
     src_args: dict[str, Any],
@@ -341,10 +385,16 @@ _populate_from_legacy()
 
 __all__ = [
     "DRIVERS",
+    "connection_driver",
+    "control_driver",
+    "control_driver_for_address",
+    "data_driver",
     "driver_from_address",
+    "driver_from_connection",
     "instantiate",
     "list_types",
     "load_class",
     "register",
+    "row_access_driver",
     "unregister",
 ]

@@ -209,3 +209,32 @@ def test_overwrite_survives_container_hop(command: str) -> None:
     assert docker_module._build_ovid2_argv(args)[-1] == "--overwrite"
     args.overwrite = False
     assert "--overwrite" not in docker_module._build_ovid2_argv(args)
+
+
+@pytest.mark.unit
+def test_gate_rejects_schemaless_warehouse_output_even_with_overwrite() -> None:
+    """A Snowflake output with no schema fails before any table work.
+
+    The occupancy probe is not consulted: a database-only location would
+    list the whole database and "confirm" an overwrite of all of it.
+    """
+    from ovid2.drivers.overwrite import OutputLocationInvalidError
+
+    probed: list[bool] = []
+
+    class _Sf:
+        type_name = "snowflake"
+        location = {"path": "SANDBOX"}
+
+        def existing_tables(self) -> list[str]:
+            probed.append(True)
+            return ["T"] * 491
+
+    with pytest.raises(OutputLocationInvalidError, match="no schema") as excinfo:
+        assert_output_writable("sf_out", overwrite=True, driver=_Sf())
+    # Existing executor entry points catch OutputNotEmptyError.
+    assert isinstance(excinfo.value, OutputNotEmptyError)
+    assert probed == []
+
+    _Sf.location = {"path": "SANDBOX/OVID_X"}
+    assert assert_output_writable("sf_out", overwrite=True, driver=_Sf()) == ["T"] * 491

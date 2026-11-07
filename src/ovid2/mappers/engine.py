@@ -30,9 +30,19 @@ logger = logging.getLogger(__name__)
 
 
 def _secrets_path(pipeline: str) -> Path:
-    """Return the per-pipeline secrets file path under XDG_CONFIG_HOME."""
+    """Return the per-pipeline secrets file path.
+
+    Honours the executor's scoped secrets directory
+    (:func:`ovid2.config.secrets.scoped_file`) first, then
+    ``$XDG_CONFIG_HOME/ovid2/secrets.d/<pipeline>.json``.
+    """
     import os
 
+    from ovid2.config.secrets import scoped_file
+
+    scoped = scoped_file(f"{pipeline}.json")
+    if scoped is not None:
+        return scoped
     root = os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")
     return Path(root) / "ovid2" / "secrets.d" / f"{pipeline}.json"
 

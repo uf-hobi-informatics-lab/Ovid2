@@ -1,0 +1,67 @@
+{#- One manual page: sidebar · article · on-this-page rail. -#}
+<div class="om-shell">
+<div class="om" data-om data-om-root="{{ surface.root }}" data-om-search-url="{{ surface.search_url() }}" data-om-suffix="{{ surface.suffix }}">
+  {% include "_sidebar.html" %}
+
+  <article class="om-article" id="om-article">
+    <nav class="om-crumbs" aria-label="Breadcrumb">
+      <a href="{{ surface.home_url() }}">Manual</a>
+      <span aria-hidden="true">/</span>
+      <a href="{{ surface.page_url(chapter.landing.key) }}">{{ '%02d' % chapter.number }} &middot; {{ chapter.title }}</a>
+      {% if page.key != chapter.landing.key %}
+      <span aria-hidden="true">/</span>
+      <span aria-current="page">{{ page.title }}</span>
+      {% endif %}
+    </nav>
+
+    <header class="om-header">
+      <h1>{{ page.title }}</h1>
+      {% if page.summary %}<p class="om-lead">{{ page.summary|md_inline }}</p>{% endif %}
+      {% if page.audience or page.generated %}
+      <p class="om-badges">
+        {% for aud in page.audience %}
+        <span class="om-badge om-badge-{{ aud }}">{{ manual.audiences[aud].label }}</span>
+        {% endfor %}
+        {% if page.generated %}<span class="om-badge om-badge-generated" title="Generated from the live registries by ovid2 manual gen-reference">Generated</span>{% endif %}
+      </p>
+      {% endif %}
+    </header>
+
+    <div class="om-content">
+      {{ body }}
+    </div>
+
+    <footer class="om-pager">
+      {% if prev %}
+      <a class="om-pager-link om-prev" href="{{ surface.page_url(prev.key) }}" rel="prev">
+        <span class="om-pager-dir">&larr; Previous</span>
+        <span class="om-pager-title">{{ prev.title }}</span>
+      </a>
+      {% else %}<span></span>{% endif %}
+      {% if next %}
+      <a class="om-pager-link om-next" href="{{ surface.page_url(next.key) }}" rel="next">
+        <span class="om-pager-dir">Next &rarr;</span>
+        <span class="om-pager-title">{{ next.title }}</span>
+      </a>
+      {% endif %}
+    </footer>
+    {% if edit_url %}
+    <p class="om-edit"><a href="{{ edit_url }}" rel="noopener noreferrer">Edit this page</a> &middot; <code>{{ page.source_relpath }}</code></p>
+    {% else %}
+    <p class="om-edit">Source: <code>src/ovid2/resources/manual/{{ page.source_relpath }}</code></p>
+    {% endif %}
+  </article>
+
+  <nav class="om-toc" aria-label="On this page">
+    {% if rendered.toc %}
+    <p class="om-toc-title">On this page</p>
+    <ol>
+      {% for entry in rendered.toc %}
+      <li class="om-toc-l{{ entry.level }}"><a href="#{{ entry.anchor }}" data-om-toc="{{ entry.anchor }}">{{ entry.text }}</a></li>
+      {% endfor %}
+    </ol>
+    {% endif %}
+    <p class="om-toc-top"><a href="#om-article">Back to top &uarr;</a></p>
+  </nav>
+</div>
+</div>

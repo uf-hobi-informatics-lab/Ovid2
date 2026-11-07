@@ -253,8 +253,9 @@ def _assert_stager_supports_drivers(
     decision — no engine session is built, no strategy is instantiated.
 
     The error message names the incompatible pair, the stager's
-    supported set, and the escape hatch (``--engine pyspark`` — the
-    only engine whose stager accepts every registered driver today).
+    supported set, and the escape hatch (``--engine duckdb`` /
+    ``--engine pyspark``; no single engine accepts every driver — the
+    Spark stager refuses drivers with ``spark_capable = False``).
     """
     for address_name in address_names:
         driver_cls = _driver_class_for_address(address_name)
@@ -282,15 +283,19 @@ def _assert_stager_supports_drivers(
             supported = sorted(stager_cls.supported_driver_types())
         except Exception:
             supported = []
+        hint = (
+            "Snowpark DataFrames live inside Snowflake and cannot read/write "
+            "non-Snowflake peripherals directly; use '--engine pyspark' or "
+            "'--engine duckdb' for cross-peripheral copies."
+            if engine_family == "snowpark"
+            else "Pick an engine whose stager supports this driver type "
+            "(e.g. '--engine duckdb' or '--engine pyspark')."
+        )
         raise RuntimeError(
             f"Engine '{engine_type}' (family '{engine_family}') is not "
             f"compatible with address '{address_name}' (driver "
             f"'{driver_type}'). The '{engine_family}' engine's stager "
-            f"supports driver types {supported}. Snowpark DataFrames "
-            f"live inside Snowflake and cannot read/write non-Snowflake "
-            f"peripherals directly; use '--engine pyspark' for "
-            f"cross-peripheral copies (the ovid2 runtime image ships "
-            f"the JDBC + hadoop-aws + ABFS drivers)."
+            f"supports driver types {supported}. {hint}"
         )
 
 

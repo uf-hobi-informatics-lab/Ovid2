@@ -64,14 +64,17 @@ Deployment:
         - The column named in ``src2`` must exist in the DataFrame.
 """
 
-import os
-from typing import Any
+from __future__ import annotations
 
-from pyspark.sql import DataFrame, Row, SparkSession
-from pyspark.sql.functions import col
+import os
+from typing import TYPE_CHECKING, Any
 
 from ovid2.config.settings import COMMON_LISTS_DIR
+from ovid2.core.engines.dsl import col
 from ovid2.transformations.fixers.base import BaseFixer
+
+if TYPE_CHECKING:
+    from pyspark.sql import DataFrame, Row, SparkSession
 
 
 class PatternsRemoverFixer(BaseFixer):

@@ -1,0 +1,121 @@
+# The Ovid2 Manual — table of contents.
+#
+# Each chapter is a directory next to this file; each page is
+# `<chapter>/<page>.md` with YAML front-matter (title, summary, audience).
+# The first page of a chapter is its landing page. Reading order (and the
+# Previous / Next links) follows this file top to bottom.
+#
+# Validate with `ovid2 manual check`; preview with `ovid2 manual serve`
+# or the web panel at /manual (set OVID2_MANUAL_RELOAD=1 while authoring).
+# Pages under 10-reference/ (except index) are generated — run
+# `ovid2 manual gen-reference`, never edit them by hand.
+
+title: The Ovid2 Manual
+tagline: >-
+  Everything you need to run, understand and extend **Ovid2** — the
+  healthcare-data ETL engine that turns raw clinical extracts into
+  PCORnet and OMOP common data models. *Fidelity over fortune.*
+edit_base_url: ""
+
+audiences:
+  user:
+    label: Operator
+    description: >-
+      You run pipelines, schedule jobs, watch them finish and hand the
+      results on. Start with installation and the web panel tour.
+    start:
+      - 01-getting-started/index
+      - 01-getting-started/first-run-local
+      - 03-web-panel/index
+      - 04-running-jobs/index
+  researcher:
+    label: Researcher
+    description: >-
+      You consume the data. Learn what each CDM contains, how values are
+      mapped and corrected, and how to read a data-quality report.
+    start:
+      - 05-data/index
+      - 05-data/data-lineage
+      - 05-data/reading-health-reports
+      - 00-welcome/glossary
+  developer:
+    label: Developer
+    description: >-
+      You author pipelines or extend the framework — formatters, mappers,
+      fixers, drivers, engines, CDMs. Start with the architecture.
+    start:
+      - 02-concepts/architecture
+      - 06-authoring/index
+      - 09-developers/index
+      - 10-reference/index
+  admin:
+    label: Administrator
+    description: >-
+      You deploy and secure Ovid2 for a team — systemd services, SSO and
+      roles, secrets, the Docker image, upgrades.
+    start:
+      - 08-operations/index
+      - 08-operations/auth
+      - 08-operations/secrets
+      - 08-operations/configuration
+
+chapters:
+  - slug: 00-welcome
+    title: Welcome
+    summary: What Ovid2 is, who it is for, and how this manual is organised.
+    pages: [index, what-is-ovid2, how-to-use-this-manual, glossary]
+
+  - slug: 01-getting-started
+    title: Getting started
+    summary: Install Ovid2, verify the host, and complete a first run — locally, in Docker, and from the web panel.
+    pages: [index, install, first-run-local, first-run-docker, first-run-web, dev-instances]
+
+  - slug: 02-concepts
+    title: Core concepts
+    summary: The mental model — storage, compute and algorithms as three independent axes, and the nouns that connect them.
+    pages: [index, architecture, storage, dataspace, pipelines, etl-stages, engines, cdms, trust-model, isolation-and-events]
+
+  - slug: 03-web-panel
+    title: The web control panel
+    summary: A guided tour of every page in the browser UI, section by section.
+    pages: [index, dashboard, submit, pipelines, jobs, dataspace, storage-and-warehouses, configure, administration, appearance]
+
+  - slug: 04-running-jobs
+    title: Running jobs
+    summary: Every job type end to end — ETL, health and EDC checks, analysis, copy / move, export — plus scheduling and monitoring.
+    pages: [index, etl, health-checks, analysis-and-dq, copy-and-move, export, scheduling, overwrite-and-batches, monitoring]
+
+  - slug: 05-data
+    title: Data & data models
+    summary: For researchers — what each CDM holds, how source values become standard ones, and how to judge data quality.
+    pages: [index, pcornet, omop, pcornet-to-omop, vocabularies, data-lineage, reading-health-reports, privacy]
+
+  - slug: 06-authoring
+    title: Authoring pipelines
+    summary: Build a pipeline package — formatter specs, mapper specs, fixer chains, dictionaries and transforms — and validate it.
+    pages: [index, new-pipeline, settings-and-dictionaries, formatters, mappers, fixers, transforms, validate-and-test]
+
+  - slug: 07-assistant
+    title: Assistant & agents
+    summary: The in-panel LLM assistant, Agent Ovid over MCP, and the human-approval gates that keep them safe.
+    pages: [index, assistant-tools, mcp, approvals]
+
+  - slug: 08-operations
+    title: Operations & security
+    summary: Deploy, secure and maintain Ovid2 — services, configuration, SSO and roles, secrets, the image, logs and upgrades.
+    pages: [index, deployment, configuration, auth, secrets, docker-image, logs-and-monitoring, maintenance]
+
+  - slug: 09-developers
+    title: Developer guide
+    summary: Work on Ovid2 itself — repository layout, invariants and contract tests, extension points, portable engine code, testing and contributing.
+    pages: [index, repository, invariants, extending, portable-code, events, testing, contributing, writing-docs]
+
+  - slug: 10-reference
+    title: Reference
+    summary: Generated from the code — CLI, REST API, MCP tools, run kinds, transforms, mapper ops, adapters, fixers, drivers, engines and CDMs.
+    pages: [index, cli, api, mcp-tools, run-kinds, transforms, mapper-ops, adapters, fixers, drivers-engines, cdms, environment]
+
+  - slug: 11-help
+    title: Help
+    summary: Answers to common questions, fixes for common errors, and where to go next.
+    pages: [index, troubleshooting, support]

@@ -1,0 +1,21 @@
+# Ported verbatim from legacy mapping_scripts/pcornet_mappers/enrollment_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: enrollment
+ops:
+- op: legacy_select
+  columns:
+  - PATID:
+      encrypt: PATID
+  - ENR_START_DATE
+  - ENR_END_DATE
+  - CHART:
+      dict: enrollment_chart_dict
+      col: CHART
+  - ENR_BASIS:
+      dict: enrollment_enr_basis_dict
+      col: ENR_BASIS
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true

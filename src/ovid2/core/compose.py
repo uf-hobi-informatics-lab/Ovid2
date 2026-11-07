@@ -26,7 +26,14 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from ovid2.config.settings import DATA_DIR, DOCKER_IMAGE, LEGACY_CREDENTIALS_DIR
+from ovid2.config import spark_sizing
+from ovid2.config.settings import (
+    DATA_DIR,
+    DOCKER_IMAGE,
+    LEGACY_CREDENTIALS_DIR,
+    SPARK_LOCAL_DIR_IN_CONTAINER,
+    WORK_DIR,
+)
 from ovid2.core.docker import (
     NSS_GROUP_IN_CONTAINER,
     NSS_PASSWD_IN_CONTAINER,
@@ -43,10 +50,26 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _PROJECT_ROOT: Path = Path(__file__).resolve().parents[3]  # repo root
-DEFAULT_WORKER_CORES: int = 8
-DEFAULT_WORKER_MEMORY: str = "56g"
-DEFAULT_WORKER_MEMORY_LIMIT: str = "60g"
+DEFAULT_WORKER_CORES: int = spark_sizing.WORKER_CORES
+DEFAULT_WORKER_MEMORY: str = f"{spark_sizing.WORKER_MEMORY_GB}g"
+DEFAULT_WORKER_MEMORY_LIMIT: str = f"{spark_sizing.WORKER_MEMORY_LIMIT_GB}g"
 DEFAULT_MASTER_MEMORY_LIMIT: str = "8g"
+
+
+def _secret_shadow() -> dict[str, Any]:
+    """Return the compose ``tmpfs`` entry hiding ``secrets.d`` from Spark nodes.
+
+    Master and workers never dereference credentials (all I/O is driven
+    from the driver container), yet they mount the whole XDG config tree
+    and run user code (UDFs). Under ``OVID2_SECRETS_SCOPE_MODE=enforce``
+    the tree's ``secrets.d`` is shadowed with an empty read-only tmpfs.
+    Mirrors :func:`ovid2.core.docker._scoped_secret_mounts`.
+    """
+    from ovid2.config.secrets import scope_enforced
+
+    if not scope_enforced():
+        return {}
+    return {"tmpfs": ["/ovid2-user-config/ovid2/secrets.d:ro,size=64k"]}
 
 
 def _volume_mounts(
@@ -125,6 +148,16 @@ def _volume_mounts(
     # ``chmod`` line in ``docker/Dockerfile``.
     mounts.append(f"{instance.spark_work_dir}:{SPARK_WORK_DIR_IN_CONTAINER}:rw")
     mounts.append(f"{instance.spark_logs_dir}:{SPARK_LOGS_DIR_IN_CONTAINER}:rw")
+    # Shuffle / spill scratch on real disk (``SPARK_LOCAL_DIRS``).
+    mounts.append(f"{instance.spark_local_dir}:{SPARK_LOCAL_DIR_IN_CONTAINER}:rw")
+    # The host ``WORK_DIR`` at the *identical* path — the driver container
+    # already gets it (``docker.py``). Executors write there too whenever a
+    # job targets a scratch path under it: the ``legacy_ovid`` profile's
+    # stage-boundary files (``legacy_scratch/``, ``legacy_rt_*``,
+    # ``legacy_infer_*``). Without the mount every such write fails on the
+    # workers with ``Mkdirs failed to create file:/run/user/<uid>/ovid2/…``.
+    WORK_DIR.mkdir(parents=True, exist_ok=True)
+    mounts.append(f"{WORK_DIR}:{WORK_DIR}:rw")
     for m in extra_mounts or []:
         mounts.append(m.as_compose_volume())
     return mounts
@@ -151,7 +184,11 @@ def build_compose_dict(
 
     Returns:
         A dict suitable for ``yaml.safe_dump``.
+
+    ``num_workers`` is clamped to what the host can run (see
+    :func:`ovid2.config.spark_sizing.effective_worker_count`).
     """
+    num_workers = spark_sizing.effective_worker_count(num_workers)
     master_service = instance.master_name
     network_service_key = "spark-network"
 
@@ -224,6 +261,7 @@ def build_compose_dict(
             *nss_env,
         ],
         "volumes": volumes,
+        **_secret_shadow(),
         # Override the image's ``ovid2`` entrypoint so ``command`` is executed
         # as a plain shell invocation (otherwise the master would attempt to
         # run ``ovid2 bash -c "..."`` and argparse would fail with exit 2).
@@ -279,9 +317,11 @@ def build_compose_dict(
                 # the driver deserialise against the same code.
                 "PYTHONPATH=/app/src:/app/pipelines",
                 "PYSPARK_PYTHON=python3",
+                f"SPARK_LOCAL_DIRS={SPARK_LOCAL_DIR_IN_CONTAINER}",
                 *nss_env,
             ],
             "volumes": volumes,
+            **_secret_shadow(),
             # See the master service comment: override the image entrypoint
             # so ``command`` runs as an ordinary shell invocation, and run
             # the Worker class in the foreground so its JVM anchors PID 1.

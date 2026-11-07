@@ -29,7 +29,10 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ovid2.drivers.base import DriverRowAccess
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +86,15 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "--limit", type=int, default=None, help="Maximum rows (default: the whole table)."
     )
     export.add_argument("--out", required=True, help="Output file path.")
+    export.add_argument(
+        "--in-process",
+        dest="in_process",
+        action="store_true",
+        help=(
+            "Run the export in this process even when unbounded "
+            "(default: exports over the host row limit run in a container)."
+        ),
+    )
     export.set_defaults(_entry=_export_entry, _tool="export-table")
 
 
@@ -91,8 +103,13 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 # ---------------------------------------------------------------------------
 
 
-def _driver_for(connection: str) -> tuple[str, Any]:
-    """Return ``(type_name, driver)`` for a connection, secrets resolved."""
+def _driver_for(connection: str) -> tuple[str, DriverRowAccess]:
+    """Return ``(type_name, driver)`` for a connection, secrets resolved.
+
+    Narrowed to :class:`~ovid2.drivers.base.DriverRowAccess`: these tools
+    are the engine-less **row access** data plane (``describe_table`` is
+    on the protocol too).
+    """
     from ovid2.config import connections as _connections
     from ovid2.drivers.registry import DRIVERS, instantiate
 
@@ -189,8 +206,94 @@ def _count_entry(args: argparse.Namespace) -> int:
     return _emit(run_table_op("count", args.connection, args.path))
 
 
+def host_export_row_limit() -> int:
+    """Row ceiling for an export run in-process on the host.
+
+    Matches the web tier's synchronous-download cap
+    (``$OVID2_EXPORT_MAX_ROWS``, default 100 000) so the "Download" button
+    keeps its latency; anything larger — or unbounded (the background
+    ``export`` job kind) — runs in a driver container so full-table row
+    data never passes through a host process.
+    """
+    import os
+
+    try:
+        return max(1, int(os.environ.get("OVID2_EXPORT_MAX_ROWS", "") or 100_000))
+    except ValueError:
+        return 100_000
+
+
+def _export_runs_in_container(args: argparse.Namespace) -> bool:
+    """Return whether this export must be dispatched to a container.
+
+    In-container invocations always run in-process (we *are* the
+    container). On the host, bounded small exports
+    (``--limit`` ≤ :func:`host_export_row_limit`) stay in-process for
+    latency; full-table exports go to a container. ``--in-process``
+    forces the host path (tests / hosts without docker).
+    """
+    from ovid2.core.docker import is_inside_docker
+
+    if is_inside_docker() or getattr(args, "in_process", False):
+        return False
+    limit = getattr(args, "limit", None)
+    return limit is None or int(limit) > host_export_row_limit()
+
+
+def _run_export_host_mode(args: argparse.Namespace) -> int:
+    """Dispatch a full-table export to a single driver container.
+
+    The container gets the scoped secrets of ``args.connection`` only
+    (:func:`ovid2.core.docker._scoped_secret_mounts` reads
+    ``args.connection``), the source connection's disc / Access mounts,
+    and the artifact's parent directory read-write at the same absolute
+    path. Its JSON result line is printed to our stdout unchanged.
+    """
+    import os
+
+    from ovid2.config import connections as _connections
+    from ovid2.core.docker import submit_to_docker
+    from ovid2.core.isolation import OvidInstance, cleanup_stale_instances
+    from ovid2.drivers.registry import DRIVERS, instantiate
+    from ovid2.tools.extra_mounts import ExtraMount
+
+    out = Path(str(args.out)).resolve()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    mounts: list[ExtraMount] = [
+        ExtraMount(host=str(out.parent), container=str(out.parent), mode="rw")
+    ]
+    try:
+        raw = _connections.load_connection_config(args.connection)
+        type_name = str(raw.get("type") or "")
+        if type_name in DRIVERS:
+            driver = instantiate(type_name, args=dict(raw.get("args") or {}), secrets={})
+            for req in driver.container_requirements_for({}):
+                host = getattr(req, "host_path", None)
+                container = getattr(req, "container_path", None)
+                if host and container:
+                    mounts.append(ExtraMount(host=str(host), container=str(container), mode="ro"))
+    except (FileNotFoundError, ValueError, KeyError) as exc:
+        return _emit(
+            {"ok": False, "supported": True, "type": "", "path": args.path, "message": str(exc)}
+        )
+
+    cleanup_stale_instances()
+    instance = OvidInstance(instance_id=os.environ.get("OVID2_INSTANCE_ID") or None)
+    args.command = "tools export-table"
+    args.out = str(out)
+    args.parsed_extra_mounts = mounts
+    args.no_spark_cluster = True
+    print(
+        f"[ovid2] export-table: running in a driver container (id={instance.instance_id}).",
+        file=sys.stderr,
+    )
+    return submit_to_docker(args, instance)
+
+
 def _export_entry(args: argparse.Namespace) -> int:
     """Entry for ``ovid2 tools export-table``."""
+    if _export_runs_in_container(args):
+        return _run_export_host_mode(args)
     return _emit(
         run_table_op(
             "export",

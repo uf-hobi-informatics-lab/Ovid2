@@ -1,0 +1,34 @@
+v: 1
+name: intervention_contact
+composite_key:
+- PROCEDURE_OCCURRENCE_ID
+domain_description: Ported from legacy mapping_scripts/nursing_mappers/tables_specs.csv.
+fields:
+- name: PROCEDURE_OCCURRENCE_ID
+  rdbms_type: RDBMS Text(x)
+  order: 1
+  sas_type: SAS Char(x)
+- name: DELETE_TIME
+  rdbms_type: RDBMS Text(x)
+  order: 2
+  sas_type: SAS Char(x)
+- name: RESOLVED_DATE
+  rdbms_type: RDBMS Text(x)
+  order: 3
+  sas_type: SAS Char(x)
+- name: SEQUENCE
+  rdbms_type: RDBMS Text(x)
+  order: 4
+  sas_type: SAS Char(x)
+- name: FREQUENCY_OF_DELIVERY
+  rdbms_type: RDBMS Text(x)
+  order: 5
+  sas_type: SAS Char(x)
+- name: EDIT_DATETIME
+  rdbms_type: RDBMS Text(x)
+  order: 6
+  sas_type: SAS Char(x)
+- name: PROVIDER_ID
+  rdbms_type: RDBMS Text(x)
+  order: 7
+  sas_type: SAS Char(x)

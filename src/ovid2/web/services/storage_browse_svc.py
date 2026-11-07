@@ -22,7 +22,7 @@ import os
 
 from ovid2.config import connections as _connections
 from ovid2.web.models import StorageBrowseEntry, StorageBrowseResponse
-from ovid2.web.services._broker import BrokerError, run_tool_json
+from ovid2.web.services._broker import BrokerError, SecretScope, run_tool_json
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,11 @@ def browse_storage(name: str, prefix: str | None = None) -> StorageBrowseRespons
         tool_args += ["--prefix", prefix]
 
     try:
-        result = run_tool_json(tool_args, timeout=_browse_deadline_seconds())
+        result = run_tool_json(
+            tool_args,
+            scope=SecretScope(connections=(name,)),
+            timeout=_browse_deadline_seconds(),
+        )
     except BrokerError as exc:
         logger.warning("Storage browse '%s' failed: %s", name, exc)
         return StorageBrowseResponse(

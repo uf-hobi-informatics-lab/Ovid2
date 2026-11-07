@@ -121,6 +121,42 @@ Known secret names:
   batch tracker.
 - `datavant.json` — used by `datavant` upload utilities (P8).
 
+### Scoped executor secrets
+
+Every executor subprocess that the web panel or worker starts sees only
+the secrets it was granted. This covers connection tests, storage
+browsing, Data Space sample / count / export, and every job. The grant
+is derived from what the request names:
+
+- addresses → their connection's `secret_ref`;
+- connections → their `secret_ref`;
+- the engine → its `secret_ref`, plus any connection named in its args;
+- the pipeline → `secrets.d/<pipeline>.json`, the `hash_id` salt;
+- the XOR seed file, for pipeline-bearing runs.
+
+The granted files are copied into a private `0700` directory under
+`$XDG_RUNTIME_DIR/ovid2/exec/`, exported as `OVID2_SECRETS_DIR`. For
+containers they are bind-mounted read-only at `/ovid2-scoped-secrets`.
+The directory is removed when the child exits. Stale ones left by a
+crashed parent are swept when `ovid2 web` starts.
+
+`OVID2_SECRETS_SCOPE_MODE` controls what happens when code asks for a
+secret outside its grant:
+
+| Mode | Behaviour |
+| --- | --- |
+| `warn` (default) | The secret still resolves from `secrets.d/`, and a warning names it: `Secret 'x' is outside this executor's declared scope …`. Use this while rolling out. |
+| `enforce` | The scoped directory is the only place searched. A miss is `SecretNotFoundError: … The run was not granted it.` Containers also get an empty tmpfs over the mounted `secrets.d/`, including every Spark master and worker. |
+
+To roll out: run with `warn`, then grep the web, worker and job logs for
+`outside this executor's declared scope`. Once there are no hits, set
+`OVID2_SECRETS_SCOPE_MODE=enforce` in the service environment.
+
+Host-side subprocesses run as the same uid as the web server. On the
+host, scoping guarantees correct code can only use what it was granted,
+and inherited tokens are stripped. It is not a sandbox. Containers
+under `enforce` are isolated for real.
+
 ## 7. XDG environment variables
 
 Ovid2 honours every relevant XDG variable:
@@ -138,3 +174,7 @@ You can also point Ovid2 at a fully custom tree with these overrides:
 - `OVID2_DATA_DIR` — replaces `/data`.
 - `OVID2_WORK_DIR` — replaces `$XDG_RUNTIME_DIR/ovid2`.
 - `OVID2_SECRETS_FILE` — single-file secret override (used in CI).
+  Never forwarded to executor subprocesses, and ignored under
+  `OVID2_SECRETS_SCOPE_MODE=enforce`.
+- `OVID2_SECRETS_DIR` — scoped secrets directory. Set by Ovid2 for its
+  own executor children; you normally never set it yourself.

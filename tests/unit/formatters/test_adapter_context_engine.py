@@ -9,6 +9,8 @@ carry the ``unit`` marker and run on any host.
 
 from __future__ import annotations
 
+import contextlib
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -226,3 +228,67 @@ def test_read_hook_required_primary_missing_reraises(
             bus=MagicMock(),
             instance_id="i1",
         )
+
+
+@pytest.mark.parametrize(
+    ("adapter_path", "spec_yaml"),
+    [
+        (
+            "ovid2.formatters.adapters.semantic_join.SemanticJoinAdapter",
+            "adapter: semantic_join\nsources:\n  a:\n    glob: '*a.csv'\n"
+            "    exclude: ['*a_sup*']\n  b:\n    glob: '*b.csv'\n"
+            "joins:\n  - with: b\n    'on': 'b.id = a.id'\n    how: left\n    prefix: b\n"
+            "projections:\n  X: x\n",
+        ),
+        (
+            "ovid2.formatters.adapters.source_passthrough.SourcePassthroughAdapter",
+            "adapter: source_passthrough\nsources:\n  a:\n    glob: '*a.csv'\n"
+            "projections:\n  X: x\n",
+        ),
+    ],
+)
+def test_adapters_thread_engine_into_read_source(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any, adapter_path: str, spec_yaml: str
+) -> None:
+    """Regression (DuckDB acme_from_disc run, 2026-11-01): every adapter must pass
+    ``engine`` / ``input_address_name`` to ``read_source``.
+
+    Without them a non-Spark engine took the Spark address path, and the
+    disc ``exclude:`` filter then referenced the stager-only
+    ``__ovid2_filename`` column: ``Binder Error: Referenced column
+    "__ovid2_filename" not found``.
+    """
+    import importlib
+
+    from ovid2.formatters.spec import load_from_yaml
+
+    seen: list[dict[str, Any]] = []
+
+    def _fake_read_source(source: Any, **kwargs: Any) -> Any:
+        seen.append(kwargs)
+        frame = MagicMock()
+        frame.alias.return_value = frame
+        return frame
+
+    module_name, _, cls_name = adapter_path.rpartition(".")
+    module = importlib.import_module(module_name)
+    monkeypatch.setattr(module, "read_source", _fake_read_source)
+    path = tmp_path / "t.yaml"
+    path.write_text(f"v: 1\nformatter: t\n{spec_yaml}")
+    spec = load_from_yaml(path, pipeline="p")
+    engine = MagicMock()
+    ctx = AdapterContext(
+        spark=MagicMock(),
+        input_address=MagicMock(),
+        pipeline="p",
+        batch_id="b",
+        engine=engine,
+        input_address_name="addr",
+    )
+    # Only the reads matter; the join / projection on mock frames may fail.
+    with contextlib.suppress(AssertionError, AttributeError, TypeError):
+        getattr(module, cls_name)().resolve(spec, ctx)
+    assert len(seen) == len(spec.sources), "adapter did not read every source"
+    for kwargs in seen:
+        assert kwargs.get("engine") is engine
+        assert kwargs.get("input_address_name") == "addr"

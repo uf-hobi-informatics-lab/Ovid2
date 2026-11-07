@@ -1,0 +1,45 @@
+# Ported verbatim from legacy mapping_scripts/pcornet_mappers/external_meds_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: external_meds
+ops:
+- op: legacy_select
+  columns:
+  - EXTMEDID:
+      encrypt: EXTMEDID
+  - PATID:
+      encrypt: PATID
+  - EXT_RECORD_DATE
+  - EXT_PAT_START_DATE
+  - EXT_END_DATE
+  - EXT_PAT_END_DATE
+  - EXT_DOSE
+  - EXT_DOSE_ORDERED_UNIT:
+      dict: external_meds_ext_dose_ordered_unit_dict
+      col: EXT_DOSE_ORDERED_UNIT
+      upper: false
+  - EXT_DOSE_FORM:
+      dict: external_meds_ext_dose_form_dict
+      col: EXT_DOSE_FORM
+  - EXT_ROUTE:
+      dict: external_meds_ext_route_dict
+      col: EXT_ROUTE
+  - EXT_BASIS:
+      dict: external_meds_ext_basis_dict
+      col: EXT_BASIS
+  - RXNORM_CUI
+  - EXTMED_SOURCE:
+      dict: external_meds_extmed_source_dict
+      col: EXTMED_SOURCE
+  - RAW_EXT_MED_NAME
+  - RAW_RXNORM_CUI
+  - RAW_EXT_NDC
+  - RAW_EXT_DOSE
+  - RAW_EXT_DOSE_UNIT
+  - RAW_EXT_ROUTE
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true
+  append_additional_fields:
+    join_field: EXTMEDID

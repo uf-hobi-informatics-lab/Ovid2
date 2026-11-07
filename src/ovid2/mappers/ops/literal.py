@@ -33,7 +33,7 @@ class LiteralOp(BaseMapOp):
         ctx: MapOpContext,
     ) -> DataFrame:
         """Return ``df`` with the column set to ``params['value']``."""
-        from pyspark.sql.functions import lit
+        from ovid2.core.engines.dsl import lit
 
         column = str(params["column"])
         value = params.get("value")

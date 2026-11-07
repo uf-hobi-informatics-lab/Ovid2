@@ -1,0 +1,64 @@
+# Ported verbatim from legacy mapping_scripts/pcornet_mappers/immunization_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: immunization
+ops:
+- op: legacy_select
+  columns:
+  - IMMUNIZATIONID:
+      encrypt: IMMUNIZATIONID
+  - PATID:
+      encrypt: PATID
+  - ENCOUNTERID:
+      encrypt: ENCOUNTERID
+  - PROCEDURESID:
+      encrypt: PROCEDURESID
+  - VX_PROVIDERID:
+      encrypt: VX_PROVIDERID
+  - VX_RECORD_DATE
+  - VX_ADMIN_DATE
+  - VX_CODE_TYPE:
+      dict: immunization_vx_code_type_dict
+      col: VX_CODE_TYPE
+  - VX_CODE
+  - VX_STATUS:
+      dict: immunization_vx_status_dict
+      col: VX_STATUS
+  - VX_STATUS_REASON:
+      dict: immunization_vx_status_reason_dict
+      col: VX_STATUS_REASON
+  - VX_SOURCE:
+      dict: immunization_vx_source_dict
+      col: VX_SOURCE
+  - VX_DOSE
+  - VX_DOSE_UNIT:
+      dict: immunization_vx_dose_unit_dict
+      col: VX_DOSE_UNIT
+      upper: false
+  - VX_ROUTE:
+      dict: immunization_vx_route_dict
+      col: VX_ROUTE
+  - VX_BODY_SITE:
+      dict: immunization_vx_body_site_dict
+      col: VX_BODY_SITE
+  - VX_MANUFACTURER:
+      dict: immunization_vx_manufacturer_dict
+      col: VX_MANUFACTURER
+  - VX_LOT_NUM
+  - VX_EXP_DATE
+  - RAW_VX_NAME
+  - RAW_VX_CODE
+  - RAW_VX_CODE_TYPE
+  - RAW_VX_DOSE
+  - RAW_VX_DOSE_UNIT
+  - RAW_VX_ROUTE
+  - RAW_VX_BODY_SITE
+  - RAW_VX_STATUS
+  - RAW_VX_STATUS_REASON
+  - RAW_VX_MANUFACTURER
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true
+  append_additional_fields:
+    join_field: IMMUNIZATIONID

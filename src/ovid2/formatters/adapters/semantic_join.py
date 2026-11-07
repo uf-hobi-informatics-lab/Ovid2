@@ -77,6 +77,8 @@ class SemanticJoinAdapter(BaseAdapter):
                 input_address=ctx.input_address,
                 pipeline=ctx.pipeline,
                 batch_id=ctx.batch_id,
+                engine=ctx.engine,
+                input_address_name=ctx.input_address_name,
             )
             source_views[source.name] = df
             df.createOrReplaceTempView(source.name)
@@ -151,6 +153,7 @@ class SemanticJoinAdapter(BaseAdapter):
         column.
         """
         rewritten = join.on.replace(f"{join.with_}.", f"{join.prefix}.{join.prefix}_")
-        from pyspark.sql.functions import expr
+        from ovid2.core.engines.dsl import expr
 
-        return expr(rewritten)
+        result: Column = expr(rewritten)
+        return result

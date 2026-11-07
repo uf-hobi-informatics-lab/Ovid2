@@ -59,6 +59,11 @@ DESTRUCTIVE_ACTIONS: frozenset[str] = frozenset(
         # occupied output location. The address is the exact write
         # location, so this replaces existing data — a human must approve.
         "run.overwrite",
+        # An agent (MCP / assistant) reading *row values* out of the Data
+        # Space (sample / export / export-job artifact). Rows are the data
+        # plane and may be PHI; the untrusted planner gets them only after
+        # a human approves this specific table, once.
+        "dataspace.agent_row_access",
     }
 )
 

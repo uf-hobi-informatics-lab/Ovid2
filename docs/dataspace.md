@@ -45,7 +45,11 @@ Postgres / SQL Server / Access reconstructed from the catalogue).
   PDF / Word `$OVID2_EXPORT_DOC_MAX_ROWS` (default 5 000).
 - **Whole table as a background job** (CSV / Excel, needs
   `submit_jobs`) — queues an `export` job; its run page shows
-  **Download export** when done.
+  **Download export** when done. The job runs `ovid2 tools export-table`
+  in a single **driver container** with only the source connection's
+  secret mounted. Any export with no row limit, or a limit above
+  `$OVID2_EXPORT_MAX_ROWS`, goes to a container this way, so full-table
+  row data never passes through a host process.
 
 Every export is audited (`dataspace.export` / `dataspace.export_job`).
 Files are written mode 0600 under `$XDG_STATE_HOME/ovid2/web_exports/`
@@ -76,14 +80,25 @@ shows *not available* instead of an error.
 | --- | --- |
 | `GET /api/v1/dataspace?path=` (listing; now with `size_bytes`, `modified_at`, `row_count`) | `view_pipeline_data` |
 | `GET /api/v1/dataspace/table?path=[&refresh=true]` | `view_pipeline_data` |
-| `GET /api/v1/dataspace/table/sample?path=&limit=` | `view_pipeline_data` |
+| `GET /api/v1/dataspace/table/sample?path=&limit=` | `view_pipeline_data` (+ agent approval) |
 | `GET /api/v1/dataspace/table/count?path=` | `view_pipeline_data` |
-| `GET /api/v1/dataspace/table/export?path=&format=&delimiter=&header_case=&limit=` | `view_pipeline_data` |
-| `POST /api/v1/dataspace/table/export-jobs` | `submit_jobs` |
-| `GET /api/v1/jobs/{job_id}/artifact` | `view_pipeline_data` |
+| `GET /api/v1/dataspace/table/export?path=&format=&delimiter=&header_case=&limit=` | `view_pipeline_data` (+ agent approval) |
+| `POST /api/v1/dataspace/table/export-jobs` | `submit_jobs` (+ agent approval) |
+| `GET /api/v1/jobs/{job_id}/artifact` | `view_pipeline_data` (+ agent approval) |
 
 Credential-bearing work runs in short-lived `ovid2 tools describe-table
-| sample-table | count-rows | export-table` executor subprocesses —
-the API process never holds a credential. The assistant may call only
-the metadata endpoint (`ods_describe_table`); MCP also has
-`ods_sample_table`.
+| sample-table | count-rows | export-table` executor subprocesses. The
+API process never holds a credential, and each subprocess sees only the
+secret of the connection it touches (see *Scoped executor secrets* in
+`docs/installer.md`).
+
+**Agents and row data.** Listing, detail and count return metadata
+only and are open to agents. The four endpoints that return *row
+values* are marked "+ agent approval" above. For an agent principal
+(MCP service token `mcp:…`, assistant token `llm:…`) they answer
+`202 {"status": "awaiting_approval", "approval_id": …, "action":
+"dataspace.agent_row_access", "target": "rows:<path>"}` until a human
+approves on the approvals page. Each approval is single-use and covers
+one table. Humans are never gated. The assistant catalogue exposes only
+`ods_describe_table`. MCP's `ods_sample_table` goes through the
+approval gate.

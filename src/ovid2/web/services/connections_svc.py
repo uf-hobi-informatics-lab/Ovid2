@@ -45,7 +45,7 @@ from ovid2.web.models import (
     WriteResult,
 )
 from ovid2.web.services import secrets_svc
-from ovid2.web.services._broker import BrokerError, run_tool_json
+from ovid2.web.services._broker import BrokerError, SecretScope, run_tool_json
 
 logger = logging.getLogger(__name__)
 
@@ -491,6 +491,7 @@ def test_connection_via_driver(name: str) -> ConnectionTestReport:
     try:
         result = run_tool_json(
             ["probe-connection", name],
+            scope=SecretScope(connections=(name,)),
             timeout=TEST_DEADLINE_SECONDS,
         )
     except BrokerError as exc:

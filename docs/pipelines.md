@@ -117,6 +117,11 @@ plain directories (`/dataspace`, `GET /api/v1/dataspace?path=/<account>/<…>`).
   tables). Agent (MCP / assistant) confirmations become a `run.overwrite`
   approval a human must grant. `copy` / `move` only count the tables they
   write; `health` only `dcq_results`.
+- **Warehouse outputs need a schema.** A Snowflake / Databricks output
+  address must name `DATABASE/SCHEMA` (or `catalog/schema`). One that names
+  only a database is rejected at submit time (web / API / MCP, including
+  draft launch and rerun) and, as a backstop, by the executor before any
+  table is read — it never runs every table only to fail at the final write.
 - **No `sf_database` / `sf_schema` overrides** on submit or pipeline
   configs — pick the schema as the address. ADR:
   the adr-address-is-exact-location design note.

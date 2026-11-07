@@ -466,7 +466,7 @@ class TestWriteSuccess:
 
         monkeypatch.setattr(addr, "_create_schema_if_not_exists", fake_create_schema)
         # Stub the CDM schema application: the real one needs a live Spark
-        # session (``spark.createDataFrame(df.rdd, schema)``); the typing
+        # session; the typing
         # logic itself is covered by ``TestApplyCdmSchema`` below. Here we
         # only assert the write fluent-chain around it.
         applied: dict[str, Any] = {}
@@ -488,7 +488,8 @@ class TestWriteSuccess:
         # The address schema is the exact target — pipeline/batch ignored.
         assert called["schema"] == "SITE_X"
         assert applied["table"] == "hash_token"
-        df.repartition.assert_called_once_with(10)
+        # No forced shuffle: the natural partitioning feeds the connector.
+        df.repartition.assert_not_called()
         df.write.format.assert_called_once_with("snowflake")
         df.write.mode.assert_called_once_with("overwrite")
         df.write.save.assert_called_once()
@@ -617,8 +618,8 @@ class TestWriteRetry:
 
 # ---------------------------------------------------------------------------
 # _apply_cdm_schema — CDM-typed DataFrame rebuild (the fix for the
-# VARCHAR(16777216) regression). Requires a real Spark session because it
-# calls ``spark.createDataFrame(df.rdd, schema)``.
+# VARCHAR(16777216) regression). Requires a real Spark session; the rebuild
+# is a pure JVM projection (no ``df.rdd`` Python round-trip).
 # ---------------------------------------------------------------------------
 
 
@@ -733,3 +734,38 @@ class TestApplyCdmSchema:
             out = addr._apply_cdm_schema(df, spark, "no_such_table_xyz")
         assert out is df
         assert any("No CDM schema found" in r.getMessage() for r in caplog.records)
+
+    def test_projection_has_no_python_roundtrip(self, spark: Any) -> None:
+        """The typed rebuild stays in the JVM (no ``LogicalRDD`` over ``df.rdd``)."""
+        addr = SnowflakeAddress(_minimal_config())
+        df = spark.range(3).selectExpr("CAST(id AS STRING) AS PATID", "'N' AS DEATH_SOURCE")
+        out = addr._apply_cdm_schema(df, spark, "death")
+        plan = out._jdf.queryExecution().analyzed().toString()
+        assert "LogicalRDD" not in plan
+        assert all(f.nullable for f in out.schema.fields)
+
+
+@pytest.mark.unit
+class TestWritePartitions:
+    def test_unset_means_no_repartition(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from ovid2.drivers.snowflake import spark as sf_spark
+
+        monkeypatch.delenv(sf_spark.SNOWFLAKE_WRITE_PARTITIONS_ENV, raising=False)
+        df = MagicMock()
+        assert sf_spark._maybe_repartition(df) is df
+        df.repartition.assert_not_called()
+
+    def test_env_pins_partitions(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from ovid2.drivers.snowflake import spark as sf_spark
+
+        monkeypatch.setenv(sf_spark.SNOWFLAKE_WRITE_PARTITIONS_ENV, "32")
+        df = MagicMock()
+        sf_spark._maybe_repartition(df)
+        df.repartition.assert_called_once_with(32)
+
+    @pytest.mark.parametrize("raw", ["abc", "0", "-4", " "])
+    def test_bad_values_ignored(self, monkeypatch: pytest.MonkeyPatch, raw: str) -> None:
+        from ovid2.drivers.snowflake import spark as sf_spark
+
+        monkeypatch.setenv(sf_spark.SNOWFLAKE_WRITE_PARTITIONS_ENV, raw)
+        assert sf_spark._write_partitions() is None

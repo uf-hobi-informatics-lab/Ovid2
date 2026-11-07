@@ -55,12 +55,15 @@ Deployment:
         - No cross-table dependencies.
 """
 
-from typing import Any
+from __future__ import annotations
 
-from pyspark.sql import DataFrame
-from pyspark.sql.functions import col
+from typing import TYPE_CHECKING, Any
 
+from ovid2.core.engines.dsl import col
 from ovid2.transformations.fixers.base import BaseFixer
+
+if TYPE_CHECKING:
+    from pyspark.sql import DataFrame
 
 
 class InvalidToNullFixer(BaseFixer):

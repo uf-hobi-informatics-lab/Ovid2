@@ -9,6 +9,7 @@ modules — none of which touch pipeline code (``ovid2.core``,
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import sys
@@ -21,7 +22,7 @@ from starlette.responses import Response
 
 from ovid2 import __version__
 from ovid2.web import db as web_db
-from ovid2.web.routes import api_v1, auth, branding, html, llm_html
+from ovid2.web.routes import api_v1, auth, branding, html, llm_html, manual_html
 from ovid2.web.templating import static_dir
 
 logger = logging.getLogger(__name__)
@@ -91,6 +92,12 @@ def create_app() -> FastAPI:
     """
     _inject_dev_pipelines_dir()
     web_db.ensure_schema()
+    # Remove per-invocation scoped-secret dirs a hard-killed broker call
+    # or worker job left behind (normal exits clean up their own).
+    from ovid2.config.executor_env import sweep_stale_scopes
+
+    with contextlib.suppress(OSError):
+        sweep_stale_scopes()
     app = FastAPI(
         title="Ovid2 control panel",
         version=__version__,
@@ -113,6 +120,7 @@ def create_app() -> FastAPI:
     app.include_router(html.router)
     app.include_router(api_v1.router)
     app.include_router(branding.router)
+    app.include_router(manual_html.router)
     app.include_router(auth.router)
 
     # Added after the routers, but a ``BaseHTTPMiddleware`` still wraps the

@@ -144,40 +144,9 @@ def secret_refs_for_addresses(address_names: Iterable[str]) -> set[str]:
     Returns:
         The set of secret-ref stems (without ``.json``).
     """
-    from ovid2.config.addresses import load_address_config
-    from ovid2.config.connections import load_connection_config
+    from ovid2.config.secret_refs import refs_for_addresses
 
-    refs: set[str] = set()
-    for address_name in address_names:
-        if not address_name:
-            continue
-        try:
-            payload = load_address_config(address_name)
-        except (FileNotFoundError, ValueError) as exc:
-            logger.debug(
-                "secret_refs_for_addresses skipping %r: %s",
-                address_name,
-                exc,
-            )
-            continue
-
-        if payload.get("_shape") == "connection":
-            connection_name = str(payload.get("connection") or "")
-        else:
-            # Legacy shape: ``src_name`` may name a connection whose
-            # secret_ref we still want to honour.
-            connection_name = str(payload.get("src_name") or "")
-
-        if not connection_name:
-            continue
-        try:
-            conn_raw = load_connection_config(connection_name)
-        except (FileNotFoundError, ValueError):
-            continue
-        ref = conn_raw.get("secret_ref")
-        if ref:
-            refs.add(str(ref))
-    return refs
+    return refs_for_addresses(address_names)
 
 
 def _requirements_for_address(

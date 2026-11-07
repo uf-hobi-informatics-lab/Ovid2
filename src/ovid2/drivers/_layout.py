@@ -37,11 +37,18 @@ __all__ = [
     "split_dataspace_path",
     "sql_ident",
     "warehouse_db_schema",
+    "warehouse_output_location_error",
 ]
 
 #: Connection types whose location is ``DATABASE[/SCHEMA]`` rather than a
 #: directory path. ``databricks`` uses ``catalog`` in place of ``database``.
 WAREHOUSE_TYPES: frozenset[str] = frozenset({"snowflake", "databricks", "postgres", "mssql"})
+
+#: Warehouse types whose *write* path has no implicit schema: the
+#: Snowflake writers (Spark + DuckDB) and the Databricks writer refuse a
+#: location without one. Postgres / MSSQL fall back to their engine
+#: default schema (``public`` / ``dbo``) and are not listed.
+SCHEMA_REQUIRED_OUTPUT_TYPES: frozenset[str] = frozenset({"snowflake", "databricks"})
 
 #: An unquoted SQL identifier (Snowflake / ANSI rules).
 _UNQUOTED_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
@@ -98,6 +105,41 @@ def warehouse_db_schema(location: Mapping[str, Any] | None) -> tuple[str, str]:
     database = str(loc.get("database") or loc.get("catalog") or (parts[0] if parts else ""))
     schema = str(loc.get("schema") or (parts[1] if len(parts) > 1 else ""))
     return database.strip(), schema.strip()
+
+
+def warehouse_output_location_error(
+    conn_type: str | None,
+    location: Mapping[str, Any] | None,
+) -> str | None:
+    """Return why ``location`` cannot be a write target, or ``None`` when it can.
+
+    A Snowflake / Databricks *output* must name both a database (catalog)
+    and a schema: the address is the exact write location and there is
+    no implicit schema on the write path. Catching this before a run
+    starts avoids executing every table only to fail at the final write
+    (and an overwrite gate that lists a whole database).
+
+    Args:
+        conn_type: The connection type (``snowflake``, ``disc`` …);
+            ``None`` / unknown types are never rejected.
+        location: The address's ``location`` mapping.
+
+    Returns:
+        A human-readable error, or ``None`` when the location is writable.
+    """
+    kind = str(conn_type or "").strip().lower()
+    if kind not in SCHEMA_REQUIRED_OUTPUT_TYPES:
+        return None
+    database, schema = warehouse_db_schema(location)
+    if not database:
+        return f"{kind} output names no database; set location.path to DATABASE/SCHEMA."
+    if not schema:
+        return (
+            f"{kind} output points at database {database!r} with no schema; "
+            f"set location.path to {database}/<SCHEMA> (an output address is the "
+            f"exact write location)."
+        )
+    return None
 
 
 def location_path(location: Mapping[str, Any] | None, *, warehouse: bool = False) -> str:

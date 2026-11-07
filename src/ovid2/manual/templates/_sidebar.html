@@ -1,0 +1,38 @@
+{#- Shared sidebar: search box + numbered chapter list. The current
+    chapter is expanded to show its pages. -#}
+<aside class="om-side" aria-label="Manual chapters">
+  <div class="om-side-inner">
+    <a class="om-brand" href="{{ surface.home_url() }}">
+      <span class="om-brand-mark">Ovid<span class="om-accent">2</span></span>
+      <span class="om-brand-sub">Manual</span>
+    </a>
+    <div class="om-search" data-om-search>
+      <label class="om-visually-hidden" for="om-search-input">Search the manual</label>
+      <input id="om-search-input" class="om-search-input" type="search"
+             placeholder="Search the manual" autocomplete="off" spellcheck="false"
+             aria-controls="om-search-results" aria-expanded="false">
+      <kbd class="om-kbd" aria-hidden="true">/</kbd>
+      <ol id="om-search-results" class="om-search-results" role="listbox" hidden></ol>
+    </div>
+    <nav class="om-chapters">
+      <ol>
+        {% for ch in manual.chapters %}
+        {% set is_current = chapter is not none and chapter.slug == ch.slug %}
+        <li class="om-chapter{% if is_current %} is-current{% endif %}">
+          <a href="{{ surface.page_url(ch.landing.key) }}"{% if is_current and page is not none and page.key == ch.landing.key %} aria-current="page"{% endif %}>
+            <span class="om-num">{{ '%02d' % ch.number }}</span>
+            <span class="om-chapter-title">{{ ch.title }}</span>
+          </a>
+          {% if is_current and ch.pages|length > 1 %}
+          <ol class="om-pages">
+            {% for p in ch.pages %}
+            <li><a href="{{ surface.page_url(p.key) }}"{% if page is not none and p.key == page.key %} aria-current="page"{% endif %}>{{ p.title }}</a></li>
+            {% endfor %}
+          </ol>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+    </nav>
+  </div>
+</aside>

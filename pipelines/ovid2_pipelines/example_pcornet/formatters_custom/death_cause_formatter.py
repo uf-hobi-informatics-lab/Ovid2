@@ -38,7 +38,7 @@ class Death_causeFormatter(BaseFormatter):
 
     def format(self, df: "DataFrame") -> "DataFrame":  # noqa: A003 — CDM API
         """Reshape raw example_pcornet data into PCORnet death_cause format (lazy)."""
-        from pyspark.sql.functions import array, col, explode, split, trim, when
+        from ovid2.core.engines.dsl import array, col, explode, split, trim, when
 
         exploded = df.withColumn(
             "DEATH_CAUSE",

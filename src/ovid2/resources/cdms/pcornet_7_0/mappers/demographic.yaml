@@ -1,0 +1,68 @@
+# Ported verbatim from legacy mapping_scripts/pcornet_mappers/demographic_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: demographic
+ops:
+- op: legacy_select
+  columns:
+  - PATID:
+      encrypt: PATID
+  - BIRTH_DATE
+  - BIRTH_TIME
+  - SEX:
+      dict: demographic_sex_dict
+      col: SEX
+  - SEXUAL_ORIENTATION:
+      dict: demographic_sexual_orientation_dict
+      col: SEXUAL_ORIENTATION
+  - GENDER_IDENTITY:
+      dict: demographic_gender_identity_dict
+      col: GENDER_IDENTITY
+  - HISPANIC:
+      dict: demographic_hispanic_dict
+      col: HISPANIC
+  - RACE:
+      dict: demographic_race_dict
+      col: RACE
+  - RACE_ETH_MISSING:
+      dict: demographic_race_eth_missing_dict
+      col: RACE_ETH_MISSING
+  - RACE_ETH_AI_AN:
+      dict: demographic_race_eth_ai_an_dict
+      col: RACE_ETH_AI_AN
+  - RACE_ETH_ASIAN:
+      dict: demographic_race_eth_asian_dict
+      col: RACE_ETH_ASIAN
+  - RACE_ETH_BLACK:
+      dict: demographic_race_eth_black_dict
+      col: RACE_ETH_BLACK
+  - RACE_ETH_HISPANIC:
+      dict: demographic_race_eth_hispanic_dict
+      col: RACE_ETH_HISPANIC
+  - RACE_ETH_ME_NA:
+      dict: demographic_race_eth_me_na_dict
+      col: RACE_ETH_ME_NA
+  - RACE_ETH_NH_PI:
+      dict: demographic_race_eth_nh_pi_dict
+      col: RACE_ETH_NH_PI
+  - RACE_ETH_WHITE:
+      dict: demographic_race_eth_white_dict
+      col: RACE_ETH_WHITE
+  - BIOBANK_FLAG:
+      dict: demographic_biobank_flag_dict
+      col: BIOBANK_FLAG
+  - PAT_PREF_LANGUAGE_SPOKEN:
+      dict: demographic_pat_pref_language_spoken_dict
+      col: PAT_PREF_LANGUAGE_SPOKEN
+  - RAW_SEX
+  - RAW_SEXUAL_ORIENTATION
+  - RAW_GENDER_IDENTITY
+  - RAW_HISPANIC
+  - RAW_RACE
+  - RAW_PAT_PREF_LANGUAGE_SPOKEN
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true
+  append_additional_fields:
+    join_field: PATID

@@ -65,5 +65,47 @@ def test_destructive_deletes_are_gated(src_root: Path) -> None:
     )
 
 
+#: Handlers that return Data Space *row values* — agents must pass the
+#: ``dataspace.agent_row_access`` approval gate.
+ROW_RETURNING_HANDLERS: frozenset[str] = frozenset(
+    {
+        "api_ods_table_sample",
+        "api_ods_table_export",
+        "api_ods_table_export_job",
+        "api_job_artifact",
+    }
+)
+
+
+def _calls(func: ast.FunctionDef, name: str) -> bool:
+    return any(
+        isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == name
+        for n in ast.walk(func)
+    )
+
+
+@pytest.mark.contract
+def test_agent_row_access_is_gated(src_root: Path) -> None:
+    """Every row-returning handler routes agents through the approval gate."""
+    api = src_root / "web" / "routes" / "api_v1.py"
+    tree = ast.parse(api.read_text(encoding="utf-8"), filename=str(api))
+    found = {
+        n.name: _calls(n, "_gate_agent_row_access")
+        for n in ast.walk(tree)
+        if isinstance(n, ast.FunctionDef) and n.name in ROW_RETURNING_HANDLERS
+    }
+    assert set(found) == ROW_RETURNING_HANDLERS, sorted(ROW_RETURNING_HANDLERS - set(found))
+    ungated = sorted(k for k, v in found.items() if not v)
+    assert not ungated, f"Row-returning handlers without the agent gate: {ungated}"
+
+
+@pytest.mark.contract
+def test_gated_actions_are_destructive() -> None:
+    """The overwrite and agent-row-access actions stay in DESTRUCTIVE_ACTIONS."""
+    from ovid2.web.services.approvals_svc import DESTRUCTIVE_ACTIONS
+
+    assert {"run.overwrite", "dataspace.agent_row_access"} <= DESTRUCTIVE_ACTIONS
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit("Run through pytest.")

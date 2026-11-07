@@ -35,6 +35,25 @@ Design rules:
    ``(src_name, src_args)`` tuple the pre-Driver-refactor code
    consumed. This lets us route the old ``BaseAddress`` machinery
    through a Driver instance until every consumer has migrated.
+
+6. **One class, three planes.** :class:`Driver` is a single concrete
+   ABC, but its surface is split into three narrow protocols so a
+   caller can only *see* the plane it needs:
+
+   - :class:`DriverControl` — metadata, probes, listings, table
+     *metadata* (``describe_table``). Never returns row values.
+   - :class:`DriverRowAccess` — ``sample_rows`` / ``iter_rows`` /
+     ``count_rows``: engine-less row reads (Data Space explorer,
+     exports). **Data plane** — row values leave the store.
+   - :class:`DriverDataPlane` — ``read`` / ``write`` /
+     ``create_complementary_tables`` against an engine session.
+
+   Obtain a narrowed view with
+   :func:`ovid2.drivers.registry.control_driver` /
+   :func:`~ovid2.drivers.registry.row_access_driver` /
+   :func:`~ovid2.drivers.registry.data_driver`; ``mypy --strict`` then
+   rejects cross-plane calls. ``tests/contract/test_control_tier_no_row_access.py``
+   pins that control-tier modules never call the row / data methods.
 """
 
 from __future__ import annotations
@@ -42,7 +61,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from ovid2.core.engines.protocols import EngineSession
@@ -379,6 +398,17 @@ class Driver(ABC):
     #: Short machine name registered in :data:`ovid2.drivers.registry.DRIVERS`.
     type_name: str = ""
 
+    #: Whether :meth:`read` / :meth:`write` /
+    #: :meth:`create_complementary_tables` work against a **Spark**
+    #: session. ``False`` for drivers whose only data plane is a
+    #: non-Spark engine strategy (today: the DuckDB-only hybrids
+    #: ``postgres`` / ``mssql`` / ``gcs`` / ``databricks``).
+    #: :class:`~ovid2.core.engines.stager.SparkEngineStager` consults it
+    #: so an unsupported engine/driver pair is refused at plan time
+    #: instead of failing mid-run (enforced by
+    #: ``tests/contract/test_driver_data_plane_declared.py``).
+    spark_capable: ClassVar[bool] = True
+
     # ------------------------------------------------------------------
     # Metadata (classmethods, no heavy imports)
     # ------------------------------------------------------------------
@@ -574,7 +604,7 @@ class Driver(ABC):
         return None
 
     # ------------------------------------------------------------------
-    # Browse (control plane — no engine session required)
+    # Browse (control plane — names, sizes, schemas; never row values)
     # ------------------------------------------------------------------
 
     def list_dir(self, prefix: str | None = None) -> list[StorageEntry]:
@@ -729,7 +759,7 @@ class Driver(ABC):
         return {}
 
     # ------------------------------------------------------------------
-    # Table introspection (control plane — Data Space explorer)
+    # Table introspection (Data Space explorer)
     # ------------------------------------------------------------------
     #
     # Four optional capabilities, all keyed on the *listing path* a
@@ -740,6 +770,11 @@ class Driver(ABC):
     # read headers / parquet footers with pyarrow, warehouses run
     # metadata queries. The default raises ``NotImplementedError`` —
     # the web tier renders "not available for <type>".
+    #
+    # Plane split: ``describe_table`` is **control plane** (metadata).
+    # ``sample_rows`` / ``iter_rows`` / ``count_rows`` are **row access —
+    # data plane**: they return (or scan) row values without an engine
+    # (see :class:`DriverRowAccess`).
 
     def describe_table(self, path: str) -> TableInfo:
         """Return the metadata of the table / data file at listing ``path``.
@@ -821,10 +856,174 @@ class Driver(ABC):
         return self.type_name, merged
 
 
+# ---------------------------------------------------------------------------
+# Plane protocols — narrowed views of :class:`Driver`
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class DriverControl(Protocol):
+    """Control-plane view: metadata, probes, listings, table metadata.
+
+    Nothing reachable through this protocol returns row values.
+    """
+
+    type_name: str
+
+    def probe_auth(self) -> ProbeResult:
+        """See :meth:`Driver.probe_auth`."""
+        ...
+
+    def probe_read(self) -> ProbeResult:
+        """See :meth:`Driver.probe_read`."""
+        ...
+
+    def probe_write(self) -> ProbeResult:
+        """See :meth:`Driver.probe_write`."""
+        ...
+
+    def list_dir(self, prefix: str | None = None) -> list[StorageEntry]:
+        """See :meth:`Driver.list_dir`."""
+        ...
+
+    def expand_all_tables(
+        self,
+        location: dict[str, Any] | None = None,
+        *,
+        pipeline: str | None = None,
+        batch_id: str | None = None,
+    ) -> list[str] | None:
+        """See :meth:`Driver.expand_all_tables`."""
+        ...
+
+    def existing_tables(self, location: dict[str, Any] | None = None) -> list[str] | None:
+        """See :meth:`Driver.existing_tables`."""
+        ...
+
+    def table_sizes(self, file_names: list[str], *, pipeline: str, batch_id: str) -> dict[str, int]:
+        """See :meth:`Driver.table_sizes`."""
+        ...
+
+    def describe_table(self, path: str) -> TableInfo:
+        """See :meth:`Driver.describe_table`."""
+        ...
+
+    def container_requirements_for(
+        self, location: dict[str, Any] | None = None
+    ) -> tuple[ContainerRequirement, ...]:
+        """See :meth:`Driver.container_requirements_for`."""
+        ...
+
+
+@runtime_checkable
+class DriverRowAccess(Protocol):
+    """Engine-less row access — **data plane** (row values leave the store)."""
+
+    type_name: str
+
+    def describe_table(self, path: str) -> TableInfo:
+        """See :meth:`Driver.describe_table`."""
+        ...
+
+    def sample_rows(self, path: str, limit: int = 100) -> TableSample:
+        """See :meth:`Driver.sample_rows`."""
+        ...
+
+    def iter_rows(
+        self, path: str, limit: int | None = None, *, batch_size: int = 5000
+    ) -> tuple[list[str], Iterator[list[tuple[Any, ...]]]]:
+        """See :meth:`Driver.iter_rows`."""
+        ...
+
+    def count_rows(self, path: str) -> int:
+        """See :meth:`Driver.count_rows`."""
+        ...
+
+
+@runtime_checkable
+class DriverDataPlane(Protocol):
+    """Engine data plane: lazy reads / the materialising write."""
+
+    type_name: str
+    spark_capable: ClassVar[bool]
+
+    def read(
+        self,
+        session: EngineSession,
+        pipeline: str,
+        batch_id: str,
+        file_name: str,
+        delimiter: str | None = None,
+        *,
+        table_name: str | None = None,
+    ) -> Any:
+        """See :meth:`Driver.read`."""
+        ...
+
+    def write(
+        self,
+        df: Any,
+        session: EngineSession,
+        pipeline: str,
+        batch_id: str,
+        table_name: str,
+        delimiter: str | None = None,
+    ) -> None:
+        """See :meth:`Driver.write`."""
+        ...
+
+    def create_complementary_tables(
+        self, session: EngineSession, pipeline: str, batch_id: str
+    ) -> None:
+        """See :meth:`Driver.create_complementary_tables`."""
+        ...
+
+    def container_requirements_for(
+        self, location: dict[str, Any] | None = None
+    ) -> tuple[ContainerRequirement, ...]:
+        """See :meth:`Driver.container_requirements_for`."""
+        ...
+
+    def as_legacy_src_args(self) -> tuple[str, dict[str, Any]]:
+        """See :meth:`Driver.as_legacy_src_args`."""
+        ...
+
+
+#: Method names per plane — the single source the contract tests read.
+CONTROL_METHODS: frozenset[str] = frozenset(
+    {
+        "probe_auth",
+        "probe_read",
+        "probe_write",
+        "list_dir",
+        "supports_expand_all",
+        "expand_all_tables",
+        "existing_tables",
+        "table_sizes",
+        "describe_table",
+        "connection_fields",
+        "location_fields",
+        "container_requirements",
+        "container_requirements_for",
+        "cdm_dimension_name",
+        "declared_cdm",
+        "workspace_database",
+    }
+)
+ROW_ACCESS_METHODS: frozenset[str] = frozenset({"sample_rows", "iter_rows", "count_rows"})
+DATA_PLANE_METHODS: frozenset[str] = frozenset({"read", "write", "create_complementary_tables"})
+
+
 __all__ = [
+    "CONTROL_METHODS",
+    "DATA_PLANE_METHODS",
+    "ROW_ACCESS_METHODS",
     "ColumnInfo",
     "ConnectionFieldSpec",
     "Driver",
+    "DriverControl",
+    "DriverDataPlane",
+    "DriverRowAccess",
     "FieldSpec",
     "LocationField",
     "ProbeResult",

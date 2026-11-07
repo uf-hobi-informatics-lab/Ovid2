@@ -19,6 +19,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from ovid2.config import spark_sizing as _spark_sizing
+
 # ---------------------------------------------------------------------------
 # Runtime environment detection
 # ---------------------------------------------------------------------------
@@ -134,7 +136,9 @@ DOCKER_IMAGE: str = os.environ.get("OVID2_DOCKER_IMAGE", "ovid2:latest")
 # Spark
 # ---------------------------------------------------------------------------
 SPARK_MODE: str = os.environ.get("OVID2_SPARK_MODE", "cluster")
-SPARK_CORES: str = os.environ.get("OVID2_SPARK_CORES", "15")
+# ``local[N]`` core count: ``$OVID2_SPARK_CORES`` or every usable CPU
+# (the historical ``15`` left most of a 96-core host idle in local mode).
+SPARK_CORES: str = str(_spark_sizing.local_cores())
 SPARK_MASTER_URL_DEFAULT: str = "spark://spark-master:7077"
 
 SPARK_CONFIG: dict[str, str] = {
@@ -183,7 +187,27 @@ SPARK_CONFIG: dict[str, str] = {
     # Network
     "spark.network.timeout": "600s",
     "spark.rpc.askTimeout": "600s",
+    # Arrow for the (rare) pandas <-> Spark boundaries (``createDataFrame``
+    # from pandas, ``toPandas`` in tooling); falls back silently on types
+    # Arrow cannot carry.
+    "spark.sql.execution.arrow.pyspark.enabled": "true",
+    "spark.sql.execution.arrow.pyspark.fallback.enabled": "true",
 }
+
+#: Directory (host side) under which each run gets a Spark scratch dir
+#: (shuffle spill, broadcast blocks, cached partitions that overflow
+#: memory). Defaults to ``$XDG_CACHE_HOME/ovid2/spark-local`` — on real
+#: disk, unlike ``$XDG_RUNTIME_DIR`` (tmpfs, RAM-backed) or the
+#: container's overlay ``/tmp``. Bind-mounted at
+#: :data:`SPARK_LOCAL_DIR_IN_CONTAINER` and exported as
+#: ``SPARK_LOCAL_DIRS`` to the driver and every worker.
+SPARK_LOCAL_ROOT: Path = Path(
+    os.environ.get("OVID2_SPARK_LOCAL_DIR")
+    or (
+        Path(os.environ.get("XDG_CACHE_HOME") or (Path.home() / ".cache")) / "ovid2" / "spark-local"
+    )
+)
+SPARK_LOCAL_DIR_IN_CONTAINER: str = "/ovid2-spark-local"
 
 # ---------------------------------------------------------------------------
 # CSV

@@ -236,6 +236,7 @@ def load_engine(engine_name: str) -> BaseEngine:
         ValueError: If neither a config file nor a bare type matches.
     """
     from ovid2.config import engines as engines_config
+    from ovid2.core.engines.dsl import set_active_engine
     from ovid2.core.engines.registry import ENGINE_TYPE_MAP, load_engine_class
 
     # 1) On-disk config path.
@@ -243,15 +244,21 @@ def load_engine(engine_name: str) -> BaseEngine:
     if config_path is not None:
         config = engines_config.load_engine_config(engine_name)
         cls = load_engine_class(str(config["type"]))
-        return cls(
+        engine = cls(
             args=dict(config.get("args") or {}),
             secrets=engines_config.resolve_secrets(config),
         )
+        # Shared fixers / mapper ops resolve their column DSL against the
+        # process's engine (``ovid2.core.engines.dsl``).
+        set_active_engine(engine)
+        return engine
 
     # 2) Bare-type back-compat path.
     if engine_name in ENGINE_TYPE_MAP:
         cls = load_engine_class(engine_name)
-        return cls()
+        engine = cls()
+        set_active_engine(engine)
+        return engine
 
     raise ValueError(
         f"Unknown engine '{engine_name}'. "
@@ -327,8 +334,14 @@ def load_formatter(
     Raises:
         ValueError: If neither a spec nor a class can be resolved.
     """
+    # 0) legacy_ovid profile: only the verbatim legacy port is used — a
+    #    pre-existing YAML approximation must never shadow it.
+    from ovid2.legacy.profile import is_legacy_ovid
+
+    legacy = is_legacy_ovid(pipeline)
+
     # 1) Try the declarative spec path first when the pipeline context is present.
-    if spark is not None and input_address is not None:
+    if spark is not None and input_address is not None and not legacy:
         try:
             from ovid2.formatters.engine import build_formatter
             from ovid2.formatters.spec import SpecNotFoundError
@@ -360,6 +373,21 @@ def load_formatter(
             f"Formatter not found for pipeline '{pipeline}' table '{table}': {exc}"
         ) from exc
     formatter: BaseFormatter = formatter_class()
+    if legacy and spark is not None and input_address is not None:
+        # Legacy ports read their own raw inputs, so they need the runtime
+        # context the custom adapter would normally attach.
+        from ovid2.formatters.adapters.base import AdapterContext
+
+        formatter.set_context(
+            AdapterContext(
+                spark=spark,  # type: ignore[arg-type]
+                input_address=input_address,
+                pipeline=pipeline,
+                batch_id=batch_id,
+                engine=engine,  # type: ignore[arg-type]
+                input_address_name=input_address_name,
+            )
+        )
     return formatter
 
 

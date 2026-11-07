@@ -56,13 +56,15 @@ Deployment:
           for the ``SOURCE`` column in stub rows).
 """
 
-from typing import Any
+from __future__ import annotations
 
-from pyspark.sql import DataFrame
-from pyspark.sql.functions import broadcast, col, current_timestamp, lit
-from pyspark.sql.types import StringType
+from typing import TYPE_CHECKING, Any
 
+from ovid2.core.engines.dsl import broadcast, col, current_timestamp, lit
 from ovid2.transformations.fixers.base import BaseFixer
+
+if TYPE_CHECKING:
+    from pyspark.sql import DataFrame
 
 
 class AddMissingHashTokenPatidsFixer(BaseFixer):
@@ -132,7 +134,7 @@ class AddMissingHashTokenPatidsFixer(BaseFixer):
             if column_name == "UPDATED":
                 stub_rows = stub_rows.withColumn(
                     "UPDATED",
-                    current_timestamp().cast(StringType()),
+                    current_timestamp().cast("string"),
                 )
             elif column_name == "SOURCE":
                 stub_rows = stub_rows.withColumn(
@@ -143,7 +145,7 @@ class AddMissingHashTokenPatidsFixer(BaseFixer):
                 # All token columns and TOKEN_ENCRYPTION_KEY get null
                 stub_rows = stub_rows.withColumn(
                     column_name,
-                    lit(None).cast(StringType()),
+                    lit(None).cast("string"),
                 )
 
         # Ensure column order matches the existing hash_token table

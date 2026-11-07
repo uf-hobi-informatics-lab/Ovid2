@@ -1,0 +1,1266 @@
+v: 1
+name: tumor_date
+composite_key:
+- person_id
+domain_description: Ported from legacy mapping_scripts/tumor_mappers/tables_specs.csv.
+fields:
+- name: person_id
+  rdbms_type: RDBMS Text(x)
+  order: 1
+  sas_type: SAS Char(x)
+- name: Ambiguous_Terminology_DX_N442
+  rdbms_type: RDBMS Text(x)
+  order: 2
+  sas_type: SAS Char(x)
+- name: Histologic_Type_ICD-O-3_N522
+  rdbms_type: RDBMS Text(x)
+  order: 3
+  sas_type: SAS Char(x)
+- name: Histological Type Description
+  rdbms_type: RDBMS Text(x)
+  order: 4
+  sas_type: SAS Char(x)
+- name: Casefinding_Source_N501
+  rdbms_type: RDBMS Text(x)
+  order: 5
+  sas_type: SAS Char(x)
+- name: Date_Conclusive_DX_N443
+  rdbms_type: RDBMS Date
+  order: 6
+  sas_type: SAS Date (Numeric)
+- name: Date_of_Diagnosis_N390
+  rdbms_type: RDBMS Date
+  order: 7
+  sas_type: SAS Date (Numeric)
+- name: Date_of_Mult_Tumors_N445
+  rdbms_type: RDBMS Date
+  order: 8
+  sas_type: SAS Date (Numeric)
+- name: Diagnostic_Confirmation_N490
+  rdbms_type: RDBMS Text(x)
+  order: 9
+  sas_type: SAS Char(x)
+- name: Grade_N440
+  rdbms_type: RDBMS Text(x)
+  order: 10
+  sas_type: SAS Char(x)
+- name: Grade Description
+  rdbms_type: RDBMS Text(x)
+  order: 11
+  sas_type: SAS Char(x)
+- name: Grade_Path_System_N449
+  rdbms_type: RDBMS Text(x)
+  order: 12
+  sas_type: SAS Char(x)
+- name: Grade_Path_Value_N441
+  rdbms_type: RDBMS Text(x)
+  order: 13
+  sas_type: SAS Char(x)
+- name: Laterality_N410
+  rdbms_type: RDBMS Text(x)
+  order: 14
+  sas_type: SAS Char(x)
+- name: Morph_Coding_Sys--Current_N470
+  rdbms_type: RDBMS Text(x)
+  order: 15
+  sas_type: SAS Char(x)
+- name: Morph_Coding_Sys--Originl_N480
+  rdbms_type: RDBMS Text(x)
+  order: 16
+  sas_type: SAS Char(x)
+- name: Mult_Tum_Rpt_as_One_Prim_N444
+  rdbms_type: RDBMS Text(x)
+  order: 17
+  sas_type: SAS Char(x)
+- name: Multiplicity_Counter_N446
+  rdbms_type: RDBMS Text(x)
+  order: 18
+  sas_type: SAS Char(x)
+- name: Primary_Site_N400
+  rdbms_type: RDBMS Text(x)
+  order: 19
+  sas_type: SAS Char(x)
+- name: Site Code Description
+  rdbms_type: RDBMS Text(x)
+  order: 20
+  sas_type: SAS Char(x)
+- name: Topography Code
+  rdbms_type: RDBMS Text(x)
+  order: 21
+  sas_type: SAS Char(x)
+- name: Topography Description
+  rdbms_type: RDBMS Text(x)
+  order: 22
+  sas_type: SAS Char(x)
+- name: Site_Coding_Sys--Current_N450
+  rdbms_type: RDBMS Text(x)
+  order: 23
+  sas_type: SAS Char(x)
+- name: Site_Coding_Sys--Original_N460
+  rdbms_type: RDBMS Text(x)
+  order: 24
+  sas_type: SAS Char(x)
+- name: Type_of_Reporting_Source_N500
+  rdbms_type: RDBMS Text(x)
+  order: 25
+  sas_type: SAS Char(x)
+- name: Age_at_Diagnosis_N230
+  rdbms_type: RDBMS Text(x)
+  order: 26
+  sas_type: SAS Char(x)
+- name: Spanish/Hispanic_Origin_N190
+  rdbms_type: RDBMS Text(x)
+  order: 27
+  sas_type: SAS Char(x)
+- name: Ethnicity Description
+  rdbms_type: RDBMS Text(x)
+  order: 28
+  sas_type: SAS Char(x)
+- name: County_at_DX_Reported_N90
+  rdbms_type: RDBMS Text(x)
+  order: 29
+  sas_type: SAS Char(x)
+- name: Date_of_Birth_N240
+  rdbms_type: RDBMS Date
+  order: 30
+  sas_type: SAS Date (Numeric)
+- name: Race_1_N160
+  rdbms_type: RDBMS Text(x)
+  order: 31
+  sas_type: SAS Char(x)
+- name: Race 1 Description
+  rdbms_type: RDBMS Text(x)
+  order: 32
+  sas_type: SAS Char(x)
+- name: Race_2_N161
+  rdbms_type: RDBMS Text(x)
+  order: 33
+  sas_type: SAS Char(x)
+- name: Race2 Description
+  rdbms_type: RDBMS Text(x)
+  order: 34
+  sas_type: SAS Char(x)
+- name: Race Coding System Current
+  rdbms_type: RDBMS Text(x)
+  order: 35
+  sas_type: SAS Char(x)
+- name: Race Coding System Original
+  rdbms_type: RDBMS Text(x)
+  order: 36
+  sas_type: SAS Char(x)
+- name: Sex_N220
+  rdbms_type: RDBMS Text(x)
+  order: 37
+  sas_type: SAS Char(x)
+- name: Sex Description
+  rdbms_type: RDBMS Text(x)
+  order: 38
+  sas_type: SAS Char(x)
+- name: Vital_Status_N1760
+  rdbms_type: RDBMS Text(x)
+  order: 39
+  sas_type: SAS Char(x)
+- name: Cause_of_Death_N1910
+  rdbms_type: RDBMS Text(x)
+  order: 40
+  sas_type: SAS Char(x)
+- name: Date_of_Last_Contact_N1750
+  rdbms_type: RDBMS Date
+  order: 41
+  sas_type: SAS Date (Numeric)
+- name: Recurrence_Date--1st_N1860
+  rdbms_type: RDBMS Date
+  order: 42
+  sas_type: SAS Date (Numeric)
+- name: Recurrence_Type--1st_N1880
+  rdbms_type: RDBMS Text(x)
+  order: 43
+  sas_type: SAS Char(x)
+- name: First Recurrence Type Description
+  rdbms_type: RDBMS Text(x)
+  order: 44
+  sas_type: SAS Char(x)
+- name: Class_of_Case_N610
+  rdbms_type: RDBMS Text(x)
+  order: 45
+  sas_type: SAS Char(x)
+- name: Class of Case Description
+  rdbms_type: RDBMS Text(x)
+  order: 46
+  sas_type: SAS Char(x)
+- name: Date_of_1st_Contact_N580
+  rdbms_type: RDBMS Date
+  order: 47
+  sas_type: SAS Date (Numeric)
+- name: Primary_Payer_at_DX_N630
+  rdbms_type: RDBMS Text(x)
+  order: 48
+  sas_type: SAS Char(x)
+- name: Sequence_Number--Hospital_N560
+  rdbms_type: RDBMS Text(x)
+  order: 49
+  sas_type: SAS Char(x)
+- name: Adenoid_Cystic_Basaloid_Pattern_N3803
+  rdbms_type: RDBMS Text(x)
+  order: 50
+  sas_type: SAS Char(x)
+- name: Adenopathy_N3804
+  rdbms_type: RDBMS Text(x)
+  order: 51
+  sas_type: SAS Char(x)
+- name: AFP_Post-Orchiectomy_Lab_Value_N3805
+  rdbms_type: RDBMS Text(x)
+  order: 52
+  sas_type: SAS Char(x)
+- name: AFP_Post-Orchiectomy_Range_N3806
+  rdbms_type: RDBMS Text(x)
+  order: 53
+  sas_type: SAS Char(x)
+- name: AFP_Pre-Orchiectomy_Lab_Value_N3807
+  rdbms_type: RDBMS Text(x)
+  order: 54
+  sas_type: SAS Char(x)
+- name: AFP_Pre-Orchiectomy_Range_N3808
+  rdbms_type: RDBMS Text(x)
+  order: 55
+  sas_type: SAS Char(x)
+- name: AFP_Pretreatment_Interpretation_N3809
+  rdbms_type: RDBMS Text(x)
+  order: 56
+  sas_type: SAS Char(x)
+- name: AFP_Pretreatment_Lab_Value_N3810
+  rdbms_type: RDBMS Text(x)
+  order: 57
+  sas_type: SAS Char(x)
+- name: AJCC_TNM_Clin_M_N1003
+  rdbms_type: RDBMS Text(x)
+  order: 58
+  sas_type: SAS Char(x)
+- name: AJCC_TNM_Clin_N_N1002
+  rdbms_type: RDBMS Text(x)
+  order: 59
+  sas_type: SAS Char(x)
+- name: AJCC_TNM_Clin_N_Suffix_N1034
+  rdbms_type: RDBMS Text(x)
+  order: 60
+  sas_type: SAS Char(x)
+- name: AJCC_TNM_Clin_Stage_Group_N1004
+  rdbms_type: RDBMS Text(x)
+  order: 61
+  sas_type: SAS Char(x)
+- name: AJCC_TNM_Clin_T_N1001
+  rdbms_type: RDBMS Text(x)
+  order: 62
+  sas_type: SAS Char(x)
+- name: AJCC_TNM_Clin_T_Suffix_N1031
+  rdbms_type: RDBMS Text(x)
+  order: 63
+  sas_type: SAS Char(x)
+- name: AJCC_TNM_Path_M_N1013
+  rdbms_type: RDBMS Text(x)
+  order: 64
+  sas_type: SAS Char(x)
+- name: AJCC_TNM_Path_N_N1012
+  rdbms_type: RDBMS Text(x)
+  order: 65
+  sas_type: SAS Char(x)
+- name: AJCC_TNM_Path_N_Suffix_N1035
+  rdbms_type: RDBMS Text(x)
+  order: 66
+  sas_type: SAS Char(x)
+- name: AJCC_TNM_Path_Stage_Group_N1014
+  rdbms_type: RDBMS Text(x)
+  order: 67
+  sas_type: SAS Char(x)
+- name: AJCC_TNM_Path_T_N1011
+  rdbms_type: RDBMS Text(x)
+  order: 68
+  sas_type: SAS Char(x)
+- name: AJCC_TNM_Path_T_Suffix_N1032
+  rdbms_type: RDBMS Text(x)
+  order: 69
+  sas_type: SAS Char(x)
+- name: AJCC_TNM_Post_Therapy_Path_(yp)_M_N1023
+  rdbms_type: RDBMS Text(x)
+  order: 70
+  sas_type: SAS Char(x)
+- name: AJCC_TNM_Post_Therapy_Path_(yp)_N_N1022
+  rdbms_type: RDBMS Text(x)
+  order: 71
+  sas_type: SAS Char(x)
+- name: AJCC_TNM_Post_Therapy_Path_(yp)_N_Suffix_N1036
+  rdbms_type: RDBMS Text(x)
+  order: 72
+  sas_type: SAS Char(x)
+- name: AJCC_TNM_Post_Therapy_Path_(yp)_Stage_Group_N1024
+  rdbms_type: RDBMS Text(x)
+  order: 73
+  sas_type: SAS Char(x)
+- name: AJCC_TNM_Post_Therapy_Path_(yp)_T_N1021
+  rdbms_type: RDBMS Text(x)
+  order: 74
+  sas_type: SAS Char(x)
+- name: AJCC_TNM_Post_Therapy_Path_(yp)_T_Suffix_N1033
+  rdbms_type: RDBMS Text(x)
+  order: 75
+  sas_type: SAS Char(x)
+- name: Anemia_N3811
+  rdbms_type: RDBMS Text(x)
+  order: 76
+  sas_type: SAS Char(x)
+- name: B_symptoms_N3812
+  rdbms_type: RDBMS Text(x)
+  order: 77
+  sas_type: SAS Char(x)
+- name: Bilirubin_Pretreatment_Total_Lab_Value_N3813
+  rdbms_type: RDBMS Text(x)
+  order: 78
+  sas_type: SAS Char(x)
+- name: Bilirubin_Pretreatment_Unit_of_Measure_N3814
+  rdbms_type: RDBMS Text(x)
+  order: 79
+  sas_type: SAS Char(x)
+- name: Bone_Invasion_N3815
+  rdbms_type: RDBMS Text(x)
+  order: 80
+  sas_type: SAS Char(x)
+- name: Brain_Molecular_Markers_N3816
+  rdbms_type: RDBMS Text(x)
+  order: 81
+  sas_type: SAS Char(x)
+- name: Breslow_Tumor_Thickness_N3817
+  rdbms_type: RDBMS Text(x)
+  order: 82
+  sas_type: SAS Char(x)
+- name: CA-125_Pretreatment_Interpretation_N3818
+  rdbms_type: RDBMS Text(x)
+  order: 83
+  sas_type: SAS Char(x)
+- name: CEA_Pretreatment_Interpretation_N3819
+  rdbms_type: RDBMS Text(x)
+  order: 84
+  sas_type: SAS Char(x)
+- name: CEA_Pretreatment_Lab_Value_N3820
+  rdbms_type: RDBMS Text(x)
+  order: 85
+  sas_type: SAS Char(x)
+- name: Chromosome_19q:_Loss_of_Heterozygosity_(LOH)_N3802
+  rdbms_type: RDBMS Text(x)
+  order: 86
+  sas_type: SAS Char(x)
+- name: Chromosome_1p:_Loss_of_Heterozygosity_(LOH)_N3801
+  rdbms_type: RDBMS Text(x)
+  order: 87
+  sas_type: SAS Char(x)
+- name: Chromosome_3_Status_N3821
+  rdbms_type: RDBMS Text(x)
+  order: 88
+  sas_type: SAS Char(x)
+- name: Chromosome_8q_Status_N3822
+  rdbms_type: RDBMS Text(x)
+  order: 89
+  sas_type: SAS Char(x)
+- name: Circumferential_Resection_Margin_(CRM)_N3823
+  rdbms_type: RDBMS Text(x)
+  order: 90
+  sas_type: SAS Char(x)
+- name: Creatinine_Pretreatment_Lab_Value_N3824
+  rdbms_type: RDBMS Text(x)
+  order: 91
+  sas_type: SAS Char(x)
+- name: Creatinine_Pretreatment_Unit_of_Measure_N3825
+  rdbms_type: RDBMS Text(x)
+  order: 92
+  sas_type: SAS Char(x)
+- name: CS_Extension_N2810
+  rdbms_type: RDBMS Text(x)
+  order: 93
+  sas_type: SAS Char(x)
+- name: EOD--Lymph_Node_Involv_N810
+  rdbms_type: RDBMS Text(x)
+  order: 94
+  sas_type: SAS Char(x)
+- name: CS_Lymph_Nodes_Eval_N2840
+  rdbms_type: RDBMS Text(x)
+  order: 95
+  sas_type: SAS Char(x)
+- name: CS_Mets_at_DX_N2850
+  rdbms_type: RDBMS Text(x)
+  order: 96
+  sas_type: SAS Char(x)
+- name: CS_Mets_Eval_N2860
+  rdbms_type: RDBMS Text(x)
+  order: 97
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor_1_N2880
+  rdbms_type: RDBMS Text(x)
+  order: 98
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor_2_N2890
+  rdbms_type: RDBMS Text(x)
+  order: 99
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor_3_N2900
+  rdbms_type: RDBMS Text(x)
+  order: 100
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor_4_N2910
+  rdbms_type: RDBMS Text(x)
+  order: 101
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor_5_N2920
+  rdbms_type: RDBMS Text(x)
+  order: 102
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor_6_N2930
+  rdbms_type: RDBMS Text(x)
+  order: 103
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor_7_N2861
+  rdbms_type: RDBMS Text(x)
+  order: 104
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor_8_N2862
+  rdbms_type: RDBMS Text(x)
+  order: 105
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor_9_N2863
+  rdbms_type: RDBMS Text(x)
+  order: 106
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor10_N2864
+  rdbms_type: RDBMS Text(x)
+  order: 107
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor11_N2865
+  rdbms_type: RDBMS Text(x)
+  order: 108
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor12_N2866
+  rdbms_type: RDBMS Text(x)
+  order: 109
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor13_N2867
+  rdbms_type: RDBMS Text(x)
+  order: 110
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor14_N2868
+  rdbms_type: RDBMS Text(x)
+  order: 111
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor15_N2869
+  rdbms_type: RDBMS Text(x)
+  order: 112
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor16_N2870
+  rdbms_type: RDBMS Text(x)
+  order: 113
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor17_N2871
+  rdbms_type: RDBMS Text(x)
+  order: 114
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor18_N2872
+  rdbms_type: RDBMS Text(x)
+  order: 115
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor19_N2873
+  rdbms_type: RDBMS Text(x)
+  order: 116
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor20_N2874
+  rdbms_type: RDBMS Text(x)
+  order: 117
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor21_N2875
+  rdbms_type: RDBMS Text(x)
+  order: 118
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor22_N2876
+  rdbms_type: RDBMS Text(x)
+  order: 119
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor23_N2877
+  rdbms_type: RDBMS Text(x)
+  order: 120
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor24_N2878
+  rdbms_type: RDBMS Text(x)
+  order: 121
+  sas_type: SAS Char(x)
+- name: CS_Site-Specific_Factor25_N2879
+  rdbms_type: RDBMS Text(x)
+  order: 122
+  sas_type: SAS Char(x)
+- name: CS_Tumor_Size_N2800
+  rdbms_type: RDBMS Text(x)
+  order: 123
+  sas_type: SAS Char(x)
+- name: CS_Tumor_Size/Ext_Eval_N2820
+  rdbms_type: RDBMS Text(x)
+  order: 124
+  sas_type: SAS Char(x)
+- name: Date_of_Sentinel_Lymph_Node_Biopsy_N832
+  rdbms_type: RDBMS Date
+  order: 125
+  sas_type: SAS Date (Numeric)
+- name: Date_Regional_Lymph_Node_Dissection_N682
+  rdbms_type: RDBMS Date
+  order: 126
+  sas_type: SAS Date (Numeric)
+- name: Derived_AJCC-6_M_N2980
+  rdbms_type: RDBMS Text(x)
+  order: 127
+  sas_type: SAS Char(x)
+- name: Derived_AJCC-6_N_N2960
+  rdbms_type: RDBMS Text(x)
+  order: 128
+  sas_type: SAS Char(x)
+- name: Derived_AJCC-6_Stage_Grp_N3000
+  rdbms_type: RDBMS Text(x)
+  order: 129
+  sas_type: SAS Char(x)
+- name: Derived_AJCC-6_T_N2940
+  rdbms_type: RDBMS Text(x)
+  order: 130
+  sas_type: SAS Char(x)
+- name: Derived_AJCC-7_M_N3420
+  rdbms_type: RDBMS Text(x)
+  order: 131
+  sas_type: SAS Char(x)
+- name: Derived_AJCC-7_N_N3410
+  rdbms_type: RDBMS Text(x)
+  order: 132
+  sas_type: SAS Char(x)
+- name: Derived_AJCC-7_Stage_Grp_N3430
+  rdbms_type: RDBMS Text(x)
+  order: 133
+  sas_type: SAS Char(x)
+- name: Derived_AJCC-7_T_N3400
+  rdbms_type: RDBMS Text(x)
+  order: 134
+  sas_type: SAS Char(x)
+- name: EOD_Mets_N776
+  rdbms_type: RDBMS Text(x)
+  order: 135
+  sas_type: SAS Char(x)
+- name: EOD_Primary_Tumor_N772
+  rdbms_type: RDBMS Text(x)
+  order: 136
+  sas_type: SAS Char(x)
+- name: EOD_Prostate_Pathologic_Extension_N3919
+  rdbms_type: RDBMS Text(x)
+  order: 137
+  sas_type: SAS Char(x)
+- name: EOD_Regional_Nodes_N774
+  rdbms_type: RDBMS Text(x)
+  order: 138
+  sas_type: SAS Char(x)
+- name: Esophagus_and_EGJ_Tumor_Epicenter_N3829
+  rdbms_type: RDBMS Text(x)
+  order: 139
+  sas_type: SAS Char(x)
+- name: Estrogen_Receptor_Percent_Positive_or_Range__N3826
+  rdbms_type: RDBMS Text(x)
+  order: 140
+  sas_type: SAS Char(x)
+- name: Estrogen_Receptor_Summary_N3827
+  rdbms_type: RDBMS Text(x)
+  order: 141
+  sas_type: SAS Char(x)
+- name: Estrogen_Receptor_Total_Allred_Score_N3828
+  rdbms_type: RDBMS Text(x)
+  order: 142
+  sas_type: SAS Char(x)
+- name: Local Extent of Disease
+  rdbms_type: RDBMS Text(x)
+  order: 143
+  sas_type: SAS Char(x)
+- name: Extranodal_Extension_Clin_(non-Head_and_Neck)_N3830
+  rdbms_type: RDBMS Text(x)
+  order: 144
+  sas_type: SAS Char(x)
+- name: Extranodal_Extension_Head_and_Neck_Clinical_N3831
+  rdbms_type: RDBMS Text(x)
+  order: 145
+  sas_type: SAS Char(x)
+- name: Extranodal_Extension_Head_and_Neck_Pathological_N3832
+  rdbms_type: RDBMS Text(x)
+  order: 146
+  sas_type: SAS Char(x)
+- name: Extranodal_Extension_Path_(non-Head_and_Neck)_N3833
+  rdbms_type: RDBMS Text(x)
+  order: 147
+  sas_type: SAS Char(x)
+- name: Extravascular_Matrix_Patterns__N3834
+  rdbms_type: RDBMS Text(x)
+  order: 148
+  sas_type: SAS Char(x)
+- name: Fibrosis_Score_N3835
+  rdbms_type: RDBMS Text(x)
+  order: 149
+  sas_type: SAS Char(x)
+- name: FIGO_Stage_N3836
+  rdbms_type: RDBMS Text(x)
+  order: 150
+  sas_type: SAS Char(x)
+- name: Gestational_Trophoblastic_Prognostic_Scoring_Index_N3837
+  rdbms_type: RDBMS Text(x)
+  order: 151
+  sas_type: SAS Char(x)
+- name: Gleason_Patterns_Clinical_N3838
+  rdbms_type: RDBMS Text(x)
+  order: 152
+  sas_type: SAS Char(x)
+- name: Gleason_Patterns_Pathological_N3839
+  rdbms_type: RDBMS Text(x)
+  order: 153
+  sas_type: SAS Char(x)
+- name: Gleason_Score_Clinical_N3840
+  rdbms_type: RDBMS Text(x)
+  order: 154
+  sas_type: SAS Char(x)
+- name: Gleason_Score_Pathological_N3841
+  rdbms_type: RDBMS Text(x)
+  order: 155
+  sas_type: SAS Char(x)
+- name: Gleason_Tertiary_Pattern_N3842
+  rdbms_type: RDBMS Text(x)
+  order: 156
+  sas_type: SAS Char(x)
+- name: Grade_Clinical_N3843
+  rdbms_type: RDBMS Text(x)
+  order: 157
+  sas_type: SAS Char(x)
+- name: Grade_Pathological_N3844
+  rdbms_type: RDBMS Text(x)
+  order: 158
+  sas_type: SAS Char(x)
+- name: Grade_Post_Therapy_Path_(yp)_N3845
+  rdbms_type: RDBMS Text(x)
+  order: 159
+  sas_type: SAS Char(x)
+- name: hCG_Post-Orchiectomy_Lab_Value_N3846
+  rdbms_type: RDBMS Text(x)
+  order: 160
+  sas_type: SAS Char(x)
+- name: hCG_Post-Orchiectomy_Range_N3847
+  rdbms_type: RDBMS Text(x)
+  order: 161
+  sas_type: SAS Char(x)
+- name: hCG_Pre-Orchiectomy_Lab_Value_N3848
+  rdbms_type: RDBMS Text(x)
+  order: 162
+  sas_type: SAS Char(x)
+- name: hCG_Pre-Orchiectomy_Range_N3849
+  rdbms_type: RDBMS Text(x)
+  order: 163
+  sas_type: SAS Char(x)
+- name: HER2_IHC_Summary__N3850
+  rdbms_type: RDBMS Text(x)
+  order: 164
+  sas_type: SAS Char(x)
+- name: HER2_ISH_Dual_Probe_Copy_Number_N3851
+  rdbms_type: RDBMS Text(x)
+  order: 165
+  sas_type: SAS Char(x)
+- name: HER2_ISH_Dual_Probe_Ratio_N3852
+  rdbms_type: RDBMS Text(x)
+  order: 166
+  sas_type: SAS Char(x)
+- name: HER2_ISH_Single_Probe_Copy_Number_N3853
+  rdbms_type: RDBMS Text(x)
+  order: 167
+  sas_type: SAS Char(x)
+- name: HER2_ISH_Summary_N3854
+  rdbms_type: RDBMS Text(x)
+  order: 168
+  sas_type: SAS Char(x)
+- name: HER2_Overall_Summary__N3855
+  rdbms_type: RDBMS Text(x)
+  order: 169
+  sas_type: SAS Char(x)
+- name: Heritable_Trait_N3856
+  rdbms_type: RDBMS Text(x)
+  order: 170
+  sas_type: SAS Char(x)
+- name: High_Risk_Cytogenetics_N3857
+  rdbms_type: RDBMS Text(x)
+  order: 171
+  sas_type: SAS Char(x)
+- name: High_Risk_Histologic_Features_N3858
+  rdbms_type: RDBMS Text(x)
+  order: 172
+  sas_type: SAS Char(x)
+- name: HIV_Status_N3859
+  rdbms_type: RDBMS Text(x)
+  order: 173
+  sas_type: SAS Char(x)
+- name: International_Normalized_Ratio_Prothrombin_Time_N3860
+  rdbms_type: RDBMS Text(x)
+  order: 174
+  sas_type: SAS Char(x)
+- name: Invasion_Beyond_Capsule_N3864
+  rdbms_type: RDBMS Text(x)
+  order: 175
+  sas_type: SAS Char(x)
+- name: Ipsilateral_Adrenal_Gland_Involvement_N3861
+  rdbms_type: RDBMS Text(x)
+  order: 176
+  sas_type: SAS Char(x)
+- name: JAK2_N3862
+  rdbms_type: RDBMS Text(x)
+  order: 177
+  sas_type: SAS Char(x)
+- name: Ki-67_N3863
+  rdbms_type: RDBMS Text(x)
+  order: 178
+  sas_type: SAS Char(x)
+- name: KIT_Gene_Immunohistochemistry__N3865
+  rdbms_type: RDBMS Text(x)
+  order: 179
+  sas_type: SAS Char(x)
+- name: KRAS_N3866
+  rdbms_type: RDBMS Text(x)
+  order: 180
+  sas_type: SAS Char(x)
+- name: LDH_Lab_Value_N3932
+  rdbms_type: RDBMS Text(x)
+  order: 181
+  sas_type: SAS Char(x)
+- name: LDH_Level_N3869
+  rdbms_type: RDBMS Text(x)
+  order: 182
+  sas_type: SAS Char(x)
+- name: LDH_Post-Orchiectomy_Range_N3867
+  rdbms_type: RDBMS Text(x)
+  order: 183
+  sas_type: SAS Char(x)
+- name: LDH_Pre-Orchiectomy_Range_N3868
+  rdbms_type: RDBMS Text(x)
+  order: 184
+  sas_type: SAS Char(x)
+- name: LDH_Upper_Limits_of_Normal_N3870
+  rdbms_type: RDBMS Text(x)
+  order: 185
+  sas_type: SAS Char(x)
+- name: LN_Assessment_Method_Femoral-Inguinal_N3871
+  rdbms_type: RDBMS Text(x)
+  order: 186
+  sas_type: SAS Char(x)
+- name: LN_Assessment_Method_Para-Aortic_N3872
+  rdbms_type: RDBMS Text(x)
+  order: 187
+  sas_type: SAS Char(x)
+- name: LN_Assessment_Method_Pelvic_N3873
+  rdbms_type: RDBMS Text(x)
+  order: 188
+  sas_type: SAS Char(x)
+- name: LN_Distant_Assessment_Method_N3874
+  rdbms_type: RDBMS Text(x)
+  order: 189
+  sas_type: SAS Char(x)
+- name: LN_Distant:_Mediastinal,_Scalene_N3875
+  rdbms_type: RDBMS Text(x)
+  order: 190
+  sas_type: SAS Char(x)
+- name: LN_Head_and_Neck_Levels_I-III_N3876
+  rdbms_type: RDBMS Text(x)
+  order: 191
+  sas_type: SAS Char(x)
+- name: LN_Head_and_Neck_Levels_IV-V_N3877
+  rdbms_type: RDBMS Text(x)
+  order: 192
+  sas_type: SAS Char(x)
+- name: LN_Head_and_Neck_Levels_VI-VII_N3878
+  rdbms_type: RDBMS Text(x)
+  order: 193
+  sas_type: SAS Char(x)
+- name: LN_Head_and_Neck_Other_N3879
+  rdbms_type: RDBMS Text(x)
+  order: 194
+  sas_type: SAS Char(x)
+- name: LN_Isolated_Tumor_Cells_(ITC)_N3880
+  rdbms_type: RDBMS Text(x)
+  order: 195
+  sas_type: SAS Char(x)
+- name: LN_Laterality_N3881
+  rdbms_type: RDBMS Text(x)
+  order: 196
+  sas_type: SAS Char(x)
+- name: LN_Positive_Axillary_Level_I-II_N3882
+  rdbms_type: RDBMS Text(x)
+  order: 197
+  sas_type: SAS Char(x)
+- name: LN_Size_N3883
+  rdbms_type: RDBMS Text(x)
+  order: 198
+  sas_type: SAS Char(x)
+- name: LN Status Femoral-Inguinal, Para-Aortic, Pelvic
+  rdbms_type: RDBMS Text(x)
+  order: 199
+  sas_type: SAS Char(x)
+- name: Lymphocytosis_N3885
+  rdbms_type: RDBMS Text(x)
+  order: 200
+  sas_type: SAS Char(x)
+- name: Lymphovascular_Invasion_N1182
+  rdbms_type: RDBMS Text(x)
+  order: 201
+  sas_type: SAS Char(x)
+- name: Major_Vein_Involvement_N3886
+  rdbms_type: RDBMS Text(x)
+  order: 202
+  sas_type: SAS Char(x)
+- name: Measured_Basal_Diameter_N3887
+  rdbms_type: RDBMS Text(x)
+  order: 203
+  sas_type: SAS Char(x)
+- name: Measured_Thickness_N3888
+  rdbms_type: RDBMS Text(x)
+  order: 204
+  sas_type: SAS Char(x)
+- name: Methylation_of_O6-Methylguanine-Methyltransferase_N3889
+  rdbms_type: RDBMS Text(x)
+  order: 205
+  sas_type: SAS Char(x)
+- name: CS_Mets_at_Dx-Bone_N2851
+  rdbms_type: RDBMS Text(x)
+  order: 206
+  sas_type: SAS Char(x)
+- name: CS_Mets_at_Dx-Brain_N2852
+  rdbms_type: RDBMS Text(x)
+  order: 207
+  sas_type: SAS Char(x)
+- name: Mets_at_Dx-Distant_LN_N1114
+  rdbms_type: RDBMS Text(x)
+  order: 208
+  sas_type: SAS Char(x)
+- name: CS_Mets_at_Dx-Liver_N2853
+  rdbms_type: RDBMS Text(x)
+  order: 209
+  sas_type: SAS Char(x)
+- name: CS_Mets_at_Dx-Lung_N2854
+  rdbms_type: RDBMS Text(x)
+  order: 210
+  sas_type: SAS Char(x)
+- name: Mets_at_DX-Other_N1117
+  rdbms_type: RDBMS Text(x)
+  order: 211
+  sas_type: SAS Char(x)
+- name: Microsatellite_Instability_(MSI)_N3890
+  rdbms_type: RDBMS Text(x)
+  order: 212
+  sas_type: SAS Char(x)
+- name: Microvascular_Density__N3891
+  rdbms_type: RDBMS Text(x)
+  order: 213
+  sas_type: SAS Char(x)
+- name: Mitotic_Count_Uveal_Melanoma_N3892
+  rdbms_type: RDBMS Text(x)
+  order: 214
+  sas_type: SAS Char(x)
+- name: Mitotic_Rate_Melanoma_N3893
+  rdbms_type: RDBMS Text(x)
+  order: 215
+  sas_type: SAS Char(x)
+- name: Multigene_Signature_Method_N3894
+  rdbms_type: RDBMS Text(x)
+  order: 216
+  sas_type: SAS Char(x)
+- name: Multigene_Signature_Results_N3895
+  rdbms_type: RDBMS Text(x)
+  order: 217
+  sas_type: SAS Char(x)
+- name: NCCN_International_Prognostic_Index_(IPI)_N3896
+  rdbms_type: RDBMS Text(x)
+  order: 218
+  sas_type: SAS Char(x)
+- name: NRAS_Mutational_Analysis_N3941
+  rdbms_type: RDBMS Text(x)
+  order: 219
+  sas_type: SAS Char(x)
+- name: Number_of_Cores_Examined_N3897
+  rdbms_type: RDBMS Text(x)
+  order: 220
+  sas_type: SAS Char(x)
+- name: Number_of_Cores_Positive_N3898
+  rdbms_type: RDBMS Text(x)
+  order: 221
+  sas_type: SAS Char(x)
+- name: Number_of_Examined_Para-Aortic_Nodes_N3899
+  rdbms_type: RDBMS Text(x)
+  order: 222
+  sas_type: SAS Char(x)
+- name: Number_of_Examined_Pelvic_Nodes_N3900
+  rdbms_type: RDBMS Text(x)
+  order: 223
+  sas_type: SAS Char(x)
+- name: Number_of_Positive_Para-Aortic_Nodes_N3901
+  rdbms_type: RDBMS Text(x)
+  order: 224
+  sas_type: SAS Char(x)
+- name: Number_of_Positive_Pelvic_Nodes_N3902
+  rdbms_type: RDBMS Text(x)
+  order: 225
+  sas_type: SAS Char(x)
+- name: Oncotype_Dx_Recurrence_Score-DCIS_N3903
+  rdbms_type: RDBMS Text(x)
+  order: 226
+  sas_type: SAS Char(x)
+- name: Oncotype_Dx_Recurrence_Score-Invasive_N3904
+  rdbms_type: RDBMS Text(x)
+  order: 227
+  sas_type: SAS Char(x)
+- name: Oncotype_Dx_Risk_Level-DCIS_N3905
+  rdbms_type: RDBMS Text(x)
+  order: 228
+  sas_type: SAS Char(x)
+- name: Oncotype_Dx_Risk_Level-Invasive_N3906
+  rdbms_type: RDBMS Text(x)
+  order: 229
+  sas_type: SAS Char(x)
+- name: Organomegaly_N3907
+  rdbms_type: RDBMS Text(x)
+  order: 230
+  sas_type: SAS Char(x)
+- name: Pediatric_Stage_N1120
+  rdbms_type: RDBMS Text(x)
+  order: 231
+  sas_type: SAS Char(x)
+- name: Percent_Necrosis_Post_Neoadjuvant_N3908
+  rdbms_type: RDBMS Text(x)
+  order: 232
+  sas_type: SAS Char(x)
+- name: Perineural_Invasion_N3909
+  rdbms_type: RDBMS Text(x)
+  order: 233
+  sas_type: SAS Char(x)
+- name: Peripheral_Blood_Involvement_N3910
+  rdbms_type: RDBMS Text(x)
+  order: 234
+  sas_type: SAS Char(x)
+- name: Peritoneal_Cytology_N3911
+  rdbms_type: RDBMS Text(x)
+  order: 235
+  sas_type: SAS Char(x)
+- name: Pleural_Effusion_N3913
+  rdbms_type: RDBMS Text(x)
+  order: 236
+  sas_type: SAS Char(x)
+- name: Primary_Sclerosing_Cholangitis__N3917
+  rdbms_type: RDBMS Text(x)
+  order: 237
+  sas_type: SAS Char(x)
+- name: Profound_Immune_Suppression_N3918
+  rdbms_type: RDBMS Text(x)
+  order: 238
+  sas_type: SAS Char(x)
+- name: Progesterone_Receptor_Percent_Positive_or_Range_N3914
+  rdbms_type: RDBMS Text(x)
+  order: 239
+  sas_type: SAS Char(x)
+- name: Progesterone_Receptor_Summary_N3915
+  rdbms_type: RDBMS Text(x)
+  order: 240
+  sas_type: SAS Char(x)
+- name: Progesterone_Receptor_Total_Allred_Score_N3916
+  rdbms_type: RDBMS Text(x)
+  order: 241
+  sas_type: SAS Char(x)
+- name: PSA_(Prostatic_Specific_Antigen)_Lab_Value_N3920
+  rdbms_type: RDBMS Text(x)
+  order: 242
+  sas_type: SAS Char(x)
+- name: Regional_Nodes_Examined_N830
+  rdbms_type: RDBMS Text(x)
+  order: 243
+  sas_type: SAS Char(x)
+- name: Regional_Nodes_Positive_N820
+  rdbms_type: RDBMS Text(x)
+  order: 244
+  sas_type: SAS Char(x)
+- name: Residual_Tumor_Volume_Post_Cytoreduction__N3921
+  rdbms_type: RDBMS Text(x)
+  order: 245
+  sas_type: SAS Char(x)
+- name: Response_to_Neoadjuvant_Therapy_N3922
+  rdbms_type: RDBMS Text(x)
+  order: 246
+  sas_type: SAS Char(x)
+- name: S_Category_Clinical_N3923
+  rdbms_type: RDBMS Text(x)
+  order: 247
+  sas_type: SAS Char(x)
+- name: S_Category_Pathological_N3924
+  rdbms_type: RDBMS Text(x)
+  order: 248
+  sas_type: SAS Char(x)
+- name: Sarcomatoid_Features_N3925
+  rdbms_type: RDBMS Text(x)
+  order: 249
+  sas_type: SAS Char(x)
+- name: Schema_Discriminator_1_N3926
+  rdbms_type: RDBMS Text(x)
+  order: 250
+  sas_type: SAS Char(x)
+- name: Schema_Discriminator_2_N3927
+  rdbms_type: RDBMS Text(x)
+  order: 251
+  sas_type: SAS Char(x)
+- name: Schema_ID_N3800
+  rdbms_type: RDBMS Text(x)
+  order: 252
+  sas_type: SAS Char(x)
+- name: SEER_Summary_Stage_1977_N760
+  rdbms_type: RDBMS Text(x)
+  order: 253
+  sas_type: SAS Char(x)
+- name: SEER_Summary_Stage_2000_N759
+  rdbms_type: RDBMS Text(x)
+  order: 254
+  sas_type: SAS Char(x)
+- name: Sentinel_Lymph_Nodes_Examined_N834
+  rdbms_type: RDBMS Text(x)
+  order: 255
+  sas_type: SAS Char(x)
+- name: Sentinel_Lymph_Nodes_Positive_N835
+  rdbms_type: RDBMS Text(x)
+  order: 256
+  sas_type: SAS Char(x)
+- name: Separate_Tumor_Nodules_N3929
+  rdbms_type: RDBMS Text(x)
+  order: 257
+  sas_type: SAS Char(x)
+- name: Serum_Albumin_Pretreatment_Level_N3930
+  rdbms_type: RDBMS Text(x)
+  order: 258
+  sas_type: SAS Char(x)
+- name: Serum_Beta-2_Microglobulin_Pretreatment_Level_N3931
+  rdbms_type: RDBMS Text(x)
+  order: 259
+  sas_type: SAS Char(x)
+- name: Summary_Stage_2018_N764
+  rdbms_type: RDBMS Text(x)
+  order: 260
+  sas_type: SAS Char(x)
+- name: Thrombocytopenia_N3933
+  rdbms_type: RDBMS Text(x)
+  order: 261
+  sas_type: SAS Char(x)
+- name: TNM_Clin_Descriptor_N980
+  rdbms_type: RDBMS Text(x)
+  order: 262
+  sas_type: SAS Char(x)
+- name: TNM_Clin_M_N960
+  rdbms_type: RDBMS Text(x)
+  order: 263
+  sas_type: SAS Char(x)
+- name: TNM_Clin_N_N950
+  rdbms_type: RDBMS Text(x)
+  order: 264
+  sas_type: SAS Char(x)
+- name: TNM_Clin_T_N940
+  rdbms_type: RDBMS Text(x)
+  order: 265
+  sas_type: SAS Char(x)
+- name: TNM_Edition_Number_N1060
+  rdbms_type: RDBMS Text(x)
+  order: 266
+  sas_type: SAS Char(x)
+- name: TNM_Path_Descriptor_N920
+  rdbms_type: RDBMS Text(x)
+  order: 267
+  sas_type: SAS Char(x)
+- name: Tumor_Deposits_N3934
+  rdbms_type: RDBMS Text(x)
+  order: 268
+  sas_type: SAS Char(x)
+- name: Tumor_Growth_Pattern_N3935
+  rdbms_type: RDBMS Text(x)
+  order: 269
+  sas_type: SAS Char(x)
+- name: Tumor_Marker_1_N1150
+  rdbms_type: RDBMS Text(x)
+  order: 270
+  sas_type: SAS Char(x)
+- name: Tumor_Marker_2_N1160
+  rdbms_type: RDBMS Text(x)
+  order: 271
+  sas_type: SAS Char(x)
+- name: Tumor_Marker_3_N1170
+  rdbms_type: RDBMS Text(x)
+  order: 272
+  sas_type: SAS Char(x)
+- name: Tumor_Size_Clinical_N752
+  rdbms_type: RDBMS Text(x)
+  order: 273
+  sas_type: SAS Char(x)
+- name: Tumor_Size_Pathologic_N754
+  rdbms_type: RDBMS Text(x)
+  order: 274
+  sas_type: SAS Char(x)
+- name: Tumor_Size_Summary_N756
+  rdbms_type: RDBMS Text(x)
+  order: 275
+  sas_type: SAS Char(x)
+- name: Ulceration_N3936
+  rdbms_type: RDBMS Text(x)
+  order: 276
+  sas_type: SAS Char(x)
+- name: Visceral_and_Parietal_Pleural_Invasion_N3937
+  rdbms_type: RDBMS Text(x)
+  order: 277
+  sas_type: SAS Char(x)
+- name: Readm_Same_Hosp_30_Days_N3190
+  rdbms_type: RDBMS Text(x)
+  order: 278
+  sas_type: SAS Char(x)
+- name: Reason_for_No_Radiation_N1430
+  rdbms_type: RDBMS Text(x)
+  order: 279
+  sas_type: SAS Char(x)
+- name: Reason_for_No_Surgery_N1340
+  rdbms_type: RDBMS Text(x)
+  order: 280
+  sas_type: SAS Char(x)
+- name: RX_Date_BRM_N1240
+  rdbms_type: RDBMS Date
+  order: 281
+  sas_type: SAS Date (Numeric)
+- name: RX_Date_Chemo_N1220
+  rdbms_type: RDBMS Date
+  order: 282
+  sas_type: SAS Date (Numeric)
+- name: Non-cancer Directed Surgery Date
+  rdbms_type: RDBMS Date
+  order: 283
+  sas_type: SAS Date (Numeric)
+- name: RX_Date_Hormone_N1230
+  rdbms_type: RDBMS Date
+  order: 284
+  sas_type: SAS Date (Numeric)
+- name: RX_Date_Mst_Defn_Srg_N3170
+  rdbms_type: RDBMS Date
+  order: 285
+  sas_type: SAS Date (Numeric)
+- name: Surgery Discharge Date Summary
+  rdbms_type: RDBMS Date
+  order: 286
+  sas_type: SAS Date (Numeric)
+- name: Surgery Date Summary
+  rdbms_type: RDBMS Date
+  order: 287
+  sas_type: SAS Date (Numeric)
+- name: RX_Date_Systemic_N3230
+  rdbms_type: RDBMS Date
+  order: 288
+  sas_type: SAS Date (Numeric)
+- name: RX_Summ--BRM_N1410
+  rdbms_type: RDBMS Text(x)
+  order: 289
+  sas_type: SAS Char(x)
+- name: RX_Summ--Chemo_N1390
+  rdbms_type: RDBMS Text(x)
+  order: 290
+  sas_type: SAS Char(x)
+- name: Non-cancer Directed Surgery Code
+  rdbms_type: RDBMS Text(x)
+  order: 291
+  sas_type: SAS Char(x)
+- name: RX_Summ--Hormone_N1400
+  rdbms_type: RDBMS Text(x)
+  order: 292
+  sas_type: SAS Char(x)
+- name: RX_Summ--Palliative_Proc_N3270
+  rdbms_type: RDBMS Text(x)
+  order: 293
+  sas_type: SAS Char(x)
+- name: RX_Summ--Reconstruct_1st_N1330
+  rdbms_type: RDBMS Text(x)
+  order: 294
+  sas_type: SAS Char(x)
+- name: RX_Summ--Scope_Reg_LN_Sur_N1292
+  rdbms_type: RDBMS Text(x)
+  order: 295
+  sas_type: SAS Char(x)
+- name: Surg Region Sites Summary
+  rdbms_type: RDBMS Text(x)
+  order: 296
+  sas_type: SAS Char(x)
+- name: Cancer Directed Surgery Code
+  rdbms_type: RDBMS Text(x)
+  order: 297
+  sas_type: SAS Char(x)
+- name: RX_Summ--Surgical_Margins_N1320
+  rdbms_type: RDBMS Text(x)
+  order: 298
+  sas_type: SAS Char(x)
+- name: RX_Summ--Systemic/Sur_Seq_N1639
+  rdbms_type: RDBMS Text(x)
+  order: 299
+  sas_type: SAS Char(x)
+- name: RX_Summ--Transplnt/Endocr_N3250
+  rdbms_type: RDBMS Text(x)
+  order: 300
+  sas_type: SAS Char(x)
+- name: Grade_Post_Therapy_Clin_(yc)_N1068
+  rdbms_type: RDBMS Text(x)
+  order: 301
+  sas_type: SAS Char(x)
+- name: Marital_Status_at_DX_N150
+  rdbms_type: RDBMS Text(x)
+  order: 302
+  sas_type: SAS Char(x)
+- name: Marital Status at Dx Description
+  rdbms_type: RDBMS Text(x)
+  order: 303
+  sas_type: SAS Char(x)
+- name: AJCC_TNM_Post_Therapy_Clin_(yc)_Stage_Group_N1067
+  rdbms_type: RDBMS Text(x)
+  order: 304
+  sas_type: SAS Char(x)
+- name: RX_Hosp--Reg_LN_Removed_N676
+  rdbms_type: RDBMS Text(x)
+  order: 305
+  sas_type: SAS Char(x)
+- name: Cancer_Status_N1770
+  rdbms_type: RDBMS Text(x)
+  order: 306
+  sas_type: SAS Char(x)
+- name: RX_Summ--Other_N1420
+  rdbms_type: RDBMS Text(x)
+  order: 307
+  sas_type: SAS Char(x)
+- name: Rad--Regional_RX_Modality_N1570
+  rdbms_type: RDBMS Text(x)
+  order: 308
+  sas_type: SAS Char(x)
+- name: Boost Treatment Modality
+  rdbms_type: RDBMS Text(x)
+  order: 309
+  sas_type: SAS Char(x)
+- name: RX_Date_Radiation_N1210
+  rdbms_type: RDBMS Date
+  order: 310
+  sas_type: SAS Date (Numeric)
+- name: RX_Date_Rad_Ended_N3220
+  rdbms_type: RDBMS Date
+  order: 311
+  sas_type: SAS Date (Numeric)
+- name: RX_Date_Other_N1250
+  rdbms_type: RDBMS Date
+  order: 312
+  sas_type: SAS Date (Numeric)
+- name: 'Regional Dose: Cgy'
+  rdbms_type: RDBMS Text(x)
+  order: 313
+  sas_type: SAS Char(x)
+- name: Boost Dose Cgy
+  rdbms_type: RDBMS Text(x)
+  order: 314
+  sas_type: SAS Char(x)
+- name: BEHAVIOR_CODE_ICD_O3_N523
+  rdbms_type: RDBMS Text(x)
+  order: 315
+  sas_type: SAS Char(x)

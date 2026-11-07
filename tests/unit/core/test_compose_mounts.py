@@ -148,3 +148,68 @@ def test_volume_mounts_includes_spark_work_and_logs(
     assert f"{_instance.spark_logs_dir}:/opt/spark/logs:rw" in joined, (
         f"spark_logs_dir not bound: {joined!r}"
     )
+
+
+@pytest.mark.unit
+def test_compose_mounts_spark_local_dir_and_env(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, _instance: OvidInstance
+) -> None:
+    """Every service sees the real-disk shuffle dir; workers export SPARK_LOCAL_DIRS."""
+    monkeypatch.setattr(compose_module, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(compose_module, "LEGACY_CREDENTIALS_DIR", tmp_path / "nope")
+    with mock.patch("ovid2.core.isolation.OvidInstance.ensure_directories"):
+        compose = compose_module.build_compose_dict(_instance, 2)
+    for name, svc in compose["services"].items():
+        assert f"{_instance.spark_local_dir}:/ovid2-spark-local:rw" in svc["volumes"], name
+    worker = compose["services"][_instance.worker_name(1)]
+    assert "SPARK_LOCAL_DIRS=/ovid2-spark-local" in worker["environment"]
+
+
+@pytest.mark.unit
+def test_compose_caps_workers_to_host(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, _instance: OvidInstance
+) -> None:
+    """25 requested workers on a 96-CPU / 958 GiB host -> 11 services."""
+    monkeypatch.setattr(compose_module, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(compose_module, "LEGACY_CREDENTIALS_DIR", tmp_path / "nope")
+    monkeypatch.setenv("OVID2_HOST_CPUS", "96")
+    monkeypatch.setenv("OVID2_HOST_MEMORY_GB", "958")
+    monkeypatch.delenv("OVID2_SPARK_ALLOW_OVERSUBSCRIBE", raising=False)
+    with mock.patch("ovid2.core.isolation.OvidInstance.ensure_directories"):
+        compose = compose_module.build_compose_dict(_instance, 25)
+    workers = [k for k in compose["services"] if k.startswith("ovid2-worker-")]
+    assert len(workers) == 11
+
+
+@pytest.mark.unit
+def test_compose_oversubscribe_escape_hatch(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, _instance: OvidInstance
+) -> None:
+    monkeypatch.setattr(compose_module, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(compose_module, "LEGACY_CREDENTIALS_DIR", tmp_path / "nope")
+    monkeypatch.setenv("OVID2_HOST_CPUS", "96")
+    monkeypatch.setenv("OVID2_HOST_MEMORY_GB", "958")
+    monkeypatch.setenv("OVID2_SPARK_ALLOW_OVERSUBSCRIBE", "1")
+    with mock.patch("ovid2.core.isolation.OvidInstance.ensure_directories"):
+        compose = compose_module.build_compose_dict(_instance, 25)
+    workers = [k for k in compose["services"] if k.startswith("ovid2-worker-")]
+    assert len(workers) == 25
+
+
+@pytest.mark.unit
+def test_volume_mounts_include_work_dir_at_identical_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, _instance: OvidInstance
+) -> None:
+    """Executors write ``legacy_ovid`` stage-boundary scratch under WORK_DIR.
+
+    Guards ``Mkdirs failed to create file:/run/user/<uid>/ovid2/legacy_rt_*``
+    on cluster workers (the driver container already mounted WORK_DIR).
+    """
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    work = tmp_path / "work"
+    monkeypatch.setattr(compose_module, "DATA_DIR", data_dir)
+    monkeypatch.setattr(compose_module, "WORK_DIR", work)
+    mounts = compose_module._volume_mounts(instance=_instance)
+    assert f"{work}:{work}:rw" in mounts
+    assert work.is_dir()

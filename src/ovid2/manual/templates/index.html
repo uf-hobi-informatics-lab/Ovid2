@@ -1,0 +1,52 @@
+{#- Manual landing page: hero, audience paths, numbered chapter index. -#}
+<div class="om-shell">
+<div class="om om-home" data-om data-om-root="{{ surface.root }}" data-om-search-url="{{ surface.search_url() }}" data-om-suffix="{{ surface.suffix }}">
+  {% include "_sidebar.html" %}
+
+  <article class="om-article" id="om-article">
+    <header class="om-hero">
+      <pre class="om-ascii" aria-hidden="true">
+ ██████  ██    ██ ██ ██████  ██████
+██    ██ ██    ██ ██ ██   ██      ██
+██    ██ ██    ██ ██ ██   ██  █████
+██    ██  ██  ██  ██ ██   ██ ██
+ ██████    ████   ██ ██████  ███████</pre>
+      <h1>{{ manual.title }}</h1>
+      {% if manual.tagline %}<p class="om-lead">{{ manual.tagline|md_inline }}</p>{% endif %}
+    </header>
+
+    <section class="om-paths" aria-label="Start here">
+      {% for path in paths %}
+      <div class="om-path om-path-{{ path.audience.slug }}">
+        <p class="om-path-label"><span class="om-badge om-badge-{{ path.audience.slug }}">{{ path.audience.label }}</span></p>
+        <p class="om-path-desc">{{ path.audience.description|md_inline }}</p>
+        <ul>
+          {% for key in path.audience.start %}
+          {% set p = manual.pages[key] %}
+          <li><a href="{{ surface.page_url(p.key) }}">{{ p.title }}</a></li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endfor %}
+    </section>
+
+    <section class="om-index" aria-label="Chapters">
+      <h2 id="chapters">Chapters</h2>
+      <ol>
+        {% for ch in manual.chapters %}
+        <li>
+          <span class="om-num">{{ '%02d' % ch.number }}</span>
+          <div>
+            <a class="om-index-title" href="{{ surface.page_url(ch.landing.key) }}">{{ ch.title }}</a>
+            {% if ch.summary %}<p class="om-index-sum">{{ ch.summary|md_inline }}</p>{% endif %}
+            <p class="om-index-pages">
+              {% for p in ch.pages %}<a href="{{ surface.page_url(p.key) }}">{{ p.title }}</a>{% if not loop.last %}<span aria-hidden="true"> · </span>{% endif %}{% endfor %}
+            </p>
+          </div>
+        </li>
+        {% endfor %}
+      </ol>
+    </section>
+  </article>
+</div>
+</div>

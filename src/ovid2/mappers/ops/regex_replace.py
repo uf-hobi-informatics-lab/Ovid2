@@ -31,8 +31,8 @@ class RegexReplaceOp(BaseMapOp):
         ctx: MapOpContext,
     ) -> DataFrame:
         """Return ``df`` with the regex substitution applied to the column."""
-        from pyspark.sql.functions import col as sf_col
-        from pyspark.sql.functions import regexp_replace
+        from ovid2.core.engines.dsl import col as sf_col
+        from ovid2.core.engines.dsl import regexp_replace
 
         column = str(params["column"])
         pattern = str(params["pattern"])

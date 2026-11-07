@@ -91,7 +91,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "--workers",
         type=int,
         default=25,
-        help="Number of Spark workers when starting an isolated cluster.",
+        help=(
+            "Parallelism budget. Spark engines: number of Spark worker containers "
+            "in the isolated cluster. DuckDB: number of tables run concurrently "
+            "inside the single, host-sized driver container."
+        ),
     )
     # Snowflake overrides (highest tier of the four-tier resolution).
     parser.add_argument(
@@ -247,6 +251,30 @@ def _run_host_mode(args: argparse.Namespace) -> int:
         ],
     )
 
+    # Non-Spark engines (Snowpark, DuckDB) compute without a Spark
+    # cluster: a single driver container is enough. Starting 1 master +
+    # N workers for them is pure startup/teardown overhead.
+    from ovid2.config.engines import engine_family, resolve_engine_type
+
+    engine_type = resolve_engine_type(getattr(args, "engine", None))
+    needs_cluster = engine_type is None or engine_family(engine_type) == "spark"
+    if not needs_cluster:
+        args.no_spark_cluster = True
+        print(
+            f"[ovid2] Engine '{args.engine}' is not Spark-family; running a single "
+            f"driver container (no Spark cluster, id={instance.instance_id})."
+        )
+        if engine_type is not None and engine_family(engine_type) == "duckdb":
+            from ovid2.config import spark_sizing
+
+            sizing = spark_sizing.duckdb_container_sizing(getattr(args, "workers", None))
+            print(
+                f"[ovid2]   duckdb sizing: {sizing['cpus']} CPUs, "
+                f"{sizing['memory_gb']} GB container ({sizing['engine_memory_gb']} GB engine), "
+                f"up to {sizing['table_concurrency']} concurrent tables (Workers)."
+            )
+        return submit_to_docker(args, instance)
+
     if SPARK_MODE == "cluster":
         return submit_with_cluster(args, instance)
     return submit_to_docker(args, instance)
@@ -362,8 +390,9 @@ def _run_container_mode(args: argparse.Namespace) -> int:
         cdm_name=cdm_name,
     )
     # Overwrite gate: the output address is the exact write location, so a
-    # non-empty output needs an explicit ``--overwrite``. Fail before any
-    # table work starts.
+    # non-empty output needs an explicit ``--overwrite``; an unwritable
+    # location (e.g. Snowflake with no schema) fails here too
+    # (``OutputLocationInvalidError``). Fail before any table work starts.
     from ovid2.drivers.overwrite import OutputNotEmptyError, assert_output_writable
 
     try:
@@ -371,6 +400,7 @@ def _run_container_mode(args: argparse.Namespace) -> int:
             args.output_address,
             overwrite=bool(getattr(args, "overwrite", False)),
             pipeline=pipeline,
+            sf_overrides=sf_overrides,
         )
     except OutputNotEmptyError as exc:
         print(f"[ovid2] ERROR {exc}", file=sys.stderr)
@@ -397,24 +427,65 @@ def _run_container_mode(args: argparse.Namespace) -> int:
 
     failures = 0
     cancelled = False
+    from ovid2.legacy.profile import is_legacy_ovid
+
     try:
-        for table in tables:
-            try:
-                formatter = load_formatter(
-                    pipeline,
-                    table,
-                    spark=spark,
-                    input_address=input_address,
-                    batch_id=batch_id,
-                    engine=engine,
-                    input_address_name=args.input_address,
-                )
+        if is_legacy_ovid(pipeline):
+            # Byte-parity with legacy Ovid: two-phase run (format→dedup→map
+            # for every table, then the verbatim legacy fix stage).
+            from ovid2.legacy.runner import run_legacy_pipeline
+
+            legacy_result = run_legacy_pipeline(
+                engine=engine,
+                spark=spark,
+                pipeline=pipeline,
+                batch_id=batch_id,
+                tables=tables,
+                transformations=transformers,
+                transformation_names=transformation_names,
+                input_address=input_address,
+                output_address=output_address,
+                input_address_name=args.input_address,
+                bus=bus,
+                instance_id=instance_id,
+                load_formatter=load_formatter,
+            )
+            failures = len(legacy_result.failed)
+            for table, error in legacy_result.failed.items():
+                print(f"[ovid2] ERROR table {table}: {error}", file=sys.stderr)
+            tables = legacy_result.succeeded + list(legacy_result.failed)
+        if not is_legacy_ovid(pipeline):
+            from ovid2.cdm.registry import get_cdm
+            from ovid2.core.table_runner import run_tables, source_sizes_from_driver
+
+            # Formatters load on the main thread (imports, spec parsing),
+            # which also yields each table's source glob for the size-based
+            # ordering. A load failure fails just that table, as before.
+            formatters: dict[str, Any] = {}
+            load_errors: dict[str, Exception] = {}
+            for table in tables:
+                try:
+                    formatters[table] = load_formatter(
+                        pipeline,
+                        table,
+                        spark=spark,
+                        input_address=input_address,
+                        batch_id=batch_id,
+                        engine=engine,
+                        input_address_name=args.input_address,
+                    )
+                except Exception as exc:
+                    load_errors[table] = exc
+
+            def _run_one(table: str) -> None:
+                if table in load_errors:
+                    raise load_errors[table]
                 run_pipeline(
                     engine=engine,
                     input_address=input_address,
                     output_address=output_address,
                     table_name=table,
-                    formatter=formatter,
+                    formatter=formatters[table],
                     transformations=transformers,
                     pipeline=pipeline,
                     batch_id=batch_id,
@@ -425,9 +496,9 @@ def _run_container_mode(args: argparse.Namespace) -> int:
                     sf_overrides=sf_overrides,
                     cdm_name=cdm_name,
                 )
-            except Exception as exc:
-                failures += 1
-                logger.exception("Table '%s' failed: %s", table, exc)
+
+            def _on_failure(table: str, exc: BaseException) -> None:
+                logger.error("Table '%s' failed: %s", table, exc, exc_info=exc)
                 bus.emit(
                     table_failed(
                         instance_id=instance_id,
@@ -438,6 +509,28 @@ def _run_container_mode(args: argparse.Namespace) -> int:
                     )
                 )
                 print(f"[ovid2] ERROR table {table}: {exc}", file=sys.stderr)
+
+            run_result = run_tables(
+                tables,
+                _run_one,
+                engine=engine,
+                reference_tables=get_cdm(cdm_name).reference_tables,
+                table_sizes=source_sizes_from_driver(
+                    args.input_address,
+                    formatters,
+                    pipeline=pipeline,
+                    batch_id=batch_id,
+                    sf_overrides=sf_overrides,
+                    cdm_name=cdm_name,
+                ),
+                on_failure=_on_failure,
+            )
+            failures = len(run_result.failed)
+            if run_result.concurrency > 1:
+                print(
+                    f"[ovid2]   parallel tables: {run_result.concurrency} workers, "
+                    f"order={run_result.order}"
+                )
 
         try:
             output_address.create_complementary_tables(spark, pipeline, batch_id)

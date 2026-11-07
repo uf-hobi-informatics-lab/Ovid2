@@ -12,12 +12,12 @@ from ovid2.web.models import EngineWrite
 
 
 @pytest.mark.unit
-def test_list_engine_types_returns_three(isolated_xdg: Path) -> None:
+def test_list_engine_types_returns_four(isolated_xdg: Path) -> None:
     from ovid2.web.services import engines_svc
 
     specs = engines_svc.list_engine_types()
     names = [s.type for s in specs]
-    assert set(names) == {"pyspark", "databricks_spark", "snowpark"}
+    assert set(names) == {"pyspark", "databricks_spark", "snowpark", "duckdb"}
 
 
 @pytest.mark.unit

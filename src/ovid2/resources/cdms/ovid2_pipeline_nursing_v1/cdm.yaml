@@ -1,0 +1,26 @@
+v: 1
+name: ovid2_pipeline_nursing_v1
+version: '1.0'
+source:
+  origin: Legacy Ovid nursing_mappers family (nursing-documentation feeds)
+  imported_from: mapping_scripts/nursing_mappers/tables_specs.csv
+tables:
+- careplan_timemark
+- condition_occurrence
+- fact_relationship
+- goal
+- goal_contact
+- intervention_contact
+- nursing_provider
+- problem_contact
+- procedure_occurrence
+- treatmentteam_nurse
+- unit
+reference_tables: []
+flavour_of_null:
+- ''
+- null
+id_columns:
+  person:
+    column: PERSON_ID
+    width: 128

@@ -59,6 +59,8 @@ class SourcePassthroughAdapter(BaseAdapter):
                 input_address=ctx.input_address,
                 pipeline=ctx.pipeline,
                 batch_id=ctx.batch_id,
+                engine=ctx.engine,
+                input_address_name=ctx.input_address_name,
             )
             for source in spec.sources.values()
         ]

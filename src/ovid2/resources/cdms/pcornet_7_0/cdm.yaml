@@ -26,6 +26,7 @@ tables:
 - lds_address_history
 - immunization
 - hash_token
+- original_hash_token
 - enrollment
 - external_meds
 - lab_history

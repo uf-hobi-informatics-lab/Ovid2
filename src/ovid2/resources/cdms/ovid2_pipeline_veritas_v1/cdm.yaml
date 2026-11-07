@@ -1,0 +1,19 @@
+v: 1
+name: ovid2_pipeline_veritas_v1
+version: '1.0'
+source:
+  origin: Legacy Ovid veritas_mappers family (Veritas death index feeds)
+  imported_from: mapping_scripts/veritas_mappers/tables_specs.csv
+tables:
+- death
+- hash_token
+- original_hash_token
+- veritas_expanded
+reference_tables: []
+flavour_of_null:
+- ''
+- null
+id_columns:
+  patient:
+    column: PATID
+    width: 128

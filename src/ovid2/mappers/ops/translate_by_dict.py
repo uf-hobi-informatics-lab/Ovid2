@@ -39,8 +39,8 @@ class TranslateByDictOp(BaseMapOp):
         ctx: MapOpContext,
     ) -> DataFrame:
         """Substitute values in ``params['column']`` using the named dict."""
-        from pyspark.sql.functions import coalesce, create_map, lit
-        from pyspark.sql.functions import col as sf_col
+        from ovid2.core.engines.dsl import coalesce, create_map, lit
+        from ovid2.core.engines.dsl import col as sf_col
 
         column = str(params["column"])
         dict_name = str(params["dict"])
@@ -85,7 +85,7 @@ class TranslateByDictOp(BaseMapOp):
                 )
                 # Combined expression: null in → null out; matched → mapped;
                 # unmatched non-null → default.
-                from pyspark.sql.functions import when
+                from ovid2.core.engines.dsl import when
 
                 result_expr = when(sf_col(column).isNull(), lit(None)).otherwise(
                     coalesce(translated, lit(default))

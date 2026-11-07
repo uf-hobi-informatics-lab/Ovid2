@@ -512,77 +512,85 @@ def test_submit_to_docker_stops_driver_on_sigterm(
 
 
 def _prepare_xdg_secrets(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, refs: list[str]) -> Path:
-    """Create an XDG config tree with a secrets.d/ holding ``refs``.json."""
+    """Create a real-layout XDG tree (``<xdg>/ovid2/secrets.d``) holding ``refs``."""
     xdg = tmp_path / "xdg"
-    (xdg / "secrets.d").mkdir(parents=True)
+    secrets = xdg / "ovid2" / "secrets.d"
+    secrets.mkdir(parents=True)
     for ref in refs:
-        (xdg / "secrets.d" / f"{ref}.json").write_text("{}", encoding="utf-8")
+        (secrets / f"{ref}.json").write_text("{}", encoding="utf-8")
     monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
+    monkeypatch.delenv("OVID2_SECRETS_DIR", raising=False)
     return xdg
 
 
-@pytest.mark.unit
-def test_secrets_dir_is_shadowed_by_tmpfs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """The whole secrets.d/ is never left readable — it is tmpfs-shadowed."""
+def _docker_cmd(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, granted: set[str]) -> list[str]:
     data_dir = tmp_path / "data"
-    data_dir.mkdir()
+    data_dir.mkdir(exist_ok=True)
     monkeypatch.setattr(docker_module, "DATA_DIR", data_dir)
     monkeypatch.setattr(docker_module, "LEGACY_CREDENTIALS_DIR", tmp_path / "absent")
-    _prepare_xdg_secrets(monkeypatch, tmp_path, ["alpha", "beta"])
     monkeypatch.setattr(
-        docker_module, "secret_refs_for_addresses", lambda names: set(), raising=False
+        "ovid2.config.secret_refs.resolve_scope", lambda scope: {f"{r}.json" for r in granted}
     )
-
     instance = OvidInstance(instance_id="20260101-000000-abcdef")
-    cmd = docker_module.build_docker_command(_make_args(), instance)
-    # tmpfs shadow present.
-    assert "--tmpfs" in cmd
-    assert "/ovid2-user-config/secrets.d" in cmd
+    return docker_module.build_docker_command(_make_args(), instance)
+
+
+@pytest.mark.unit
+def test_enforce_mode_shadows_real_secrets_dir(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Under enforce, the *real* secrets.d path inside the mount is tmpfs-shadowed."""
+    _prepare_xdg_secrets(monkeypatch, tmp_path, ["alpha", "beta"])
+    monkeypatch.setenv("OVID2_SECRETS_SCOPE_MODE", "enforce")
+    cmd = _docker_cmd(monkeypatch, tmp_path, set())
+    idx = cmd.index("--tmpfs")
+    assert cmd[idx + 1].startswith("/ovid2-user-config/ovid2/secrets.d:")
+    assert "OVID2_SECRETS_SCOPE_MODE=enforce" in cmd
+
+
+@pytest.mark.unit
+def test_warn_mode_does_not_shadow(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """The default roll-out mode keeps secrets.d visible (warn on out-of-scope)."""
+    _prepare_xdg_secrets(monkeypatch, tmp_path, ["alpha"])
+    monkeypatch.delenv("OVID2_SECRETS_SCOPE_MODE", raising=False)
+    cmd = _docker_cmd(monkeypatch, tmp_path, set())
+    assert "--tmpfs" not in cmd
+    assert "OVID2_SECRETS_SCOPE_MODE=warn" in cmd
 
 
 @pytest.mark.unit
 def test_only_referenced_secret_is_bound(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Only the run's referenced secret file is bound back over the tmpfs."""
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
-    monkeypatch.setattr(docker_module, "DATA_DIR", data_dir)
-    monkeypatch.setattr(docker_module, "LEGACY_CREDENTIALS_DIR", tmp_path / "absent")
+    """Only the run's granted secret file is bound into the scoped dir."""
     xdg = _prepare_xdg_secrets(monkeypatch, tmp_path, ["alpha", "beta", "gamma"])
-    # This run references only "alpha".
-    monkeypatch.setattr(
-        docker_module,
-        "secret_refs_for_addresses",
-        lambda names: {"alpha"},
-        raising=False,
-    )
-
-    instance = OvidInstance(instance_id="20260101-000000-abcdef")
-    cmd = docker_module.build_docker_command(_make_args(), instance)
+    cmd = _docker_cmd(monkeypatch, tmp_path, {"alpha"})
     joined = " ".join(cmd)
-    alpha = xdg / "secrets.d" / "alpha.json"
-    assert f"{alpha}:/ovid2-user-config/secrets.d/alpha.json:ro" in cmd
-    # The other pipelines' secrets are never bound in.
+    alpha = xdg / "ovid2" / "secrets.d" / "alpha.json"
+    assert f"{alpha}:/ovid2-scoped-secrets/alpha.json:ro" in cmd
+    assert "OVID2_SECRETS_DIR=/ovid2-scoped-secrets" in cmd
     assert "beta.json" not in joined
     assert "gamma.json" not in joined
 
 
 @pytest.mark.unit
-def test_no_refs_binds_no_secrets(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """With no referenced secrets, the tmpfs shadow exposes nothing."""
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
-    monkeypatch.setattr(docker_module, "DATA_DIR", data_dir)
-    monkeypatch.setattr(docker_module, "LEGACY_CREDENTIALS_DIR", tmp_path / "absent")
-    _prepare_xdg_secrets(monkeypatch, tmp_path, ["alpha"])
-    monkeypatch.setattr(
-        docker_module, "secret_refs_for_addresses", lambda names: set(), raising=False
-    )
-
-    instance = OvidInstance(instance_id="20260101-000000-abcdef")
-    cmd = docker_module.build_docker_command(_make_args(), instance)
+def test_inherited_scope_dir_is_the_grant(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A worker-scoped host process forwards exactly its own scoped dir."""
+    _prepare_xdg_secrets(monkeypatch, tmp_path, ["alpha", "beta"])
+    scope = tmp_path / "scope"
+    scope.mkdir()
+    (scope / "beta.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("OVID2_SECRETS_DIR", str(scope))
+    cmd = _docker_cmd(monkeypatch, tmp_path, {"alpha"})  # ignored: env scope wins
     joined = " ".join(cmd)
-    assert "--tmpfs" in cmd
+    assert f"{scope / 'beta.json'}:/ovid2-scoped-secrets/beta.json:ro" in cmd
     assert "alpha.json" not in joined
+
+
+@pytest.mark.unit
+def test_no_refs_binds_no_secrets(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """With nothing granted, no secret file is bound."""
+    _prepare_xdg_secrets(monkeypatch, tmp_path, ["alpha"])
+    cmd = _docker_cmd(monkeypatch, tmp_path, set())
+    assert "alpha.json" not in " ".join(cmd)
 
 
 @pytest.mark.unit
@@ -595,5 +603,154 @@ def test_addresses_for_args_collects_all_shapes() -> None:
         output_address="out",
         from_address="in",  # duplicate — collapsed
         to_address="dest",
+        prev_input_address="prev",
     )
-    assert docker_module._addresses_for_args(args) == ["in", "out", "dest"]
+    assert docker_module._addresses_for_args(args) == ["in", "out", "dest", "prev"]
+
+
+@pytest.mark.unit
+def test_secret_scope_for_args_covers_connections_engine_pipeline() -> None:
+    """Health connections, the engine, and the pipeline salts are all in scope."""
+    from argparse import Namespace
+
+    args = Namespace(
+        input_address=None,
+        output_address="out",
+        input_connection="c_in",
+        output_connection="c_out",
+        engine="snowpark",
+        pipeline="demo",
+    )
+    scope = docker_module.secret_scope_for_args(args)
+    assert scope.connections == ("c_in", "c_out")
+    assert scope.addresses == ("out",)
+    assert scope.engines == ("snowpark",)
+    assert scope.pipelines == ("demo",)
+
+
+@pytest.mark.unit
+def test_build_docker_command_mounts_spark_local_dir(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Shuffle/spill scratch is a real-disk bind exported as SPARK_LOCAL_DIRS."""
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    monkeypatch.setattr(docker_module, "DATA_DIR", data_dir)
+    monkeypatch.setattr(docker_module, "LEGACY_CREDENTIALS_DIR", tmp_path / "absent")
+
+    instance = OvidInstance(instance_id="20260101-000000-abcdef")
+    cmd = docker_module.build_docker_command(_make_args(), instance)
+    joined = " ".join(cmd)
+    assert f"{instance.spark_local_dir}:/ovid2-spark-local:rw" in joined
+    assert "SPARK_LOCAL_DIRS=/ovid2-spark-local" in cmd
+    assert any(c.startswith("OVID2_SPARK_DRIVER_MEMORY=") for c in cmd)
+
+
+@pytest.mark.unit
+def test_local_mode_driver_memory_scales_with_host(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Local mode sizes the driver heap + container limit from host RAM."""
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    monkeypatch.setattr(docker_module, "DATA_DIR", data_dir)
+    monkeypatch.setattr(docker_module, "LEGACY_CREDENTIALS_DIR", tmp_path / "absent")
+    monkeypatch.setattr(docker_module, "SPARK_MODE", "local")
+    monkeypatch.setenv("OVID2_HOST_MEMORY_GB", "128")
+    monkeypatch.delenv("OVID2_SPARK_LOCAL_DRIVER_MEMORY_GB", raising=False)
+
+    instance = OvidInstance(instance_id="20260101-000000-abcdef")
+    cmd = docker_module.build_docker_command(_make_args(), instance)
+    assert "OVID2_SPARK_DRIVER_MEMORY=48g" in cmd
+    assert "--memory=56g" in cmd  # 48 + 4 overhead + 4 slack
+    assert any(c.startswith("SPARK_MASTER_URL=local[") for c in cmd)
+
+
+@pytest.mark.unit
+def test_cluster_mode_keeps_configured_driver_memory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    monkeypatch.setattr(docker_module, "DATA_DIR", data_dir)
+    monkeypatch.setattr(docker_module, "LEGACY_CREDENTIALS_DIR", tmp_path / "absent")
+    monkeypatch.setattr(docker_module, "SPARK_MODE", "cluster")
+
+    instance = OvidInstance(instance_id="20260101-000000-abcdef")
+    cmd = docker_module.build_docker_command(_make_args(), instance)
+    assert "OVID2_SPARK_DRIVER_MEMORY=32g" in cmd
+    assert "--memory=40g" in cmd
+
+
+@pytest.mark.unit
+def test_build_docker_command_caps_duckdb_memory_to_container(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """DuckDB's memory_limit must sit under the container's ``--memory`` cap.
+
+    Inside the container ``/proc/meminfo`` reports the host's RAM, so
+    without this env DuckDB would size itself above the cgroup ceiling
+    and be OOM-killed instead of spilling.
+    """
+    monkeypatch.setattr(docker_module, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(docker_module, "LEGACY_CREDENTIALS_DIR", tmp_path / "absent")
+    monkeypatch.delenv("OVID2_DUCKDB_MEMORY_LIMIT", raising=False)
+    args = _make_args()
+    args.engine = "duckdb"
+    args.no_spark_cluster = True
+    instance = OvidInstance(instance_id="20260101-000000-abcdef")
+    cmd = docker_module.build_docker_command(args, instance)
+    mem = next(a for a in cmd if a.startswith("--memory="))
+    cap_gb = int(mem.removeprefix("--memory=").removesuffix("g"))
+    env = next(a for a in cmd if a.startswith("OVID2_DUCKDB_MEMORY_LIMIT="))
+    limit_gb = int(env.split("=", 1)[1].removesuffix("GB"))
+    assert 0 < limit_gb < cap_gb
+    assert limit_gb == max(1, int(cap_gb * 0.85))
+
+
+@pytest.mark.unit
+def test_duckdb_memory_limit_operator_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OVID2_DUCKDB_MEMORY_LIMIT", "64GB")
+    assert docker_module.duckdb_memory_limit(200) == "64GB"
+    monkeypatch.delenv("OVID2_DUCKDB_MEMORY_LIMIT")
+    assert docker_module.duckdb_memory_limit(200) == "170GB"
+
+
+@pytest.mark.unit
+def test_duckdb_container_sized_from_host_and_workers(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """DuckDB: one host-sized container; Workers -> table concurrency."""
+    monkeypatch.setattr(docker_module, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(docker_module, "LEGACY_CREDENTIALS_DIR", tmp_path / "absent")
+    for var in (
+        "OVID2_DUCKDB_MEMORY_LIMIT",
+        "OVID2_DUCKDB_THREADS",
+        "OVID2_DUCKDB_TABLE_CONCURRENCY",
+        "OVID2_DUCKDB_CPUS",
+        "OVID2_DUCKDB_MEMORY_FRACTION",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("OVID2_HOST_CPUS", "96")
+    monkeypatch.setenv("OVID2_HOST_MEMORY_GB", "958")
+    args = _make_args()
+    args.engine = "duckdb"
+    args.workers = 25
+    cmd = docker_module.build_docker_command(args, OvidInstance())
+    assert "--memory=718g" in cmd
+    assert "--cpus=96" in cmd
+    assert "OVID2_DUCKDB_TABLE_CONCURRENCY=25" in cmd
+    assert "OVID2_DUCKDB_THREADS=96" in cmd
+    assert "OVID2_DUCKDB_MEMORY_LIMIT=610GB" in cmd
+
+
+@pytest.mark.unit
+def test_spark_container_keeps_driver_sizing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """PySpark keeps the driver-heap-derived cap and no DuckDB knobs."""
+    monkeypatch.setattr(docker_module, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(docker_module, "LEGACY_CREDENTIALS_DIR", tmp_path / "absent")
+    cmd = docker_module.build_docker_command(_make_args(), OvidInstance())
+    assert not any(t.startswith("--cpus=") for t in cmd)
+    assert not any(t.startswith("OVID2_DUCKDB_TABLE_CONCURRENCY=") for t in cmd)

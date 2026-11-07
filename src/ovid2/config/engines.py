@@ -40,7 +40,7 @@ from ovid2.config import secrets as _secrets_module
 #: Type names known to the web layer. Mirrors
 #: :data:`ovid2.core.engines.registry.ENGINE_TYPE_MAP`. A contract test
 #: keeps the two in sync.
-_KNOWN_TYPES: tuple[str, ...] = ("pyspark", "databricks_spark", "snowpark")
+_KNOWN_TYPES: tuple[str, ...] = ("pyspark", "databricks_spark", "snowpark", "duckdb")
 
 #: Type-name → engine family. Duplicates the ``family`` class attribute on
 #: each :class:`~ovid2.core.engines.base.BaseEngine` subclass so the web
@@ -52,6 +52,7 @@ _ENGINE_FAMILY: dict[str, str] = {
     "pyspark": "spark",
     "databricks_spark": "spark",
     "snowpark": "snowpark",
+    "duckdb": "duckdb",
 }
 
 
@@ -233,6 +234,46 @@ _FIELD_SPECS: dict[str, dict[str, list[dict[str, Any]]]] = {
                 "multiline": True,
             },
         ],
+    },
+    "duckdb": {
+        "args": [
+            {
+                "name": "threads",
+                "required": False,
+                "help": "Worker threads (default: every usable CPU; $OVID2_DUCKDB_THREADS).",
+            },
+            {
+                "name": "memory_limit",
+                "required": False,
+                "help": "Memory cap before DuckDB spills to disk, e.g. '200GB' "
+                "(default: 75% of host RAM; $OVID2_DUCKDB_MEMORY_LIMIT).",
+            },
+            {
+                "name": "temp_directory",
+                "required": False,
+                "help": "Spill directory (default: a per-run dir under the Spark "
+                "scratch root on real disk; $OVID2_DUCKDB_TEMP_DIR).",
+            },
+            {
+                "name": "database_path",
+                "required": False,
+                "help": "Optional on-disk database file (default: in-memory).",
+            },
+            {
+                "name": "preserve_insertion_order",
+                "required": False,
+                "default": "false",
+                "help": "'true' keeps input row order in outputs (slower, more memory).",
+            },
+            {
+                "name": "table_concurrency",
+                "required": False,
+                "help": "Tables run at once after the reference tables, largest "
+                "first, each on its own cursor (default: min(tables, CPUs); "
+                "'1' = sequential; $OVID2_DUCKDB_TABLE_CONCURRENCY).",
+            },
+        ],
+        "secrets": [],
     },
 }
 

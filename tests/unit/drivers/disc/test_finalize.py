@@ -3,8 +3,9 @@
 Covers the parts of :mod:`ovid2.drivers.disc.spark` that were rewritten
 in the 2026-08 single-CSV finalize refactor:
 
-- ``_merge_csv_part_files``: cat-based concat of ``_header.csv`` +
-  ``part-*.csv``, with a pure-Python fallback when ``cat`` is absent.
+- ``_merge_csv_part_files``: parallel offset-based concat of
+  ``_header.csv`` + ``part-*.csv`` (``copy_file_range`` with a
+  pread/pwrite fallback).
 - ``_maybe_coalesce``: honours ``$OVID2_DISC_WRITE_PARTITIONS``,
   otherwise no-op.
 - End-to-end write via a real Spark session (uses the shared ``spark``
@@ -27,7 +28,7 @@ import pytest
 
 
 class TestMergeCsvPartFiles:
-    """Coverage for the internal ``cat``-based CSV finalizer."""
+    """Coverage for the internal parallel CSV finalizer."""
 
     def _stage(self, work_dir: Path, header: str, parts: list[str]) -> None:
         """Create the staging directory shape ``_write_csv`` produces."""
@@ -87,12 +88,12 @@ class TestMergeCsvPartFiles:
         with pytest.raises(FileNotFoundError, match="No part files"):
             _merge_csv_part_files(str(work), str(tmp_path / "o.csv"))
 
-    def test_pure_python_fallback_when_cat_missing(
+    def test_pread_fallback_when_copy_file_range_missing(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Simulate an environment without ``cat`` on ``PATH``."""
+        """Hosts without ``os.copy_file_range`` fall back to pread/pwrite."""
         from ovid2.drivers.disc import spark as disc_spark
 
         work = tmp_path / "tmp_out"
@@ -101,11 +102,68 @@ class TestMergeCsvPartFiles:
             header="h1,h2\n",
             parts=["a,b\n", "c,d\n"],
         )
-        # Force ``shutil.which('cat')`` to report absent.
-        monkeypatch.setattr(disc_spark.shutil, "which", lambda _n: None)
+        monkeypatch.delattr(disc_spark.os, "copy_file_range", raising=False)
         out = tmp_path / "out.csv"
         disc_spark._merge_csv_part_files(str(work), str(out))
         assert out.read_text() == "h1,h2\na,b\nc,d\n"
+
+    def test_parallel_merge_is_byte_identical_to_cat(self, tmp_path: Path) -> None:
+        """Many uneven parts (incl. empty ones) merge in exact sorted order."""
+        import random
+
+        from ovid2.drivers.disc.spark import _merge_csv_part_files
+
+        work = tmp_path / "tmp_out"
+        work.mkdir()
+        (work / "_header.csv").write_bytes(b"k\tv\n")
+        rng = random.Random(7)
+        expected = b"k\tv\n"
+        for i in range(60):
+            n = 0 if i % 13 == 0 else rng.randint(1, 4000)
+            body = b"".join(f"{i}-{j}\t{'x' * (j % 17)}\n".encode() for j in range(n))
+            (work / f"part-{i:05d}-u.csv").write_bytes(body)
+            expected += body
+        out = tmp_path / "out.csv"
+        _merge_csv_part_files(str(work), str(out))
+        assert out.read_bytes() == expected
+
+    def test_overwrites_existing_longer_output(self, tmp_path: Path) -> None:
+        """A stale, longer output file is truncated, not partially overwritten."""
+        from ovid2.drivers.disc.spark import _merge_csv_part_files
+
+        work = tmp_path / "tmp_out"
+        self._stage(work, header="a\n", parts=["1\n"])
+        out = tmp_path / "out.csv"
+        out.write_text("stale-content-that-is-much-longer\n" * 10)
+        _merge_csv_part_files(str(work), str(out))
+        assert out.read_text() == "a\n1\n"
+
+
+class TestHeaderLine:
+    """The schema-derived header matches Spark's unquoted header row."""
+
+    def test_header_line_joins_columns(self) -> None:
+        from ovid2.drivers.disc.spark import _header_line
+
+        assert _header_line(["PATID", "DX"], "\t") == b"PATID\tDX\n"
+
+    def test_header_matches_spark_header(self, spark: object, tmp_path: Path) -> None:
+        """Byte-compare against Spark's own ``header=True`` output."""
+        from ovid2.drivers.disc.spark import _header_line
+
+        df = spark.createDataFrame([("1", "2")], ["Col A", "b|c"])  # type: ignore[attr-defined]
+        target = tmp_path / "spark_hdr"
+        (
+            df.limit(0)
+            .coalesce(1)
+            .write.format("csv")
+            .option("header", True)
+            .option("delimiter", "|")
+            .option("quote", "")
+            .save(str(target))
+        )
+        part = next(target.glob("part-*.csv"))
+        assert part.read_bytes() == _header_line(list(df.columns), "|")
 
     def test_binary_safe_pass_through(self, tmp_path: Path) -> None:
         """Body bytes are never re-encoded — CSV cell contents survive."""

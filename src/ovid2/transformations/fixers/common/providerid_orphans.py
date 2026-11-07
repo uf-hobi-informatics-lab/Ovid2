@@ -65,13 +65,16 @@ Deployment:
           returns the DataFrame unchanged -- no error is raised.
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from pyspark.sql import DataFrame
-from pyspark.sql.functions import broadcast, col, lit, when
-
+from ovid2.core.engines.dsl import broadcast, col, lit, when
 from ovid2.transformations.fixers.base import BaseFixer
+
+if TYPE_CHECKING:
+    from pyspark.sql import DataFrame
 
 logger = logging.getLogger(__name__)
 

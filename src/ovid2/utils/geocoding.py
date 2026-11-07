@@ -29,7 +29,7 @@ import logging
 from collections import Counter
 from functools import lru_cache
 from itertools import chain
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from pyspark.sql import Column
@@ -250,11 +250,11 @@ def _map_expr(mapping: dict[str, str]) -> Column:
     stays valid and every lookup returns ``NULL`` (the callers ``coalesce``
     over these, so a NULL simply falls through to the next source).
     """
-    from pyspark.sql.functions import create_map, lit
+    from ovid2.core.engines.dsl import create_map, lit
 
     if not mapping:
-        return create_map(lit("__ovid2_empty__"), lit(None))
-    return create_map([lit(x) for x in chain.from_iterable(mapping.items())])
+        return cast("Column", create_map(lit("__ovid2_empty__"), lit(None)))
+    return cast("Column", create_map([lit(x) for x in chain.from_iterable(mapping.items())]))
 
 
 def fips_state_abbrev_map_expr() -> Column:

@@ -40,6 +40,9 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import IO
 
+from ovid2.config.executor_env import ScopedSecrets, env_key_allowed, prepare_scoped_secrets
+from ovid2.config.executor_env import build_minimal_env as _build_minimal_env
+from ovid2.config.secret_refs import SecretScope
 from ovid2.config.settings import DATA_DIR, LEGACY_CREDENTIALS_DIR
 from ovid2.run_kinds import get_kind
 from ovid2.web import db as web_db
@@ -57,16 +60,10 @@ logger = logging.getLogger(__name__)
 def _env_key_allowed(key: str, allowlist: tuple[str, ...]) -> bool:
     """Return True if ``key`` matches the allow-list.
 
-    An entry ending in ``*`` is a prefix match; otherwise it is an exact
-    match. See :data:`ovid2.web.settings.WORKER_ENV_ALLOWLIST`.
+    Thin alias of :func:`ovid2.config.executor_env.env_key_allowed`
+    (kept for back-compat with existing imports).
     """
-    for pattern in allowlist:
-        if pattern.endswith("*"):
-            if key.startswith(pattern[:-1]):
-                return True
-        elif key == pattern:
-            return True
-    return False
+    return env_key_allowed(key, allowlist)
 
 
 def build_minimal_env(
@@ -75,12 +72,42 @@ def build_minimal_env(
 ) -> dict[str, str]:
     """Return an allow-listed copy of ``source_env``.
 
-    Only keys matching ``allowlist`` survive; everything else — including
-    any ambient credentials exported into the worker's shell — is
-    dropped. The executor receives its credentials exclusively from the
-    scoped per-run secret mounts, never from inherited environment.
+    Delegates to :func:`ovid2.config.executor_env.build_minimal_env`, which
+    also strips :data:`~ovid2.config.executor_env.ALWAYS_DROP`
+    (``OVID2_SECRETS_FILE``, inherited ``OVID2_SECRETS_DIR``, the MCP /
+    assistant API tokens).
     """
-    return {k: v for k, v in source_env.items() if _env_key_allowed(k, allowlist)}
+    return _build_minimal_env(source_env, allowlist)
+
+
+def job_secret_scope(job: JobDetail) -> SecretScope:
+    """Return the secrets one job may dereference.
+
+    Every connection-bearing name a job can carry: the input / output
+    addresses, an optional ``prev_input_address`` (health refresh), the
+    engine, the export kind's ``connection``, and the pipeline (its
+    ``secrets.d/<pipeline>.json`` salts for ``hash_id``). The XOR seed
+    file is granted to pipeline-bearing kinds, which may tokenise ids.
+    Pinned by ``tests/contract/test_executor_subprocess_env_scoped.py``.
+    """
+    from ovid2.config.settings import SEED_FILE_NAME
+
+    extra = job.extra_args or {}
+    addresses = tuple(
+        str(a)
+        for a in (job.input_address, job.output_address, extra.get("prev_input_address"))
+        if a
+    )
+    connections = tuple(str(c) for c in (extra.get("connection"),) if c)
+    engines = tuple(str(e) for e in (extra.get("engine") or "pyspark",) if e)
+    pipelines = (job.pipeline,) if job.pipeline else ()
+    return SecretScope(
+        connections=connections,
+        addresses=addresses,
+        engines=engines,
+        pipelines=pipelines,
+        extra_refs=(SEED_FILE_NAME,) if job.pipeline else (),
+    )
 
 
 @dataclass
@@ -91,6 +118,7 @@ class _Running:
     instance_id: str
     process: subprocess.Popen[bytes]
     log_handle: IO[bytes] | None = field(default=None)
+    scoped_secrets: ScopedSecrets | None = field(default=None)
 
 
 class Worker:
@@ -307,6 +335,9 @@ class Worker:
         """Spawn ``ovid2 etl`` for ``job`` and record the child PID."""
         argv = self._build_argv(job)
         env = self._build_env(job)
+        scoped = prepare_scoped_secrets(job_secret_scope(job), label=job.job_id)
+        # Scoped copy written by executor_env (dir 0o700, files 0o600).
+        env["OVID2_SECRETS_DIR"] = str(scoped.path)
         data_dir = Path(env.get("OVID2_DATA_DIR") or DATA_DIR)
         creds_dir = Path(env.get("OVID2_CREDENTIALS_DIR") or LEGACY_CREDENTIALS_DIR)
         data_exists = data_dir.is_dir()
@@ -350,6 +381,7 @@ class Worker:
             )
         except OSError as exc:
             log_handle.close()
+            scoped.cleanup()
             logger.exception("Failed to spawn ovid2 etl for job %s", job.job_id)
             jobs_svc.mark_terminal(
                 job.job_id, status=jobs_svc.STATUS_FAILED, error=f"spawn failed: {exc}"
@@ -362,6 +394,7 @@ class Worker:
             instance_id=job.instance_id or "",
             process=process,
             log_handle=log_handle,
+            scoped_secrets=scoped,
         )
         logger.info(
             "Spawned pid=%d for job=%s instance=%s pipeline=%s batch=%s",
@@ -609,7 +642,9 @@ class Worker:
 
         ``ovid2 tools export-table <connection> --path <location>
         --format … --delimiter … --header-case … --out <artifact>`` — no
-        ``--limit`` (the whole table). Runs on the host; no container.
+        ``--limit`` (the whole table). The ``export-table`` tool itself
+        dispatches to a container (see :mod:`ovid2.tools.table_ops`); this
+        host process only receives the scoped env.
         """
         extra = job.extra_args
         connection = str(extra.get("connection") or "")
@@ -800,6 +835,8 @@ class Worker:
         with contextlib.suppress(Exception):
             if record.log_handle is not None:
                 record.log_handle.close()
+        if record.scoped_secrets is not None:
+            record.scoped_secrets.cleanup()
         # Refresh cancel_requested from the DB so a race between the
         # SIGTERM and the exit is still attributed correctly.
         detail = jobs_svc.get_job(record.job_id)

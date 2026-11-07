@@ -1,0 +1,45 @@
+# Ported verbatim from legacy mapping_scripts/pcornet_mappers/pro_cm_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: pro_cm
+ops:
+- op: legacy_select
+  reader: backslash_escape
+  columns:
+  - PRO_CM_ID:
+      encrypt: PRO_CM_ID
+  - PATID:
+      encrypt: PATID
+  - ENCOUNTERID:
+      encrypt: ENCOUNTERID
+  - PRO_DATE
+  - PRO_TIME
+  - PRO_TYPE:
+      dict: pro_cm_pro_type_dict
+      col: PRO_TYPE
+  - PRO_NAME
+  - PRO_CODE
+  - PRO_RESPONSE_TEXT
+  - PRO_RESPONSE_NUM
+  - PRO_METHOD:
+      dict: pro_cm_pro_method_dict
+      col: PRO_METHOD
+  - PRO_MODE:
+      dict: pro_cm_pro_mode_dict
+      col: PRO_MODE
+  - PRO_CAT:
+      dict: pro_cm_pro_cat_dict
+      col: PRO_CAT
+  - PRO_SOURCE:
+      dict: pro_cm_pro_source_dict
+      col: PRO_SOURCE
+  - PRO_VERSION
+  - PRO_SEQ
+  - PRO_FULLNAME
+  - PRO_TEXT
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true
+  append_additional_fields:
+    join_field: PRO_CM_ID

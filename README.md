@@ -217,10 +217,54 @@ flowchart TB
   and directory listings go through a short-lived `ovid2 tools …` subprocess
   (`_broker.py`).
 - **Executor tier** (`cli` / `core` / `drivers`) is the only place that
-  dereferences credentials. The worker runs with an allow-listed environment;
-  the container gets only the secret files this run actually references.
+  dereferences credentials. Every executor subprocess the web tier or worker
+  spawns gets an allow-listed environment and a private, scoped secrets
+  directory (see *Control plane vs data plane* below).
 - The legacy in-process `scheduler/service.py` is **parked for rollback** —
   the live scheduling path is the web-worker (see diagram 3).
+
+#### Control plane vs data plane
+
+Alongside the trust tiers, every operation is classified by **plane**:
+
+| Plane | What it covers | Returns row values? |
+|---|---|---|
+| **Control** | Configuration, metadata, credential probes, listings (names, sizes, schemas, table metadata) | Never |
+| **Row access** (data) | Engine-less reads: `sample_rows`, `iter_rows`, `count_rows`, table export | Yes |
+| **Data plane** (data) | Engine reads and writes (`read` / `write` / `create_complementary_tables`) | Yes |
+
+- **One driver, three views.** `Driver` stays the single concrete class per
+  peripheral, but callers take a narrowed view through the `DriverControl`,
+  `DriverRowAccess` or `DriverDataPlane` protocols, using the factories
+  `control_driver` / `row_access_driver` / `data_driver` in
+  `drivers/registry.py`. Control-tier code (web, MCP, Data Space browsing,
+  overwrite checks, probes) never calls a row or data-plane method.
+- **Scoped executor secrets.** Each executor subprocess (broker probes and
+  browsing, worker jobs, engine tests, the LLM executor) runs with a private
+  `0700` `OVID2_SECRETS_DIR` that holds `0600` copies of only the secrets its
+  connections, addresses, engine and pipeline salt need. `OVID2_SECRETS_FILE`
+  and the MCP / assistant tokens are always stripped. Inside containers the
+  granted files are mounted at `/ovid2-scoped-secrets`.
+- **Two-step roll-out.** `OVID2_SECRETS_SCOPE_MODE=warn` (the default) still
+  resolves an out-of-scope read but logs a warning naming it. `enforce` makes
+  the scope exclusive and hides the real `secrets.d` (tmpfs) in the driver
+  container and in every Spark master and worker.
+- **Full-table exports run in a container.** `ovid2 tools export-table` with
+  no `--limit`, or a limit above `$OVID2_EXPORT_MAX_ROWS`, runs in a single
+  driver container. Small synchronous downloads, samples and counts stay on
+  the host (still scoped) to keep latency low.
+- **Agents need approval to read rows.** For `mcp:` / `llm:` principals,
+  Data Space sample, export, export jobs and job artifacts return
+  `202 awaiting_approval` (action `dataspace.agent_row_access`). Each approval
+  is single-use and covers one table. Metadata (describe, count, listing)
+  stays open to agents, and human users are unaffected.
+- **Spark capability is declared.** `Driver.spark_capable` is `False` for the
+  DuckDB-only hybrid drivers, so pairing one with `pyspark` is refused at plan
+  time rather than failing mid-run.
+
+On the host, scoping gives least authority by construction, but it is not a
+sandbox: host subprocesses still run as the web tier's uid. Containers under
+`enforce` are real isolation, because nothing outside the grant is mounted.
 
 ### 2. Submit → execute (sequence)
 
@@ -442,7 +486,8 @@ them enforced by a contract test.
 | **Pluggable compute** | Engines (PySpark / Databricks Connect / Snowpark) sit behind `EngineSession` / `EngineFunctions` protocols; only engine modules may import a compute SDK. |
 | **Pluggable storage** | Nine peripherals behind one `Driver` protocol; an `EngineStager` keeps engine and storage orthogonal (any engine ↔ any driver). |
 | **CDM/ETL independence** | The engine never imports a CDM module — table lists, keys, valuesets, and shared views live on a `CdmHandle` authored as YAML. |
-| **Trust separation** | Untrusted agent (MCP / assistant) → trusted API (web) → executor (CLI/core/drivers); only the executor dereferences secrets. Destructive operations require human approval. |
+| **Trust separation** | Untrusted agent (MCP / assistant) → trusted API (web) → executor (CLI/core/drivers); only the executor dereferences secrets, and each executor subprocess sees only the secrets it is scoped to. Destructive operations, and agent reads of row values, require human approval. |
+| **Control / data plane split** | Control-tier code (web, MCP, probes, listings) only touches metadata. Anything that returns row values goes through the row-access or data-plane driver views. |
 | **Multiple control surfaces** | CLI **+** web control panel + JSON API **+** MCP server **+** in-panel LLM assistant, all over the same job model. |
 | **XDG paths** | Config, secrets, runtime state, material, and data all resolve through XDG (with legacy paths honoured inside the Docker image). |
 | **Installable & operable** | PEP 621 wheel, `pipx install .`, src-layout package + PEP 420 namespace pipelines, `ovid2 <cmd>` console script, systemd units. |
@@ -468,15 +513,26 @@ gcs) live under `src/ovid2/drivers/snowflake/staging/`.
 
 ### Drivers & connections
 
-Every storage peripheral is a `Driver` (`src/ovid2/drivers/`) owning both the
-control plane (credentials, probe, container requirements) and the data plane
-(read/write). Nine types are registered in `drivers/registry.py::DRIVERS`:
+Every storage peripheral is a `Driver` (`src/ovid2/drivers/`). One class
+covers three planes, and callers take a narrowed protocol view of it:
 
-| Native drivers | Legacy-adapter drivers |
+| Plane | Protocol / factory | Methods |
+|---|---|---|
+| Control | `DriverControl` / `control_driver` | credentials, probe, listings, `describe_table`, container requirements |
+| Row access | `DriverRowAccess` / `row_access_driver` | `sample_rows`, `iter_rows`, `count_rows` (no engine needed) |
+| Data plane | `DriverDataPlane` / `data_driver` | engine `read` / `write` |
+
+The per-plane method sets in `drivers/registry.py` are what the contract
+tests check. Nine types are registered in `drivers/registry.py::DRIVERS`:
+
+| Native drivers | Legacy-adapter (hybrid) drivers |
 |---|---|
 | `disc`, `s3`, `azure_blob`, `snowflake`, `access` | `gcs`, `databricks`, `postgres`, `mssql` |
 
-The four legacy types run through `LegacyDriverAdapter` today; native ports
+The four hybrid types run through `LegacyDriverAdapter` today and declare
+`spark_capable = False`, so they are DuckDB-only. Pairing one with `pyspark`
+is refused at plan time. If a native driver fails to import, Ovid2 logs a
+warning instead of silently falling back to the legacy adapter. Native ports
 land per type. **Connections** (`src/ovid2/connections/`) are the reusable
 credential-bearing endpoints; **addresses** are cheap views onto them.
 Connections and drivers are top-level packages (not under `core`) so the web
@@ -770,6 +826,7 @@ templates.
 | `tools import-cdm` | Regenerate a CDM YAML tree from an authoritative xlsx |
 | `tools import-vocabulary` | Slice a vocabulary out of the OMOP CONCEPT bundle |
 | `tools ods {ls,resolve,dimensions}` | Browse the Data Space namespace |
+| `tools export-table` | Export a Data Space table (full-table or above `$OVID2_EXPORT_MAX_ROWS` runs in a driver container) |
 | `tools test-engine` | Probe an engine config (used by the web tier via subprocess) |
 | `tools probe-connection` | Probe a connection's credentials/reachability |
 | `tools browse-storage` | List a storage location (host-side filesystem browser) |
@@ -950,7 +1007,10 @@ Capabilities are cumulative:
 `ovid2 mcp` exposes a curated **88-tool** MCP surface over that API for AI
 agents (stdio or streamable-HTTP transport). It speaks *only* HTTP to the API
 and imports no pipeline, driver, or secret module — the agent tier is the
-untrusted planner.
+untrusted planner. Agents can browse metadata freely, but reading row values
+(`ods_sample_table`, exports, job artifacts) returns an approval id that a
+human must approve first (`dataspace.agent_row_access`, single-use, one
+table per approval).
 
 ## LLM assistant
 
@@ -1063,10 +1123,26 @@ uv run pre-commit run --all            # everything the commit hooks run
 | `test_agent_tier_capability_only.py` | The MCP tier speaks only the HTTP API |
 | `test_llm_tier_isolation.py` | Web / MCP never import the executor-only LLM runtime |
 | `test_agent_tools_catalogue.py` | The assistant's tool allow-list matches real routes and excludes sensitive ones |
-| `test_destructive_ops_require_approval.py` | Destructive operations go through the human-approval gate |
+| `test_destructive_ops_require_approval.py` | Destructive operations and agent row reads go through the human-approval gate |
+| `test_tier_import_closure.py` | The web / MCP transitive imports stay free of `ovid2.core`, engines and SDKs |
+| `test_executor_subprocess_env_scoped.py` | Every web/MCP spawn passes a scoped env, and every broker call passes a secret scope |
+| `test_control_tier_no_row_access.py` | Control-tier code calls no row-access or data-plane driver method |
+| `test_driver_data_plane_declared.py` | Every driver declares `spark_capable` and has a data plane |
 | `test_web_openapi_stable.py` | The public API schema only changes intentionally |
 
 ## Documentation
+
+**Start with the Ovid2 Manual** — a one-stop, searchable guide for
+operators, researchers, developers and administrators (12 chapters:
+getting started, concepts, the web panel, running jobs, data models,
+authoring pipelines, the assistant, operations, the developer guide, a
+generated reference, and help).
+
+- In the web panel: **System → Manual** (`/manual`).
+- As a static site: `ovid2 manual build --out site/` (or `ovid2 manual serve`).
+- Source: [`src/ovid2/resources/manual/`](src/ovid2/resources/manual/).
+
+Background and design notes:
 
 - [`docs/quickstart-local.md`](docs/quickstart-local.md) — Docker-less local run
 - [`docs/formatter-spec.md`](docs/formatter-spec.md) — declarative formatter reference

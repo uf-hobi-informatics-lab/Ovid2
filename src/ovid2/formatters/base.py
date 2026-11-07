@@ -32,6 +32,12 @@ class BaseFormatter(ABC):
     #: outside the custom adapter (e.g. a direct unit test).
     _context: AdapterContext | None = None
 
+    #: Engine family this formatter is limited to (``"spark"``), or
+    #: ``None`` when it only uses the portable DSL. Checked by the custom
+    #: adapter before :meth:`format`, so an incompatible engine fails the
+    #: table with a clear message instead of a backend type error.
+    requires_family: str | None = None
+
     def set_context(self, ctx: AdapterContext) -> None:
         """Attach the adapter runtime context.
 

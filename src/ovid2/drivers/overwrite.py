@@ -19,11 +19,19 @@ point. It is import-safe (the driver registry is imported lazily).
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ovid2.drivers.base import DriverControl
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["OutputNotEmptyError", "assert_output_writable", "probe_output_tables"]
+__all__ = [
+    "OutputLocationInvalidError",
+    "OutputNotEmptyError",
+    "assert_output_writable",
+    "probe_output_tables",
+]
 
 
 class OutputNotEmptyError(RuntimeError):
@@ -46,7 +54,32 @@ class OutputNotEmptyError(RuntimeError):
         )
 
 
-def probe_output_tables(driver: Any) -> list[str] | None:
+class OutputLocationInvalidError(OutputNotEmptyError):
+    """Raised when the output location cannot be written at all.
+
+    Example: a Snowflake output naming a database but no schema. It
+    subclasses :class:`OutputNotEmptyError` so every executor entry point
+    that already fails fast on the overwrite gate also fails fast here —
+    before any table is read or transformed.
+    """
+
+    def __init__(self, address: str, reason: str) -> None:
+        self.address = address
+        self.tables = []
+        RuntimeError.__init__(self, f"Output '{address}' is not a valid write location: {reason}")
+
+
+def _location_error(driver: Any) -> str | None:
+    """Return why ``driver``'s location cannot be written, or ``None``."""
+    from ovid2.drivers._layout import warehouse_output_location_error
+
+    return warehouse_output_location_error(
+        str(getattr(driver, "type_name", "") or ""),
+        getattr(driver, "location", None) or {},
+    )
+
+
+def probe_output_tables(driver: DriverControl) -> list[str] | None:
     """Return the tables already at ``driver``'s location, or ``None`` if unknown.
 
     Never raises: any listing failure (missing SDK, credentials, bad
@@ -71,6 +104,7 @@ def assert_output_writable(
     driver: Any | None = None,
     pipeline: str | None = None,
     only_tables: list[str] | None = None,
+    sf_overrides: dict[str, Any] | None = None,
 ) -> list[str] | None:
     """Fail fast when the output location is occupied and overwrite is not confirmed.
 
@@ -84,12 +118,17 @@ def assert_output_writable(
             count as "would be overwritten" — used by runs that write a
             single known table into a shared location (``health`` writes
             ``dcq_results`` next to the CDM tables it reads).
+        sf_overrides: Legacy ``--sf_*`` overrides, applied when the
+            driver is built here so ``--sf_schema`` is honoured.
 
     Returns:
         The tables found at the output (``[]`` when empty, ``None`` when
         occupancy could not be determined).
 
     Raises:
+        OutputLocationInvalidError: When the output location cannot be
+            written (e.g. a Snowflake / Databricks output with no schema),
+            regardless of ``overwrite``.
         OutputNotEmptyError: When the output holds tables and
             ``overwrite`` is ``False``.
     """
@@ -100,10 +139,15 @@ def assert_output_writable(
         try:
             from ovid2.drivers.registry import driver_from_address
 
-            driver = driver_from_address(address_name, pipeline=pipeline)
+            driver = driver_from_address(address_name, pipeline=pipeline, sf_overrides=sf_overrides)
         except Exception as exc:
             logger.warning("overwrite gate: cannot resolve output '%s': %s", label, exc)
             return None
+    reason = _location_error(driver)
+    if reason:
+        # Checked before the occupancy probe: a schema-less warehouse
+        # location would otherwise list the whole database.
+        raise OutputLocationInvalidError(label, reason)
     tables = probe_output_tables(driver)
     if tables is None:
         logger.warning(

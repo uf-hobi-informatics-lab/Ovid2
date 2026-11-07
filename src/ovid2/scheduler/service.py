@@ -315,9 +315,13 @@ class SchedulerService:
             tables = get_all_tables(pipeline)
             transformation_names = get_all_transformations()
 
+            from ovid2.cdm.registry import resolve_cdm_for_pipeline
+            from ovid2.core.table_runner import run_tables, source_sizes_from_driver
+
+            formatters: dict[str, Any] = {}
             for table in tables:
                 try:
-                    formatter = load_formatter(
+                    formatters[table] = load_formatter(
                         pipeline,
                         table,
                         spark=spark,
@@ -330,15 +334,16 @@ class SchedulerService:
                         pipeline,
                         table,
                     )
-                    continue
-                transforms = load_transformations(transformation_names)
+
+            def _run_one(table: str) -> None:
                 run_pipeline(
                     engine=self.engine,
                     input_address=input_address,
                     output_address=output_address,
                     table_name=table,
-                    formatter=formatter,
-                    transformations=transforms,
+                    formatter=formatters[table],
+                    # Fresh transformer instances per table (parallel-safe).
+                    transformations=load_transformations(transformation_names),
                     pipeline=pipeline,
                     batch_id=batch_id,
                     event_bus=self._bus,
@@ -346,6 +351,22 @@ class SchedulerService:
                     input_address_name=self.input_address_name,
                     output_address_name=self.output_address_name,
                 )
+
+            runnable = [t for t in tables if t in formatters]
+            result = run_tables(
+                runnable,
+                _run_one,
+                engine=self.engine,
+                reference_tables=resolve_cdm_for_pipeline(pipeline).reference_tables,
+                table_sizes=source_sizes_from_driver(
+                    self.input_address_name, formatters, pipeline=pipeline, batch_id=batch_id
+                ),
+                fail_fast=True,
+            )
+            if result.failed:
+                # The batch fails on any table failure (historical contract).
+                failed_table, failed_exc = next(iter(result.failed.items()))
+                raise RuntimeError(f"table '{failed_table}' failed: {failed_exc}") from failed_exc
             success = True
         except Exception as exc:
             logger.exception("ETL job failed for %s/%s", pipeline, batch_id)

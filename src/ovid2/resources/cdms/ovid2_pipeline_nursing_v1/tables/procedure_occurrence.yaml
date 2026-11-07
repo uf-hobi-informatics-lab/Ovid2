@@ -1,0 +1,38 @@
+v: 1
+name: procedure_occurrence
+composite_key:
+- PROCEDURE_OCCURRENCE_ID
+domain_description: Ported from legacy mapping_scripts/nursing_mappers/tables_specs.csv.
+fields:
+- name: PROCEDURE_OCCURRENCE_ID
+  rdbms_type: RDBMS Text(x)
+  order: 1
+  sas_type: SAS Char(x)
+- name: PERSON_ID
+  rdbms_type: RDBMS Text(x)
+  order: 2
+  sas_type: SAS Char(x)
+- name: PROCEDURE_CONCEPT_ID
+  rdbms_type: RDBMS Text(x)
+  order: 3
+  sas_type: SAS Char(x)
+- name: PROCEDURE_DATE
+  rdbms_type: RDBMS Text(x)
+  order: 4
+  sas_type: SAS Char(x)
+- name: PROCEDURE_END_DATE
+  rdbms_type: RDBMS Text(x)
+  order: 5
+  sas_type: SAS Char(x)
+- name: PROCEDURE_TYPE_CONCEPT_ID
+  rdbms_type: RDBMS Text(x)
+  order: 6
+  sas_type: SAS Char(x)
+- name: VISIT_OCCURRENCE_ID
+  rdbms_type: RDBMS Text(x)
+  order: 7
+  sas_type: SAS Char(x)
+- name: PROCEDURE_SOURCE_VALUE
+  rdbms_type: RDBMS Text(x)
+  order: 8
+  sas_type: SAS Char(x)

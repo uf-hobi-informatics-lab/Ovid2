@@ -1,0 +1,75 @@
+# Ported verbatim from legacy mapping_scripts/pcornet_mappers/lab_result_cm_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: lab_result_cm
+ops:
+- op: legacy_select
+  columns:
+  - LAB_RESULT_CM_ID:
+      encrypt: LAB_RESULT_CM_ID
+      suffix: LAB_RESULT_CM
+  - PATID:
+      encrypt: PATID
+  - ENCOUNTERID:
+      encrypt: ENCOUNTERID
+  - SPECIMEN_SOURCE:
+      dict: lab_result_cm_specimen_source_dict
+      col: SPECIMEN_SOURCE
+  - LAB_LOINC
+  - LAB_RESULT_SOURCE:
+      dict: lab_result_cm_lab_result_source_dict
+      col: LAB_RESULT_SOURCE
+  - LAB_LOINC_SOURCE:
+      dict: lab_result_cm_lab_loinc_source_dict
+      col: LAB_LOINC_SOURCE
+  - PRIORITY:
+      dict: lab_result_cm_priority_dict
+      col: PRIORITY
+  - RESULT_LOC:
+      dict: lab_result_cm_result_loc_dict
+      col: RESULT_LOC
+  - LAB_PX
+  - LAB_PX_TYPE:
+      dict: lab_result_cm_lab_px_type_dict
+      col: LAB_PX_TYPE
+  - LAB_ORDER_DATE
+  - SPECIMEN_DATE
+  - SPECIMEN_TIME
+  - RESULT_DATE
+  - RESULT_TIME
+  - RESULT_QUAL:
+      dict: lab_result_cm_result_qual_dict
+      col: RESULT_QUAL
+  - RESULT_SNOMED
+  - RESULT_NUM
+  - RESULT_MODIFIER:
+      dict: lab_result_cm_result_modifier_dict
+      col: RESULT_MODIFIER
+  - RESULT_UNIT:
+      dict: lab_result_cm_result_unit_dict
+      col: RESULT_UNIT
+      upper: false
+  - NORM_RANGE_LOW
+  - NORM_MODIFIER_LOW:
+      dict: lab_result_cm_norm_modifier_low_dict
+      col: NORM_MODIFIER_LOW
+  - NORM_RANGE_HIGH
+  - NORM_MODIFIER_HIGH:
+      dict: lab_result_cm_norm_modifier_high_dict
+      col: NORM_MODIFIER_HIGH
+  - ABN_IND:
+      dict: lab_result_cm_abn_ind_dict
+      col: ABN_IND
+  - RAW_LAB_NAME
+  - RAW_LAB_CODE
+  - RAW_PANEL
+  - RAW_RESULT
+  - RAW_UNIT
+  - RAW_ORDER_DEPT
+  - RAW_FACILITY_CODE
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true
+  append_additional_fields:
+    join_field: LAB_RESULT_CM_ID

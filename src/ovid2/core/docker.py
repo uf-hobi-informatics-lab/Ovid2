@@ -33,6 +33,7 @@ from ovid2.config.settings import (
     LEGACY_CREDENTIALS_DIR,
     SPARK_CONFIG,
     SPARK_CORES,
+    SPARK_LOCAL_DIR_IN_CONTAINER,
     SPARK_MODE,
     WORK_DIR,
 )
@@ -165,91 +166,161 @@ def driver_container_name(instance_id: str) -> str:
     return f"ovid2-driver-{safe}"
 
 
+#: argparse dests that name an *address* the run dereferences.
+SCOPED_ADDRESS_ARGS: tuple[str, ...] = (
+    "input_address",
+    "output_address",
+    "from_address",
+    "to_address",
+    "prev_input_address",
+)
+
+#: argparse dests that name a *connection* the run dereferences.
+SCOPED_CONNECTION_ARGS: tuple[str, ...] = ("input_connection", "output_connection", "connection")
+
+#: Container path the granted secret files are bound under; exported to
+#: the container as ``OVID2_SECRETS_DIR``.
+SCOPED_SECRETS_IN_CONTAINER: str = "/ovid2-scoped-secrets"
+
+
 def _addresses_for_args(args: Any) -> list[str]:
     """Return the address names a run references, for secret scoping.
 
-    Reads the same argparse attributes :func:`_build_ovid2_argv` uses:
-    ``input_address`` / ``output_address`` (ETL family) and
-    ``from_address`` / ``to_address`` (copy / move). Missing attributes
-    are skipped. Order is preserved but duplicates are collapsed.
+    Covers every dest in :data:`SCOPED_ADDRESS_ARGS` (ETL family, copy /
+    move, and the health ``--prev_input_address`` refresh). Missing
+    attributes are skipped; order is preserved, duplicates collapsed.
     """
     names: list[str] = []
-    for attr in ("input_address", "output_address", "from_address", "to_address"):
+    for attr in SCOPED_ADDRESS_ARGS:
         value = getattr(args, attr, None)
         if value and value not in names:
             names.append(str(value))
     return names
 
 
-def _secret_refs_for_addresses(address_names: list[str]) -> set[str]:
-    """Return the secret-ref stems the given addresses depend on.
+def secret_scope_for_args(args: Any) -> Any:
+    """Return the :class:`~ovid2.config.secret_refs.SecretScope` of a run.
 
-    Thin indirection over
-    :func:`ovid2.drivers.collector.secret_refs_for_addresses` so the
-    heavy import stays lazy and unit tests can patch a stable
-    module-level name (``docker_module.secret_refs_for_addresses``).
+    Addresses, connections (health's ``--input_connection`` /
+    ``--output_connection``), the engine, and the pipeline (salts + the
+    XOR seed). Pinned by
+    ``tests/contract/test_executor_subprocess_env_scoped.py``.
     """
-    return secret_refs_for_addresses(address_names)
+    from ovid2.config.secret_refs import SecretScope
+    from ovid2.config.settings import SEED_FILE_NAME
 
-
-def secret_refs_for_addresses(address_names: list[str]) -> set[str]:
-    from ovid2.drivers.collector import (
-        secret_refs_for_addresses as _impl,
+    connections = tuple(
+        str(getattr(args, a)) for a in SCOPED_CONNECTION_ARGS if getattr(args, a, None)
+    )
+    engine = getattr(args, "engine", None)
+    pipeline = getattr(args, "pipeline", None)
+    return SecretScope(
+        connections=connections,
+        addresses=tuple(_addresses_for_args(args)),
+        engines=(str(engine),) if engine else (),
+        pipelines=(str(pipeline),) if pipeline else (),
+        extra_refs=(SEED_FILE_NAME,) if pipeline else (),
     )
 
-    return _impl(address_names)
+
+def _granted_secret_files(args: Any) -> list[Path]:
+    """Return host paths of the secret files this run was granted.
+
+    When the host process already runs inside a scoped executor env
+    (``OVID2_SECRETS_DIR`` set by the web worker), that directory *is*
+    the grant. Otherwise (direct CLI invocation) the scope is derived
+    from ``args`` and resolved against the normal ``secrets.d`` search
+    path — names only, values are never read here.
+    """
+    from ovid2.config.executor_env import secret_source_dirs
+    from ovid2.config.secret_refs import resolve_scope
+
+    scoped = os.environ.get("OVID2_SECRETS_DIR")
+    if scoped and Path(scoped).is_dir():
+        return sorted(p for p in Path(scoped).iterdir() if p.is_file())
+    try:
+        wanted = resolve_scope(secret_scope_for_args(args))
+    except Exception:
+        logger.warning("Could not compute scoped secret refs; granting none.")
+        return []
+    files: list[Path] = []
+    for name in sorted(wanted):
+        src = next(
+            (d / name for d in secret_source_dirs() if (d / name).is_file()),
+            None,
+        )
+        if src is None:
+            logger.debug("Secret %r referenced by this run has no file; skipping.", name)
+            continue
+        files.append(src)
+    return files
 
 
 def _scoped_secret_mounts(args: Any, host_xdg_config: Path) -> list[str]:
-    """Return docker ``-v`` / ``--tmpfs`` flags scoping secret exposure.
+    """Return docker flags scoping the container's secret exposure.
 
-    Shadows ``/ovid2-user-config/secrets.d`` with an empty tmpfs so no
-    real secret is visible by default, then bind-mounts back (read-only)
-    only the ``secrets.d/<ref>.json`` files the run's addresses reference.
+    - Every granted secret file is bind-mounted read-only under
+      :data:`SCOPED_SECRETS_IN_CONTAINER`, exported as
+      ``OVID2_SECRETS_DIR`` (consulted first by ``load_secret``).
+    - Under ``OVID2_SECRETS_SCOPE_MODE=enforce`` the mounted config
+      tree's real ``secrets.d`` (``/ovid2-user-config/ovid2/secrets.d``)
+      is shadowed by an empty tmpfs, so nothing outside the grant is
+      reachable at all. Under the default ``warn`` it stays visible and
+      out-of-scope reads log a warning (roll-out mode).
 
-    When the reference set cannot be computed (e.g. address configs are
-    unreadable) the function *fails safe* by shadowing secrets.d with an
-    empty tmpfs and mounting nothing back — the executor then surfaces a
-    clear "secret not found" error rather than silently gaining access to
-    every pipeline's credentials.
+    Historical note: before 2026-11-04 this shadowed
+    ``/ovid2-user-config/secrets.d`` — one level too shallow (the tree is
+    ``$XDG_CONFIG_HOME/ovid2/secrets.d``) — so no secret was ever hidden.
     """
-    secrets_dir = host_xdg_config / "secrets.d"
-    if not secrets_dir.is_dir():
-        return []
+    from ovid2.config.secrets import SCOPE_MODE_ENV, scope_enforced
 
-    # Compute the needed refs without importing pyspark / reading secret
-    # values. ``secret_refs_for_addresses`` walks address -> connection
-    # -> secret_ref names only. Bound at call time (rather than module
-    # import) to keep this module import-cheap and to let tests patch it.
-    try:
-        refs = _secret_refs_for_addresses(_addresses_for_args(args))
-    except Exception:
-        logger.warning(
-            "Could not compute scoped secret refs; shadowing all secrets.",
-        )
-        refs = set()
+    flags: list[str] = []
+    for src in _granted_secret_files(args):
+        flags.extend(["-v", f"{src}:{SCOPED_SECRETS_IN_CONTAINER}/{src.name}:ro"])
+    flags.extend(["-e", f"OVID2_SECRETS_DIR={SCOPED_SECRETS_IN_CONTAINER}"])
+    enforce = scope_enforced()
+    flags.extend(["-e", f"{SCOPE_MODE_ENV}={'enforce' if enforce else 'warn'}"])
+    if enforce and (host_xdg_config / "ovid2" / "secrets.d").is_dir():
+        flags.extend(["--tmpfs", "/ovid2-user-config/ovid2/secrets.d:ro,size=64k"])
+    return flags
 
-    # tmpfs shadow hides the real secrets.d contents from the container.
-    # The tmpfs itself must be writable so docker can create the nested
-    # bind-mount points for the individual secret files; each secret file
-    # is then bound read-only on top, so no secret is ever writable.
-    mounts: list[str] = ["--tmpfs", "/ovid2-user-config/secrets.d"]
 
-    # Bind each needed secret file back on top of the tmpfs, read-only.
-    for ref in sorted(refs):
-        src = secrets_dir / f"{ref}.json"
-        if src.is_file():
-            mounts.extend(
-                ["-v", f"{src}:/ovid2-user-config/secrets.d/{ref}.json:ro"],
-            )
-        else:
-            logger.warning(
-                "Secret ref %r referenced by this run has no file at %s; "
-                "the executor will fail loudly if it needs it.",
-                ref,
-                src,
-            )
-    return mounts
+def effective_spark_config(*, cluster_mode: bool) -> dict[str, str]:
+    """Return :data:`SPARK_CONFIG` adjusted for the run mode and host.
+
+    Cluster mode keeps the configured driver heap. Local mode runs every
+    task inside the driver JVM, so its heap is sized from host RAM
+    (:func:`ovid2.config.spark_sizing.local_driver_memory_gb`) unless the
+    operator pinned ``spark.driver.memory`` via
+    ``$OVID2_SPARK_LOCAL_DRIVER_MEMORY_GB``. Executor settings are inert
+    in local mode and left untouched.
+    """
+    from ovid2.config import spark_sizing
+
+    config = dict(SPARK_CONFIG)
+    if not cluster_mode:
+        config["spark.driver.memory"] = f"{spark_sizing.local_driver_memory_gb()}g"
+    return config
+
+
+def duckdb_memory_limit(container_memory_gb: int) -> str:
+    """Return the DuckDB ``memory_limit`` for a container capped at ``container_memory_gb``.
+
+    An operator-set ``$OVID2_DUCKDB_MEMORY_LIMIT`` on the host wins;
+    otherwise 85% of the container cap (at least 1 GB).
+    """
+    override = os.environ.get("OVID2_DUCKDB_MEMORY_LIMIT", "").strip()
+    if override:
+        return override
+    return f"{max(1, int(container_memory_gb * 0.85))}GB"
+
+
+def _is_duckdb_engine(args: Any) -> bool:
+    """Return whether ``args.engine`` resolves to the DuckDB family."""
+    from ovid2.config.engines import engine_family, resolve_engine_type
+
+    engine_type = resolve_engine_type(getattr(args, "engine", None))
+    return engine_type is not None and engine_family(engine_type) == "duckdb"
 
 
 def build_docker_command(args: Any, instance: OvidInstance) -> list[str]:
@@ -275,15 +346,33 @@ def build_docker_command(args: Any, instance: OvidInstance) -> list[str]:
     output_dir = project_root / "output"
     output_dir.mkdir(exist_ok=True)
 
-    driver_memory = SPARK_CONFIG.get("spark.driver.memory", "32g")
-    driver_overhead = SPARK_CONFIG.get("spark.driver.memoryOverhead", "4g")
+    cluster_mode = SPARK_MODE == "cluster" and not getattr(args, "no_spark_cluster", False)
+    spark_config = effective_spark_config(cluster_mode=cluster_mode)
+    driver_memory = spark_config.get("spark.driver.memory", "32g")
+    driver_overhead = spark_config.get("spark.driver.memoryOverhead", "4g")
     docker_memory_gb = int(_parse_memory_gb(driver_memory) + _parse_memory_gb(driver_overhead) + 4)
 
-    spark_conf_args: list[str] = []
-    for key, value in SPARK_CONFIG.items():
-        spark_conf_args.extend(["--conf", f"{key}={value}"])
+    # DuckDB runs the whole job in-process in this one container, so it
+    # is sized from the host (75% RAM, every CPU), not from Spark's
+    # driver-heap cap, and the job's *Workers* field is its table
+    # concurrency. See :func:`ovid2.config.spark_sizing.duckdb_container_sizing`.
+    duckdb_env_flags: list[str] = []
+    cpu_flags: list[str] = []
+    if _is_duckdb_engine(args):
+        from ovid2.config import spark_sizing
 
-    if SPARK_MODE == "cluster" and not getattr(args, "no_spark_cluster", False):
+        sizing = spark_sizing.duckdb_container_sizing(getattr(args, "workers", None))
+        docker_memory_gb = sizing["memory_gb"]
+        cpu_flags = [f"--cpus={sizing['cpus']}"]
+        duckdb_env_flags = [
+            "-e",
+            f"OVID2_DUCKDB_THREADS={os.environ.get('OVID2_DUCKDB_THREADS') or sizing['threads']}",
+            "-e",
+            "OVID2_DUCKDB_TABLE_CONCURRENCY="
+            f"{os.environ.get('OVID2_DUCKDB_TABLE_CONCURRENCY') or sizing['table_concurrency']}",
+        ]
+
+    if cluster_mode:
         master_url = instance.spark_master_url()
         network_args = ["--network", instance.network_name]
     else:
@@ -295,10 +384,28 @@ def build_docker_command(args: Any, instance: OvidInstance) -> list[str]:
     # ``SPARK_MASTER_URL`` is picked up by :class:`PySparkEngine`, and
     # ``SPARK_CONF_<KEY>=value`` is a widely-used convention consumable by
     # any downstream tooling that wants to layer conf on top. The
-    # ``spark_conf_args`` list is retained above only because the docker
-    # memory calculation depends on ``SPARK_CONFIG`` being read.
-    spark_env_flags: list[str] = ["-e", f"SPARK_MASTER_URL={master_url}"]
-    for key, value in SPARK_CONFIG.items():
+    # ``spark.driver.memory`` is a JVM-launch setting, so the local-mode
+    # (host-sized) value travels as ``OVID2_SPARK_DRIVER_MEMORY`` which
+    # :class:`PySparkEngine` layers over ``SPARK_CONFIG``.
+    spark_env_flags: list[str] = [
+        "-e",
+        f"SPARK_MASTER_URL={master_url}",
+        "-e",
+        f"SPARK_LOCAL_DIRS={SPARK_LOCAL_DIR_IN_CONTAINER}",
+        "-e",
+        f"OVID2_SPARK_DRIVER_MEMORY={driver_memory}",
+        # The DuckDB engine spills / stages into the same real-disk
+        # per-run scratch mount Spark uses.
+        "-e",
+        f"OVID2_DUCKDB_SCRATCH_ROOT={SPARK_LOCAL_DIR_IN_CONTAINER}",
+        # DuckDB sizes ``memory_limit`` from /proc/meminfo, which inside a
+        # container reports the *host's* RAM — far above the ``--memory``
+        # cap below, so it would be OOM-killed before it ever spills.
+        # Give it ~85% of the container cap (the rest is Python/Arrow).
+        "-e",
+        f"OVID2_DUCKDB_MEMORY_LIMIT={duckdb_memory_limit(docker_memory_gb)}",
+    ]
+    for key, value in spark_config.items():
         # Env var names must be shell-safe; keys already contain only
         # ``[a-z0-9.]``, so replace dots with underscores.
         env_key = "SPARK_CONF_" + key.replace(".", "_").upper()
@@ -461,6 +568,8 @@ def build_docker_command(args: Any, instance: OvidInstance) -> list[str]:
         f"{instance.spark_work_dir}:{SPARK_WORK_DIR_IN_CONTAINER}:rw",
         "-v",
         f"{instance.spark_logs_dir}:{SPARK_LOGS_DIR_IN_CONTAINER}:rw",
+        "-v",
+        f"{instance.spark_local_dir}:{SPARK_LOCAL_DIR_IN_CONTAINER}:rw",
     ]
 
     cmd: list[str] = [
@@ -471,8 +580,10 @@ def build_docker_command(args: Any, instance: OvidInstance) -> list[str]:
         driver_container_name(instance.instance_id),
         *user_flags,
         f"--memory={docker_memory_gb}g",
+        *cpu_flags,
         "-e",
         f"OVID2_INSTANCE_ID={instance.instance_id}",
+        *duckdb_env_flags,
         *pythonpath_env,
         *xdg_env,
         *work_env,
@@ -535,6 +646,8 @@ def _build_ovid2_argv(args: Any) -> list[str]:
         subcommands like ``tools copy`` return two leading tokens).
     """
     command = getattr(args, "command", "etl")
+    if command in ("tools export-table", "export"):
+        return _build_tools_export_argv(args)
     if command in ("tools copy", "copy"):
         tokens = _build_tools_copy_argv(args)
     elif command in ("tools move", "move"):
@@ -628,6 +741,34 @@ def _build_health_argv(args: Any) -> list[str]:
         value = getattr(args, optional, None)
         if value:
             tokens.extend([f"--{optional}", value])
+    return tokens
+
+
+def _build_tools_export_argv(args: Any) -> list[str]:
+    """Return the ovid2 argv tokens for ``ovid2 tools export-table``.
+
+    Runs the table export inside the driver container (row data never
+    passes through a host process). ``--out`` is the same absolute path
+    on both sides — :func:`ovid2.tools.table_ops._run_export_host_mode`
+    bind-mounts its parent directory read-write.
+    """
+    tokens: list[str] = [
+        "tools",
+        "export-table",
+        str(args.connection),
+        "--path",
+        str(args.path),
+        "--format",
+        str(args.fmt),
+        "--delimiter",
+        str(args.delimiter),
+        "--header-case",
+        str(args.header_case),
+        "--out",
+        str(args.out),
+    ]
+    if getattr(args, "limit", None) is not None:
+        tokens.extend(["--limit", str(args.limit)])
     return tokens
 
 

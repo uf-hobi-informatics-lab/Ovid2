@@ -1,0 +1,29 @@
+# Ported verbatim from legacy mapping_scripts/pcornet_mappers/private_address_geocode_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: private_address_geocode
+ops:
+- op: legacy_select
+  columns:
+  - GEOCODEID:
+      encrypt: GEOCODEID
+  - ADDRESSID:
+      encrypt: ADDRESSID
+  - GEOCODE_STATE
+  - GEOCODE_COUNTY
+  - GEOCODE_LONGITUDE
+  - GEOCODE_LATITUDE
+  - GEOCODE_BLOCK
+  - GEOCODE_TRACT
+  - GEOCODE_GROUP
+  - GEOCODE_ZCTA
+  - GEOCODE_CUSTOM
+  - GEOCODE_CUSTOM_TEXT
+  - SHAPEFILE
+  - GEO_ACCURACY
+  - GEO_PROV_REF
+  - ASSIGNMENT_DATE
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true

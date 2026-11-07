@@ -1,0 +1,32 @@
+# Ported verbatim from legacy mapping_scripts/nursing_mappers/procedure_occurrence_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: procedure_occurrence
+ops:
+- op: legacy_select
+  columns:
+  - PROCEDURE_OCCURRENCE_ID:
+      encrypt: PROCEDURE_OCCURRENCE_ID
+  - PERSON_ID:
+      encrypt: PERSON_ID
+  - PROCEDURE_CONCEPT_ID
+  - PROCEDURE_DATE
+  - PROCEDURE_DATETIME
+  - PROCEDURE_END_DATE
+  - PROCEDURE_END_DATETIME
+  - PROCEDURE_TYPE_CONCEPT_ID
+  - MODIFIER_CONCEPT_ID
+  - QUANTITY
+  - PROVIDER_ID:
+      encrypt: PROVIDER_ID
+  - VISIT_OCCURRENCE_ID:
+      encrypt: VISIT_OCCURRENCE_ID
+  - VISIT_DETAIL_ID:
+      encrypt: VISIT_DETAIL_ID
+  - PROCEDURE_SOURCE_VALUE
+  - PROCEDURE_SOURCE_CONCEPT_ID
+  - MODIFIER_SOURCE_VALUE
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true

@@ -1,0 +1,55 @@
+# Ported verbatim from legacy mapping_scripts/pcornet_mappers/obs_gen_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: obs_gen
+ops:
+- op: legacy_select
+  columns:
+  - OBSGENID:
+      encrypt: OBSGENID
+      suffix: OBS_GEN
+  - PATID:
+      encrypt: PATID
+  - ENCOUNTERID:
+      encrypt: ENCOUNTERID
+  - OBSGEN_PROVIDERID:
+      encrypt: OBSGEN_PROVIDERID
+  - OBSGEN_START_DATE
+  - OBSGEN_START_TIME
+  - OBSGEN_STOP_DATE
+  - OBSGEN_STOP_TIME
+  - OBSGEN_TYPE:
+      dict: obs_gen_obsgen_type_dict
+      col: OBSGEN_TYPE
+  - OBSGEN_CODE
+  - OBSGEN_RESULT_QUAL:
+      dict: obs_gen_obsgen_result_qual_dict
+      col: OBSGEN_RESULT_QUAL
+  - OBSGEN_RESULT_TEXT
+  - OBSGEN_RESULT_NUM
+  - OBSGEN_RESULT_MODIFIER:
+      dict: obs_gen_obsgen_result_modifier_dict
+      col: OBSGEN_RESULT_MODIFIER
+  - OBSGEN_RESULT_UNIT:
+      dict: obs_gen_obsgen_result_unit_dict
+      col: OBSGEN_RESULT_UNIT
+      upper: false
+  - OBSGEN_TABLE_MODIFIED
+  - OBSGEN_ID_MODIFIED
+  - OBSGEN_SOURCE:
+      dict: obs_gen_obsgen_source_dict
+      col: OBSGEN_SOURCE
+  - OBSGEN_ABN_IND:
+      dict: obs_gen_obsgen_abn_ind_dict
+      col: OBSGEN_ABN_IND
+  - RAW_OBSGEN_NAME
+  - RAW_OBSGEN_CODE
+  - RAW_OBSGEN_TYPE
+  - RAW_OBSGEN_RESULT
+  - RAW_OBSGEN_UNIT
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true
+  append_additional_fields:
+    join_field: OBSGENID

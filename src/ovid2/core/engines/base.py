@@ -16,6 +16,7 @@ Concrete implementations live under :mod:`ovid2.core.engines`.
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -23,6 +24,8 @@ from datetime import UTC
 from typing import TYPE_CHECKING, Any
 
 from ovid2.core.engines.protocols import EngineFamily, EngineFunctions, EngineSession
+
+_log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ovid2.core.engines.metrics import EngineMetricsSample
@@ -208,6 +211,19 @@ class BaseEngine(ABC):
             return df.dropDuplicates()
         return df.dropDuplicates(cols)
 
+    def drop_duplicates_keep_incomplete_keys(self, df: Any, cols: list[str]) -> Any | None:
+        """Single-pass dedup on ``cols`` that keeps every incomplete-key row.
+
+        A row whose key has a NULL / empty component is never a duplicate
+        (null-key passthrough). The portable fallback filters, dedups the
+        complete-key half and unions the halves — which makes engines
+        that do not share sub-plans across a UNION (DuckDB) compute the
+        upstream plan twice. Engines that can do it in one pass override
+        this; ``None`` means "use the filter + union fallback".
+        """
+        del df, cols
+        return None
+
     def with_column(self, df: Any, name: str, col: Any) -> Any:
         """Add / replace a column.
 
@@ -248,7 +264,48 @@ class BaseEngine(ABC):
             handle, not the original ``df``.
         """
         del name  # unused by the caching default
-        return df.cache()
+        cached = df.cache()
+        self._checkpoints().append(cached)
+        return cached
+
+    def _checkpoints(self) -> list[Any]:
+        """Return the per-engine list of live checkpoint handles."""
+        handles: list[Any] | None = getattr(self, "_checkpoint_handles", None)
+        if handles is None:
+            handles = []
+            self._checkpoint_handles = handles
+        return handles
+
+    def release_checkpoints(self) -> int:
+        """Release every checkpoint taken since the last release.
+
+        Called by the pipeline after each table is written: a table's
+        checkpoints (e.g. the PCORnet->OMOP ``common`` fan-in) are never
+        reused by the next table, and on Spark leaving them cached piles
+        executor storage memory up across ``measurement`` /
+        ``observation`` / ``procedure_occurrence``. The Spark default
+        calls ``unpersist(blocking=False)``; engines whose checkpoints
+        are tables override this. Best-effort — never raises.
+
+        Returns:
+            Number of handles released.
+        """
+        handles = self._checkpoints()
+        released = 0
+        while handles:
+            handle = handles.pop()
+            unpersist = getattr(handle, "unpersist", None)
+            if unpersist is None:
+                continue
+            try:
+                unpersist(blocking=False)
+            except TypeError:
+                unpersist()
+            except Exception as exc:
+                _log.debug("checkpoint release failed: %s", exc)
+                continue
+            released += 1
+        return released
 
     def get_stager(self) -> Any:
         """Return the :class:`EngineStager` for this engine's family.

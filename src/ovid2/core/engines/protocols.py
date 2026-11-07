@@ -39,6 +39,7 @@ class EngineFamily(str, Enum):
 
     SPARK = "spark"
     SNOWPARK = "snowpark"
+    DUCKDB = "duckdb"
 
 
 @runtime_checkable

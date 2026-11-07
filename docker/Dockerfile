@@ -216,11 +216,21 @@ FROM base AS final
 # google-cloud-storage in-container (Bitnami used to ship boto3 implicitly).
 # ``pyspark`` is already present from the ``spark`` stage at the pinned
 # version; pip leaves it untouched.
-ARG OVID2_EXTRAS=s3,azure,gcs
+# ``postgres`` / ``mssql`` / ``access`` serve the DuckDB engine's
+# warehouse + Access strategies (``drivers/<type>/duckdb.py``).
+ARG OVID2_EXTRAS=s3,azure,gcs,postgres,mssql,access
 COPY --from=builder /wheels/*.whl /tmp/
 RUN set -e; whl="$(ls /tmp/*.whl)"; \
     pip3 install --no-cache-dir "${whl}[${OVID2_EXTRAS}]" && rm /tmp/*.whl \
     && python3 -c "import pyspark, sys; assert pyspark.__version__.startswith('4.1'), pyspark.__version__; print('python', sys.version.split()[0], 'pyspark', pyspark.__version__)"
+
+# DuckDB extensions are baked into a read-only directory so runs never
+# download at run time (offline / egress-restricted hosts). The engine
+# points ``extension_directory`` here via $OVID2_DUCKDB_EXTENSION_DIR.
+ENV OVID2_DUCKDB_EXTENSION_DIR=/opt/duckdb/extensions
+RUN mkdir -p "${OVID2_DUCKDB_EXTENSION_DIR}" \
+    && python3 -c "import duckdb, os; c = duckdb.connect(config={'extension_directory': os.environ['OVID2_DUCKDB_EXTENSION_DIR']}); [c.execute(f'INSTALL {e}') for e in ('httpfs', 'azure', 'postgres', 'aws')]; [c.execute(f'LOAD {e}') for e in ('httpfs', 'azure', 'postgres', 'aws')]; print('duckdb', duckdb.__version__, 'extensions ok')" \
+    && chmod -R a+rX /opt/duckdb
 
 COPY docker/entrypoint.sh /usr/local/bin/ovid2-entrypoint
 RUN chmod 755 /usr/local/bin/ovid2-entrypoint

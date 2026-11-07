@@ -208,19 +208,28 @@ class _FakeDriver:
 
 
 class TestSparkStager:
-    def test_supports_every_registered_driver(self) -> None:
-        from ovid2.drivers.registry import DRIVERS
+    def test_supports_every_spark_capable_driver(self) -> None:
+        from ovid2.drivers.registry import DRIVERS, load_class
 
         for name in DRIVERS:
-            assert SparkEngineStager.supports(name), name
+            assert SparkEngineStager.supports(name) is load_class(name).spark_capable, name
+
+    def test_rejects_duckdb_only_hybrids(self) -> None:
+        for name in ("postgres", "mssql", "gcs", "databricks"):
+            assert SparkEngineStager.supports(name) is False, name
+
+    def test_supports_native_spark_drivers(self) -> None:
+        for name in ("disc", "s3", "azure_blob", "snowflake", "access"):
+            assert SparkEngineStager.supports(name) is True, name
 
     def test_supports_rejects_unknown_type(self) -> None:
         assert SparkEngineStager.supports("not_a_driver_type") is False
 
-    def test_supported_driver_types_equals_registry(self) -> None:
-        from ovid2.drivers.registry import DRIVERS
+    def test_supported_driver_types_are_the_spark_capable_ones(self) -> None:
+        from ovid2.drivers.registry import DRIVERS, load_class
 
-        assert SparkEngineStager.supported_driver_types() == frozenset(DRIVERS)
+        expected = frozenset(t for t in DRIVERS if load_class(t).spark_capable)
+        assert SparkEngineStager.supported_driver_types() == expected
 
     def test_materialise_is_pass_through(self) -> None:
         engine = _FakeEngine()

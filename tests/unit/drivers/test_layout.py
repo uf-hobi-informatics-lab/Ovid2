@@ -83,3 +83,26 @@ def test_sql_ident(name: str, expected: str) -> None:
 def test_sql_ident_empty_raises() -> None:
     with pytest.raises(BatchPathError):
         sql_ident("  ")
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("conn_type", "location", "ok"),
+    [
+        ("snowflake", {"path": "SANDBOX"}, False),
+        ("snowflake", {}, False),
+        ("snowflake", {"path": "SANDBOX/OVID_X"}, True),
+        ("snowflake", {"database": "SANDBOX", "schema": "S"}, True),
+        ("databricks", {"catalog": "main"}, False),
+        ("databricks", {"path": "main/bronze"}, True),
+        ("postgres", {"path": "db"}, True),
+        ("disc", {}, True),
+        (None, {"path": "X"}, True),
+    ],
+)
+def test_warehouse_output_location_error(
+    conn_type: str | None, location: dict[str, str], ok: bool
+) -> None:
+    from ovid2.drivers._layout import warehouse_output_location_error
+
+    assert (warehouse_output_location_error(conn_type, location) is None) is ok

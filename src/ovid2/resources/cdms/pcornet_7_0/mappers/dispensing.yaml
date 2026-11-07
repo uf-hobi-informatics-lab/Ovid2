@@ -1,0 +1,40 @@
+# Ported verbatim from legacy mapping_scripts/pcornet_mappers/dispensing_mapper.py by ovid2.tools.legacy_mapper_migrator.
+# Do not hand-edit: re-run the migrator when the legacy mapper changes.
+v: 1
+table: dispensing
+ops:
+- op: legacy_select
+  columns:
+  - DISPENSINGID:
+      encrypt: DISPENSINGID
+  - PATID:
+      encrypt: PATID
+  - PRESCRIBINGID:
+      encrypt: PRESCRIBINGID
+  - DISPENSE_DATE
+  - NDC
+  - DISPENSE_SOURCE:
+      dict: dispensing_dispense_source_dict
+      col: DISPENSE_SOURCE
+      fallback: none
+  - DISPENSE_SUP
+  - DISPENSE_AMT
+  - DISPENSE_DOSE_DISP
+  - DISPENSE_DOSE_DISP_UNIT:
+      dict: dispensing_dispense_dose_disp_unit_dict
+      col: DISPENSE_DOSE_DISP_UNIT
+      fallback: none
+  - DISPENSE_ROUTE:
+      dict: dispensing_dispense_route_dict
+      col: DISPENSE_ROUTE
+      fallback: none
+  - RAW_NDC
+  - RAW_DISPENSE_DOSE_DISP
+  - RAW_DISPENSE_DOSE_DISP_UNIT
+  - RAW_DISPENSE_ROUTE
+  - UPDATED:
+      updated: true
+  - SOURCE:
+      source: true
+  append_additional_fields:
+    join_field: DISPENSINGID
