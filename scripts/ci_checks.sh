@@ -66,6 +66,39 @@ fi
 gates=("$@")
 [ ${#gates[@]} -eq 0 ] && gates=("${ALL_GATES[@]}")
 
+junit_dir="${OVID2_CI_JUNIT_DIR:-$(mktemp -d)}"
+mkdir -p "$junit_dir"
+
+# On GitHub Actions, turn each failed/errored test in a JUnit report into an
+# ``::error`` workflow command. Annotations are readable without signing in
+# (job logs are not), so a red public run is diagnosable from the API alone.
+annotate_failures() {
+    [ "${GITHUB_ACTIONS:-}" = "true" ] || return 0
+    [ -f "$1" ] || return 0
+    python3 - "$1" <<'PY' || true
+import sys
+import xml.etree.ElementTree as ET
+
+
+def esc(text: str) -> str:
+    return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+shown = 0
+for case in ET.parse(sys.argv[1]).getroot().iter("testcase"):
+    for kind in ("failure", "error"):
+        node = case.find(kind)
+        if node is None:
+            continue
+        shown += 1
+        if shown > 40:  # GitHub keeps at most 50 annotations per step
+            break
+        test_id = f"{case.get('classname', '')}::{case.get('name', '')}"
+        detail = (node.get("message") or "") + "\n" + (node.text or "")[-1500:]
+        print(f"::error title={kind}: {esc(test_id)}::{esc(detail.strip())}")
+PY
+}
+
 failed=()
 for gate in "${gates[@]}"; do
     echo "::group::[ci_checks] $gate"
@@ -78,10 +111,14 @@ for gate in "${gates[@]}"; do
             mypy --config-file=pyproject.toml src/ovid2 || rc=$?
             ;;
         contract)
-            pytest -q -p no:cacheprovider -m contract || rc=$?
+            pytest -q -p no:cacheprovider -rfE -m contract \
+                --junitxml="$junit_dir/contract.xml" || rc=$?
+            annotate_failures "$junit_dir/contract.xml"
             ;;
         unit)
-            pytest -q -p no:cacheprovider -m "$UNIT_MARKERS" || rc=$?
+            pytest -q -p no:cacheprovider -rfE -m "$UNIT_MARKERS" \
+                --junitxml="$junit_dir/unit.xml" || rc=$?
+            annotate_failures "$junit_dir/unit.xml"
             ;;
         *)
             echo "unknown gate: $gate (expected one of: ${ALL_GATES[*]})" >&2

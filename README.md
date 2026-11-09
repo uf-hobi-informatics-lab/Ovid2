@@ -13,12 +13,26 @@ Last Updated: 2026-10-22
 > notice. Do not point production workloads at it without reviewing the
 > [status](#status) section first.
 
-**Ovid2** is a healthcare-data **ETL engine**. It ingests raw source data and
-transforms it into standardized common-data-model shapes —
+**Ovid2** is a **domain-agnostic data ETL engine**. It reads raw source data
+from any supported storage, runs it on any supported compute engine, reshapes
+it into a **target data model you describe declaratively** (tables, keys,
+value sets, vocabularies, quality checks), and writes the result to the exact
+location you choose. Nothing about a domain is hard-coded in the engine — a
+domain is a plug-in.
+
+**Healthcare is Ovid2's first and most mature domain, with production-grade
+support.** It ships
 [PCORnet CDM v7.0](https://pcornet.org/data-driven-common-model/) and
-[OMOP CDM 5.3](https://ohdsi.github.io/CommonDataModel/) — and writes the
-result to a configurable output. It also runs the **PCORnet EDC data-quality
-checks** against any PCORnet database.
+[OMOP CDM 5.3](https://ohdsi.github.io/CommonDataModel/), a PCORnet → OMOP
+converter, cross-CDM clinical vocabularies (LOINC, SNOMED, ICD-10-CM,
+ICD-9-CM, RxNorm, NDC, OMOP CONCEPT), the **PCORnet EDC data-quality checks**,
+clinical fixers, and patient-identifier hashing — the same stack that runs
+research-network data refreshes today.
+
+**Trajectory: domain-agnostic.** Every new domain arrives the way PCORnet and
+OMOP did — as a data-model directory, vocabularies, mapper/fixer specs and
+health checks — without changing the engine, the drivers, or the compute
+layer.
 
 Its defining design goal is **isolation between the three axes of an ETL
 job — storage, compute, and algorithms** — so each can change without
@@ -32,6 +46,21 @@ touching the others:
 - **Algorithms** — declarative formatters, mappers, fixer chains, and a
   general-purpose transforms library that never import a specific CDM or
   engine (**CDM/ETL independence**).
+
+### Domain scope
+
+| Domain-agnostic core (any data) | Healthcare domain pack (shipped, production-grade) |
+| --- | --- |
+| Drivers, engines, `EngineStager`, the Data Space | PCORnet CDM v7.0 and OMOP CDM 5.3 (YAML under `resources/cdms/`) |
+| Formatter / mapper / fixer spec engines, transforms library | PCORnet → OMOP converter (18/18 tables) |
+| CDM registry (`CdmHandle`) and semantic layer (vocabularies + bindings) | Clinical vocabularies: LOINC, SNOMED, ICD-10/9-CM, RxNorm, NDC, OMOP CONCEPT |
+| Data-health check framework (operators, packages, reports) | PCORnet EDC check packages (`dcq_v7_03`, `20r1`) and clinical fixers |
+| Web panel, REST API, MCP server, LLM assistant, scheduler | `hash_id` patient-identifier hashing, PHI-aware defaults |
+
+A new domain is a new CDM directory (`resources/cdms/<model>/`), optional
+vocabularies and bindings (`resources/semantic/`), and pipeline specs — see
+[Data models (CDMs)](src/ovid2/resources/manual/02-concepts/cdms.md) and
+[Extending Ovid2 → Add a CDM](src/ovid2/resources/manual/09-developers/extending.md#add-a-cdm).
 
 Around that engine sits an event-driven display layer, a pip/pipx-installable
 package, XDG-compliant paths, a **web control panel + JSON API**, an

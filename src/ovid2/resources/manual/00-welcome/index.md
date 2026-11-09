@@ -1,15 +1,22 @@
 ---
 title: Welcome to Ovid2
-summary: The healthcare-data ETL engine — what it does, who it serves, and where to begin.
+summary: The domain-agnostic data ETL engine — healthcare first — what it does, who it serves, and where to begin.
 audience: [user, researcher, developer, admin]
 ---
 
-**Ovid2** turns raw clinical extracts — CSV dumps, warehouse schemas,
-Access databases — into standard **common data models** (PCORnet CDM 7.0
-and OMOP CDM 5.3), checks their quality against the PCORnet EDC
-characterisation queries, and delivers the result to wherever your
-research team works: a folder, an object store, or a warehouse such as
-Snowflake.
+**Ovid2** is a **domain-agnostic data ETL engine**. It turns raw source
+data — CSV dumps, warehouse schemas, Access databases — into the target
+**data model** you describe in YAML, checks its quality, and delivers the
+result to wherever your team works: a folder, an object store, or a
+warehouse such as Snowflake. Storage, compute and the data model are all
+plug-ins; nothing about a domain is hard-coded in the engine.
+
+**Healthcare is its first and most mature domain.** Ovid2 ships
+production-grade support for clinical research data: **PCORnet CDM 7.0**
+and **OMOP CDM 5.3**, a PCORnet → OMOP converter, standard clinical
+vocabularies, and the PCORnet EDC characterisation queries. New domains
+arrive the same way — as a data model, vocabularies and specs — without
+changing the engine. See [What is Ovid2?](what-is-ovid2.md#domain-scope).
 
 It is built around one promise, its creed: ***Fidelity over fortune.***
 Every value that leaves Ovid2 can be traced back to the source row and the
@@ -31,7 +38,7 @@ dropped, and nothing runs that a human did not approve.
 
 | You bring | Ovid2 provides | You get |
 | --- | --- | --- |
-| Raw source files or tables | Declarative **formatters** that shape each CDM table | Standard PCORnet or OMOP tables |
+| Raw source files or tables | Declarative **formatters** that shape each data-model table | Tables in your target model — e.g. standard PCORnet or OMOP |
 | Local value codes | **Mappers** that translate to standard vocabularies | Codes researchers can query consistently |
 | Imperfect data | **Fixers** that repair or remove illogical records — always logged | Cleaner, characterised data |
 | A storage account | **Drivers** for disc, S3, Azure Blob, GCS, Snowflake, Databricks, Postgres, SQL Server, Access | Reads and writes at the exact location you choose |

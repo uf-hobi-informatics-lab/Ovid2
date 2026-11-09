@@ -1,7 +1,9 @@
 # Security Policy
 
-Ovid2 is a data-processing engine used with healthcare pipeline data (PCORnet,
-OMOP). Security and data-confidentiality issues are treated as high priority.
+Ovid2 is a domain-agnostic data engine; its first and production domain is
+healthcare (PCORnet, OMOP), so it routinely handles protected health
+information. Security and data-confidentiality issues are treated as high
+priority.
 
 ## Reporting a vulnerability
 

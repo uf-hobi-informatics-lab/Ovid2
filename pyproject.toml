@@ -5,14 +5,14 @@ build-backend = "hatchling.build"
 [project]
 name = "ovid2"
 version = "0.1.0"
-description = "Ovid2 — data processing engine for healthcare pipeline data (PCORnet CDM v7.0, OMOP CDM 5.3)"
+description = "Ovid2 — domain-agnostic data ETL engine with production-grade healthcare support (PCORnet CDM v7.0, OMOP CDM 5.3)"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
     { name = "UF HOBI Informatics Lab" },
 ]
-keywords = ["etl", "pyspark", "pcornet", "omop", "cdm", "healthcare"]
+keywords = ["etl", "data-engineering", "domain-agnostic", "pyspark", "duckdb", "cdm", "healthcare", "pcornet", "omop"]
 classifiers = [
     # NOTE: "Private :: Do Not Upload" was removed as part of the OSS-readiness
     # scaffolding. Re-add it if the open-source release is not approved.

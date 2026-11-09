@@ -4,7 +4,8 @@ Thanks for your interest in Ovid2. This document explains how to set up a
 development environment, the quality bar every change must clear, and the
 conventions that keep the codebase coherent.
 
-> Ovid2 is a data-processing engine used with healthcare pipeline data. Read
+> Ovid2 is a domain-agnostic data engine whose first, production domain is
+> healthcare (PCORnet, OMOP) — treat every dataset as potentially sensitive. Read
 > [`SECURITY.md`](SECURITY.md) before contributing — **never** put credentials,
 > secrets, tokens, or real patient data in code, tests, issues, or PRs.
 

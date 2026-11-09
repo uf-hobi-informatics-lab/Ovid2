@@ -13,8 +13,8 @@
 title: The Ovid2 Manual
 tagline: >-
   Everything you need to run, understand and extend **Ovid2** — the
-  healthcare-data ETL engine that turns raw clinical extracts into
-  PCORnet and OMOP common data models. *Fidelity over fortune.*
+  domain-agnostic data ETL engine, shipping production-grade healthcare
+  support (PCORnet and OMOP common data models). *Fidelity over fortune.*
 edit_base_url: ""
 
 audiences:

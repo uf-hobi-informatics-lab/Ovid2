@@ -6,33 +6,59 @@ audience: [user, researcher, developer, admin]
 
 ## The problem
 
-Clinical research networks pool data from many hospitals. Each hospital
-exports its electronic health records differently: other file layouts,
-other code systems, other ideas of what "missing" means. Before anyone can
-ask a research question across sites, every extract has to be reshaped into
-one agreed **common data model** (CDM), its local codes translated to
-standard vocabularies, and its quality characterised so analysts know what
-they can trust.
+Whenever data from many sources has to be pooled, every source exports it
+differently: other file layouts, other code systems, other ideas of what
+"missing" means. Before anyone can ask a question across sources, every
+extract has to be reshaped into one agreed **data model**, its local codes
+translated to standard vocabularies, and its quality characterised so
+analysts know what they can trust.
 
-Doing that by hand-written script per site, per table, per refresh does not
-scale and is hard to audit. Ovid2 replaces those scripts with a
-**declarative engine**: each site describes *what* its data looks like in
-small YAML specs, and Ovid2 does the *how* — the same way, every time, on
-whatever storage and compute the site has.
+Ovid2 was born in clinical research, where this problem is acute: research
+networks pool electronic health records from many hospitals into one
+**common data model** (CDM). Doing that by hand-written script per site,
+per table, per refresh does not scale and is hard to audit. Ovid2 replaces
+those scripts with a **declarative engine**: each source describes *what*
+its data looks like in small YAML specs, and Ovid2 does the *how* — the
+same way, every time, on whatever storage and compute is available.
+
+## Domain scope
+
+Ovid2 is **domain-agnostic by design** and **healthcare-first in
+practice**.
+
+| Domain-agnostic core — works for any data | Healthcare domain pack — shipped, production-grade |
+| --- | --- |
+| Drivers, engines and the Data Space | PCORnet CDM 7.0 and OMOP CDM 5.3 |
+| Formatter, mapper and fixer spec engines; the transforms library | PCORnet → OMOP converter |
+| The CDM registry and semantic layer (vocabularies and bindings) | LOINC, SNOMED, ICD-10-CM, ICD-9-CM, RxNorm, NDC, OMOP CONCEPT |
+| The data-health check framework and reports | PCORnet EDC check packages and clinical fixers |
+| Web panel, REST API, MCP server, assistant, scheduler | Patient-identifier hashing and PHI-aware defaults |
+
+The engine never imports a specific data model: everything it knows about a
+CDM comes from a YAML directory read through a `CdmHandle` (see
+[Data models](../02-concepts/cdms.md)). That is the trajectory of the
+project — **each new domain arrives the way PCORnet and OMOP did**, as a
+data-model directory, optional vocabularies, pipeline specs and health
+checks, with no change to the engine, drivers or compute layer. See
+[Extending Ovid2 → Add a CDM](../09-developers/extending.md#add-a-cdm).
+
+The rest of this manual uses healthcare examples because that is where
+Ovid2 runs in production today; the concepts apply unchanged to any domain.
 
 ## What Ovid2 does
 
 1. **Reads** raw extracts from wherever they live — a folder, an S3 or
    Azure container, a Snowflake schema, an Access database.
-2. **Formats** each source into the target CDM table shape.
-3. **De-duplicates** rows on the CDM's key.
+2. **Formats** each source into the target data-model table shape.
+3. **De-duplicates** rows on the model's key.
 4. **Maps** local values to standard codes (for example `M` → `M`,
    `Male` → `M`, `1` → `M` for PCORnet `SEX`).
 5. **Fixes** illogical or orphaned records with a catalogue of reusable,
    documented corrections.
 6. **Writes** the result to an exact output location.
-7. **Characterises** the output with the PCORnet EDC data-quality queries
-   and Ovid2's own health panels.
+7. **Characterises** the output with declarative health checks — for
+   healthcare, the PCORnet EDC data-quality queries plus Ovid2's own
+   panels.
 
 It can also convert a finished PCORnet database to **OMOP CDM 5.3**, copy
 or move tables between any two storage systems, and export any table it can
@@ -49,6 +75,10 @@ Three axes, kept independent
 Declarative first
 : Formatters, mappers and fixer chains are data, not code. Hand-written
   Python is an explicitly gated exception.
+
+Domain-agnostic engine
+: Data models, vocabularies and health checks are YAML plug-ins. The
+  engine ships healthcare models first and stays free of any one domain.
 
 Lazy end to end
 : Nothing is computed until the single final write, so a run is one
