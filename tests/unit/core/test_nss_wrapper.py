@@ -196,6 +196,11 @@ def _mk_args() -> Namespace:
 @pytest.fixture
 def _stubbed_instance(monkeypatch: pytest.MonkeyPatch) -> OvidInstance:
     """Return an OvidInstance whose nss overlay materialisation is a no-op."""
+    # ``build_compose_dict`` clamps workers to the host (spark_sizing);
+    # pin a large host so the worker-count assertions hold on small CI runners.
+    monkeypatch.setenv("OVID2_HOST_CPUS", "96")
+    monkeypatch.setenv("OVID2_HOST_MEMORY_GB", "958")
+    monkeypatch.delenv("OVID2_SPARK_ALLOW_OVERSUBSCRIBE", raising=False)
     monkeypatch.setattr(
         OvidInstance,
         "ensure_nss_files",

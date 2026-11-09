@@ -18,7 +18,10 @@
 # --docker builds (once, cached by a hash of pyproject.toml) an image that
 # mirrors the CI install, so local results match CI even when the host
 # Python or its packages differ. Override the base image with
-# OVID2_CI_PYTHON_IMAGE (default python:3.14-slim).
+# OVID2_CI_PYTHON_IMAGE (default python:3.14-slim). The container also
+# pretends to be a GitHub-hosted runner (2 CPUs / 7 GiB via OVID2_HOST_CPUS /
+# OVID2_HOST_MEMORY_GB; override with OVID2_CI_HOST_CPUS / _MEMORY_GB) so
+# host-sized code paths (spark_sizing worker clamps) behave as they do in CI.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -60,6 +63,8 @@ EOF
         -v "$pw:/etc/passwd:ro" \
         -e PYTHONPATH=/w/src:/w/pipelines -e PYTHONDONTWRITEBYTECODE=1 \
         -e MYPY_CACHE_DIR=/tmp/mypy_cache -e RUFF_CACHE_DIR=/tmp/ruff_cache \
+        -e OVID2_HOST_CPUS="${OVID2_CI_HOST_CPUS:-2}" \
+        -e OVID2_HOST_MEMORY_GB="${OVID2_CI_HOST_MEMORY_GB:-7}" \
         -v "$PWD:/w" -w /w "$tag" bash scripts/ci_checks.sh "$@"
 fi
 

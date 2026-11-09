@@ -54,6 +54,11 @@ def _stub_nss_files(monkeypatch: pytest.MonkeyPatch) -> None:
         "ensure_directories",
         lambda self: None,
     )
+    # ``build_compose_dict`` clamps workers to the host (spark_sizing);
+    # pin a large host so "1 master + N workers" holds on small CI runners.
+    monkeypatch.setenv("OVID2_HOST_CPUS", "96")
+    monkeypatch.setenv("OVID2_HOST_MEMORY_GB", "958")
+    monkeypatch.delenv("OVID2_SPARK_ALLOW_OVERSUBSCRIBE", raising=False)
 
 
 def _mk_args(command: str) -> argparse.Namespace:
