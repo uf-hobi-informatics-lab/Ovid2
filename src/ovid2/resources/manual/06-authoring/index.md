@@ -13,8 +13,8 @@ describe it declaratively, as data:
 | Formatter specs | `formatters/<table>.yaml` | how each CDM table is built from raw files |
 | Mapper specs | `mappers/<table>.yaml` | how values are translated to standard codes |
 | Dictionaries | `dictionaries.py` | the value maps the mappers use |
-| Fixer chains | `fixer_configs.py` | which corrections apply to each table |
-| Transform chains | `transforms/<name>.yaml` (optional) | reusable general clean-up |
+| Fixer chains | `fixer_configs.yaml` (or `fixer_configs.py`) | which corrections apply to each table |
+| Transform chains | `transforms/<name>.yaml` + `transforms/assignments.yaml` (optional) | reusable clean-up / user-defined columns, run in the `transform` stage |
 
 Hand-written Python is the **exception**. Use it only behind
 `adapter: custom` (formatters) or `class:` (mappers), and only when the
@@ -42,5 +42,6 @@ declarative form can't express what you need.
 The `ovid2_pipelines` namespace merges every directory on `PYTHONPATH`
 that contains an `ovid2_pipelines/` folder. Keep site packages in your
 own repository and add its `pipelines/` directory to `PYTHONPATH` (or set
-`OVID2_PIPELINES_DIR`). Production jobs run inside the Docker image, so
+`OVID2_PIPELINE_PACKAGES_DIR`). From a source checkout the CLI and web find
+`<repo>/pipelines` automatically. Production jobs run inside the Docker image, so
 **rebuild the image** after changing a package.

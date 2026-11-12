@@ -15,6 +15,7 @@ run Ovid2 to read it.
   <a class="card" href="vocabularies.md"><strong>Vocabularies</strong><span>ICD, LOINC, SNOMED, RxNorm, NDC and OMOP concepts.</span></a>
   <a class="card" href="data-lineage.md"><strong>Data lineage</strong><span>Trace any value back to its source row and rule.</span></a>
   <a class="card" href="reading-health-reports.md"><strong>Reading a health report</strong><span>Interpret EDC checks and health panels.</span></a>
+  <a class="card" href="report-studio.md"><strong>Report Studio</strong><span>Design, share and export reports from your runs.</span></a>
   <a class="card" href="privacy.md"><strong>Privacy & identifiers</strong><span>Hashed ids, tokens, and what never leaves the executor.</span></a>
 </div>
 
@@ -29,7 +30,8 @@ run Ovid2 to read it.
 3. **What was corrected or removed?** Every fixer logs an event per table.
    → [Data lineage](data-lineage.md#what-the-fixers-changed)
 4. **How good is it?** Run a health check and read the report. →
-   [Reading a health report](reading-health-reports.md)
+   [Reading a health report](reading-health-reports.md); turn it into a
+   shareable, exportable report in the [Report Studio](report-studio.md)
 
 > [!TIP]
 > Every CDM can be browsed in the web panel under **Configure → CDMs**:

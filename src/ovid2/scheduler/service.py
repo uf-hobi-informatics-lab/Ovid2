@@ -316,7 +316,11 @@ class SchedulerService:
             transformation_names = get_all_transformations()
 
             from ovid2.cdm.registry import resolve_cdm_for_pipeline
-            from ovid2.core.table_runner import run_tables, source_sizes_from_driver
+            from ovid2.core.table_runner import (
+                driver_prestage,
+                run_tables,
+                source_sizes_from_driver,
+            )
 
             formatters: dict[str, Any] = {}
             for table in tables:
@@ -362,6 +366,13 @@ class SchedulerService:
                     self.input_address_name, formatters, pipeline=pipeline, batch_id=batch_id
                 ),
                 fail_fast=True,
+                prestage=driver_prestage(
+                    self.engine,
+                    self.input_address_name,
+                    formatters,
+                    pipeline=pipeline,
+                    batch_id=batch_id,
+                ),
             )
             if result.failed:
                 # The batch fails on any table failure (historical contract).

@@ -63,7 +63,7 @@ def test_pipeline_plan_endpoint(web_client, submit_pipeline: str) -> None:  # ty
     body = r.json()
     assert body["pipeline"] == submit_pipeline
     assert body["cdm"] == "pcornet_7_0"
-    assert body["transformations"] == ["format", "deduplicate", "map", "fix"]
+    assert body["transformations"] == ["format", "deduplicate", "transform", "map", "fix"]
     by_name = {t["name"]: t for t in body["tables"]}
     assert by_name["demographic"]["has_formatter"] is True
     assert by_name["demographic"]["source"] == "yaml"

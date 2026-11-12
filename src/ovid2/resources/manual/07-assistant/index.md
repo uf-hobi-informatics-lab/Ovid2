@@ -11,7 +11,7 @@ only the executor touches data.**
 | | In-panel assistant | Agent Ovid (MCP) |
 | --- | --- | --- |
 | Where | the robot button on the panel's right rail | any MCP client (desktop assistants, IDEs, agents) |
-| Reads | GET-only API tools, with your role capped at operator | the 88 typed MCP tools |
+| Reads | GET-only API tools, with your role capped at operator | the 100 typed MCP tools |
 | Acts | proposals, draft jobs and UI changes **you** click to run | submits, edits, cancels, behind RBAC and approvals |
 | Models | yours: any OpenAI-compatible endpoint, plus an optional decision model | the client's model |
 | Guide | [Assistant tools](assistant-tools.md) | [Agent Ovid (MCP)](mcp.md) |

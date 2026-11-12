@@ -31,6 +31,7 @@ Which links you see depends on your [role](../08-operations/auth.md).
 | | Pipelines | saved configs, packages, formatters, mappers | [Pipelines](pipelines.md) |
 | | Jobs | history, live run pages, reports | [Jobs & runs](jobs.md) |
 | Explore | Data Space | browse, inspect and export any table | [Data Space](dataspace.md) |
+| | Reports | design, organise, share and export research reports | [Report Studio](../05-data/report-studio.md) |
 | Configure | Storage accounts | connections and addresses | [Storage & warehouses](storage-and-warehouses.md) |
 | | Warehouses | compute engines | [Storage & warehouses](storage-and-warehouses.md) |
 | | LLMs, Secrets, CDMs, Settings, Setup wizard | configuration | [Configure](configure.md) |

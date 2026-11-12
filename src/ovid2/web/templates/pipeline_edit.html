@@ -12,7 +12,7 @@
 
   <form method="post"
         action="{% if mode == 'new' %}/pipelines{% else %}/pipelines/{{ name }}{% endif %}"
-        class="edit-form">
+        class="edit-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if mode == 'new' %}
       <div class="form-row">
         <label for="name">Name</label>

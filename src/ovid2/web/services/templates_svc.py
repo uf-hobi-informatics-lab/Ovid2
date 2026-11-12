@@ -10,6 +10,7 @@ files.
 
 from __future__ import annotations
 
+import json
 import logging
 
 from ovid2.web import db as web_db
@@ -81,7 +82,12 @@ def scaffold_pipeline(
         raise ScaffoldError("Supply either `template` or both `source_pipeline` and `cdm`.")
 
     try:
-        dest = _scaffold(request.name, source_pipeline=source_pipeline, cdm=cdm)
+        dest = _scaffold(
+            request.name,
+            source_pipeline=source_pipeline,
+            cdm=cdm,
+            identity=dict(request.identity or {}),
+        )
     except NewPipelineError as exc:
         raise ScaffoldError(str(exc)) from None
 
@@ -90,8 +96,13 @@ def scaffold_pipeline(
         actor=actor,
         action="pipeline.scaffold",
         target=request.name,
-        detail_json=(
-            f'{{"source_pipeline": "{source_pipeline}", "cdm": "{cdm}", "path": "{dest}"}}'
+        detail_json=json.dumps(
+            {
+                "source_pipeline": source_pipeline,
+                "cdm": cdm,
+                "path": str(dest),
+                "identity_keys": sorted((request.identity or {}).keys()),
+            }
         ),
     )
     logger.info(

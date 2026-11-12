@@ -37,6 +37,7 @@ audiences:
       - 05-data/index
       - 05-data/data-lineage
       - 05-data/reading-health-reports
+      - 05-data/report-studio
       - 00-welcome/glossary
   developer:
     label: Developer
@@ -88,7 +89,7 @@ chapters:
   - slug: 05-data
     title: Data & data models
     summary: For researchers — what each CDM holds, how source values become standard ones, and how to judge data quality.
-    pages: [index, pcornet, omop, pcornet-to-omop, vocabularies, data-lineage, reading-health-reports, privacy]
+    pages: [index, pcornet, omop, pcornet-to-omop, vocabularies, data-lineage, reading-health-reports, report-studio, privacy]
 
   - slug: 06-authoring
     title: Authoring pipelines

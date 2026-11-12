@@ -218,7 +218,10 @@ FROM base AS final
 # version; pip leaves it untouched.
 # ``postgres`` / ``mssql`` / ``access`` serve the DuckDB engine's
 # warehouse + Access strategies (``drivers/<type>/duckdb.py``).
-ARG OVID2_EXTRAS=s3,azure,gcs,postgres,mssql,access
+# ``reports`` ships the Report Studio exporters (vl-convert, svglib,
+# reportlab, python-docx) so ``ovid2 tools report-export`` also works
+# in-container.
+ARG OVID2_EXTRAS=s3,azure,gcs,postgres,mssql,access,reports
 COPY --from=builder /wheels/*.whl /tmp/
 RUN set -e; whl="$(ls /tmp/*.whl)"; \
     pip3 install --no-cache-dir "${whl}[${OVID2_EXTRAS}]" && rm /tmp/*.whl \

@@ -84,6 +84,19 @@ class BaseFormatter(ABC):
         return []
 
     @property
+    def source_globs(self) -> list[str]:
+        """Return every input glob the formatter reads (primary first).
+
+        Advisory: lets an engine pre-stage all of a run's sources up front
+        and in parallel (:func:`ovid2.core.table_runner.run_tables`).
+        Multi-source formatters override it; the default is the primary
+        source only. Listing a glob the formatter does not read only costs
+        a parse; omitting one only loses the head start.
+        """
+        name = self.input_file_name
+        return [name] if name and name != "*" else []
+
+    @property
     def primary_source_optional(self) -> bool:
         """Whether the table's primary input source is optional.
 

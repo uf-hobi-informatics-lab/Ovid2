@@ -37,6 +37,11 @@ packages, engine, workers) that is **not queued**. Your browser opens the
 draft's run page, where ▶ pulses. Press ▶ to queue it, or **discard** to
 delete it. The worker never runs a draft by itself.
 
+Ask *"build an EDC summary of the last health run"* and the assistant drafts
+a **report** instead (`create_report_draft`). It reads the source's columns
+and the chart library first, then opens the private draft in the
+[Report Studio](../05-data/report-studio.md). Nothing is shared or exported.
+
 ## Proposals
 
 For `submit_run`, `cancel_job`, `rerun_job`, and enabling or disabling
@@ -54,6 +59,13 @@ Your browser:
   safe colours, sizes, weights and fonts);
 - refuses unreadable contrast;
 - applies the change and shows **Undo**.
+
+`edit_report_layout` changes the report open in the
+[Report Studio](../05-data/report-studio.md), for example *"hide the status
+section, move exceptions first and switch to the colour-blind theme"*. The
+system prompt carries the report outline (ids only, sanitised). Your browser
+sends the ops to the same server validator the editor uses, applies them to
+your **unsaved** working copy, and shows **Undo**. Only you can **Save**.
 
 ## Never exposed
 

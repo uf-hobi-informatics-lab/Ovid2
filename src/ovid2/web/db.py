@@ -194,6 +194,96 @@ CREATE TABLE IF NOT EXISTS web_user_prefs (
 """
 
 
+# Report Studio (adr-report-studio.md). Report *sources* (aggregated run
+# datasets) live as JSON files under ``$XDG_STATE_HOME/ovid2/reports``;
+# these tables hold the catalogue rows, the saved layouts, their version
+# history, per-user organisation (folders / favourites) and the share ACL.
+_REPORT_STUDIO_DDL: tuple[str, ...] = (
+    """
+    CREATE TABLE IF NOT EXISTS web_report_sources (
+        source_id     TEXT PRIMARY KEY,
+        kind          TEXT NOT NULL,
+        title         TEXT NOT NULL,
+        instance_id   TEXT,
+        pipeline      TEXT,
+        batch_id      TEXT,
+        cdm           TEXT,
+        generated_at  TEXT,
+        ingested_at   TEXT NOT NULL,
+        ingested_by   TEXT NOT NULL,
+        file_name     TEXT NOT NULL,
+        summary_json  TEXT
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_web_report_sources_kind ON web_report_sources(kind, generated_at DESC)",
+    "CREATE INDEX IF NOT EXISTS ix_web_report_sources_instance ON web_report_sources(instance_id)",
+    """
+    CREATE TABLE IF NOT EXISTS web_reports (
+        report_id     TEXT PRIMARY KEY,
+        owner         TEXT NOT NULL,
+        title         TEXT NOT NULL,
+        description   TEXT NOT NULL DEFAULT '',
+        folder        TEXT NOT NULL DEFAULT '',
+        tags_json     TEXT NOT NULL DEFAULT '[]',
+        source_id     TEXT NOT NULL,
+        template_id   TEXT,
+        layout_json   TEXT NOT NULL,
+        version       INTEGER NOT NULL DEFAULT 1,
+        status        TEXT NOT NULL DEFAULT 'saved',
+        created_at    TEXT NOT NULL,
+        updated_at    TEXT NOT NULL,
+        updated_by    TEXT NOT NULL,
+        archived      INTEGER NOT NULL DEFAULT 0
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_web_reports_owner ON web_reports(owner, updated_at DESC)",
+    "CREATE INDEX IF NOT EXISTS ix_web_reports_source ON web_reports(source_id)",
+    """
+    CREATE TABLE IF NOT EXISTS web_report_versions (
+        report_id     TEXT NOT NULL,
+        version       INTEGER NOT NULL,
+        layout_json   TEXT NOT NULL,
+        saved_at      TEXT NOT NULL,
+        saved_by      TEXT NOT NULL,
+        note          TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (report_id, version)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS web_report_shares (
+        report_id       TEXT NOT NULL,
+        principal_kind  TEXT NOT NULL,
+        principal       TEXT NOT NULL,
+        permission      TEXT NOT NULL,
+        granted_by      TEXT NOT NULL,
+        granted_at      TEXT NOT NULL,
+        PRIMARY KEY (report_id, principal_kind, principal)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_web_report_shares_principal ON web_report_shares(principal_kind, principal)",
+    """
+    CREATE TABLE IF NOT EXISTS web_report_favorites (
+        user_id     TEXT NOT NULL,
+        report_id   TEXT NOT NULL,
+        created_at  TEXT NOT NULL,
+        PRIMARY KEY (user_id, report_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS web_report_templates (
+        template_id   TEXT PRIMARY KEY,
+        owner         TEXT NOT NULL,
+        name          TEXT NOT NULL,
+        description   TEXT NOT NULL DEFAULT '',
+        source_kind   TEXT NOT NULL,
+        layout_json   TEXT NOT NULL,
+        shared        INTEGER NOT NULL DEFAULT 0,
+        created_at    TEXT NOT NULL
+    )
+    """,
+)
+
+
 def ensure_schema() -> None:
     """Create web-tier tables and indexes if they do not already exist."""
     path = web_db_path()
@@ -201,6 +291,8 @@ def ensure_schema() -> None:
     conn = sqlite3.connect(path, isolation_level=None)
     try:
         conn.execute("PRAGMA journal_mode = WAL")
+        for stmt in _REPORT_STUDIO_DDL:
+            conn.execute(stmt)
         conn.execute(_WEB_JOBS_DDL)
         for stmt in _WEB_JOBS_INDEXES:
             conn.execute(stmt)

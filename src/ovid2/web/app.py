@@ -11,9 +11,6 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import os
-import sys
-from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
@@ -21,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 
 from ovid2 import __version__
+from ovid2.config.pipeline_packages import ensure_pipeline_packages_on_path
 from ovid2.web import db as web_db
 from ovid2.web.routes import api_v1, auth, branding, html, llm_html, manual_html
 from ovid2.web.templating import static_dir
@@ -53,25 +51,12 @@ class NoCacheStaticFiles(StaticFiles):
 def _inject_dev_pipelines_dir() -> None:
     """When running from a source checkout, put ``pipelines/`` on ``sys.path``.
 
-    Production installations register pipelines under ``ovid2_pipelines``
-    via ``pip install`` and this helper is a no-op. For a developer
-    running ``ovid2 web`` from the repo the helper walks up from
-    :mod:`ovid2` looking for a sibling ``pipelines/`` directory.
-    Overridable via ``OVID2_PIPELINES_DIR``.
+    Thin wrapper over
+    :func:`ovid2.config.pipeline_packages.ensure_pipeline_packages_on_path`
+    (shared with the CLI entry point so both surfaces discover the same
+    ``ovid2_pipelines.*`` packages).
     """
-    override = os.environ.get("OVID2_PIPELINES_DIR")
-    if override:
-        candidate = Path(override)
-        if candidate.is_dir() and str(candidate) not in sys.path:
-            sys.path.insert(0, str(candidate))
-        return
-    here = Path(__file__).resolve()
-    for parent in here.parents:
-        candidate = parent / "pipelines"
-        if (candidate / "ovid2_pipelines").is_dir():
-            if str(candidate) not in sys.path:
-                sys.path.insert(0, str(candidate))
-            return
+    ensure_pipeline_packages_on_path()
 
 
 def create_app() -> FastAPI:

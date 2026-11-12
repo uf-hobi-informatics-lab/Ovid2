@@ -25,5 +25,5 @@ ARGS_MODEL = GetPipelineArgs
 
 
 async def run(client: WebApiClient, args: GetPipelineArgs) -> Any:
-    """Call ``GET /api/v1/pipelines/{pipeline}``."""
-    return await client.get(f"/api/v1/pipelines/{args.pipeline}")
+    """Call ``GET /api/v1/pipeline-packages/{pipeline}``."""
+    return await client.get(f"/api/v1/pipeline-packages/{args.pipeline}")

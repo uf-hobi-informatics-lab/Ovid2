@@ -69,10 +69,12 @@ def get_all_transformations() -> list[str]:
 
     1. ``format``       — pipeline-specific reshaping.
     2. ``deduplicate``  — before Map so the map UDF sees fewer rows.
-    3. ``map``          — value dictionaries + ID encryption.
-    4. ``fix``          — cross-table and single-column repairs.
+    3. ``transform``    — the pipeline's assigned transform chains
+       (``transforms/assignments.yaml``); a no-op when none are assigned.
+    4. ``map``          — value dictionaries + ID encryption.
+    5. ``fix``          — cross-table and single-column repairs.
     """
-    return ["format", "deduplicate", "map", "fix"]
+    return ["format", "deduplicate", "transform", "map", "fix"]
 
 
 def resolve_transformations(transformations: list[str]) -> list[str]:
@@ -414,10 +416,12 @@ def load_transformations(transformation_names: list[str]) -> list[BaseTransforme
     from ovid2.transformations.map import MapTransformer
     from ovid2.transformations.quality.mapping_gap import MappingGapTransformer
     from ovid2.transformations.quality.mapping_report import MappingReportTransformer
+    from ovid2.transformations.transform import TransformStageTransformer
 
     transformer_map: dict[str, type[BaseTransformer]] = {
         "format": FormatTransformer,
         "deduplicate": DeduplicateTransformer,
+        "transform": TransformStageTransformer,
         "map": MapTransformer,
         "fix": FixTransformer,
         # Analysis

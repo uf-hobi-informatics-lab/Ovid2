@@ -1,0 +1,34 @@
+name: EDC submission summary
+description: >-
+  One-page overview for a data-characterisation submission — headline
+  counts, status mix, per-part breakdown and the checks that need action.
+layout:
+  v: 1
+  title: Data-characterisation summary
+  theme: publication
+  page: {size: letter, orientation: portrait}
+  options: {show_provenance: true, show_toc: false}
+  sections:
+    - id: overview
+      title: Overview
+      blocks:
+        - {id: intro, type: text, text_ref: overview}
+        - {id: kpi_total, type: chart, chart: kpi, dataset: summary, width: third,
+           params: {value: checks_total, label: Checks run, format: integer}}
+        - {id: kpi_pass, type: chart, chart: kpi, dataset: summary, width: third,
+           params: {value: pass_rate, label: Pass rate, format: number, suffix: "%", threshold: 90, good_when: above}}
+        - {id: kpi_exc, type: chart, chart: kpi, dataset: summary, width: third,
+           params: {value: checks_exception, label: Exceptions, format: integer, threshold: 1, good_when: below}}
+    - id: status
+      title: Check outcomes
+      blocks:
+        - {id: status_donut, type: chart, chart: donut, dataset: status, title: Checks by status, width: half,
+           params: {category: status, value: checks, color_scheme: status, labels: true}}
+        - {id: parts_stack, type: chart, chart: stacked_bar, dataset: parts, title: Outcomes by part, width: half,
+           params: {category: part, value: checks, stack_by: status, color_scheme: status, sort: none}}
+    - id: action
+      title: Checks needing action
+      blocks:
+        - {id: exc_table, type: chart, chart: table, dataset: checks, title: Exceptions and errors,
+           filters: [{field: status, op: in, value: [exception, error]}],
+           params: {columns: [check_name, part, edc_table, status, exception_count, interpretation], status_column: status}}

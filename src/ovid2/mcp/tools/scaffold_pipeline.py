@@ -30,6 +30,14 @@ class ScaffoldPipelineArgs(BaseModel):
         None,
         description="Target CDM name (required with source_pipeline).",
     )
+    identity: dict[str, Any] | None = Field(
+        None,
+        description=(
+            "Identity constants for the clone (NETWORKID, DATAMARTID, DATAVANT_KEY, "
+            "MERGE_DATABASE_NAME, …). Unset keys get name-derived defaults — call "
+            "inspect_pipeline_template first to see which keys the template declares."
+        ),
+    )
 
 
 TOOL_NAME = "scaffold_pipeline"
@@ -38,14 +46,16 @@ TOOL_DESCRIPTION = (
     "explicit source pipeline) under a new name. The clone inherits the "
     "template's formatters, dictionaries, and fixer chains; its "
     "pipeline_settings identity fields are reset to name-derived "
-    "placeholders and the target CDM binding is preserved. Fails with "
+    "placeholders (or the supplied identity values), every reference to "
+    "the template package is rewritten to the clone, and the target CDM "
+    "binding is preserved. Fails with "
     "HTTP 400 when the name already exists or the template is unknown."
 )
 ARGS_MODEL = ScaffoldPipelineArgs
 
 
 async def run(client: WebApiClient, args: ScaffoldPipelineArgs) -> Any:
-    """Call ``POST /api/v1/pipelines/scaffold``.
+    """Call ``POST /api/v1/pipeline-packages/scaffold``.
 
     The server-side scaffold payload still uses the ``source_pipeline``
     key, so map the (canonical) ``source_pipeline`` field back onto it.
@@ -53,4 +63,4 @@ async def run(client: WebApiClient, args: ScaffoldPipelineArgs) -> Any:
     payload = args.model_dump(exclude_none=True)
     if "source_pipeline" in payload:
         payload["source_pipeline"] = payload.pop("source_pipeline")
-    return await client.post("/api/v1/pipelines/scaffold", json_body=payload)
+    return await client.post("/api/v1/pipeline-packages/scaffold", json_body=payload)

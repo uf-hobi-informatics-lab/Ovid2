@@ -1,0 +1,21 @@
+# Report themes style the *report output* only (Studio canvas, HTML/PDF/
+# DOCX/PNG/SVG exports). They never read the web page's theme tokens —
+# pinned by tests/contract/test_report_theme_independence.py.
+name: publication
+label: Publication
+description: Clean white paper, Tableau-10 palette, sans-serif. A safe default for papers and slides.
+mode: light
+fonts: {body: "Helvetica, Arial, sans-serif", heading: "Helvetica, Arial, sans-serif", mono: "Menlo, Consolas, monospace"}
+colors:
+  background: "#ffffff"
+  surface: "#f6f7f9"
+  text: "#1f2328"
+  muted: "#59636e"
+  border: "#d0d7de"
+  accent: "#1f6feb"
+  grid: "#e6e8eb"
+palette: ["#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f", "#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#bab0ac"]
+sequential: blues
+diverging: redblue
+status: {passed: "#2da44e", exception: "#d1242f", error: "#8250df", skipped: "#8c959f", not_applicable: "#afb8c1", warning: "#bf8700"}
+sizes: {base: 11, title: 20, heading: 15, axis: 10}

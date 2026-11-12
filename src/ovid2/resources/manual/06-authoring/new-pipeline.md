@@ -50,3 +50,42 @@ table's formatter. `--tables all` then skips it, and the run summary says
 so.
 
 Next: [Settings & dictionaries](settings-and-dictionaries.md).
+
+## What the copy rewrites
+
+Scaffolding (from the wizard, `POST /api/v1/pipeline-packages/scaffold`
+or `ovid2 tools new-pipeline`) makes the clone self-contained:
+
+- every `ovid2_pipelines.<template>` reference (imports, YAML `class:`
+  paths) and generated `partner_name = '<template>'` binding is rewritten
+  to the new name;
+- every **identity** constant the template declares is re-personalised,
+  following aliases such as `DEFAULT_PIPELINE_DB_NAME = DEFAULT_PARTNER_DB_NAME`:
+
+| Constant | Clone default | Must match |
+| --- | --- | --- |
+| `NETWORKID`, `NETWORK_NAME`, `DATAMART_PLATFORM` | template value (`$OVID2_NETWORK_ID`) | HARVEST |
+| `DATAMARTID` | `<NETWORKID><NAME>` | HARVEST datamart id |
+| `DATAMART_NAME` | the name | HARVEST |
+| `DEFAULT_PIPELINE_DB_NAME`, `MERGE_DATABASE_NAME` | `CHAR_<NAME>` | Snowflake databases |
+| `DATAVANT_KEY` | the name, lower-case | Datavant site key |
+| `CDM_SOURCE_NAME`, `CDM_SOURCE_ABBREVIATION` | name-derived | OMOP `cdm_source` |
+
+Override any of them on the wizard's **Identity** step, with the
+`identity` field of the scaffold request, or later in the pipeline
+builder's **Settings**. A clone of a `legacy_ovid` port records
+`LEGACY_VENDOR_PARTNER` so the fix stage keeps using the template's
+vendored fixer scripts.
+
+ETL pipeline names must be Python identifiers (letters, digits, `_`),
+because the package is imported as `ovid2_pipelines.<name>`.
+
+## Names that must match
+
+`GET /api/v1/pipeline-packages/{p}/bindings` (MCP `check_pipeline_bindings`,
+builder → *Name checks*) checks every cross-configuration name statically:
+CDM registration, identity placeholders, the required engine family,
+`hash_id` salt keys in `secrets.d/<pipeline>.json`, `dictionaries.py`
+names, fixer names / scopes / keys / reference tables / list files,
+formatter class paths and join vocabularies, and transform assignments.
+

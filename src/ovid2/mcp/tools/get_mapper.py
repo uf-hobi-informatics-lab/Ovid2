@@ -25,5 +25,5 @@ ARGS_MODEL = GetMapperArgs
 
 
 async def run(client: WebApiClient, args: GetMapperArgs) -> Any:
-    """Call ``GET /api/v1/pipelines/{pipeline}/mappers/{table}``."""
-    return await client.get(f"/api/v1/pipelines/{args.pipeline}/mappers/{args.table}")
+    """Call ``GET /api/v1/pipeline-packages/{pipeline}/mappers/{table}``."""
+    return await client.get(f"/api/v1/pipeline-packages/{args.pipeline}/mappers/{args.table}")

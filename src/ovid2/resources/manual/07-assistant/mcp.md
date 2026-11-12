@@ -1,6 +1,6 @@
 ---
 title: Agent Ovid (MCP)
-summary: Run the MCP server, connect a client, authenticate it, and understand its 88 tools.
+summary: Run the MCP server, connect a client, authenticate it, and understand its 100 tools.
 audience: [developer, admin, user]
 ---
 

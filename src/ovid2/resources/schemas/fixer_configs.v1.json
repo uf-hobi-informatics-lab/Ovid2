@@ -1,0 +1,29 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://ovid2.dev/schemas/fixer_configs.v1.json",
+    "title": "Ovid2 fixer chains",
+    "description": "Declarative fix chains of a pipeline (pipelines/<pipeline>/fixer_configs.yaml). Preferred over fixer_configs.py when both exist. Each entry names a registered common fixer (`fix`) plus its arguments, either positional (src1/src2) or by the fixer's named aliases (reference_table, target_column, list_name, …).",
+    "type": "object",
+    "required": ["v"],
+    "additionalProperties": false,
+    "properties": {
+        "v": {"type": "integer", "const": 1},
+        "description": {"type": "string"},
+        "fixer_chains": {
+            "type": "object",
+            "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+            "additionalProperties": {"type": "array", "items": {"$ref": "#/$defs/fix"}}
+        },
+        "multi_table_fixes": {"type": "array", "items": {"$ref": "#/$defs/fix"}}
+    },
+    "$defs": {
+        "fix": {
+            "type": "object",
+            "required": ["fix"],
+            "properties": {
+                "fix": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}
+            },
+            "additionalProperties": {"type": ["string", "number", "boolean"]}
+        }
+    }
+}

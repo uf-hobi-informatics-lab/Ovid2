@@ -1,0 +1,575 @@
+# Report Studio chart library (curated Vega-Lite).
+#
+# One entry per chart kind. ``params`` is a JSON Schema (object) the
+# layout's block ``params`` must satisfy. Two vendor keywords drive
+# field pickers and semantic validation:
+#
+#   x-field: [<column types>]   the value must name a dataset column whose
+#                               type is in the list ([] = any type);
+#   x-fields: [<column types>]  same, for an array of column names.
+#
+# The spec itself is produced by the matching builder in
+# ``ovid2.reports.charts`` (BUILDERS) — never by the user or the LLM, who
+# only pick a kind and fill these params. ``renderer`` selects the output
+# path: ``vega`` (Vega-Lite → browser / SVG / PNG), ``kpi`` and ``table``
+# (rendered natively by every exporter). Pinned against BUILDERS by
+# tests/contract/test_report_catalogues.py.
+
+v: 1
+
+categories:
+  comparison: Compare categories
+  trend: Change over time
+  distribution: Distributions
+  relationship: Relationships
+  part_to_whole: Part of a whole
+  single_value: Single value
+  tabular: Tables
+
+_shared:
+  agg: &agg {type: string, enum: [sum, mean, median, min, max, count, distinct, none], default: sum,
+             description: "How rows sharing a category are combined (none = plot raw values)."}
+  sort: &sort {type: string, enum: [none, ascending, descending], default: descending}
+  color_scheme: &color_scheme {type: string, enum: [theme, status, sequential, diverging], default: theme,
+                               description: "theme = categorical palette; status = semantic pass/warn/fail colours."}
+  labels: &labels {type: boolean, default: false, description: Print values on the marks.}
+  horizontal: &horizontal {type: boolean, default: false}
+  height: &height {type: integer, minimum: 60, maximum: 900, default: 260}
+  axis_title: &axis_title {type: string, maxLength: 80}
+  log_scale: &log_scale {type: boolean, default: false}
+  tooltip: &tooltip {type: array, maxItems: 8, items: {type: string}, x-fields: [],
+                     description: Extra columns shown on hover.}
+
+charts:
+  # ------------------------------------------------------------ comparison
+  - name: bar
+    label: Bar chart
+    category: comparison
+    renderer: vega
+    summary: One bar per category; the classic way to compare a measure across groups.
+    params:
+      type: object
+      additionalProperties: false
+      required: [category, value]
+      properties:
+        category: {type: string, x-field: [nominal, ordinal, boolean, text, temporal]}
+        value: {type: string, x-field: [quantitative]}
+        color: {type: string, x-field: [nominal, ordinal, boolean, text]}
+        agg: *agg
+        sort: *sort
+        horizontal: *horizontal
+        labels: *labels
+        color_scheme: *color_scheme
+        log_scale: *log_scale
+        category_title: *axis_title
+        value_title: *axis_title
+        tooltip: *tooltip
+        height: *height
+
+  - name: grouped_bar
+    label: Grouped bar chart
+    category: comparison
+    renderer: vega
+    summary: Bars side by side within each category, one per group.
+    params:
+      type: object
+      additionalProperties: false
+      required: [category, value, group]
+      properties:
+        category: {type: string, x-field: [nominal, ordinal, boolean, text, temporal]}
+        value: {type: string, x-field: [quantitative]}
+        group: {type: string, x-field: [nominal, ordinal, boolean, text]}
+        agg: *agg
+        horizontal: *horizontal
+        labels: *labels
+        color_scheme: *color_scheme
+        category_title: *axis_title
+        value_title: *axis_title
+        tooltip: *tooltip
+        height: *height
+
+  - name: stacked_bar
+    label: Stacked bar chart
+    category: comparison
+    renderer: vega
+    summary: Bars split into stacked segments — totals and composition at once.
+    params:
+      type: object
+      additionalProperties: false
+      required: [category, value, stack_by]
+      properties:
+        category: {type: string, x-field: [nominal, ordinal, boolean, text, temporal]}
+        value: {type: string, x-field: [quantitative]}
+        stack_by: {type: string, x-field: [nominal, ordinal, boolean, text]}
+        agg: *agg
+        sort: *sort
+        horizontal: *horizontal
+        color_scheme: *color_scheme
+        category_title: *axis_title
+        value_title: *axis_title
+        tooltip: *tooltip
+        height: *height
+
+  - name: normalized_bar
+    label: 100% stacked bar
+    category: comparison
+    renderer: vega
+    summary: Stacked bars scaled to 100% — compares shares, not totals.
+    params:
+      type: object
+      additionalProperties: false
+      required: [category, value, stack_by]
+      properties:
+        category: {type: string, x-field: [nominal, ordinal, boolean, text, temporal]}
+        value: {type: string, x-field: [quantitative]}
+        stack_by: {type: string, x-field: [nominal, ordinal, boolean, text]}
+        agg: *agg
+        horizontal: *horizontal
+        color_scheme: *color_scheme
+        category_title: *axis_title
+        tooltip: *tooltip
+        height: *height
+
+  - name: lollipop
+    label: Lollipop chart
+    category: comparison
+    renderer: vega
+    summary: A lighter bar chart — a stem and a dot per category; good for many categories.
+    params:
+      type: object
+      additionalProperties: false
+      required: [category, value]
+      properties:
+        category: {type: string, x-field: [nominal, ordinal, boolean, text]}
+        value: {type: string, x-field: [quantitative]}
+        agg: *agg
+        sort: *sort
+        horizontal: {type: boolean, default: true}
+        category_title: *axis_title
+        value_title: *axis_title
+        tooltip: *tooltip
+        height: *height
+
+  - name: dot_plot
+    label: Dot plot
+    category: comparison
+    renderer: vega
+    summary: Cleveland dot plot — one dot per category (and optional series) on a shared scale.
+    params:
+      type: object
+      additionalProperties: false
+      required: [category, value]
+      properties:
+        category: {type: string, x-field: [nominal, ordinal, boolean, text]}
+        value: {type: string, x-field: [quantitative]}
+        color: {type: string, x-field: [nominal, ordinal, boolean, text]}
+        sort: *sort
+        color_scheme: *color_scheme
+        log_scale: *log_scale
+        value_title: *axis_title
+        tooltip: *tooltip
+        height: *height
+
+  - name: bullet
+    label: Bullet chart
+    category: comparison
+    renderer: vega
+    summary: Actual value as a bar against a target tick — progress toward thresholds.
+    params:
+      type: object
+      additionalProperties: false
+      required: [category, value, target]
+      properties:
+        category: {type: string, x-field: [nominal, ordinal, boolean, text]}
+        value: {type: string, x-field: [quantitative]}
+        target: {type: string, x-field: [quantitative]}
+        value_title: *axis_title
+        tooltip: *tooltip
+        height: *height
+
+  # ----------------------------------------------------------------- trend
+  - name: line
+    label: Line chart
+    category: trend
+    renderer: vega
+    summary: A measure over time (or any ordered axis), optionally one line per series.
+    params:
+      type: object
+      additionalProperties: false
+      required: [x, y]
+      properties:
+        x: {type: string, x-field: [temporal, ordinal, quantitative, nominal]}
+        y: {type: string, x-field: [quantitative]}
+        series: {type: string, x-field: [nominal, ordinal, boolean, text]}
+        agg: *agg
+        points: {type: boolean, default: true}
+        interpolate: {type: string, enum: [linear, monotone, step-after], default: linear}
+        color_scheme: *color_scheme
+        log_scale: *log_scale
+        x_title: *axis_title
+        y_title: *axis_title
+        tooltip: *tooltip
+        height: *height
+
+  - name: area
+    label: Area chart
+    category: trend
+    renderer: vega
+    summary: A filled line — emphasises volume over time.
+    params:
+      type: object
+      additionalProperties: false
+      required: [x, y]
+      properties:
+        x: {type: string, x-field: [temporal, ordinal, quantitative, nominal]}
+        y: {type: string, x-field: [quantitative]}
+        agg: *agg
+        interpolate: {type: string, enum: [linear, monotone, step-after], default: monotone}
+        x_title: *axis_title
+        y_title: *axis_title
+        tooltip: *tooltip
+        height: *height
+
+  - name: stacked_area
+    label: Stacked area chart
+    category: trend
+    renderer: vega
+    summary: Several series stacked over time — the total and each contribution.
+    params:
+      type: object
+      additionalProperties: false
+      required: [x, y, series]
+      properties:
+        x: {type: string, x-field: [temporal, ordinal, quantitative, nominal]}
+        y: {type: string, x-field: [quantitative]}
+        series: {type: string, x-field: [nominal, ordinal, boolean, text]}
+        agg: *agg
+        normalize: {type: boolean, default: false}
+        interpolate: {type: string, enum: [linear, monotone, step-after], default: monotone}
+        color_scheme: *color_scheme
+        x_title: *axis_title
+        y_title: *axis_title
+        tooltip: *tooltip
+        height: *height
+
+  - name: step_line
+    label: Step chart
+    category: trend
+    renderer: vega
+    summary: A line that changes in discrete steps — counts that jump between refreshes.
+    params:
+      type: object
+      additionalProperties: false
+      required: [x, y]
+      properties:
+        x: {type: string, x-field: [temporal, ordinal, quantitative, nominal]}
+        y: {type: string, x-field: [quantitative]}
+        series: {type: string, x-field: [nominal, ordinal, boolean, text]}
+        agg: *agg
+        color_scheme: *color_scheme
+        x_title: *axis_title
+        y_title: *axis_title
+        tooltip: *tooltip
+        height: *height
+
+  - name: slope
+    label: Slope chart
+    category: trend
+    renderer: vega
+    summary: Change between two points in time for many series — who went up, who went down.
+    params:
+      type: object
+      additionalProperties: false
+      required: [period, value, series]
+      properties:
+        period: {type: string, x-field: [nominal, ordinal, temporal]}
+        value: {type: string, x-field: [quantitative]}
+        series: {type: string, x-field: [nominal, ordinal, text]}
+        color_scheme: *color_scheme
+        value_title: *axis_title
+        tooltip: *tooltip
+        height: *height
+
+  - name: sparkline
+    label: Sparkline
+    category: trend
+    renderer: vega
+    summary: A tiny axis-free trend line to sit beside a number.
+    params:
+      type: object
+      additionalProperties: false
+      required: [x, y]
+      properties:
+        x: {type: string, x-field: [temporal, ordinal, quantitative, nominal]}
+        y: {type: string, x-field: [quantitative]}
+        agg: *agg
+        height: {type: integer, minimum: 24, maximum: 200, default: 60}
+
+  # ----------------------------------------------------------- distribution
+  - name: histogram
+    label: Histogram
+    category: distribution
+    renderer: vega
+    summary: How a numeric value is distributed, in equal-width bins.
+    params:
+      type: object
+      additionalProperties: false
+      required: [value]
+      properties:
+        value: {type: string, x-field: [quantitative]}
+        weight: {type: string, x-field: [quantitative], description: Optional pre-aggregated count per row.}
+        max_bins: {type: integer, minimum: 2, maximum: 200, default: 20}
+        value_title: *axis_title
+        height: *height
+
+  - name: boxplot
+    label: Box plot
+    category: distribution
+    renderer: vega
+    summary: Median, quartiles and outliers of a value, optionally per category.
+    params:
+      type: object
+      additionalProperties: false
+      required: [value]
+      properties:
+        value: {type: string, x-field: [quantitative]}
+        category: {type: string, x-field: [nominal, ordinal, boolean, text]}
+        horizontal: *horizontal
+        log_scale: *log_scale
+        value_title: *axis_title
+        height: *height
+
+  - name: strip_plot
+    label: Strip plot
+    category: distribution
+    renderer: vega
+    summary: Every observation as a tick along a scale, optionally per category.
+    params:
+      type: object
+      additionalProperties: false
+      required: [value]
+      properties:
+        value: {type: string, x-field: [quantitative]}
+        category: {type: string, x-field: [nominal, ordinal, boolean, text]}
+        color: {type: string, x-field: [nominal, ordinal, boolean, text]}
+        color_scheme: *color_scheme
+        value_title: *axis_title
+        tooltip: *tooltip
+        height: *height
+
+  - name: density
+    label: Density plot
+    category: distribution
+    renderer: vega
+    summary: A smoothed distribution curve, optionally one per group.
+    params:
+      type: object
+      additionalProperties: false
+      required: [value]
+      properties:
+        value: {type: string, x-field: [quantitative]}
+        group: {type: string, x-field: [nominal, ordinal, boolean, text]}
+        bandwidth: {type: number, minimum: 0, maximum: 1000000000, default: 0}
+        color_scheme: *color_scheme
+        value_title: *axis_title
+        height: *height
+
+  # ----------------------------------------------------------- relationship
+  - name: scatter
+    label: Scatter plot
+    category: relationship
+    renderer: vega
+    summary: Two numeric measures against each other — correlations and outliers.
+    params:
+      type: object
+      additionalProperties: false
+      required: [x, y]
+      properties:
+        x: {type: string, x-field: [quantitative, temporal]}
+        y: {type: string, x-field: [quantitative]}
+        color: {type: string, x-field: [nominal, ordinal, boolean, text]}
+        trendline: {type: boolean, default: false}
+        color_scheme: *color_scheme
+        log_scale: *log_scale
+        x_title: *axis_title
+        y_title: *axis_title
+        tooltip: *tooltip
+        height: *height
+
+  - name: bubble
+    label: Bubble chart
+    category: relationship
+    renderer: vega
+    summary: A scatter plot whose point size encodes a third measure.
+    params:
+      type: object
+      additionalProperties: false
+      required: [x, y, size]
+      properties:
+        x: {type: string, x-field: [quantitative, temporal, nominal, ordinal]}
+        y: {type: string, x-field: [quantitative, nominal, ordinal]}
+        size: {type: string, x-field: [quantitative]}
+        color: {type: string, x-field: [nominal, ordinal, boolean, text]}
+        color_scheme: *color_scheme
+        x_title: *axis_title
+        y_title: *axis_title
+        tooltip: *tooltip
+        height: *height
+
+  - name: heatmap
+    label: Heatmap
+    category: relationship
+    renderer: vega
+    summary: A grid of two categories coloured by a value or a status — e.g. checks by table.
+    params:
+      type: object
+      additionalProperties: false
+      required: [x, y, value]
+      properties:
+        x: {type: string, x-field: [nominal, ordinal, temporal, text, boolean]}
+        y: {type: string, x-field: [nominal, ordinal, temporal, text, boolean]}
+        value: {type: string, x-field: []}
+        agg: *agg
+        labels: *labels
+        color_scheme: {type: string, enum: [sequential, diverging, status, theme], default: sequential}
+        x_title: *axis_title
+        y_title: *axis_title
+        tooltip: *tooltip
+        height: *height
+
+  - name: calendar_heatmap
+    label: Calendar heatmap
+    category: relationship
+    renderer: vega
+    summary: Volume per month (rows = years) or per day (rows = weekday) — gaps and spikes jump out.
+    params:
+      type: object
+      additionalProperties: false
+      required: [date, value]
+      properties:
+        date: {type: string, x-field: [temporal, ordinal, nominal, text]}
+        value: {type: string, x-field: [quantitative]}
+        granularity: {type: string, enum: [month, day], default: month}
+        agg: *agg
+        color_scheme: {type: string, enum: [sequential, diverging], default: sequential}
+        tooltip: *tooltip
+        height: *height
+
+  # ---------------------------------------------------------- part to whole
+  - name: pie
+    label: Pie chart
+    category: part_to_whole
+    renderer: vega
+    summary: Shares of a whole; best with five or fewer slices.
+    params:
+      type: object
+      additionalProperties: false
+      required: [category, value]
+      properties:
+        category: {type: string, x-field: [nominal, ordinal, boolean, text]}
+        value: {type: string, x-field: [quantitative]}
+        labels: *labels
+        color_scheme: *color_scheme
+        tooltip: *tooltip
+        height: *height
+
+  - name: donut
+    label: Donut chart
+    category: part_to_whole
+    renderer: vega
+    summary: A pie with a hole — reads a little better and leaves room for a total.
+    params:
+      type: object
+      additionalProperties: false
+      required: [category, value]
+      properties:
+        category: {type: string, x-field: [nominal, ordinal, boolean, text]}
+        value: {type: string, x-field: [quantitative]}
+        labels: *labels
+        color_scheme: *color_scheme
+        tooltip: *tooltip
+        height: *height
+
+  - name: part_bar
+    label: Part-of-whole bar
+    category: part_to_whole
+    renderer: vega
+    summary: A single 100% bar split by category — compact composition at a glance.
+    params:
+      type: object
+      additionalProperties: false
+      required: [category, value]
+      properties:
+        category: {type: string, x-field: [nominal, ordinal, boolean, text]}
+        value: {type: string, x-field: [quantitative]}
+        color_scheme: *color_scheme
+        tooltip: *tooltip
+        height: {type: integer, minimum: 30, maximum: 300, default: 70}
+
+  # ------------------------------------------------------------ single value
+  - name: kpi
+    label: KPI tile
+    category: single_value
+    renderer: kpi
+    summary: One headline number (sum / mean / count …) with an optional good/bad threshold.
+    params:
+      type: object
+      additionalProperties: false
+      required: [value]
+      properties:
+        value: {type: string, x-field: []}
+        agg: {type: string, enum: [sum, mean, median, min, max, count, distinct, first, last], default: sum}
+        label: {type: string, maxLength: 80}
+        format: {type: string, enum: [number, integer, percent, compact], default: number}
+        threshold: {type: number}
+        good_when: {type: string, enum: [above, below], default: above}
+        suffix: {type: string, maxLength: 12}
+
+  - name: gauge
+    label: Gauge
+    category: single_value
+    renderer: vega
+    summary: A half-dial showing one value against a maximum (e.g. a pass rate out of 100%).
+    params:
+      type: object
+      additionalProperties: false
+      required: [value]
+      properties:
+        value: {type: string, x-field: [quantitative]}
+        agg: {type: string, enum: [sum, mean, median, min, max, count, first, last], default: sum}
+        max: {type: number, exclusiveMinimum: 0, default: 100}
+        label: {type: string, maxLength: 80}
+        height: {type: integer, minimum: 80, maximum: 400, default: 180}
+
+  - name: progress
+    label: Progress bar
+    category: single_value
+    renderer: vega
+    summary: A filled track — one value against a maximum, e.g. checks passed out of checks run.
+    params:
+      type: object
+      additionalProperties: false
+      required: [value]
+      properties:
+        value: {type: string, x-field: [quantitative]}
+        agg: {type: string, enum: [sum, mean, median, min, max, count, first, last], default: sum}
+        max: {type: number, exclusiveMinimum: 0, default: 100}
+        max_field: {type: string, x-field: [quantitative], description: Take the maximum from this column (summed) instead of max.}
+        label: {type: string, maxLength: 80}
+        height: {type: integer, minimum: 24, maximum: 120, default: 44}
+
+  # ----------------------------------------------------------------- tabular
+  - name: table
+    label: Data table
+    category: tabular
+    renderer: table
+    summary: The rows themselves, with chosen columns and status colouring.
+    params:
+      type: object
+      additionalProperties: false
+      properties:
+        columns: {type: array, minItems: 1, maxItems: 20, items: {type: string}, x-fields: []}
+        status_column: {type: string, x-field: [nominal, ordinal, text, boolean]}
+        max_rows: {type: integer, minimum: 1, maximum: 2000, default: 200}
+        zebra: {type: boolean, default: true}
+        number_format: {type: string, enum: [number, integer, compact, raw], default: number}

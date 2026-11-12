@@ -1,0 +1,97 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://ovid2.dev/schemas/report_layout.v1.json",
+    "title": "Ovid2 report layout",
+    "description": "A declarative report: ordered sections of ordered blocks (array order = stacking order), each block visible or hidden, charts chosen from the curated chart library by kind + params. Rendered identically by the Report Studio preview and every exporter. The report theme is independent of the web page theme.",
+    "type": "object",
+    "required": ["v", "title", "sections"],
+    "additionalProperties": false,
+    "properties": {
+        "v": {"type": "integer", "const": 1},
+        "title": {"type": "string", "minLength": 1, "maxLength": 200},
+        "subtitle": {"type": "string", "maxLength": 300},
+        "description": {"type": "string", "maxLength": 4000},
+        "theme": {"type": "string", "pattern": "^[a-z][a-z0-9_]{1,40}$"},
+        "page": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "size": {"enum": ["letter", "a4", "legal"]},
+                "orientation": {"enum": ["portrait", "landscape"]}
+            }
+        },
+        "options": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "small_cell_threshold": {
+                    "type": "integer", "minimum": 0, "maximum": 100,
+                    "description": "Counts (columns flagged is_count) strictly between 0 and this value are suppressed in every rendering and export."
+                },
+                "show_provenance": {"type": "boolean"},
+                "show_toc": {"type": "boolean"}
+            }
+        },
+        "sections": {
+            "type": "array",
+            "maxItems": 60,
+            "items": {"$ref": "#/$defs/section"}
+        }
+    },
+    "$defs": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"},
+        "section": {
+            "type": "object",
+            "required": ["id", "title", "blocks"],
+            "additionalProperties": false,
+            "properties": {
+                "id": {"$ref": "#/$defs/id"},
+                "title": {"type": "string", "minLength": 1, "maxLength": 200},
+                "description": {"type": "string", "maxLength": 4000},
+                "visible": {"type": "boolean"},
+                "page_break_before": {"type": "boolean"},
+                "blocks": {"type": "array", "maxItems": 80, "items": {"$ref": "#/$defs/block"}}
+            }
+        },
+        "filter": {
+            "type": "object",
+            "required": ["field", "op"],
+            "additionalProperties": false,
+            "properties": {
+                "field": {"type": "string", "maxLength": 64},
+                "op": {"enum": ["eq", "ne", "in", "not_in", "gt", "gte", "lt", "lte", "is_null", "not_null", "contains"]},
+                "value": {}
+            }
+        },
+        "block": {
+            "type": "object",
+            "required": ["id", "type"],
+            "additionalProperties": false,
+            "properties": {
+                "id": {"$ref": "#/$defs/id"},
+                "type": {"enum": ["chart", "text", "callout"]},
+                "title": {"type": "string", "maxLength": 200},
+                "caption": {"type": "string", "maxLength": 2000},
+                "visible": {"type": "boolean"},
+                "width": {"enum": ["full", "half", "third", "two_thirds"]},
+                "dataset": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+                "chart": {"type": "string", "pattern": "^[a-z][a-z0-9_]{1,40}$"},
+                "params": {"type": "object"},
+                "filters": {"type": "array", "maxItems": 10, "items": {"$ref": "#/$defs/filter"}},
+                "top_n": {
+                    "type": "object",
+                    "required": ["n", "by"],
+                    "additionalProperties": false,
+                    "properties": {
+                        "n": {"type": "integer", "minimum": 1, "maximum": 500},
+                        "by": {"type": "string", "maxLength": 64},
+                        "order": {"enum": ["descending", "ascending"]}
+                    }
+                },
+                "text": {"type": "string", "maxLength": 20000},
+                "text_ref": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+                "tone": {"enum": ["info", "success", "warning", "danger", "note"]}
+            }
+        }
+    }
+}

@@ -21,5 +21,5 @@ ARGS_MODEL = ListMappersArgs
 
 
 async def run(client: WebApiClient, args: ListMappersArgs) -> Any:
-    """Call ``GET /api/v1/pipelines/{pipeline}/mappers``."""
-    return await client.get(f"/api/v1/pipelines/{args.pipeline}/mappers")
+    """Call ``GET /api/v1/pipeline-packages/{pipeline}/mappers``."""
+    return await client.get(f"/api/v1/pipeline-packages/{args.pipeline}/mappers")

@@ -1,0 +1,18 @@
+name: grayscale_print
+label: Grayscale print
+description: Black-and-white safe for photocopies and journals that charge for colour.
+mode: light
+fonts: {body: "Georgia, 'Times New Roman', serif", heading: "Georgia, 'Times New Roman', serif", mono: "Courier New, monospace"}
+colors:
+  background: "#ffffff"
+  surface: "#f2f2f2"
+  text: "#000000"
+  muted: "#4d4d4d"
+  border: "#9a9a9a"
+  accent: "#262626"
+  grid: "#dddddd"
+palette: ["#1a1a1a", "#4d4d4d", "#808080", "#a6a6a6", "#c8c8c8", "#333333", "#666666", "#999999"]
+sequential: greys
+diverging: greys
+status: {passed: "#bfbfbf", exception: "#1a1a1a", error: "#595959", skipped: "#e0e0e0", not_applicable: "#efefef", warning: "#808080"}
+sizes: {base: 11, title: 20, heading: 15, axis: 10}

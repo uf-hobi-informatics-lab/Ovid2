@@ -534,9 +534,28 @@ def parquet_glob(path: Any) -> Any:
 
 
 def _shortest_double_text(conn: Any) -> None:
-    """Register a macro rendering doubles via DuckDB's shortest repr (Java parity)."""
+    """Register a macro rendering doubles via DuckDB's shortest repr (Java parity).
+
+    ``__ovid2_java_double`` takes a fast path for the common case: in
+    Java's plain-notation range (``1e-3 <= |x| < 1e7``) DuckDB's
+    shortest round-trip ``CAST(x AS VARCHAR)`` already is Java's
+    ``Double.toString`` (same digits, ``.0`` suffix), so the regex /
+    lambda rewrite (``__ovid2_java_double_slow``) only runs for zero,
+    NaN / Infinity and scientific-notation values.
+    """
+    _create_java_double_slow(conn)
     conn.execute(
         "CREATE OR REPLACE TEMP MACRO __ovid2_java_double(x) AS ("
+        "CASE WHEN abs(x) >= 0.001 AND abs(x) < 10000000 "
+        "AND NOT contains(CAST(x AS VARCHAR), 'e') THEN CAST(x AS VARCHAR) "
+        "ELSE __ovid2_java_double_slow(x) END)"
+    )
+
+
+def _create_java_double_slow(conn: Any) -> None:
+    """Register the general (regex + lambda) Java ``Double.toString`` macro."""
+    conn.execute(
+        "CREATE OR REPLACE TEMP MACRO __ovid2_java_double_slow(x) AS ("
         "CASE WHEN x IS NULL THEN NULL "
         "WHEN isnan(x) THEN 'NaN' "
         "WHEN isinf(x) THEN CASE WHEN x > 0 THEN 'Infinity' ELSE '-Infinity' END "

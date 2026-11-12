@@ -1,0 +1,36 @@
+name: Data-quality deep dive
+description: >-
+  Every check and metric — where exceptions concentrate by table and part,
+  the top offenders, and full appendices.
+layout:
+  v: 1
+  title: Data-quality deep dive
+  theme: publication
+  page: {size: letter, orientation: landscape}
+  options: {show_provenance: true, show_toc: true}
+  sections:
+    - id: summary
+      title: Summary
+      blocks:
+        - {id: intro, type: text, text_ref: overview}
+        - {id: progress, type: chart, chart: progress, dataset: summary, title: Checks passed,
+           params: {value: checks_passed, max_field: checks_total, label: Passed}}
+    - id: where
+      title: Where exceptions concentrate
+      blocks:
+        - {id: by_table, type: chart, chart: bar, dataset: by_table, title: Exception metrics by source table, width: half,
+           params: {category: source_table, value: exceptions, horizontal: true, labels: true}}
+        - {id: heat, type: chart, chart: heatmap, dataset: metrics, title: Metric status by check and table, width: half,
+           params: {x: source_table, y: check_name, value: status, color_scheme: status}}
+        - {id: top_checks, type: chart, chart: lollipop, dataset: checks, title: Top 15 checks by exceptions,
+           top_n: {n: 15, by: exception_count},
+           filters: [{field: exception_count, op: gt, value: 0}],
+           params: {category: check_name, value: exception_count}}
+    - id: appendix
+      title: Appendix
+      page_break_before: true
+      blocks:
+        - {id: all_checks, type: chart, chart: table, dataset: checks, title: All checks,
+           params: {columns: [check_id, check_name, part, status, exception_count, metric_count, description], status_column: status, max_rows: 500}}
+        - {id: exc_metrics, type: chart, chart: table, dataset: exceptions, title: Exception metrics,
+           params: {columns: [check_name, source_table, metric, value_num, threshold_num], max_rows: 500}}

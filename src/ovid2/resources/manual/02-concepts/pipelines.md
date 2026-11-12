@@ -51,7 +51,7 @@ web *Pipelines* page. A config pins:
 
 | Kind | What it does | Needs a package? | CDM-shaped? |
 | --- | --- | --- | --- |
-| `etl` | format → deduplicate → map → fix → write | yes (scaffolded from a template) | yes |
+| `etl` | format → deduplicate → transform → map → fix → write | yes (scaffolded from a template) | yes |
 | `analysis` | read-only summaries (monthly counts, distinct values) | yes (pick an existing one) | no |
 | `dq_checks` | PCORnet EDC checks for a report cycle | no | reads CDM tables |
 | `health` | EDC checks + Ovid2 health panels with a browsable report | no | reads CDM tables |

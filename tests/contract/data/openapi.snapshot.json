@@ -378,6 +378,49 @@
         "title": "BootstrapResponse",
         "type": "object"
       },
+      "BuilderRawText": {
+        "description": "Raw YAML document body for a pipeline-builder save.",
+        "properties": {
+          "raw_text": {
+            "description": "Full YAML source (UTF-8).",
+            "title": "Raw Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "raw_text"
+        ],
+        "title": "BuilderRawText",
+        "type": "object"
+      },
+      "BuilderValidateRequest": {
+        "description": "Validate (without saving) one builder document.",
+        "properties": {
+          "doc_type": {
+            "description": "Which schema / registry checks to run.",
+            "enum": [
+              "transform",
+              "assignments",
+              "fixers",
+              "formatter",
+              "mapper"
+            ],
+            "title": "Doc Type",
+            "type": "string"
+          },
+          "raw_text": {
+            "description": "Full YAML source (UTF-8).",
+            "title": "Raw Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "doc_type",
+          "raw_text"
+        ],
+        "title": "BuilderValidateRequest",
+        "type": "object"
+      },
       "CdmDetail": {
         "description": "Full detail for one CDM handle.\n\nAssembled by :mod:`ovid2.web.services.cdms_svc` from\n:class:`ovid2.cdm.handle.CdmHandle`. The web tier reads only\nmetadata \u2014 no pyspark, no schema file I/O beyond what the loader\nalready performed at import time.",
         "properties": {
@@ -4095,6 +4138,434 @@
         "title": "PipelineWrite",
         "type": "object"
       },
+      "ReportCreateRequest": {
+        "description": "Body of ``POST /api/v1/reports`` and ``POST /api/v1/report-drafts``.\n\nGive ``template_id`` *or* ``layout`` (a ``report_layout.v1`` document);\nwith neither, the source's first recommended template is used.",
+        "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Description",
+            "type": "string"
+          },
+          "folder": {
+            "default": "",
+            "description": "Slash-separated folder, e.g. 'EDC/2026'.",
+            "maxLength": 120,
+            "title": "Folder",
+            "type": "string"
+          },
+          "layout": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Full report_layout.v1 document.",
+            "title": "Layout"
+          },
+          "source_id": {
+            "description": "Report source id (GET /api/v1/report-sources).",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 12,
+            "title": "Tags",
+            "type": "array"
+          },
+          "template_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Built-in or user template id.",
+            "title": "Template Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "source_id"
+        ],
+        "title": "ReportCreateRequest",
+        "type": "object"
+      },
+      "ReportDuplicateRequest": {
+        "description": "Body of ``POST /api/v1/reports/{id}/duplicate``.",
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "ReportDuplicateRequest",
+        "type": "object"
+      },
+      "ReportExportRequest": {
+        "description": "Body of ``POST /api/v1/reports/{id}/exports``.",
+        "properties": {
+          "block_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "svg / png only: just this chart block.",
+            "title": "Block Id"
+          },
+          "format": {
+            "pattern": "^(pdf|html|docx|xlsx|svg|png|md|json)$",
+            "title": "Format",
+            "type": "string"
+          },
+          "layout": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Export unsaved edits instead of the saved layout.",
+            "title": "Layout"
+          }
+        },
+        "required": [
+          "format"
+        ],
+        "title": "ReportExportRequest",
+        "type": "object"
+      },
+      "ReportExportResult": {
+        "description": "A finished export, downloadable once from ``download_url`` (1 h TTL).",
+        "properties": {
+          "download_url": {
+            "title": "Download Url",
+            "type": "string"
+          },
+          "export_id": {
+            "title": "Export Id",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "media_type": {
+            "title": "Media Type",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "export_id",
+          "filename",
+          "media_type",
+          "size",
+          "download_url"
+        ],
+        "title": "ReportExportResult",
+        "type": "object"
+      },
+      "ReportFavoriteRequest": {
+        "description": "Body of ``PUT /api/v1/reports/{id}/favorite``.",
+        "properties": {
+          "favorite": {
+            "default": true,
+            "title": "Favorite",
+            "type": "boolean"
+          }
+        },
+        "title": "ReportFavoriteRequest",
+        "type": "object"
+      },
+      "ReportOpsRequest": {
+        "description": "Body of ``POST /api/v1/reports/{id}/ops`` \u2014 declarative layout edits.",
+        "properties": {
+          "expected_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Version"
+          },
+          "layout": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "save=false only: apply to this unsaved working copy instead of the saved layout.",
+            "title": "Layout"
+          },
+          "ops": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 40,
+            "minItems": 1,
+            "title": "Ops",
+            "type": "array"
+          },
+          "render": {
+            "default": false,
+            "description": "save=false only: also return the render model.",
+            "title": "Render",
+            "type": "boolean"
+          },
+          "save": {
+            "default": true,
+            "description": "False = validate + return the new layout only.",
+            "title": "Save",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ops"
+        ],
+        "title": "ReportOpsRequest",
+        "type": "object"
+      },
+      "ReportPreviewRequest": {
+        "description": "Body of ``POST /api/v1/reports/{id}/preview`` (render an unsaved layout).",
+        "properties": {
+          "layout": {
+            "additionalProperties": true,
+            "title": "Layout",
+            "type": "object"
+          }
+        },
+        "required": [
+          "layout"
+        ],
+        "title": "ReportPreviewRequest",
+        "type": "object"
+      },
+      "ReportShareRequest": {
+        "description": "Body of ``PUT /api/v1/reports/{id}/shares``.",
+        "properties": {
+          "permission": {
+            "default": "view",
+            "pattern": "^(view|edit)$",
+            "title": "Permission",
+            "type": "string"
+          },
+          "principal": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Principal",
+            "type": "string"
+          },
+          "principal_kind": {
+            "pattern": "^(user|role)$",
+            "title": "Principal Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "principal_kind",
+          "principal"
+        ],
+        "title": "ReportShareRequest",
+        "type": "object"
+      },
+      "ReportSourceIngestRequest": {
+        "description": "Body of ``POST /api/v1/report-sources/ingest``.",
+        "properties": {
+          "instance_id": {
+            "pattern": "^[0-9]{8}-[0-9]{6}-[0-9a-f]{6}$",
+            "title": "Instance Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instance_id"
+        ],
+        "title": "ReportSourceIngestRequest",
+        "type": "object"
+      },
+      "ReportTemplateSaveRequest": {
+        "description": "Body of ``POST /api/v1/reports/{id}/save-as-template``.",
+        "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "shared": {
+            "default": false,
+            "description": "Visible to every user (else private).",
+            "title": "Shared",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ReportTemplateSaveRequest",
+        "type": "object"
+      },
+      "ReportTrendRequest": {
+        "description": "Body of ``POST /api/v1/report-sources/trend``.",
+        "properties": {
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 24,
+            "minItems": 2,
+            "title": "Source Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source_ids"
+        ],
+        "title": "ReportTrendRequest",
+        "type": "object"
+      },
+      "ReportUpdateRequest": {
+        "description": "Body of ``PUT /api/v1/reports/{id}`` (only given fields change).",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "expected_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Reject with 409 when the stored version differs (optimistic lock).",
+            "title": "Expected Version"
+          },
+          "folder": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder"
+          },
+          "layout": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Layout"
+          },
+          "note": {
+            "default": "",
+            "description": "Version-history note.",
+            "maxLength": 200,
+            "title": "Note",
+            "type": "string"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 12,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "ReportUpdateRequest",
+        "type": "object"
+      },
       "RunCheckSummary": {
         "description": "Aggregate status of one data-health check within a ``health`` run.\n\nDrives the run window's left pane (check list) and the report viewer\nnav tree. Populated from ``check.started`` / ``check.completed`` /\n``check.failed`` events.",
         "properties": {
@@ -4588,6 +5059,19 @@
             ],
             "description": "Target CDM name. Required with `source_pipeline`; taken from the template otherwise.",
             "title": "Cdm"
+          },
+          "identity": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Identity constants for the clone's pipeline_settings.py (NETWORKID, DATAMARTID, DATAVANT_KEY, \u2026). Unset keys get name-derived defaults; see GET /api/v1/pipeline-templates/{id}.",
+            "title": "Identity"
           },
           "name": {
             "description": "Name for the new pipeline package.",
@@ -5110,6 +5594,22 @@
         "title": "SettingsWorker",
         "type": "object"
       },
+      "SettingsWrite": {
+        "description": "Literal-constant updates for ``pipeline_settings.py``.",
+        "properties": {
+          "values": {
+            "additionalProperties": true,
+            "description": "{CONSTANT: new value}.",
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "title": "SettingsWrite",
+        "type": "object"
+      },
       "SnowflakeSaveResponse": {
         "description": "Response body for ``POST /api/v1/install/snowflake``.",
         "properties": {
@@ -5297,6 +5797,31 @@
           "has_formatter"
         ],
         "title": "TablePlanEntry",
+        "type": "object"
+      },
+      "TransformAssignRequest": {
+        "description": "Assign a named transform chain to tables of a pipeline.",
+        "properties": {
+          "pipeline": {
+            "description": "Pipeline package to assign the chain to.",
+            "title": "Pipeline",
+            "type": "string"
+          },
+          "tables": {
+            "description": "CDM tables, or ['*'] for all.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Tables",
+            "type": "array"
+          }
+        },
+        "required": [
+          "pipeline",
+          "tables"
+        ],
+        "title": "TransformAssignRequest",
         "type": "object"
       },
       "TransformSummary": {
@@ -5547,6 +6072,13 @@
       },
       "ValidationError": {
         "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
           "loc": {
             "items": {
               "anyOf": [
@@ -7097,6 +7629,63 @@
         ]
       }
     },
+    "/api/v1/fixers": {
+      "get": {
+        "description": "Return the web-safe fixer catalogue (mirror of the fixer registry).",
+        "operationId": "api_list_fixers_api_v1_fixers_get",
+        "parameters": [
+          {
+            "description": "Only fixers usable under this CDM.",
+            "in": "query",
+            "name": "cdm",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only fixers usable under this CDM.",
+              "title": "Cdm"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Api List Fixers Api V1 Fixers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Common fixer catalogue (names, scope, aliases)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
     "/api/v1/fs/list": {
       "get": {
         "description": "Return a directory listing scoped by ``settings.fs_picker.roots``.",
@@ -8481,6 +9070,33 @@
         ]
       }
     },
+    "/api/v1/mapper-ops": {
+      "get": {
+        "description": "Return the web-safe mapper-op catalogue used by the builder form.",
+        "operationId": "api_list_mapper_ops_api_v1_mapper_ops_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Api List Mapper Ops Api V1 Mapper Ops Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Mapper op catalogue (names, summaries, params_schema)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
     "/api/v1/me/appearance": {
       "get": {
         "description": "Return the caller's stored appearance (defaults when never saved).",
@@ -8654,6 +9270,127 @@
         ]
       }
     },
+    "/api/v1/pipeline-packages/{pipeline}/bindings": {
+      "get": {
+        "description": "Return ``[{id, category, label, value, must_match, status, detail, where}]``.",
+        "operationId": "api_package_bindings_api_v1_pipeline_packages__pipeline__bindings_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pipeline",
+            "required": true,
+            "schema": {
+              "title": "Pipeline",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Engine to check family against.",
+            "in": "query",
+            "name": "engine",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Engine to check family against.",
+              "title": "Engine"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Api Package Bindings Api V1 Pipeline Packages  Pipeline  Bindings Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check every name a pipeline must match against other configuration",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/pipeline-packages/{pipeline}/builder:validate": {
+      "post": {
+        "description": "Validate without saving \u2014 powers the editor's live lint.\n\nReturns ``{ok, errors: [{path, message}]}``; never writes.",
+        "operationId": "api_builder_validate_api_v1_pipeline_packages__pipeline__builder_validate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pipeline",
+            "required": true,
+            "schema": {
+              "title": "Pipeline",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuilderValidateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Builder Validate Api V1 Pipeline Packages  Pipeline  Builder Validate Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate a builder document (transform / assignments / fixers / formatter / mapper)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
     "/api/v1/pipeline-packages/{pipeline}/file": {
       "get": {
         "description": "Return the text of a pipeline file after anti-traversal checks.",
@@ -8703,6 +9440,102 @@
           }
         },
         "summary": "Preview one pipeline file (whitelisted)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/pipeline-packages/{pipeline}/fixers": {
+      "get": {
+        "description": "Return ``fixer_configs.yaml`` (converted from ``fixer_configs.py`` when absent).",
+        "operationId": "api_get_fixers_api_v1_pipeline_packages__pipeline__fixers_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pipeline",
+            "required": true,
+            "schema": {
+              "title": "Pipeline",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Get Fixers Api V1 Pipeline Packages  Pipeline  Fixers Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get a pipeline's fixer chains as YAML",
+        "tags": [
+          "v1"
+        ]
+      },
+      "put": {
+        "description": "Validate against the fixer registry and save ``fixer_configs.yaml``.",
+        "operationId": "api_put_fixers_api_v1_pipeline_packages__pipeline__fixers_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pipeline",
+            "required": true,
+            "schema": {
+              "title": "Pipeline",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuilderRawText"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save a pipeline's fixer chains (fixer_configs.yaml)",
         "tags": [
           "v1"
         ]
@@ -8956,6 +9789,69 @@
           }
         },
         "summary": "Validate every formatter YAML for a pipeline",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/pipeline-packages/{pipeline}/inspect": {
+      "get": {
+        "description": "Static inspection of an installed package (never executes it).",
+        "operationId": "api_inspect_package_api_v1_pipeline_packages__pipeline__inspect_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pipeline",
+            "required": true,
+            "schema": {
+              "title": "Pipeline",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Engine to check family against.",
+            "in": "query",
+            "name": "engine",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Engine to check family against.",
+              "title": "Engine"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Inspect Package Api V1 Pipeline Packages  Pipeline  Inspect Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Inspect a pipeline package (tables x stages, identity, bindings)",
         "tags": [
           "v1"
         ]
@@ -9257,6 +10153,410 @@
         ]
       }
     },
+    "/api/v1/pipeline-packages/{pipeline}/settings": {
+      "get": {
+        "description": "Return every ``pipeline_settings.py`` constant with ``editable``.",
+        "operationId": "api_get_pipeline_settings_api_v1_pipeline_packages__pipeline__settings_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pipeline",
+            "required": true,
+            "schema": {
+              "title": "Pipeline",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Get Pipeline Settings Api V1 Pipeline Packages  Pipeline  Settings Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get a pipeline's settings constants (editable flags)",
+        "tags": [
+          "v1"
+        ]
+      },
+      "patch": {
+        "description": "Rewrite literal constants in place (computed values stay read-only).",
+        "operationId": "api_patch_pipeline_settings_api_v1_pipeline_packages__pipeline__settings_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pipeline",
+            "required": true,
+            "schema": {
+              "title": "Pipeline",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update literal constants in pipeline_settings.py",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/pipeline-packages/{pipeline}/transform-assignments": {
+      "get": {
+        "description": "Return ``transforms/assignments.yaml`` (empty template when absent).",
+        "operationId": "api_get_assignments_api_v1_pipeline_packages__pipeline__transform_assignments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pipeline",
+            "required": true,
+            "schema": {
+              "title": "Pipeline",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Get Assignments Api V1 Pipeline Packages  Pipeline  Transform Assignments Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get a pipeline's transform assignments",
+        "tags": [
+          "v1"
+        ]
+      },
+      "put": {
+        "description": "Validate (schema, CDM tables, known chains, params) and save.",
+        "operationId": "api_put_assignments_api_v1_pipeline_packages__pipeline__transform_assignments_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pipeline",
+            "required": true,
+            "schema": {
+              "title": "Pipeline",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuilderRawText"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save a pipeline's transform assignments",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/pipeline-packages/{pipeline}/transforms": {
+      "get": {
+        "description": "Return ``<pkg>/transforms/*.yaml`` chains.",
+        "operationId": "api_list_pipeline_transforms_api_v1_pipeline_packages__pipeline__transforms_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pipeline",
+            "required": true,
+            "schema": {
+              "title": "Pipeline",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Api List Pipeline Transforms Api V1 Pipeline Packages  Pipeline  Transforms Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List a pipeline's private transform chains",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/pipeline-packages/{pipeline}/transforms/{name}": {
+      "delete": {
+        "description": "Delete ``<pkg>/transforms/<name>.yaml``.",
+        "operationId": "api_delete_pipeline_transform_api_v1_pipeline_packages__pipeline__transforms__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pipeline",
+            "required": true,
+            "schema": {
+              "title": "Pipeline",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete a pipeline-private transform chain",
+        "tags": [
+          "v1"
+        ]
+      },
+      "get": {
+        "description": "Return raw + parsed YAML of a package-private chain.",
+        "operationId": "api_get_pipeline_transform_api_v1_pipeline_packages__pipeline__transforms__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pipeline",
+            "required": true,
+            "schema": {
+              "title": "Pipeline",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Get Pipeline Transform Api V1 Pipeline Packages  Pipeline  Transforms  Name  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get one pipeline-private transform chain",
+        "tags": [
+          "v1"
+        ]
+      },
+      "put": {
+        "description": "Validate and save ``<pkg>/transforms/<name>.yaml``.",
+        "operationId": "api_put_pipeline_transform_api_v1_pipeline_packages__pipeline__transforms__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pipeline",
+            "required": true,
+            "schema": {
+              "title": "Pipeline",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuilderRawText"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create or update a pipeline-private transform chain",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
     "/api/v1/pipeline-templates": {
       "get": {
         "description": "Return the curated pipeline templates (Phase 3 scaffolder).\n\nEach template names a source pipeline package + target CDM that a\nnew ETL pipeline can be scaffolded from via ``POST\n/api/v1/pipelines/scaffold``.",
@@ -9278,6 +10578,87 @@
           }
         },
         "summary": "List pipeline templates",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/pipeline-templates/{template_id}": {
+      "get": {
+        "description": "Return what the template provides and every name the clone must match.",
+        "operationId": "api_inspect_template_api_v1_pipeline_templates__template_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "template_id",
+            "required": true,
+            "schema": {
+              "title": "Template Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Clone name (drives identity defaults).",
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Clone name (drives identity defaults).",
+              "title": "Name"
+            }
+          },
+          {
+            "description": "Engine to check family against.",
+            "in": "query",
+            "name": "engine",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Engine to check family against.",
+              "title": "Engine"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Inspect Template Api V1 Pipeline Templates  Template Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Inspect a pipeline template (tables, identity, requirements, bindings)",
         "tags": [
           "v1"
         ]
@@ -9696,6 +11077,1552 @@
           }
         },
         "summary": "Submit an ETL job from this pipeline",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/report-catalogue": {
+      "get": {
+        "description": "Return chart kinds (with params schemas), themes, layout edit ops, formats.",
+        "operationId": "api_report_catalogue_api_v1_report_catalogue_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Report Catalogue Api V1 Report Catalogue Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Report Studio catalogue: chart kinds, report themes, export formats",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/report-drafts": {
+      "post": {
+        "description": "Like ``POST /reports`` but marked ``draft``; the browser opens ``url``.\n\nA draft is an ordinary private report (status ``draft`` until first\nsaved). Nothing is shared or exported.",
+        "operationId": "api_create_report_draft_api_v1_report_drafts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Create Report Draft Api V1 Report Drafts Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create a draft report and open it in the Studio (assistant)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/report-exports/{export_id}": {
+      "get": {
+        "description": "Stream the file. Only the user who produced it can download it.",
+        "operationId": "api_download_report_export_api_v1_report_exports__export_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "export_id",
+            "required": true,
+            "schema": {
+              "title": "Export Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The exported file (attachment)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download a finished report export (the user who made it; 1 h)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/report-sources": {
+      "get": {
+        "description": "Return a page of report sources, newest first (no rows).",
+        "operationId": "api_list_report_sources_api_v1_report_sources_get",
+        "parameters": [
+          {
+            "description": "health | analysis | run_summary | health_trend",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "health | analysis | run_summary | health_trend",
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pipeline",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Pipeline"
+            }
+          },
+          {
+            "in": "query",
+            "name": "instance_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Instance Id"
+            }
+          },
+          {
+            "description": "Substring of title / batch / id.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Substring of title / batch / id.",
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api List Report Sources Api V1 Report Sources Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List report sources (durable, aggregated run datasets)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/report-sources/ingest": {
+      "post": {
+        "description": "Idempotently (re)build every source a run produced (health / analysis / summary).",
+        "operationId": "api_ingest_report_sources_api_v1_report_sources_ingest_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportSourceIngestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Ingest Report Sources Api V1 Report Sources Ingest Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest a finished run's artifacts into report sources",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/report-sources/trend": {
+      "post": {
+        "description": "Combine several health runs (refresh-over-refresh) into one trend source.",
+        "operationId": "api_build_report_trend_api_v1_report_sources_trend_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportTrendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Build Report Trend Api V1 Report Sources Trend Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Build a data-health trend source from 2+ health sources",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/report-sources/{source_id}": {
+      "get": {
+        "description": "Return the row-free description the planner uses to pick charts.",
+        "operationId": "api_get_report_source_api_v1_report_sources__source_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "title": "Source Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Get Report Source Api V1 Report Sources  Source Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Describe one report source: datasets, columns, types, examples (no rows)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/report-templates": {
+      "get": {
+        "description": "Return recommended layouts, optionally for one source kind.",
+        "operationId": "api_list_report_templates_api_v1_report_templates_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {},
+                  "title": "Response Api List Report Templates Api V1 Report Templates Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List report templates (built-in + your own + shared)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/report-templates/{template_id}": {
+      "delete": {
+        "description": "Delete a user template you own (built-ins are read-only).",
+        "operationId": "api_delete_report_template_api_v1_report_templates__template_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "template_id",
+            "required": true,
+            "schema": {
+              "title": "Template Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Delete Report Template Api V1 Report Templates  Template Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete one of your report templates",
+        "tags": [
+          "v1"
+        ]
+      },
+      "get": {
+        "description": "Return a template (layout included).",
+        "operationId": "api_get_report_template_api_v1_report_templates__template_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "template_id",
+            "required": true,
+            "schema": {
+              "title": "Template Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Get Report Template Api V1 Report Templates  Template Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get one report template with its layout",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/reports": {
+      "get": {
+        "description": "Return report summaries (no layouts), newest first.",
+        "operationId": "api_list_reports_api_v1_reports_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "pattern": "^(all|mine|shared|favorites)$",
+              "title": "Scope",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "folder",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Folder"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tag",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "archived",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Archived",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api List Reports Api V1 Reports Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List reports visible to you",
+        "tags": [
+          "v1"
+        ]
+      },
+      "post": {
+        "description": "Create and save a new report owned by the caller.",
+        "operationId": "api_create_report_api_v1_reports_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Create Report Api V1 Reports Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create a report (from a template, a layout, or the source's recommendation)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/reports/{report_id}": {
+      "get": {
+        "description": "Return the report and its layout (outline included for planners).",
+        "operationId": "api_get_report_api_v1_reports__report_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Get Report Api V1 Reports  Report Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get one report: metadata, layout and (owner) shares",
+        "tags": [
+          "v1"
+        ]
+      },
+      "put": {
+        "description": "Save changes; a layout change creates a new version (409 on a stale version).",
+        "operationId": "api_update_report_api_v1_reports__report_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Update Report Api V1 Reports  Report Id  Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save a report (layout / title / description / folder / tags)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/reports/{report_id}/archive": {
+      "post": {
+        "description": "Soft-delete; restore with ``/restore``.",
+        "operationId": "api_archive_report_api_v1_reports__report_id__archive_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Archive Report Api V1 Reports  Report Id  Archive Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Archive a report (owner; reversible)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/reports/{report_id}/duplicate": {
+      "post": {
+        "description": "Duplicate any report you can view.",
+        "operationId": "api_duplicate_report_api_v1_reports__report_id__duplicate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportDuplicateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Duplicate Report Api V1 Reports  Report Id  Duplicate Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Copy a report into a new one you own",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/reports/{report_id}/exports": {
+      "post": {
+        "description": "Render in an executor subprocess; download from ``download_url``.\n\nHidden sections / blocks are never exported; every export is audited.",
+        "operationId": "api_export_report_api_v1_reports__report_id__exports_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportExportResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export a report (pdf / html / docx / xlsx / svg / png / md / json)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/reports/{report_id}/favorite": {
+      "put": {
+        "description": "Per-user favourite flag.",
+        "operationId": "api_favorite_report_api_v1_reports__report_id__favorite_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportFavoriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Favorite Report Api V1 Reports  Report Id  Favorite Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Star or un-star a report",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/reports/{report_id}/ops": {
+      "post": {
+        "description": "Apply ops atomically; ``save=false`` only validates and returns the layout.",
+        "operationId": "api_report_ops_api_v1_reports__report_id__ops_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportOpsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Report Ops Api V1 Reports  Report Id  Ops Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apply declarative layout edit ops (add / move / hide / restyle blocks)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/reports/{report_id}/preview": {
+      "post": {
+        "description": "Validate ``layout`` and return its render model (nothing is saved).",
+        "operationId": "api_preview_report_api_v1_reports__report_id__preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Preview Report Api V1 Reports  Report Id  Preview Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Render an unsaved layout against the report's source",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/reports/{report_id}/render": {
+      "get": {
+        "description": "Return resolved blocks (Vega-Lite specs, KPI values, tables) in the report theme.",
+        "operationId": "api_render_report_api_v1_reports__report_id__render_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Render Report Api V1 Reports  Report Id  Render Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Render model of the saved report (what the Studio canvas draws)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/reports/{report_id}/restore": {
+      "post": {
+        "description": "Un-archive.",
+        "operationId": "api_unarchive_report_api_v1_reports__report_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Unarchive Report Api V1 Reports  Report Id  Restore Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restore an archived report (owner)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/reports/{report_id}/save-as-template": {
+      "post": {
+        "description": "Private by default; ``shared=true`` publishes it to every user.",
+        "operationId": "api_report_save_template_api_v1_reports__report_id__save_as_template_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportTemplateSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Report Save Template Api V1 Reports  Report Id  Save As Template Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save a report's layout as a reusable template",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/reports/{report_id}/shares": {
+      "get": {
+        "description": "Return the share ACL.",
+        "operationId": "api_report_shares_api_v1_reports__report_id__shares_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {},
+                  "title": "Response Api Report Shares Api V1 Reports  Report Id  Shares Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Who a report is shared with (owner)",
+        "tags": [
+          "v1"
+        ]
+      },
+      "put": {
+        "description": "Grant view / edit. Human-only: agent principals get 403.",
+        "operationId": "api_share_report_api_v1_reports__report_id__shares_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportShareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {},
+                  "title": "Response Api Share Report Api V1 Reports  Report Id  Shares Put",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Share a report with a user or a role (owner; audited)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/reports/{report_id}/shares/{principal_kind}/{principal}": {
+      "delete": {
+        "description": "Revoke a grant.",
+        "operationId": "api_unshare_report_api_v1_reports__report_id__shares__principal_kind___principal__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "principal_kind",
+            "required": true,
+            "schema": {
+              "title": "Principal Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "principal",
+            "required": true,
+            "schema": {
+              "title": "Principal",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {},
+                  "title": "Response Api Unshare Report Api V1 Reports  Report Id  Shares  Principal Kind   Principal  Delete",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stop sharing a report with a user or role (owner; audited)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/reports/{report_id}/versions": {
+      "get": {
+        "description": "Return ``[{version, saved_at, saved_by, note}]`` newest first.",
+        "operationId": "api_report_versions_api_v1_reports__report_id__versions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {},
+                  "title": "Response Api Report Versions Api V1 Reports  Report Id  Versions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Version history of a report",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/reports/{report_id}/versions/{version}": {
+      "get": {
+        "description": "Return a snapshot.",
+        "operationId": "api_report_version_api_v1_reports__report_id__versions__version__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "title": "Version",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Report Version Api V1 Reports  Report Id  Versions  Version  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "One saved version of a report (with layout)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/reports/{report_id}/versions/{version}/restore": {
+      "post": {
+        "description": "Re-save the snapshot; history is never rewritten.",
+        "operationId": "api_restore_report_version_api_v1_reports__report_id__versions__version__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "title": "Version",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Restore Report Version Api V1 Reports  Report Id  Versions  Version  Restore Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restore an old version (saved as the newest version)",
         "tags": [
           "v1"
         ]
@@ -10524,6 +13451,223 @@
         ]
       }
     },
+    "/api/v1/transform-library": {
+      "get": {
+        "description": "Return reusable chains from ``$XDG_CONFIG_HOME/ovid2/transforms`` + shipped.",
+        "operationId": "api_list_transform_library_api_v1_transform_library_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Api List Transform Library Api V1 Transform Library Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List user + shipped transform chains (the UDF library)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/transform-library/{name}": {
+      "delete": {
+        "description": "Delete a user chain (human-approval gated: pipelines may depend on it).",
+        "operationId": "api_delete_transform_library_api_v1_transform_library__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete a user transform-library chain",
+        "tags": [
+          "v1"
+        ]
+      },
+      "get": {
+        "description": "Return raw + parsed YAML of a library chain.",
+        "operationId": "api_get_transform_library_api_v1_transform_library__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Get Transform Library Api V1 Transform Library  Name  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get one transform-library chain",
+        "tags": [
+          "v1"
+        ]
+      },
+      "put": {
+        "description": "Validate (schema, op params, SQL allow-list) and save a library chain.",
+        "operationId": "api_put_transform_library_api_v1_transform_library__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuilderRawText"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create or update a user transform-library chain",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/transform-library/{name}/assign": {
+      "post": {
+        "description": "Append ``{spec: name}`` to the pipeline's ``transforms/assignments.yaml``.",
+        "operationId": "api_assign_transform_api_v1_transform_library__name__assign_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransformAssignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Assign a library chain to tables of a pipeline",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
     "/api/v1/transforms": {
       "get": {
         "description": "Return the CDM-agnostic public transformations catalogue.\n\nReads the web-safe catalogue mirror\n(:mod:`ovid2.config.transforms_catalogue`); does not import pipeline\ncode. Each entry carries name / summary / category / requires_family\n/ params_schema so a user or Agent Ovid can pick and configure a\ntransform before composing it into a chain.",
@@ -10582,7 +13726,7 @@
     },
     "/api/v1/transforms:validate": {
       "post": {
-        "description": "Validate a transform spec against the schema and the op catalogue.\n\nLets an agent catch an unknown op or malformed step *before* saving\nthe spec. Returns ``{ok, errors}``.",
+        "description": "Validate a transform spec against the schema and the op catalogue.\n\nLets an agent catch an unknown op, a malformed step, a parameter that\nviolates the op's ``params_schema`` or an expression outside the SQL\nallow-list *before* saving the spec. Returns ``{ok, errors}``.",
         "operationId": "api_validate_transform_api_v1_transforms_validate_post",
         "requestBody": {
           "content": {

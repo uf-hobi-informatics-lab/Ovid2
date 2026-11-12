@@ -48,14 +48,15 @@ def _pipeline_names() -> list[str]:
 def _load_configs(
     pipeline: str,
 ) -> tuple[dict[str, list[dict[str, object]]], list[dict[str, object]]]:
-    """Return ``(FIXER_CHAINS, MULTI_TABLE_FIXES)`` for a pipeline, or empties."""
-    try:
-        module = importlib.import_module(f"ovid2_pipelines.{pipeline}.fixer_configs")
-    except ModuleNotFoundError:
-        return {}, []
-    chains = getattr(module, "FIXER_CHAINS", {}) or {}
-    multi = list(getattr(module, "MULTI_TABLE_FIXES", []) or [])
-    return chains, multi
+    """Return ``(FIXER_CHAINS, MULTI_TABLE_FIXES)`` for a pipeline, or empties.
+
+    Reads through the runtime loader, so ``fixer_configs.yaml`` (preferred)
+    and ``fixer_configs.py`` are both covered.
+    """
+    from ovid2.config.fixer_configs import load_fixer_configs
+
+    chains, multi, _source = load_fixer_configs(pipeline)
+    return chains, multi  # type: ignore[return-value]
 
 
 @pytest.mark.contract

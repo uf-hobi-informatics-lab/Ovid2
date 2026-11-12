@@ -194,3 +194,35 @@ def test_settings_form_post_gated_end_to_end(
             follow_redirects=False,
         )
         assert with_token.status_code == 303
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/pipelines",
+        "/pipeline-packages/new",
+        "/pipeline-packages/example_pcornet/formatters/new",
+        "/pipeline-packages/example_pcornet/mappers/demographic/edit",
+        "/pipelines/x/delete",
+        "/pipelines/x/run",
+    ],
+)
+def test_pipeline_mutation_routes_gated(
+    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch, path: str
+) -> None:
+    """Pipeline / package / formatter / mapper form POSTs reject a missing token."""
+    import importlib
+
+    import ovid2.web.app as _app_module
+    import ovid2.web.settings as _web_settings
+
+    importlib.reload(_web_settings)
+    importlib.reload(_app_module)
+    _use_auth(monkeypatch, enabled=True)
+    with TestClient(_app_module.app) as client:
+        r = client.post(path, data={"name": "x"}, follow_redirects=False)
+        # 403 (CSRF) or 401/303 (unauthenticated) — never a processed write.
+        assert r.status_code in (401, 403) or (
+            r.status_code == 303 and "/login" in r.headers.get("location", "")
+        ), (path, r.status_code)

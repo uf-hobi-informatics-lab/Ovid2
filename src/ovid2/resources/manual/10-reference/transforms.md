@@ -31,6 +31,7 @@ Transforms are CDM-agnostic, lazy DataFrame ops you compose into chains (from a 
 | Op | Summary | Params (* = required) | Engine |
 | --- | --- | --- | --- |
 | `cast` | Cast columns to target SQL types using a {column: type} map. | `types`* | any |
+| `derive_column` | Add or replace a column computed from a checked Spark-SQL expression. | `column`*, `expr`*, `cast` | any |
 | `normalize_whitespace` | Collapse repeated whitespace to single spaces and trim the ends. | `columns`* | any |
 | `pad` | Pad a column to a fixed width with a fill character (left or right). | `column`*, `width`*, `char`, `side` | any |
 | `regex_replace` | Replace regex matches with a replacement string across columns. | `columns`*, `pattern`*, `replacement`* | any |

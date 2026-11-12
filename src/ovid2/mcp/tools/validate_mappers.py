@@ -23,5 +23,5 @@ ARGS_MODEL = ValidateMappersArgs
 
 
 async def run(client: WebApiClient, args: ValidateMappersArgs) -> Any:
-    """Call ``POST /api/v1/pipelines/{pipeline}/mappers:validate``."""
-    return await client.post(f"/api/v1/pipelines/{args.pipeline}/mappers:validate")
+    """Call ``POST /api/v1/pipeline-packages/{pipeline}/mappers:validate``."""
+    return await client.post(f"/api/v1/pipeline-packages/{args.pipeline}/mappers:validate")

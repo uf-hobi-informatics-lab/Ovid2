@@ -13,10 +13,15 @@ The scaffolder:
    ``ovid2_pipelines`` namespace ``__path__``).
 3. Copies the whole tree to ``<pipelines_root>/<new_name>/``, refusing
    to overwrite an existing package.
-4. Rewrites the copied ``pipeline_settings.py`` so the new package does
-   not inherit the template's *identity* (DB name, HARVEST datamart
-   id/name, DATAVANT key). The target ``cdm`` binding is preserved (or
-   added) so ``resolve_cdm_for_pipeline`` returns the right handle.
+4. Rewrites every reference to the template package in the copy
+   (``ovid2_pipelines.<template>`` imports and YAML ``class:`` paths,
+   legacy ``partner_name`` bindings) so the clone is self-contained.
+5. Rewrites the copied ``pipeline_settings.py`` so the new package does
+   not inherit the template's *identity* — every constant in
+   :data:`ovid2.tools.pipeline_identity.IDENTITY_FIELDS` the template
+   declares (HARVEST network / datamart, databases, Datavant key, OMOP
+   ``cdm_source``), following ``A = B`` aliases. Operator overrides
+   (``identity=``) win over the name-derived defaults.
 
 Usage::
 
@@ -31,29 +36,26 @@ from __future__ import annotations
 import argparse
 import importlib
 import logging
-import os
 import re
 import shutil
 import sys
 from pathlib import Path
+from typing import Any
 
+from ovid2.tools.pipeline_identity import (
+    default_identity,
+    read_settings_constants,
+    rewrite_settings,
+)
 from ovid2.tools.templates import get_template, list_templates
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["NewPipelineError", "main", "register", "scaffold_pipeline"]
+__all__ = ["NewPipelineError", "main", "register", "scaffold_pipeline", "template_references"]
 
 _NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
-_IDENTITY_PLACEHOLDERS = (
-    "DEFAULT_PIPELINE_DB_NAME",
-    "DATAMARTID",
-    "DATAMART_NAME",
-    "DATAVANT_KEY",
-    "MERGE_DATABASE_NAME",
-    "CDM_SOURCE_NAME",
-    "CDM_SOURCE_ABBREVIATION",
-)
+_TEXT_SUFFIXES = (".py", ".yaml", ".yml", ".json", ".md", ".txt")
 
 
 class NewPipelineError(ValueError):
@@ -88,56 +90,103 @@ def _source_pipeline_path(source_pipeline: str) -> Path:
     raise NewPipelineError(f"Source pipeline '{source_pipeline}' has no on-disk directory.")
 
 
-def _network_prefix(text: str) -> str:
-    """Return the datamart-id prefix for scaffolded pipelines.
+def _rewrite_pipeline_settings(
+    text: str,
+    new_name: str,
+    cdm: str,
+    overrides: dict[str, Any] | None = None,
+    *,
+    source_pipeline: str | None = None,
+) -> str:
+    """Re-personalise a cloned ``pipeline_settings.py``.
 
-    Uses ``$OVID2_NETWORK_ID`` when set, else the template's own
-    ``NETWORKID`` constant, else ``NET``.
+    Every identity constant the template declares (see
+    :data:`ovid2.tools.pipeline_identity.IDENTITY_FIELDS`) is rewritten to
+    its name-derived default or the supplied override, following
+    ``A = B`` aliases to the defining literal; the ``cdm`` binding is
+    set (appended when absent). A ``legacy_ovid`` clone additionally
+    records ``LEGACY_VENDOR_PARTNER`` so the fix stage keeps finding the
+    template's vendored fixer scripts.
     """
-    env = os.environ.get("OVID2_NETWORK_ID")
-    if env:
-        return env
-    match = re.search(r"^NETWORKID\s*=\s*(['\"])(.*?)\1", text, re.MULTILINE)
-    return match.group(2) if match and match.group(2) else "NET"
-
-
-def _placeholder_value(constant: str, new_name: str, network_id: str = "NET") -> str:
-    """Return the placeholder string for an identity ``constant``."""
-    upper = new_name.upper().replace("-", "_").replace(".", "_")
-    if constant in ("DEFAULT_PIPELINE_DB_NAME", "MERGE_DATABASE_NAME"):
-        return f"CHAR_{upper}"
-    if constant == "DATAMARTID":
-        return f"{network_id}{upper}"
-    if constant == "DATAMART_NAME":
-        return new_name
-    if constant == "DATAVANT_KEY":
-        return new_name.lower()
-    if constant == "CDM_SOURCE_NAME":
-        return f"{new_name} PCORnet-to-OMOP conversion"
-    if constant == "CDM_SOURCE_ABBREVIATION":
-        return upper
-    return new_name
-
-
-def _rewrite_pipeline_settings(text: str, new_name: str, cdm: str) -> str:
-    """Rewrite identity constants + the ``cdm`` binding in-place."""
-    result = text
-    network_id = _network_prefix(text)
-    for constant in _IDENTITY_PLACEHOLDERS:
-        placeholder = _placeholder_value(constant, new_name, network_id)
-        pattern = re.compile(
-            rf"(^{re.escape(constant)}\s*=\s*)(['\"])(.*?)(\2)",
-            re.MULTILINE,
+    constants = read_settings_constants(text)
+    values = default_identity(new_name, constants, cdm=cdm, overrides=overrides)
+    has_cdm_line = re.search(r"^cdm\s*=", text, re.MULTILINE) is not None
+    if not has_cdm_line and "cdm" not in (overrides or {}):
+        values.pop("cdm", None)
+    result = rewrite_settings(text, values)
+    if (
+        source_pipeline
+        and constants.get("ETL_PROFILE") == "legacy_ovid"
+        and "LEGACY_VENDOR_PARTNER" not in constants
+    ):
+        if not result.endswith("\n"):
+            result += "\n"
+        result += (
+            "# Cloned from a legacy_ovid port: the vendored fixer scripts stay\n"
+            "# under pipelines/legacy_ovid_vendor/partners/<LEGACY_VENDOR_PARTNER>/.\n"
+            f"LEGACY_VENDOR_PARTNER = {source_pipeline!r}\n"
         )
-
-        def _swap(m: re.Match[str], ph: str = placeholder) -> str:
-            return f"{m.group(1)}{m.group(2)}{ph}{m.group(2)}"
-
-        result = pattern.sub(_swap, result)
-    cdm_pattern = re.compile(r"(^cdm\s*=\s*)(['\"])(.*?)(\2)", re.MULTILINE)
-    if cdm_pattern.search(result):
-        result = cdm_pattern.sub(lambda m: f"{m.group(1)}{m.group(2)}{cdm}{m.group(2)}", result)
     return result
+
+
+def _rewrite_package_references(dest: Path, source_pipeline: str, new_name: str) -> list[Path]:
+    """Point the clone's code at itself instead of the template package.
+
+    Rewrites, in every text file of the copied tree:
+
+    * ``ovid2_pipelines.<source>.`` / ``ovid2_pipelines.<source>`` module
+      references (imports, ``class:`` dotted paths in YAML);
+    * ``from ovid2_pipelines import <source>`` imports;
+    * the generated legacy-port ``partner_name = '<source>'`` binding.
+
+    Returns:
+        The files that changed.
+    """
+    module_re = re.compile(rf"\bovid2_pipelines\.{re.escape(source_pipeline)}\b")
+    from_re = re.compile(rf"(\bfrom\s+ovid2_pipelines\s+import\s+){re.escape(source_pipeline)}\b")
+    partner_re = re.compile(
+        rf"^(\s*partner_name\s*=\s*)(['\"]){re.escape(source_pipeline)}\2", re.MULTILINE
+    )
+    changed: list[Path] = []
+    for path in sorted(dest.rglob("*")):
+        if not path.is_file() or path.suffix not in _TEXT_SUFFIXES:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        new = module_re.sub(f"ovid2_pipelines.{new_name}", text)
+        new = from_re.sub(rf"\g<1>{new_name}", new)
+        new = partner_re.sub(rf"\g<1>\g<2>{new_name}\g<2>", new)
+        if new != text:
+            path.write_text(new, encoding="utf-8")
+            path.chmod(0o644)
+            changed.append(path)
+    return changed
+
+
+def template_references(dest: Path, source_pipeline: str) -> list[str]:
+    """Return ``file:line`` locations in ``dest`` still naming ``source_pipeline``.
+
+    Used by tests and by the scaffold report to prove a clone is
+    self-contained.
+    """
+    module_re = re.compile(
+        rf"\bovid2_pipelines\.{re.escape(source_pipeline)}\b"
+        rf"|\bfrom\s+ovid2_pipelines\s+import\s+{re.escape(source_pipeline)}\b"
+    )
+    hits: list[str] = []
+    for path in sorted(dest.rglob("*")):
+        if not path.is_file() or path.suffix not in _TEXT_SUFFIXES:
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except UnicodeDecodeError:
+            continue
+        for i, line in enumerate(lines, 1):
+            if module_re.search(line):
+                hits.append(f"{path.relative_to(dest)}:{i}")
+    return hits
 
 
 def scaffold_pipeline(
@@ -146,6 +195,7 @@ def scaffold_pipeline(
     source_pipeline: str,
     cdm: str,
     pipelines_root: Path | None = None,
+    identity: dict[str, Any] | None = None,
 ) -> Path:
     """Copy ``source_pipeline`` to a new package named ``new_name``.
 
@@ -156,6 +206,8 @@ def scaffold_pipeline(
         cdm: Target CDM name recorded in the copied ``pipeline_settings``.
         pipelines_root: Override the destination root (used by tests).
             Defaults to the first writable ``ovid2_pipelines`` dir.
+        identity: Operator-chosen identity values (``DATAMARTID``,
+            ``DATAVANT_KEY``, …) overriding the name-derived defaults.
 
     Returns:
         The path to the newly created package directory.
@@ -179,18 +231,39 @@ def scaffold_pipeline(
     if dest.exists():
         raise NewPipelineError(f"Pipeline package '{new_name}' already exists at {dest}.")
 
+    if not new_name.isidentifier():
+        raise NewPipelineError(
+            f"Invalid pipeline name {new_name!r}: it must be a valid Python identifier "
+            "(letters, digits, underscore; not starting with a digit) because the "
+            "package is imported as ovid2_pipelines.<name>."
+        )
+    settings_src = src / "pipeline_settings.py"
+    if settings_src.is_file():
+        try:
+            original = settings_src.read_text(encoding="utf-8")
+            rewritten = _rewrite_pipeline_settings(
+                original, new_name, cdm, identity, source_pipeline=source_pipeline
+            )
+        except SyntaxError as exc:
+            raise NewPipelineError(
+                f"Template '{source_pipeline}' pipeline_settings.py does not parse: {exc}"
+            ) from None
+    else:
+        rewritten = None
+
     shutil.copytree(
         src,
         dest,
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
     )
-
-    settings_path = dest / "pipeline_settings.py"
-    if settings_path.is_file():
-        original = settings_path.read_text(encoding="utf-8")
-        rewritten = _rewrite_pipeline_settings(original, new_name, cdm)
+    _rewrite_package_references(dest, source_pipeline, new_name)
+    if rewritten is not None:
+        settings_path = dest / "pipeline_settings.py"
         settings_path.write_text(rewritten, encoding="utf-8")
         settings_path.chmod(0o644)
+    for path in dest.rglob("*"):
+        path.chmod(0o755 if path.is_dir() else 0o644)
+    dest.chmod(0o755)
 
     logger.info(
         "Scaffolded pipeline '%s' from '%s' (cdm=%s) at %s",

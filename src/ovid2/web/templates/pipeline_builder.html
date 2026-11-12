@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% import "_help.html" as help %}
+{% block title %}Customize {{ pipeline }} &mdash; Ovid2{% endblock %}
+{% block content %}
+{#
+  Pipeline builder — navigate and edit every spec of one package.
+
+  Left   tree: package documents (assignments, transforms, fixers,
+         settings) + every CDM table with per-stage status dots.
+  Main   per-table flow graph (Source files → Format → Transform → Map →
+         Fix → table) and the editor: Form ↔ YAML tabs (CodeMirror,
+         live-linted). Everything is read and written through /api/v1 by
+         static/spec_builder.js; the inspection below is the initial state.
+#}
+{% set s = inspection.summary %}
+<section class="page pl-page pb-page" id="spec-builder"
+         data-kind="etl"
+         data-pipeline="{{ pipeline }}"
+         data-cdm="{{ inspection.cdm }}"
+         data-profile="{{ inspection.profile }}"
+         data-can-write="{{ 'true' if can_write else 'false' }}"
+         data-initial-table="{{ initial_table }}"
+         data-initial-doc="{{ initial_doc }}">
+  <p class="pl-back"><a href="/pipeline-packages/{{ pipeline }}">{{ icons.icon("chevron-left", size=15) }} {{ pipeline }} package</a>
+    {% if pipeline_config %} &middot; <a href="/pipelines/{{ pipeline_config.name }}">pipeline definition</a>{% endif %}</p>
+  <header class="page-header pl-header">
+    <div class="pl-title">
+      <h1>Customize <span class="mono">{{ pipeline }}</span>
+        {% call help.tip_block(label="Pipeline builder") %}
+          Pick a table to see how it flows through the stages and edit its
+          <strong>formatter</strong>, <strong>mapper</strong>, assigned
+          <strong>transforms</strong> and <strong>fix chain</strong>. Each document
+          has a <strong>Form</strong> view generated from its schema and a
+          <strong>YAML</strong> view &mdash; edit either; they stay in sync.
+          Package-wide documents (transform assignments, private transform chains,
+          fixer chains, settings) are at the top of the tree.
+        {% endcall %}
+      </h1>
+      <p class="pl-subtitle">{{ inspection.cdm }}{% if inspection.profile == 'legacy_ovid' %} &middot; legacy_ovid port (generated formatters are read-only){% endif %}{% if inspection.requires_family %} &middot; requires a {{ inspection.requires_family }} engine{% endif %}</p>
+    </div>
+    <a class="button" href="/transforms">{{ icons.icon("zap", size=15) }} Transform library</a>
+  </header>
+
+  <div class="pl-stats">
+    <div class="pl-stat pl-stat-total"><span class="pl-stat-icon">{{ icons.icon("table", size=18) }}</span><span class="pl-stat-body"><span class="pl-stat-value">{{ s.configured }}/{{ s.tables }}</span><span class="pl-stat-label">tables configured</span></span></div>
+    <div class="pl-stat pl-stat-ok"><span class="pl-stat-icon">{{ icons.icon("layers", size=18) }}</span><span class="pl-stat-body"><span class="pl-stat-value">{{ s.with_mapper }}</span><span class="pl-stat-label">with a mapper</span></span></div>
+    <div class="pl-stat pl-stat-auto"><span class="pl-stat-icon">{{ icons.icon("zap", size=18) }}</span><span class="pl-stat-body"><span class="pl-stat-value" data-stat-transforms>{{ s.with_transforms }}</span><span class="pl-stat-label">with transforms</span></span></div>
+    <div class="pl-stat pl-stat-auto"><span class="pl-stat-icon">{{ icons.icon("shield-check", size=18) }}</span><span class="pl-stat-body"><span class="pl-stat-value">{{ s.with_fixers }}</span><span class="pl-stat-label">with fix chains</span></span></div>
+    <div class="pl-stat {{ 'pl-stat-off' if not s.errors else '' }}" style="--sc: {{ 'var(--err)' if s.errors else ('var(--warn)' if s.warnings else 'var(--ok)') }}">
+      <span class="pl-stat-icon">{{ icons.icon("check-square", size=18) }}</span>
+      <span class="pl-stat-body"><span class="pl-stat-value" data-stat-checks>{{ s.errors }} / {{ s.warnings }}</span><span class="pl-stat-label">errors / warnings</span></span>
+    </div>
+  </div>
+
+  <div class="pb-layout">
+    <nav class="pb-tree" aria-label="Pipeline documents" id="pb-tree">
+      <input type="search" class="pb-tree-search" placeholder="Filter tables…" aria-label="Filter tables" data-tree-filter>
+      <p class="pb-tree-group">Package</p>
+      <button type="button" class="pb-tree-item" data-doc="checks">{{ icons.icon("check-square", size=15) }}<span class="pb-tree-name">Name checks</span></button>
+      <button type="button" class="pb-tree-item" data-doc="assignments">{{ icons.icon("zap", size=15) }}<span class="pb-tree-name">Transform assignments</span></button>
+      <button type="button" class="pb-tree-item" data-doc="transforms">{{ icons.icon("layers", size=15) }}<span class="pb-tree-name">Private transforms</span></button>
+      <button type="button" class="pb-tree-item" data-doc="fixers">{{ icons.icon("shield-check", size=15) }}<span class="pb-tree-name">Fixer chains</span></button>
+      <button type="button" class="pb-tree-item" data-doc="settings">{{ icons.icon("sliders", size=15) }}<span class="pb-tree-name">Settings</span></button>
+      <p class="pb-tree-group">Tables <span class="nw-muted">({{ inspection.cdm }})</span></p>
+      {% for t in inspection.tables %}
+        <button type="button" class="pb-tree-item {{ '' if t.configured else 'is-unconfigured' }}" data-table="{{ t.name }}">
+          {{ icons.icon("table", size=14) }}<span class="pb-tree-name">{{ t.name }}</span>
+          <span class="pb-tree-dots" aria-hidden="true" title="format · transform · map · fix">
+            <i class="{{ 'on' if t.formatter else '' }}"></i><i class="{{ 'on' if t.transforms else '' }}"></i><i class="{{ 'on' if t.mapper else '' }}"></i><i class="{{ 'on' if t.fixers else '' }}"></i>
+          </span>
+        </button>
+      {% endfor %}
+    </nav>
+
+    <div class="pb-main">
+      <section class="pl-panel" id="pb-flow-panel" hidden>
+        <div class="pl-panel-head">
+          <span class="pl-card-badge">{{ icons.icon("table", size=16) }}</span>
+          <h2 data-flow-title>table</h2>
+          <span class="nw-muted small" data-flow-sub></span>
+        </div>
+        <div class="flow-graph" id="pb-flow"><svg class="flow-graph-svg"></svg></div>
+      </section>
+
+      <section class="pl-panel" id="pb-editor-panel">
+        <div class="pl-panel-head">
+          <span class="pl-card-badge" data-editor-icon>{{ icons.icon("edit", size=16) }}</span>
+          <h2 data-editor-title>Pick a document</h2>
+          <span class="nw-muted small mono" data-editor-path></span>
+        </div>
+        <div class="pb-tabs" role="tablist" data-editor-tabs hidden>
+          <button type="button" class="pb-tab" role="tab" data-tab="form" aria-selected="true">{{ icons.icon("sliders", size=14) }} Form</button>
+          <button type="button" class="pb-tab" role="tab" data-tab="yaml" aria-selected="false">{{ icons.icon("file", size=14) }} YAML</button>
+          <span class="pl-flex"></span>
+        </div>
+        <div data-editor-body>
+          <p class="note">Choose a table or a package document on the left. Tables show how the data flows through format &rarr; transform &rarr; map &rarr; fix; click a stage to edit it.</p>
+        </div>
+        <div class="pb-pane" data-pane="yaml" hidden>
+          <textarea class="mono wide" rows="20" spellcheck="false" data-yaml-source></textarea>
+        </div>
+        <ul class="pb-errors" data-editor-errors hidden></ul>
+        <div class="pb-editor-actions" data-editor-actions hidden>
+          <span class="pb-status small" data-editor-status></span>
+          <button type="button" class="button danger" data-editor-delete hidden>{{ icons.icon("trash", size=14) }} Delete</button>
+          <button type="button" class="button" data-editor-revert>Revert</button>
+          <button type="button" class="button primary" data-editor-save {% if not can_write %}disabled title="Requires the manage-config capability"{% endif %}>{{ icons.icon("check", size=14) }} Save</button>
+        </div>
+      </section>
+    </div>
+  </div>
+</section>
+<script type="application/json" id="pb-inspection">{{ inspection | tojson }}</script>
+<script type="module" src="/static/spec_builder.js"></script>
+{% endblock %}

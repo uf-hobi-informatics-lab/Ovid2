@@ -52,9 +52,9 @@ class ApplyTransformsOp(BaseMapOp):
         ctx: MapOpContext,
     ) -> DataFrame:
         """Resolve the transform chain and run it lazily against ``df``."""
-        from ovid2.core.engines.pyspark import spark_functions
         from ovid2.transforms import engine as transforms_engine
         from ovid2.transforms import spec as transforms_spec
+        from ovid2.transforms.runtime import engine_context_for
 
         spec_name = params.get("spec")
         inline_steps = params.get("steps")
@@ -75,15 +75,15 @@ class ApplyTransformsOp(BaseMapOp):
         else:
             raise ValueError("apply_transforms: one of 'spec' or 'steps' is required.")
 
-        # The mapper tier is Spark-family; obtain the portable functions
-        # DSL from the Spark engine without spinning a new session.
-        functions = spark_functions()
+        # Resolve the *active* engine (Spark, DuckDB, Snowpark) — the
+        # mapper tier runs under every engine family.
+        functions, family = engine_context_for(df)
         return transforms_engine.run(
             df,
             transform_spec,
-            session=ctx.spark,  # type: ignore[arg-type]  # SparkSession satisfies EngineSession structurally
+            session=ctx.spark,  # type: ignore[arg-type]  # engine session satisfies EngineSession structurally
             functions=functions,
-            engine_family="spark",
+            engine_family=family,
             pipeline=ctx.pipeline,
             secrets=ctx.secrets,
         )

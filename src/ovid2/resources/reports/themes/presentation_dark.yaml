@@ -1,0 +1,18 @@
+name: presentation_dark
+label: Presentation (dark)
+description: Dark slides with bright accents and larger type, for projectors.
+mode: dark
+fonts: {body: "'Segoe UI', Helvetica, Arial, sans-serif", heading: "'Segoe UI', Helvetica, Arial, sans-serif", mono: "Menlo, Consolas, monospace"}
+colors:
+  background: "#14181f"
+  surface: "#1e242d"
+  text: "#e8ecf1"
+  muted: "#9aa5b1"
+  border: "#333c48"
+  accent: "#58a6ff"
+  grid: "#2a313b"
+palette: ["#58a6ff", "#ffa657", "#ff7b72", "#7ee787", "#d2a8ff", "#f2cc60", "#79c0ff", "#ffbedd"]
+sequential: plasma
+diverging: redyellowblue
+status: {passed: "#3fb950", exception: "#f85149", error: "#bc8cff", skipped: "#6e7681", not_applicable: "#484f58", warning: "#d29922"}
+sizes: {base: 13, title: 26, heading: 18, axis: 12}

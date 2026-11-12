@@ -27,8 +27,8 @@ ARGS_MODEL = SaveMapperArgs
 
 
 async def run(client: WebApiClient, args: SaveMapperArgs) -> Any:
-    """Call ``PUT /api/v1/pipelines/{pipeline}/mappers/{table}``."""
+    """Call ``PUT /api/v1/pipeline-packages/{pipeline}/mappers/{table}``."""
     return await client.put(
-        f"/api/v1/pipelines/{args.pipeline}/mappers/{args.table}",
+        f"/api/v1/pipeline-packages/{args.pipeline}/mappers/{args.table}",
         json_body={"raw_text": args.raw_text},
     )

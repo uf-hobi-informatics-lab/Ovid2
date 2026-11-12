@@ -1,0 +1,31 @@
+name: Volume & value profile
+description: >-
+  Monthly record volumes per table, a calendar view to spot gaps, the
+  column profile and the most frequent values.
+layout:
+  v: 1
+  title: Data volume and value profile
+  theme: publication
+  page: {size: letter, orientation: landscape}
+  options: {show_provenance: true, small_cell_threshold: 11}
+  sections:
+    - id: overview
+      title: Overview
+      blocks:
+        - {id: intro, type: text, text_ref: overview}
+        - {id: rows, type: chart, chart: bar, dataset: tables, title: Rows per table,
+           params: {category: table, value: rows, horizontal: true, labels: true}}
+    - id: volume
+      title: Volume over time
+      blocks:
+        - {id: monthly, type: chart, chart: line, dataset: monthly_totals, title: Monthly records per table,
+           params: {x: month, y: records, series: table, points: false}}
+        - {id: calendar, type: chart, chart: calendar_heatmap, dataset: monthly_totals, title: Monthly volume (all tables),
+           params: {date: month, value: records}}
+    - id: values
+      title: Columns and values
+      blocks:
+        - {id: nulls, type: chart, chart: bar, dataset: columns, title: Columns with the most nulls,
+           top_n: {n: 20, by: null_pct}, params: {category: column, value: null_pct, color: table, horizontal: true}}
+        - {id: profile, type: chart, chart: table, dataset: columns, title: Column profile,
+           params: {columns: [table, column, distinct_values, total_rows, null_pct]}}

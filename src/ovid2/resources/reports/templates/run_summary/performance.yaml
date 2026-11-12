@@ -1,0 +1,35 @@
+name: Run performance
+description: >-
+  How a run went — table outcomes, slowest tables, stage events and fix
+  outcomes.
+layout:
+  v: 1
+  title: Run summary
+  theme: publication
+  page: {size: letter, orientation: portrait}
+  options: {show_provenance: true}
+  sections:
+    - id: overview
+      title: Overview
+      blocks:
+        - {id: intro, type: text, text_ref: overview}
+        - {id: k_tables, type: chart, chart: kpi, dataset: overview, width: third,
+           params: {value: tables_completed, label: Tables completed, format: integer}}
+        - {id: k_failed, type: chart, chart: kpi, dataset: overview, width: third,
+           params: {value: tables_failed, label: Tables failed, format: integer, threshold: 1, good_when: below}}
+        - {id: k_time, type: chart, chart: kpi, dataset: overview, width: third,
+           params: {value: duration_s, label: Duration, format: compact, suffix: " s"}}
+    - id: tables
+      title: Tables
+      blocks:
+        - {id: slowest, type: chart, chart: bar, dataset: tables, title: Elapsed time per table,
+           params: {category: table, value: elapsed_s, color: status, color_scheme: theme, horizontal: true}}
+        - {id: tbl, type: chart, chart: table, dataset: tables, title: Table outcomes,
+           params: {columns: [table, status, elapsed_s, error], status_column: status}}
+    - id: stages
+      title: Stages and fixes
+      blocks:
+        - {id: stage_bar, type: chart, chart: grouped_bar, dataset: stages, title: Stage events, width: half,
+           params: {category: stage, value: events, group: outcome}}
+        - {id: fix_bar, type: chart, chart: stacked_bar, dataset: fixes, title: Fix outcomes, width: half,
+           params: {category: fix, value: events, stack_by: status, horizontal: true}}

@@ -203,11 +203,17 @@ MAX_PREVIEW_BYTES: int = 1_048_576  # 1 MiB
 def _iter_allowed_files(pkg_path: Path) -> list[Path]:
     """Return the whitelist of files a caller may fetch for one pipeline."""
     allowed: list[Path] = []
-    for rel in ("pipeline_settings.py", "dictionaries.py", "fixer_configs.py"):
+    for rel in (
+        "pipeline_settings.py",
+        "dictionaries.py",
+        "fixer_configs.py",
+        "fixer_configs.yaml",
+        "transforms/assignments.yaml",
+    ):
         candidate = pkg_path / rel
         if candidate.is_file():
             allowed.append(candidate)
-    for sub in ("formatters", "mappers"):
+    for sub in ("formatters", "mappers", "formatters_custom", "transforms"):
         sub_dir = pkg_path / sub
         if not sub_dir.is_dir():
             continue

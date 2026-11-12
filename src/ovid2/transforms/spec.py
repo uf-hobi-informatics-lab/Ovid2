@@ -5,16 +5,19 @@ Unlike a mapper spec, it is not bound to a CDM table — it is a named
 recipe that a user or Agent Ovid composes once and can reference from
 many places.
 
-Two storage locations are supported (both loaded by :func:`find_spec`):
+Three storage locations are searched by :func:`find_spec` (first hit wins):
 
-1. **Shared library** —
-   ``src/ovid2/resources/transforms/<name>.yaml``. Reusable across
-   every pipeline; ships in the package.
-2. **Per-pipeline** —
+1. **Per-pipeline** —
    ``pipelines/ovid2_pipelines/<pipeline>/transforms/<name>.yaml``
    (or a Python-dict ``SPEC = {...}`` module at
-   ``ovid2_pipelines.<pipeline>.transforms.<name>``). Overrides the
-   shared library when both define ``<name>``.
+   ``ovid2_pipelines.<pipeline>.transforms.<name>``).
+2. **User library** — ``$XDG_CONFIG_HOME/ovid2/transforms/<name>.yaml``
+   (:func:`user_library_dir`, override ``$OVID2_TRANSFORMS_DIR``). The
+   operator's own reusable "UDF" chains, authored in the web builder and
+   assignable to any pipeline. Mounted read-only into run containers
+   with the rest of the XDG config tree.
+3. **Shipped library** —
+   ``src/ovid2/resources/transforms/<name>.yaml``. Ships in the package.
 
 The engine (:mod:`ovid2.transforms.engine`) walks ``steps`` and applies
 each op lazily.
@@ -156,13 +159,21 @@ def _shared_dir() -> Path | None:
     return path if path.is_dir() else None
 
 
+def user_library_dir() -> Path:
+    """Return the user transform-library directory (see :mod:`ovid2.config.transform_assignments`)."""
+    from ovid2.config.transform_assignments import user_library_dir as _dir
+
+    return _dir()
+
+
 def find_spec(name: str, pipeline: str | None = None) -> Path | None:
     """Locate the YAML spec for ``name``.
 
     Search order (first hit wins):
 
     1. Per-pipeline: ``ovid2_pipelines.<pipeline>.transforms/<name>.yaml``.
-    2. Shared library: ``ovid2.resources.transforms/<name>.yaml``.
+    2. User library: :func:`user_library_dir` ``/<name>.yaml``.
+    3. Shipped library: ``ovid2.resources.transforms/<name>.yaml``.
 
     Returns ``None`` when no YAML spec exists (a Python-dict ``SPEC``
     module may still exist — see :func:`load_spec`).
@@ -177,6 +188,10 @@ def find_spec(name: str, pipeline: str | None = None) -> Path | None:
                 candidate = Path(base) / f"{name}.yaml"
                 if candidate.is_file():
                     return candidate
+
+    user = user_library_dir() / f"{name}.yaml"
+    if user.is_file():
+        return user
 
     shared = _shared_dir()
     if shared is not None:
@@ -226,4 +241,5 @@ __all__ = [
     "load_from_dict",
     "load_from_yaml",
     "load_spec",
+    "user_library_dir",
 ]

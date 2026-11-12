@@ -1,8 +1,10 @@
 """Fix transformer.
 
 Loads per-pipeline, per-table fix configurations and applies them as a chain
-of lazy Spark transformations. Fixes are declared in
-``ovid2_pipelines.<pipeline>.fixer_configs.FIXER_CHAINS``.
+of lazy Spark transformations. Fixes are declared in the pipeline's
+``fixer_configs.yaml`` (preferred) or
+``ovid2_pipelines.<pipeline>.fixer_configs.FIXER_CHAINS`` — see
+:mod:`ovid2.config.fixer_configs`.
 
 Contract:
 
@@ -25,7 +27,6 @@ Contract:
 
 from __future__ import annotations
 
-import importlib
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -173,25 +174,19 @@ class FixTransformer(BaseTransformer):
 
     @staticmethod
     def _load_fix_chain(pipeline: str, table_name: str) -> list[dict[str, Any]]:
-        """Return ``FIXER_CHAINS[table_name]`` from the pipeline module, or ``[]``."""
-        module_name = f"ovid2_pipelines.{pipeline}.fixer_configs"
-        try:
-            module = importlib.import_module(module_name)
-        except ModuleNotFoundError:
-            return []
-        fixer_chains = getattr(module, "FIXER_CHAINS", {})
-        result: list[dict[str, Any]] = list(fixer_chains.get(table_name, []))
-        return result
+        """Return the table's fix chain (``fixer_configs.yaml`` or ``.py``), or ``[]``."""
+        from ovid2.config.fixer_configs import load_fixer_configs
+
+        chains, _multi, _source = load_fixer_configs(pipeline)
+        return list(chains.get(table_name, []))
 
     @staticmethod
     def load_multi_table_fixes(pipeline: str) -> list[dict[str, Any]]:
-        """Return ``MULTI_TABLE_FIXES`` from the pipeline's ``fixer_configs``."""
-        module_name = f"ovid2_pipelines.{pipeline}.fixer_configs"
-        try:
-            module = importlib.import_module(module_name)
-        except ModuleNotFoundError:
-            return []
-        return list(getattr(module, "MULTI_TABLE_FIXES", []))
+        """Return the pipeline's multi-table fixes (YAML or ``.py``)."""
+        from ovid2.config.fixer_configs import load_fixer_configs
+
+        _chains, multi, _source = load_fixer_configs(pipeline)
+        return list(multi)
 
     @classmethod
     def apply_multi_table_fixes(

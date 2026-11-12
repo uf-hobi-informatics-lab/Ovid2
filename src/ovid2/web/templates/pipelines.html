@@ -176,9 +176,16 @@
                      title="Edit" aria-label="Edit {{ r.name }}">
                     {{ icons.icon("edit", size=15) }}
                   </a>
+                  {% if r.pipeline in package_names %}
+                  <a href="/pipeline-packages/{{ r.pipeline }}/builder" class="icon-button"
+                     title="Customize specs (formatters, mappers, transforms, fixers, settings)"
+                     aria-label="Customize {{ r.name }}">
+                    {{ icons.icon("sliders", size=15) }}
+                  </a>
+                  {% endif %}
                   <form action="/pipelines/{{ r.name }}/delete" method="post"
                         class="pl-inline-form"
-                        onsubmit="return confirm('Delete pipeline {{ r.name }}?')">
+                        onsubmit="return confirm('Delete pipeline {{ r.name }}?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="icon-button danger"
                             title="Delete" aria-label="Delete {{ r.name }}">
                       {{ icons.icon("trash", size=15) }}
@@ -225,7 +232,7 @@
       <button type="button" class="icon-button" data-run-modal-close
               aria-label="Close">{{ icons.icon("close", size=18) }}</button>
     </div>
-    <form method="post" data-run-modal-form action="">
+    <form method="post" data-run-modal-form action=""><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
       {# ---- Input side (only shown when the pipeline's input is open) ---- #}
       <section class="storage-card" data-run-side="input" hidden>

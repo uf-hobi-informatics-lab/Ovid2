@@ -55,6 +55,9 @@ DESTRUCTIVE_ACTIONS: frozenset[str] = frozenset(
         "pipeline.delete",
         "address.delete",
         "llm.delete",
+        # Deleting a user transform-library chain: pipelines may have it
+        # assigned (transforms/assignments.yaml), so their next run fails.
+        "transform.delete",
         # An agent (MCP / assistant) confirming that a run may overwrite an
         # occupied output location. The address is the exact write
         # location, so this replaces existing data — a human must approve.

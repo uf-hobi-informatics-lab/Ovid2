@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% import "_help.html" as help %}
+{% block title %}Transform library &mdash; Ovid2{% endblock %}
+{% block content %}
+{#
+  Transform library — reusable chains ("UDFs").
+
+  User chains live in $XDG_CONFIG_HOME/ovid2/transforms/<name>.yaml and are
+  visible to every pipeline (and to run containers through the read-only
+  XDG mount); shipped chains are read-only (duplicate to customise). A
+  chain is an ordered list of library ops; ``derive_column`` /
+  ``filter_expr`` take a Spark-SQL expression checked against an
+  allow-list (no sub-queries, aggregates, reflect / java_method / UDFs).
+  Assign a chain to tables of a pipeline: it runs in that pipeline's
+  ``transform`` stage (between deduplicate and map).
+#}
+<section class="page pl-page pb-page" id="spec-builder"
+         data-mode="library"
+         data-can-write="{{ 'true' if can_write else 'false' }}"
+         data-initial-name="{{ initial_name }}"
+         data-pipelines='{{ pipelines | tojson }}'>
+  <header class="page-header pl-header">
+    <div class="pl-title">
+      <h1>Transform library
+        {% call help.tip_block(label="Transform library") %}
+          A <strong>transform</strong> is a named, reusable chain of library ops
+          &mdash; your own user-defined function. Build it with the form or write
+          the YAML, then <strong>assign</strong> it to tables of any pipeline: it
+          runs in the pipeline's <code>transform</code> stage, between deduplicate
+          and map, on every engine. <code>derive_column</code> computes a column
+          from a Spark-SQL expression (e.g.
+          <code>coalesce(nullif(trim(SEX), ''), 'UN')</code>) checked against an
+          allow-list of row functions.
+        {% endcall %}
+      </h1>
+      <p class="pl-subtitle">Reusable chains you can assign to any pipeline.</p>
+    </div>
+    <button type="button" class="button primary" data-lib-new {% if not can_write %}disabled{% endif %}>{{ icons.icon("plus", size=15) }} New transform</button>
+  </header>
+
+  <div class="pb-layout">
+    <nav class="pb-tree" aria-label="Transforms" id="pb-tree">
+      <input type="search" class="pb-tree-search" placeholder="Filter…" aria-label="Filter transforms" data-tree-filter>
+      <div data-lib-tree><p class="note small">Loading…</p></div>
+      <p class="pb-tree-group">Op catalogue</p>
+      <button type="button" class="pb-tree-item" data-doc="catalogue">{{ icons.icon("book", size=15) }}<span class="pb-tree-name">All ops</span></button>
+    </nav>
+
+    <div class="pb-main">
+      <section class="pl-panel" id="pb-editor-panel">
+        <div class="pl-panel-head">
+          <span class="pl-card-badge" data-editor-icon>{{ icons.icon("zap", size=16) }}</span>
+          <h2 data-editor-title>Pick a transform</h2>
+          <span class="nw-muted small mono" data-editor-path></span>
+        </div>
+        <div class="pb-tabs" role="tablist" data-editor-tabs hidden>
+          <button type="button" class="pb-tab" role="tab" data-tab="form" aria-selected="true">{{ icons.icon("sliders", size=14) }} Form</button>
+          <button type="button" class="pb-tab" role="tab" data-tab="yaml" aria-selected="false">{{ icons.icon("file", size=14) }} YAML</button>
+        </div>
+        <div data-editor-body>
+          <div class="pb-lib-grid" data-lib-grid></div>
+        </div>
+        <div class="pb-pane" data-pane="yaml" hidden>
+          <textarea class="mono wide" rows="20" spellcheck="false" data-yaml-source></textarea>
+        </div>
+        <ul class="pb-errors" data-editor-errors hidden></ul>
+        <div class="pb-editor-actions" data-editor-actions hidden>
+          <span class="pb-status small" data-editor-status></span>
+          <button type="button" class="button danger" data-editor-delete hidden>{{ icons.icon("trash", size=14) }} Delete</button>
+          <button type="button" class="button" data-editor-revert>Revert</button>
+          <button type="button" class="button primary" data-editor-save {% if not can_write %}disabled title="Requires the manage-config capability"{% endif %}>{{ icons.icon("check", size=14) }} Save</button>
+        </div>
+      </section>
+
+      <section class="pl-panel" id="pb-assign-panel" hidden>
+        <div class="pl-panel-head">
+          <span class="pl-card-badge">{{ icons.icon("arrow-right", size=16) }}</span>
+          <h2>Assign to a pipeline</h2>
+        </div>
+        <div class="pb-add-row">
+          <select data-assign-pipeline aria-label="Pipeline">
+            <option value="">(choose a pipeline package)</option>
+            {% for p in pipelines %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+          </select>
+          <input type="text" data-assign-tables placeholder="tables, e.g. demographic encounter  (or *)" aria-label="Tables">
+          <button type="button" class="button" data-assign-go {% if not can_write %}disabled{% endif %}>Assign</button>
+        </div>
+        <p class="pb-status small" data-assign-status></p>
+      </section>
+    </div>
+  </div>
+</section>
+<script type="module" src="/static/spec_builder.js"></script>
+{% endblock %}

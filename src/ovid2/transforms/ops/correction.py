@@ -256,10 +256,12 @@ class DistinctTransform(BaseTransform):
 class FilterExprTransform(BaseTransform):
     """Keep rows matching a boolean column expression.
 
-    The expression is a Spark/Snowpark column predicate (e.g.
+    The expression is a Spark-SQL column predicate (e.g.
     ``AGE >= 0 AND AGE <= 120``). It is a *filter predicate*, not
     a query that reads external data, so it does not trip the
-    parameterised-SQL rule.
+    parameterised-SQL rule. It is checked against the expression
+    allow-list (:mod:`ovid2.config.sql_expr_guard`) before use — no
+    sub-queries, no ``reflect`` / ``java_method`` / UDF calls.
     """
 
     category = "correction"
@@ -291,14 +293,89 @@ class FilterExprTransform(BaseTransform):
 
     def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
         """Return ``df`` filtered by the predicate (lazy)."""
-        predicate = str(params["expr"])
+        from ovid2.config.sql_expr_guard import ensure_safe_expression, for_engine_family
+
+        predicate = ensure_safe_expression(str(params["expr"]), where="filter_expr.expr")
+        predicate = for_engine_family(predicate, ctx.engine_family)
         f = ctx.functions
         return df.where(f.expr(predicate))
+
+
+class DeriveColumnTransform(BaseTransform):
+    """Add (or replace) a column computed from a Spark-SQL expression.
+
+    The *user-defined function* of the transforms library: a declarative,
+    engine-portable expression such as
+    ``coalesce(nullif(trim(SEX), ''), 'UN')``. The expression is parsed
+    and checked against the allow-list in
+    :mod:`ovid2.config.sql_expr_guard` (row-local built-ins only — no
+    sub-queries, aggregates, windows, ``reflect`` / ``java_method`` or
+    UDF calls) and then evaluated lazily through the active engine's
+    ``functions.expr`` (Spark natively, DuckDB via the sqlglot
+    transpiler, Snowpark via ``sql_expr``).
+    """
+
+    category = "formatting"
+
+    @property
+    def name(self) -> str:
+        """Return the transform identifier."""
+        return "derive_column"
+
+    @property
+    def summary(self) -> str:
+        """Return a one-line description."""
+        return "Add or replace a column computed from a checked Spark-SQL expression."
+
+    @property
+    def params_schema(self) -> dict[str, Any]:
+        """Return the JSON-schema fragment for this op."""
+        return {
+            "type": "object",
+            "required": ["column", "expr"],
+            "additionalProperties": False,
+            "properties": {
+                "column": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Output column (replaced when it already exists).",
+                },
+                "expr": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": (
+                        "Spark-SQL row expression, e.g. \"coalesce(nullif(trim(SEX), ''), 'UN')\"."
+                    ),
+                },
+                "cast": {
+                    "type": "string",
+                    "description": "Optional result type, e.g. 'string', 'int', 'date'.",
+                },
+            },
+        }
+
+    def apply(self, df: DataFrame, params: dict[str, Any], ctx: TransformContext) -> DataFrame:
+        """Return ``df`` with ``column`` set to the expression (lazy)."""
+        from ovid2.config.sql_expr_guard import ensure_safe_expression, for_engine_family
+
+        expression = ensure_safe_expression(str(params["expr"]), where="derive_column.expr")
+        expression = for_engine_family(expression, ctx.engine_family)
+        f = ctx.functions
+        value = f.expr(expression)
+        cast_to = params.get("cast")
+        if cast_to:
+            value = value.cast(str(cast_to))
+        # Replace an existing column under its own spelling (CDM columns
+        # are upper-case; ``column: sex`` should not rename ``SEX``).
+        target = str(params["column"])
+        existing = {c.lower(): c for c in df.columns}
+        return df.withColumn(existing.get(target.lower(), target), value)
 
 
 __all__ = [
     "ClampTransform",
     "DedupTransform",
+    "DeriveColumnTransform",
     "DistinctTransform",
     "FilterExprTransform",
     "NullIfTransform",

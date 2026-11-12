@@ -26,7 +26,7 @@
 
   <form method="post"
         action="{% if mode == 'new' %}/pipeline-packages/{{ pipeline }}/formatters/new{% else %}/pipeline-packages/{{ pipeline }}/formatters/{{ table }}/edit{% endif %}"
-        class="edit-form">
+        class="edit-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if mode == 'new' %}
       <div class="form-row">
         <label for="table">Table name</label>

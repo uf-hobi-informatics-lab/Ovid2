@@ -24,6 +24,7 @@ GATED_DELETE_HANDLERS: frozenset[str] = frozenset(
         "api_delete_pipeline_config",
         "api_delete_address",
         "api_delete_llm",
+        "api_delete_transform_library",
     }
 )
 

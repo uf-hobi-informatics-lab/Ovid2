@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import contextvars
 import logging
+import os
 import threading
 from collections.abc import Callable, Collection, Sequence
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
@@ -90,6 +91,7 @@ def run_tables(
     table_sizes: Callable[[list[str]], dict[str, int]] | None = None,
     on_failure: FailureHook | None = None,
     fail_fast: bool = False,
+    prestage: Callable[[list[str], int], None] | None = None,
 ) -> TableRunResult:
     """Run every table in ``tables`` through ``run_one``.
 
@@ -111,6 +113,12 @@ def run_tables(
         fail_fast: Stop starting new tables after the first failure
             (tables already running finish). The scheduler's historical
             contract; ``ovid2 etl`` keeps going.
+        prestage: ``(tail_tables, concurrency) -> None``; called once
+            after the reference tables and before the parallel phase so
+            the engine can parse every source of the remaining tables up
+            front, in parallel, largest first (see
+            :func:`prestage_sources`). Best-effort: a failure is logged
+            and each table stages its own sources as before.
 
     Returns:
         A :class:`TableRunResult`.
@@ -164,6 +172,16 @@ def run_tables(
     for table in head:
         _one(table)
 
+    # Phase A' — parse every remaining source once, in parallel, before
+    # the tables start (they then hit the stage cache).
+    if prestage is not None and tail and not stop.is_set():
+        try:
+            prestage(list(tail), concurrency)
+        except KeyboardInterrupt:
+            raise
+        except Exception as exc:  # advisory; tables stage on demand
+            logger.warning("Source pre-staging failed; tables stage on demand: %s", exc)
+
     # Phase B — parallel, largest first. ``ThreadPoolExecutor`` starts
     # queued work FIFO, so submission order is start order.
     _run_parallel(tail, _one, engine=engine, concurrency=concurrency, stop=stop)
@@ -213,6 +231,98 @@ def _run_parallel(
         pool.shutdown(wait=True, cancel_futures=True)
         raise
     pool.shutdown(wait=True)
+
+
+def prestage_sources(
+    engine: Any,
+    formatters: dict[str, Any],
+    stage_one: Callable[[str], None],
+    *,
+    sizes: Callable[[list[str]], dict[str, int]] | None = None,
+) -> Callable[[list[str], int], None]:
+    """Return a ``run_tables(prestage=...)`` hook staging sources in parallel.
+
+    Collects each tail table's :attr:`~ovid2.formatters.base.BaseFormatter.source_globs`,
+    de-duplicates them, orders them largest first (``sizes`` maps glob →
+    bytes) and calls ``stage_one(glob)`` on ``concurrency`` worker
+    threads, each on its own engine cursor. ``stage_one`` must be
+    idempotent with the tables' own reads (the DuckDB stage cache makes
+    the later per-table read a cache hit). A glob that fails to stage is
+    logged and left for its table to report.
+    """
+
+    def _hook(tables: list[str], concurrency: int) -> None:
+        globs: list[str] = []
+        for table in tables:
+            for glob in getattr(formatters.get(table), "source_globs", None) or []:
+                if glob and glob != "*" and glob not in globs:
+                    globs.append(glob)
+        if not globs:
+            return
+        by_size = _safe_sizes(sizes, globs) if sizes is not None else {}
+        globs.sort(key=lambda g: -by_size.get(g, 0))
+        logger.info("Pre-staging %d source(s) on %d worker(s): %s", len(globs), concurrency, globs)
+
+        def _stage(glob: str) -> None:
+            try:
+                stage_one(glob)
+            except KeyboardInterrupt:
+                raise
+            except Exception as exc:
+                logger.info("Pre-stage of %s skipped (%s); its table will report it.", glob, exc)
+
+        _run_parallel(
+            globs,
+            _stage,
+            engine=engine,
+            concurrency=max(1, min(concurrency, len(globs))),
+            stop=threading.Event(),
+        )
+
+    return _hook
+
+
+def driver_prestage(
+    engine: Any,
+    address_name: str | None,
+    formatters: dict[str, Any],
+    *,
+    pipeline: str,
+    batch_id: str,
+    sf_overrides: dict[str, Any] | None = None,
+    cdm_name: str | None = None,
+) -> Callable[[list[str], int], None] | None:
+    """Return a :func:`prestage_sources` hook for a staged engine, else ``None``.
+
+    Only engines that stage text sources into a shared cache (DuckDB:
+    ``stage_sources_enabled()``) benefit; Spark / Snowpark return
+    ``None`` and run exactly as before.
+    """
+    enabled = getattr(engine, "stage_sources_enabled", None)
+    if not address_name or not callable(enabled) or not enabled():
+        return None
+    # Opt-in: measured on ACME (24 tables, 96 cores) a barrier that stages
+    # every source before any table starts was *slower* (589 s vs 474 s)
+    # than letting tables stage on demand — one serial-parse source
+    # (drug_exposure.csv) holds every table back. Kept for feeds where
+    # many tables share a few large sources.
+    flag = os.environ.get("OVID2_DUCKDB_PRESTAGE", "").strip().lower()
+    if flag not in ("1", "true", "yes", "on"):
+        return None
+    from ovid2.drivers.registry import driver_from_address
+
+    driver = driver_from_address(
+        address_name, pipeline=pipeline, sf_overrides=sf_overrides, cdm_name=cdm_name
+    )
+    stager = engine.get_stager()
+
+    def _stage_one(glob: str) -> None:
+        stager.materialise(driver, pipeline, batch_id, glob)
+
+    def _sizes(globs: list[str]) -> dict[str, int]:
+        return dict(driver.table_sizes(sorted(set(globs)), pipeline=pipeline, batch_id=batch_id))
+
+    return prestage_sources(engine, formatters, _stage_one, sizes=_sizes)
 
 
 def _safe_sizes(
@@ -282,7 +392,9 @@ def source_sizes_from_driver(
 
 __all__ = [
     "TableRunResult",
+    "driver_prestage",
     "order_largest_first",
+    "prestage_sources",
     "run_tables",
     "source_sizes_from_driver",
     "split_reference_tables",

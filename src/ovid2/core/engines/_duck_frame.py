@@ -368,15 +368,22 @@ class DuckFrame:
     def dropDuplicatesKeepIncompleteKeys(self, subset: Sequence[str]) -> DuckFrame:  # noqa: N802
         """Dedup on ``subset``; rows with a NULL / ``''`` key part all survive.
 
-        One ``QUALIFY`` pass — no UNION, so the upstream plan runs once.
+        One hash-aggregate pass — no UNION, so the upstream plan runs
+        once. Incomplete-key rows get a unique tag (``gen_random_uuid``)
+        as an extra ``DISTINCT ON`` key, so each forms its own group;
+        complete-key rows share a NULL tag and dedup on ``subset``. A
+        hash ``DISTINCT ON`` is ~2x faster than a ``row_number()``
+        window here and spills gracefully.
         """
         keys = [ident(k) for k in subset]
         complete = " AND ".join(f"({k} IS NOT NULL AND CAST({k} AS VARCHAR) <> '')" for k in keys)
+        tag = ident(_fresh_alias("__ovdk"))
         name = _fresh_alias("__ovq")
         rel = self._rel.query(
             name,
-            f"SELECT * FROM {ident(name)} QUALIFY NOT ({complete}) OR "
-            f"row_number() OVER (PARTITION BY {', '.join(keys)}) = 1",
+            f"SELECT * EXCLUDE ({tag}) FROM (SELECT DISTINCT ON ({', '.join(keys)}, {tag}) * "
+            f"FROM (SELECT *, CASE WHEN {complete} THEN NULL ELSE gen_random_uuid() END "
+            f"AS {tag} FROM {ident(name)}))",
         )
         return self._derive(rel)
 

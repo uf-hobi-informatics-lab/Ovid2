@@ -18,6 +18,7 @@ def test_transformation_stages_constant() -> None:
     assert svc.TRANSFORMATION_STAGES == (
         "format",
         "deduplicate",
+        "transform",
         "map",
         "fix",
     )
@@ -29,7 +30,7 @@ def test_get_pipeline_plan_testpipeline() -> None:
     assert plan.pipeline == "testpipeline"
     # No pipeline_settings.py → default CDM.
     assert plan.cdm == "pcornet_7_0"
-    assert plan.transformations == ["format", "deduplicate", "map", "fix"]
+    assert plan.transformations == ["format", "deduplicate", "transform", "map", "fix"]
 
     by_name = {t.name: t for t in plan.tables}
     # YAML formatter present.

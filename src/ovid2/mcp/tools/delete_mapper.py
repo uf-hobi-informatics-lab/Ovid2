@@ -25,5 +25,5 @@ ARGS_MODEL = DeleteMapperArgs
 
 
 async def run(client: WebApiClient, args: DeleteMapperArgs) -> Any:
-    """Call ``DELETE /api/v1/pipelines/{pipeline}/mappers/{table}``."""
-    return await client.delete(f"/api/v1/pipelines/{args.pipeline}/mappers/{args.table}")
+    """Call ``DELETE /api/v1/pipeline-packages/{pipeline}/mappers/{table}``."""
+    return await client.delete(f"/api/v1/pipeline-packages/{args.pipeline}/mappers/{args.table}")

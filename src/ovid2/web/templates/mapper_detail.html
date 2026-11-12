@@ -14,7 +14,7 @@
          class="button primary small">Edit</a>
       <form action="/pipeline-packages/{{ spec.pipeline }}/mappers/{{ spec.table }}/delete"
             method="post" style="display: inline;"
-            onsubmit="return confirm('Delete mapper {{ spec.pipeline }}/{{ spec.table }}?')">
+            onsubmit="return confirm('Delete mapper {{ spec.pipeline }}/{{ spec.table }}?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="button danger small">Delete</button>
       </form>
     </p>

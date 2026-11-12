@@ -31,6 +31,8 @@ but it uses only one host.
 | `stage_sources` | `OVID2_DUCKDB_STAGE_SOURCES` | `true` (parse each text source once into scratch Parquet) |
 | `table_concurrency` | `OVID2_DUCKDB_TABLE_CONCURRENCY` | the job's **Workers** (`--workers`), else `min(tables, CPUs)`; `1` = one table at a time |
 | — | `OVID2_DUCKDB_MAX_LINE_SIZE` | 8 MiB (longest CSV record) |
+| `scratch_codec` | `OVID2_DUCKDB_SCRATCH_CODEC` | `zstd` (scratch Parquet codec) |
+| — | `OVID2_DUCKDB_PRESTAGE` | off — stage every source before the parallel phase |
 
 **Container sizing and Workers.** DuckDB is one process, so a DuckDB
 run is always **one** driver container — there are no worker containers
@@ -82,6 +84,24 @@ took 28 s sequentially and 18 s in parallel, with identical row sets.
   headers like `"a", "b"` (space before the quote) are unquoted like
   Spark's `ignoreLeadingWhiteSpace`. An absent `optional: true` primary
   source yields an empty CDM-shaped table plus a warning, as on Spark.
+- **Dedup** keeps incomplete-key rows in one hash pass (`DISTINCT ON`
+  with a unique tag for NULL / empty keys) instead of filter + `UNION`,
+  which made DuckDB run the formatter plan twice.
+- **CSV writes** take DuckDB's own header (one write of the body, no
+  re-copy) and only wrap string columns for the delimiter / line-break
+  check; typed columns are cast straight to text. Doubles in Java's
+  plain range use `CAST(x AS VARCHAR)` (identical to `Double.toString`);
+  the regex rewrite runs only for scientific notation, zero, NaN, ±Inf.
+- **Date parsing** of canonical, zero-padded values (`yyyy-MM-dd`,
+  `yyyy-MM-dd HH:mm:ss`, …) uses the native `try_strptime`; every other
+  shape falls back to the LEGACY `SimpleDateFormat` emulation. Both paths
+  are fuzz-tested against each other.
+- **Scratch Parquet** is `zstd`: same parse and scan time as `lz4_raw`
+  on ACME, ~37% fewer bytes on a shared disk.
+- On ACME (24 tables, 96 cores, ~280 GB in) these took a run from 636 s
+  to 415 s with identical outputs, except tables whose dedup ties are
+  arbitrary (same key set, different surviving row) and the
+  timestamp-derived `GEOCODEID`.
 - **Reference tables** (`demographic`, `encounter`, `provider`, `harvest`,
   `death`) are materialised once into scratch Parquet. Spark gets the same
   effect from `persist()`. Cross-table fixers therefore scan them instead

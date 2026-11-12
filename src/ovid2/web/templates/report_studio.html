@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% import "_help.html" as help %}
+{% block title %}{{ report.title }} &mdash; Report Studio &mdash; Ovid2{% endblock %}
+{% block content %}
+{#
+  Report Studio editor / viewer (adr-report-studio.md).
+
+  Left: outline. Drag (or ↑/↓) to change the stacking order of sections and
+  blocks; the eye hides a section / block from the report and every export.
+  Centre: the canvas, drawn by report_render.js in the *report* theme
+  (independent of this page's theme). Right: inspector for the report, the
+  selected section or block (chart gallery + params form generated from the
+  chart library's JSON Schemas).
+
+  Edits stay local (undo / redo) until Save, which stores a new version.
+  The assistant edits the same working copy through the edit_report_layout
+  UI action (window.Ovid2ReportStudio.applyOps); the human still saves.
+#}
+<link rel="stylesheet" href="/static/report_render.css">
+<section class="page pl-page rs-page rs-studio" id="report-studio"
+         data-report-id="{{ report.report_id }}"
+         data-can-edit="{{ 'true' if can_edit else 'false' }}"
+         data-is-owner="{{ 'true' if is_owner else 'false' }}">
+  <header class="rs-studio-head">
+    <a class="rs-back" href="/reports" title="Back to the library">{{ icons.icon("chevron-left", size=16) }} Reports</a>
+    <div class="rs-studio-title">
+      <input type="text" class="rs-title-input" maxlength="160" value="{{ report.title }}" aria-label="Report title"
+             data-title {% if not can_edit %}readonly{% endif %}>
+      <span class="rs-meta note small" data-meta>
+        v{{ report.version }} · {{ report.permission }}{% if report.folder %} · {{ report.folder }}{% endif %}
+      </span>
+      <span class="badge status-draft" data-dirty hidden>unsaved</span>
+      {% if report.status == 'draft' %}<span class="badge status-draft" data-draft-badge>draft</span>{% endif %}
+    </div>
+    <div class="rs-studio-actions">
+      {% if can_edit %}
+      <button type="button" class="button small icon-button" data-undo title="Undo (Ctrl+Z)" aria-label="Undo" disabled>{{ icons.icon("undo", size=15) }}</button>
+      <button type="button" class="button small icon-button" data-redo title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled>{{ icons.icon("redo", size=15) }}</button>
+      {% endif %}
+      <button type="button" class="button small" data-versions>{{ icons.icon("clock", size=14) }} History</button>
+      {% if is_owner %}
+      <button type="button" class="button small" data-share>{{ icons.icon("share", size=14) }} Share</button>
+      {% endif %}
+      <div class="rs-menu">
+        <button type="button" class="button small" data-export-toggle aria-haspopup="true" aria-expanded="false">{{ icons.icon("download", size=14) }} Export {{ icons.icon("chevron-down", size=12) }}</button>
+        <div class="rs-menu-list" data-export-menu hidden role="menu"></div>
+      </div>
+      <div class="rs-menu">
+        <button type="button" class="button small icon-button" data-more-toggle aria-haspopup="true" aria-expanded="false" aria-label="More">…</button>
+        <div class="rs-menu-list" data-more-menu hidden role="menu">
+          <button type="button" role="menuitem" data-duplicate>{{ icons.icon("copy", size=14) }} Duplicate</button>
+          {% if can_edit %}<button type="button" role="menuitem" data-save-template>{{ icons.icon("layers", size=14) }} Save as template…</button>{% endif %}
+          {% if is_owner %}<button type="button" role="menuitem" data-organise>{{ icons.icon("folder", size=14) }} Folder &amp; tags…</button>{% endif %}
+          {% if is_owner %}<button type="button" role="menuitem" class="danger" data-archive>{{ icons.icon("trash", size=14) }} Archive</button>{% endif %}
+        </div>
+      </div>
+      {% if can_edit %}
+      <button type="button" class="button small primary" data-save disabled>{{ icons.icon("check", size=14) }} Save</button>
+      {% endif %}
+    </div>
+  </header>
+
+  <div class="rs-notice" data-notice hidden></div>
+
+  <div class="rs-studio-grid">
+    <aside class="rs-outline" aria-label="Report outline">
+      <div class="rs-pane-head">
+        <h2>Outline</h2>
+        {% call help.tip_block(label="Outline") %}
+          The order here is the order in the report. Drag a row (or use the
+          arrows) to move it, and the eye to hide it — hidden items are kept
+          in the layout but left out of the canvas and every export.
+        {% endcall %}
+      </div>
+      <button type="button" class="rs-outline-report" data-select-report>{{ icons.icon("report", size=15) }} Report settings</button>
+      <ol class="rs-tree" data-outline></ol>
+      {% if can_edit %}
+      <button type="button" class="button small rs-add-section" data-add-section>{{ icons.icon("plus", size=14) }} Section</button>
+      {% endif %}
+    </aside>
+
+    <div class="rs-canvas-wrap">
+      <div class="rs-canvas-bar note small">
+        <span data-theme-label></span>
+        <span class="rs-canvas-hint">Canvas uses the report theme, not the page theme.</span>
+      </div>
+      <div class="rs-canvas" data-canvas><p class="note">Loading…</p></div>
+    </div>
+
+    <aside class="rs-inspector" aria-label="Inspector">
+      <div class="rs-pane-head"><h2 data-inspector-title>Report</h2></div>
+      <div data-inspector></div>
+      <ul class="pb-errors" data-errors hidden></ul>
+    </aside>
+  </div>
+
+  <dialog class="rs-dialog" data-versions-dialog>
+    <div class="rs-dialog-body">
+      <h2>Version history</h2>
+      <ol class="rs-versions" data-versions-list></ol>
+      <div class="rs-dialog-actions"><button type="button" class="button" data-close>Close</button></div>
+    </div>
+  </dialog>
+
+  <dialog class="rs-dialog" data-share-dialog>
+    <form class="rs-dialog-body" data-share-form>
+      <h2>Share “<span data-share-title></span>”</h2>
+      {% if not auth_enabled() %}
+      <p class="note small">Sign-in is turned off on this deployment, so everyone uses the same anonymous account and sharing has no effect until auth is enabled.</p>
+      {% endif %}
+      <table class="data-table rs-share-table"><thead><tr><th>Who</th><th>Access</th><th></th></tr></thead><tbody data-share-rows></tbody></table>
+      <div class="rs-share-add">
+        <select name="principal_kind" aria-label="Share with">
+          <option value="user">User id / e-mail</option>
+          <option value="role">Everyone with role</option>
+        </select>
+        <input type="text" name="principal" maxlength="200" placeholder="user id" required aria-label="Principal" list="rs-role-list">
+        <datalist id="rs-role-list"><option value="viewer"><option value="pipeline_operator"><option value="system_admin"></datalist>
+        <select name="permission" aria-label="Access">
+          <option value="view">can view</option>
+          <option value="edit">can edit</option>
+        </select>
+        <button type="submit" class="button primary small">Share</button>
+      </div>
+      <ul class="pb-errors" data-share-errors hidden></ul>
+      <p class="note small">Sharing is recorded in the audit log. Viewers still need the view-runs capability.</p>
+      <div class="rs-dialog-actions"><button type="button" class="button" data-close>Done</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="rs-dialog" data-template-dialog>
+    <form class="rs-dialog-body" data-template-form>
+      <h2>Save as template</h2>
+      <label>Name <input type="text" name="name" maxlength="160" required></label>
+      <label>Description <textarea name="description" rows="3" maxlength="2000"></textarea></label>
+      <label class="rs-check"><input type="checkbox" name="shared"> Share with every user</label>
+      <ul class="pb-errors" data-template-errors hidden></ul>
+      <div class="rs-dialog-actions">
+        <button type="button" class="button" data-close>Cancel</button>
+        <button type="submit" class="button primary">Save template</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="rs-dialog" data-organise-dialog>
+    <form class="rs-dialog-body" data-organise-form>
+      <h2>Folder &amp; tags</h2>
+      <label>Folder <input type="text" name="folder" maxlength="120" placeholder="e.g. EDC/2026" value="{{ report.folder }}"></label>
+      <label>Tags <input type="text" name="tags" placeholder="comma separated" value="{{ report.tags | join(', ') }}"></label>
+      <label>Description <textarea name="description" rows="3" maxlength="2000">{{ report.description }}</textarea></label>
+      <ul class="pb-errors" data-organise-errors hidden></ul>
+      <div class="rs-dialog-actions">
+        <button type="button" class="button" data-close>Cancel</button>
+        <button type="submit" class="button primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+</section>
+<script src="/static/vendor/vega.bundle.min.js" defer></script>
+<script src="/static/report_render.js" defer></script>
+<script src="/static/report_studio.js" defer></script>
+{% endblock %}

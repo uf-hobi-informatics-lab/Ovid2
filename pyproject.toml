@@ -117,6 +117,15 @@ export = [
     "reportlab>=4.0",
     "python-docx>=1.1",
 ]
+reports = [
+    # Report Studio exporters (``ovid2 tools report-export``, executor tier):
+    # Vega-Lite -> SVG/PNG without Node (vl-convert) and vector charts in
+    # PDFs (svglib). Plus the ``export`` document writers.
+    "vl-convert-python>=1.7",
+    "svglib>=1.5",
+    "reportlab>=4.0",
+    "python-docx>=1.1",
+]
 web = [
     # HTTP control panel + REST API surface (W1+).
     "fastapi>=0.110",
@@ -314,6 +323,9 @@ module = [
     "google.oauth2.*",
     "pyarrow.*",
     "reportlab.*",
+    "svglib.*",            # Report Studio PDF charts (ovid2[reports])
+    "vl_convert",          # Report Studio Vega-Lite renderer (ovid2[reports])
+    "vl_convert.*",
     "docx.*",
     "psycopg.*",
     "psycopg2.*",

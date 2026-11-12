@@ -175,6 +175,56 @@ tools:
       properties:
         category: {type: string, description: "formatting / correction / reshape / sampling"}
 
+  - name: list_transform_library
+    description: Reusable transform chains (user library + shipped), with their ops.
+    method: GET
+    path: /api/v1/transform-library
+    capability: view_pipeline_data
+
+  - name: get_transform_library_chain
+    description: One reusable transform chain (raw YAML + parsed steps).
+    method: GET
+    path: /api/v1/transform-library/{name}
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+
+  - name: save_transform_library_chain
+    description: >-
+      PROPOSE creating or updating a reusable transform chain in the user
+      library. raw_text is YAML {v: 1, description, steps: [{op, ...params}]}
+      using ops from list_transforms; derive_column / filter_expr take an
+      allow-listed Spark-SQL row expression. The server validates on save.
+      The user must confirm.
+    method: PUT
+    path: /api/v1/transform-library/{name}
+    capability: manage_config
+    params:
+      type: object
+      required: [name, raw_text]
+      properties:
+        name: {type: string, description: "lower-case, digits, _"}
+        raw_text: {type: string}
+
+  - name: assign_transform_chain
+    description: >-
+      PROPOSE assigning a library transform chain to tables of a pipeline
+      package so its transform stage runs it (between deduplicate and map).
+      The user must confirm.
+    method: POST
+    path: /api/v1/transform-library/{name}/assign
+    capability: manage_config
+    params:
+      type: object
+      required: [name, pipeline, tables]
+      properties:
+        name: {type: string}
+        pipeline: {type: string}
+        tables: {type: array, items: {type: string}, description: "CDM tables, or ['*']"}
+
   # --------------------------------------------------------- configuration
   - name: list_pipeline_configs
     description: >-
@@ -229,6 +279,64 @@ tools:
     description: The execution plan (per-table stage chain) a pipeline package would run.
     method: GET
     path: /api/v1/pipeline-packages/{pipeline}/plan
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [pipeline]
+      properties:
+        pipeline: {type: string}
+
+  - name: inspect_pipeline_template
+    description: >-
+      What a pipeline template provides before creating a pipeline from it:
+      every CDM table with formatter / source-file patterns / mapper / fix
+      chain, the identity constants (template value + clone default), the
+      required engine family, and every name that must match other
+      configuration (status ok/warn/error).
+    method: GET
+    path: /api/v1/pipeline-templates/{template_id}
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [template_id]
+      properties:
+        template_id: {type: string}
+        name: {type: string, description: "Planned pipeline name"}
+        engine: {type: string}
+
+  - name: inspect_pipeline_package
+    description: >-
+      Static inspection of an installed pipeline package: tables x stages
+      (format, transform, map, fix), identity constants and name checks.
+    method: GET
+    path: /api/v1/pipeline-packages/{pipeline}/inspect
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [pipeline]
+      properties:
+        pipeline: {type: string}
+        engine: {type: string}
+
+  - name: check_pipeline_bindings
+    description: >-
+      Every name a pipeline package must match elsewhere (CDM, identity,
+      engine family, salt keys, dictionaries, fixer references and lists,
+      class paths, vocabularies, transform assignments) with ok/warn/error.
+    method: GET
+    path: /api/v1/pipeline-packages/{pipeline}/bindings
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [pipeline]
+      properties:
+        pipeline: {type: string}
+        engine: {type: string}
+
+  - name: get_transform_assignments
+    description: Which transform chains a pipeline package's transform stage runs per table.
+    method: GET
+    path: /api/v1/pipeline-packages/{pipeline}/transform-assignments
     capability: view_pipeline_data
     params:
       type: object
@@ -538,6 +646,159 @@ tools:
       properties:
         name: {type: string}
 
+  # ------------------------------------------------------- Report Studio
+  # The assistant is the primary planner of reports: it reads sources
+  # (schema + aggregates only; row_values columns are masked for agents),
+  # the chart library and templates, then DRAFTS a report (opens it in the
+  # Studio) and edits the open report with the edit_report_layout UI action.
+  # Saving, sharing and exporting stay with the human.
+  - name: list_report_sources
+    description: >-
+      List report sources: durable, aggregated datasets published by finished runs
+      (kind health / analysis / run_summary / health_trend), newest first. Each has
+      source_id, kind, title, pipeline, batch_id, generated_at, dataset row counts and
+      recommended_templates.
+    method: GET
+    path: /api/v1/report-sources
+    capability: view_runs
+    params:
+      type: object
+      properties:
+        kind: {type: string, enum: [health, analysis, run_summary, health_trend]}
+        pipeline: {type: string}
+        instance_id: {type: string}
+        q: {type: string, description: "Substring of title / batch / id."}
+        limit: {type: integer, minimum: 1, maximum: 100, default: 20}
+
+  - name: get_report_source
+    description: >-
+      Describe one report source: every dataset with its columns (name, type,
+      sensitivity, distinct count, min/max or example values) and row count - never the
+      rows. Use the column names and types to choose chart params.
+    method: GET
+    path: /api/v1/report-sources/{source_id}
+    capability: view_runs
+    params:
+      type: object
+      required: [source_id]
+      properties:
+        source_id: {type: string}
+
+  - name: get_report_catalogue
+    description: >-
+      The Report Studio library: every chart kind (name, category, summary, params JSON
+      Schema - x-field lists the column types a param accepts), the report themes, the
+      layout edit ops and export formats. Read it before planning charts.
+    method: GET
+    path: /api/v1/report-catalogue
+    capability: view_runs
+    max_result_chars: 60000
+
+  - name: list_report_templates
+    description: Recommended report layouts (built-in and the user's own) per source kind.
+    method: GET
+    path: /api/v1/report-templates
+    capability: view_runs
+    params:
+      type: object
+      properties:
+        source_kind: {type: string, enum: [health, analysis, run_summary, health_trend]}
+
+  - name: get_report_template
+    description: One report template including its full layout (sections and blocks).
+    method: GET
+    path: /api/v1/report-templates/{template_id}
+    capability: view_runs
+    params:
+      type: object
+      required: [template_id]
+      properties:
+        template_id: {type: string}
+
+  - name: list_reports
+    description: >-
+      Reports visible to the user (scope all / mine / shared / favorites), with title,
+      folder, tags, source_id, version and permission.
+    method: GET
+    path: /api/v1/reports
+    capability: view_runs
+    params:
+      type: object
+      properties:
+        scope: {type: string, enum: [all, mine, shared, favorites], default: all}
+        q: {type: string}
+        source_id: {type: string}
+
+  - name: get_report
+    description: >-
+      One saved report: metadata, the full layout and a compact outline with section /
+      block ids (the ids edit_report_layout ops refer to).
+    method: GET
+    path: /api/v1/reports/{report_id}
+    capability: view_runs
+    params:
+      type: object
+      required: [report_id]
+      properties:
+        report_id: {type: string}
+
+  - name: create_report_draft
+    description: >-
+      DRAFT a new report and open it in the Report Studio for the user (private, not
+      shared or exported). Give source_id (from list_report_sources) plus either a
+      template_id (from list_report_templates) or a full layout {v: 1, title, theme,
+      sections: [{id, title, blocks: [{id, type: chart|text|callout, chart, dataset,
+      params, title, width, visible}]}]} whose chart params use real column names from
+      get_report_source. Omit both to use the source's recommended template.
+    method: POST
+    path: /api/v1/report-drafts
+    capability: run_reports
+    opens_draft: true
+    params:
+      type: object
+      required: [source_id]
+      properties:
+        source_id: {type: string}
+        template_id: {type: string}
+        layout: {type: object}
+        title: {type: string, maxLength: 160}
+        description: {type: string, maxLength: 2000}
+        folder: {type: string, maxLength: 120}
+        tags: {type: array, items: {type: string}, maxItems: 12}
+
+  - name: save_report
+    description: >-
+      PROPOSE saving a report's layout / title / folder / tags as a new version. The
+      user confirms. Prefer edit_report_layout for changes to the open report - the
+      user saves those from the Studio.
+    method: PUT
+    path: /api/v1/reports/{report_id}
+    capability: run_reports
+    params:
+      type: object
+      required: [report_id]
+      properties:
+        report_id: {type: string}
+        layout: {type: object}
+        title: {type: string, maxLength: 160}
+        folder: {type: string, maxLength: 120}
+        tags: {type: array, items: {type: string}, maxItems: 12}
+
+  - name: export_report
+    description: >-
+      PROPOSE exporting a saved report (pdf / html / docx / xlsx / svg / png / md / json).
+      Hidden sections are never exported. The user confirms and downloads the file.
+    method: POST
+    path: /api/v1/reports/{report_id}/exports
+    capability: run_reports
+    params:
+      type: object
+      required: [report_id, format]
+      properties:
+        report_id: {type: string}
+        format: {type: string, enum: [pdf, html, docx, xlsx, svg, png, md, json]}
+        block_id: {type: string, description: "svg / png only: one chart block."}
+
   # ------------------------------------------------------------ UI actions
   # ui_action: true -> no method / path; never reaches the API. The executor
   # emits a ui_action event, the user's browser re-validates the arguments
@@ -634,3 +895,40 @@ tools:
       required: [name]
       properties:
         name: {type: string, minLength: 1, maxLength: 60}
+
+  # Report Studio: edits the report open in the user's browser (the Studio's
+  # working copy). The browser re-validates every op against the same
+  # server validator (POST /reports/{id}/ops save=false) before applying it;
+  # the change is undoable and nothing is saved until the human presses
+  # Save. Cosmetic in the UI-action sense: it never persists, shares or
+  # exports. Amendment to adr-llm-dual-system.md (adr-report-studio.md).
+  - name: edit_report_layout
+    description: >-
+      UI: edit the report open in the Report Studio (its outline with section / block
+      ids is in the system prompt). Applies the ops to the user's working copy at once
+      with Undo; the user saves. Ops: set_report {set: {title, subtitle, description,
+      theme, page, options}}; add_section {title, index?}; update_section {section_id,
+      set}; move_section {section_id, index}; remove_section {section_id}; add_block
+      {section_id, index?, block: {type, chart, dataset, params, title, width, text}};
+      update_block {block_id, set, merge_params?}; move_block {block_id, section_id?,
+      index}; remove_block {block_id}; set_visibility {target_id, visible}. Chart params
+      must use columns of the block's dataset (get_report_source).
+    ui_action: true
+    capability: use_llm
+    params:
+      type: object
+      additionalProperties: false
+      required: [ops]
+      properties:
+        ops:
+          type: array
+          minItems: 1
+          maxItems: 40
+          items:
+            type: object
+            required: [op]
+            properties:
+              op:
+                type: string
+                enum: [set_report, add_section, update_section, move_section, remove_section, add_block, update_block, move_block, remove_block, set_visibility]
+        note: {type: string, maxLength: 200, description: "One-line summary shown to the user."}

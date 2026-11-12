@@ -24,7 +24,7 @@ from ovid2.core.loaders import (
 @pytest.mark.unit
 def test_canonical_order() -> None:
     """``['all']`` expands to the canonical order."""
-    assert resolve_transformations(["all"]) == ["format", "deduplicate", "map", "fix"]
+    assert resolve_transformations(["all"]) == ["format", "deduplicate", "transform", "map", "fix"]
 
 
 @pytest.mark.unit
@@ -42,7 +42,7 @@ def test_unknown_names_returned_as_is() -> None:
 @pytest.mark.unit
 def test_canonical_list_matches_documented_chain() -> None:
     """Sanity: the canonical order is exactly what the docs promise."""
-    assert get_all_transformations() == ["format", "deduplicate", "map", "fix"]
+    assert get_all_transformations() == ["format", "deduplicate", "transform", "map", "fix"]
 
 
 # ---------------------------------------------------------------------------

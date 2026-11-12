@@ -19,7 +19,15 @@ from ovid2.web.models import (
 )
 from ovid2.web.services import events_svc
 
-_STAGE_ORDER: tuple[str, ...] = ("read", "format", "deduplicate", "map", "fix", "write")
+_STAGE_ORDER: tuple[str, ...] = (
+    "read",
+    "format",
+    "deduplicate",
+    "transform",
+    "map",
+    "fix",
+    "write",
+)
 
 
 def build_timeline(instance_id: str) -> RunTimeline:

@@ -89,6 +89,17 @@ def test_every_pipeline_is_excluded_or_public() -> None:
     )
 
 
+#: Private-only top-level trees that must never reach the public mirror.
+_PRIVATE_ONLY_TREES = ("studies/**", ".opencode/**")
+
+
+def test_private_only_trees_are_excluded() -> None:
+    """Internal trees (e.g. ``studies/`` publication briefs) stay off GitHub."""
+    excluded = set(_manifest()["exclude"]["paths"])
+    missing = [p for p in _PRIVATE_ONLY_TREES if p not in excluded]
+    assert not missing, f"private-only trees missing from manifest [exclude]: {missing}"
+
+
 def test_overlay_is_leak_free() -> None:
     """The public overlay trips no deny rule outside ``[[leak_gate.allow]]`` lines.
 

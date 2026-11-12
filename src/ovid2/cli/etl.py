@@ -456,7 +456,11 @@ def _run_container_mode(args: argparse.Namespace) -> int:
             tables = legacy_result.succeeded + list(legacy_result.failed)
         if not is_legacy_ovid(pipeline):
             from ovid2.cdm.registry import get_cdm
-            from ovid2.core.table_runner import run_tables, source_sizes_from_driver
+            from ovid2.core.table_runner import (
+                driver_prestage,
+                run_tables,
+                source_sizes_from_driver,
+            )
 
             # Formatters load on the main thread (imports, spec parsing),
             # which also yields each table's source glob for the size-based
@@ -524,6 +528,15 @@ def _run_container_mode(args: argparse.Namespace) -> int:
                     cdm_name=cdm_name,
                 ),
                 on_failure=_on_failure,
+                prestage=driver_prestage(
+                    engine,
+                    args.input_address,
+                    formatters,
+                    pipeline=pipeline,
+                    batch_id=batch_id,
+                    sf_overrides=sf_overrides,
+                    cdm_name=cdm_name,
+                ),
             )
             failures = len(run_result.failed)
             if run_result.concurrency > 1:

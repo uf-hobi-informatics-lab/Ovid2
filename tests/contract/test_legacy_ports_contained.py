@@ -61,9 +61,15 @@ def test_some_legacy_pipelines_exist() -> None:
 def test_legacy_pipeline_is_complete(pipeline: str) -> None:
     pkg = _PIPES / pipeline
     assert (pkg / "dictionaries.py").is_file()
-    assert (_VENDOR / "partners" / pipeline / "fixer_scripts").is_dir(), (
-        "fixer scripts not vendored"
+    # A clone of a port (``ovid2 tools new-pipeline``) points at the
+    # template's vendored scripts through ``LEGACY_VENDOR_PARTNER``.
+    vendored = re.search(
+        r"""^LEGACY_VENDOR_PARTNER\s*=\s*['"]([^'"]+)['"]""",
+        (pkg / "pipeline_settings.py").read_text(encoding="utf-8"),
+        re.M,
     )
+    partner = vendored.group(1) if vendored else pipeline
+    assert (_VENDOR / "partners" / partner / "fixer_scripts").is_dir(), "fixer scripts not vendored"
     ports = sorted((pkg / "formatters_custom").glob("*_formatter.py"))
     assert ports, f"{pipeline}: no formatter ports"
     chains_src = (pkg / "fixer_configs.py").read_text(encoding="utf-8")

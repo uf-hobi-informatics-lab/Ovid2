@@ -26,9 +26,12 @@ not listed here are internal; don't rely on them.
 | `OVID2_WORK_DIR` | `$XDG_RUNTIME_DIR/ovid2` | per-run work dirs and event logs |
 | `OVID2_MATERIAL_DIR` | `$XDG_DATA_HOME/ovid2/material` | OMOP vocabulary, geocoding lists |
 | `OVID2_DATA_DIR` | `$XDG_DATA_HOME/ovid2/data` | raw batches (legacy layout) |
-| `OVID2_PIPELINES_DIR` | auto-detected `pipelines/` in a checkout | extra directory holding `ovid2_pipelines/` |
+| `OVID2_PIPELINE_PACKAGES_DIR` | auto-detected `pipelines/` in a checkout | directory holding `ovid2_pipelines/` (CLI and web) |
+| `OVID2_PIPELINES_DIR` | XDG `pipelines/` | saved pipeline-config JSONs; also accepted as the packages dir when it contains `ovid2_pipelines/` |
 | `OVID2_WEB_LOG_DIR` | under the state dir | job console logs |
 | `OVID2_WEB_EXPORT_DIR` | `$XDG_STATE_HOME/ovid2/web_exports` | Data Space export files |
+| `OVID2_REPORTS_DIR` | `$XDG_STATE_HOME/ovid2/reports` | Report Studio sources (durable, aggregated run datasets) |
+| `OVID2_REPORT_EXPORT_DIR` | `$XDG_STATE_HOME/ovid2/report_exports` | Report Studio export files (1 h) |
 
 ## Execution
 
@@ -61,6 +64,8 @@ not listed here are internal; don't rely on them.
 | `OVID2_DUCKDB_STAGE_SOURCES` | `true` | parse each text source once into scratch Parquet |
 | `OVID2_DUCKDB_TABLE_CONCURRENCY` | Workers, else `min(tables, CPUs)` | tables at once (`1` = sequential) |
 | `OVID2_DUCKDB_MAX_LINE_SIZE` | 8 MiB | longest CSV record |
+| `OVID2_DUCKDB_SCRATCH_CODEC` | `zstd` | scratch Parquet codec (`zstd` / `lz4_raw` / `snappy` / `uncompressed`) |
+| `OVID2_DUCKDB_PRESTAGE` | off | stage every source before the parallel phase (opt-in) |
 
 ### Snowpark
 

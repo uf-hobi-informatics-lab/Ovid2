@@ -133,6 +133,35 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "derive_column",
+        "summary": "Add or replace a column computed from a checked Spark-SQL expression.",
+        "category": "formatting",
+        "requires_family": None,
+        "params_schema": {
+            "type": "object",
+            "required": ["column", "expr"],
+            "additionalProperties": False,
+            "properties": {
+                "column": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Output column (replaced when it already exists).",
+                },
+                "expr": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": (
+                        "Spark-SQL row expression, e.g. \"coalesce(nullif(trim(SEX), ''), 'UN')\"."
+                    ),
+                },
+                "cast": {
+                    "type": "string",
+                    "description": "Optional result type, e.g. 'string', 'int', 'date'.",
+                },
+            },
+        },
+    },
+    {
         "name": "dense_rank",
         "summary": "Add a dense rank (no gaps for ties) within partitions.",
         "category": "reshape",

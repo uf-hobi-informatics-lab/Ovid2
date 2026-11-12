@@ -236,6 +236,12 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 
     _new_pipeline.register(tool_subparsers)
 
+    # ``ovid2 tools migrate-fixers`` — fixer_configs.py → fixer_configs.yaml
+    # (editable in the web pipeline builder).
+    from ovid2.tools import migrate_fixers as _migrate_fixers
+
+    _migrate_fixers.register(tool_subparsers)
+
     # ``ovid2 tools ods ...`` — Ovid Data Space read-only helpers.
     _register_ods(tool_subparsers)
 
@@ -244,6 +250,12 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     from ovid2.tools import table_ops as _table_ops
 
     _table_ops.register(tool_subparsers)
+
+    # ``ovid2 tools report-export`` — Report Studio renderer (executor
+    # tier; reportlab / python-docx / xlsxwriter / vl-convert).
+    from ovid2.tools import report_export as _report_export
+
+    _report_export.register(tool_subparsers)
 
     def _fallback(_args: argparse.Namespace) -> int:
         parser.print_help(sys.stderr)

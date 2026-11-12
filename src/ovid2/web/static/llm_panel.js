@@ -190,7 +190,12 @@
    * profile by the theme.js store (its write* accessors PUT
    * /api/v1/me/appearance), so applyUiAction itself never fetches. */
 
-  var UI_ACTIONS = ["set_appearance", "save_appearance", "apply_saved_appearance"];
+  var UI_ACTIONS = ["set_appearance", "save_appearance", "apply_saved_appearance", "edit_report_layout"];
+  // Report Studio ops (pinned against ovid2.reports.layout.OPS and the
+  // edit_report_layout catalogue enum by test_agent_tools_catalogue.py).
+  var REPORT_OPS = ["set_report", "add_section", "update_section", "move_section", "remove_section",
+                    "add_block", "update_block", "move_block", "remove_block", "set_visibility"];
+  function studioLib() { return window.Ovid2ReportStudio || null; }
   var HEX = /^#[0-9a-fA-F]{6}$/;
   var FONT = /^(var\(--(font-sans|font-serif|mono|font-display)\)|[A-Za-z0-9 ,"'-]{1,160})$/;
   var SIZE = /^[0-9]{1,2}(\.[0-9]{1,3})?(px|rem|em)$/;
@@ -209,11 +214,16 @@
   }
 
   function uiContext() {
-    var t = themeLib(), a = appLib();
-    if (!t || !a) return null;
-    return { theme: t.currentTheme(), colors: t.readCustom ? t.readCustom() : {},
-             appearance: a.readAppearance ? a.readAppearance() : {},
-             saved_themes: savedNames() };
+    var t = themeLib(), a = appLib(), st = studioLib();
+    var ctx = null;
+    if (t && a) {
+      ctx = { theme: t.currentTheme(), colors: t.readCustom ? t.readCustom() : {},
+              appearance: a.readAppearance ? a.readAppearance() : {},
+              saved_themes: savedNames() };
+    }
+    var outline = st && st.outline ? st.outline() : null;
+    if (outline) { ctx = ctx || {}; ctx.report = outline; }
+    return ctx;
   }
 
   // Validate one CSS-var override; returns an error string or "".
@@ -229,7 +239,27 @@
   }
 
   // Full argument check, independent of the executor's schema validation.
+  function checkReportArgs(args) {
+    var st = studioLib();
+    if (!st || !st.info || !st.info()) return "no report is open in the Report Studio on this page";
+    if (!st.info().can_edit) return "you have view-only access to this report";
+    if (!args || typeof args !== "object" || Array.isArray(args)) return "arguments must be an object";
+    var keys = Object.keys(args);
+    for (var i = 0; i < keys.length; i++) {
+      if (keys[i] !== "ops" && keys[i] !== "note") return "unknown argument " + keys[i];
+    }
+    if (args.note !== undefined && (typeof args.note !== "string" || args.note.length > 200)) return "note must be a short string";
+    if (!Array.isArray(args.ops) || !args.ops.length || args.ops.length > 40) return "ops must be a list of 1-40 edits";
+    for (var j = 0; j < args.ops.length; j++) {
+      var op = args.ops[j];
+      if (!op || typeof op !== "object" || Array.isArray(op)) return "op " + j + " must be an object";
+      if (REPORT_OPS.indexOf(op.op) === -1) return "op " + j + ": unknown op " + op.op;
+    }
+    return "";
+  }
+
   function checkUiArgs(name, args) {
+    if (name === "edit_report_layout") return checkReportArgs(args);
     var t = themeLib(), a = appLib();
     if (!t || !a || !a.repaint) return "appearance controls are not loaded on this page";
     if (UI_ACTIONS.indexOf(name) === -1) return "unknown UI action " + name;
@@ -309,6 +339,7 @@
   function applyUiAction(u) {
     var err = checkUiArgs(u.name, u.args);
     if (err) { u.state = "refused"; u.outcome = "Refused: " + err + "."; return; }
+    if (u.name === "edit_report_layout") { applyReportEdit(u); return; }
     var t = themeLib(), a = appLib(), args = u.args;
     var before = snapshot(u.name === "save_appearance");
     try {
@@ -362,8 +393,39 @@
     }
   }
 
+  // The Studio validates the ops against the chart library + source on the
+  // server (POST /reports/{id}/ops save=false) before touching its working
+  // copy; nothing is saved until the human presses Save.
+  function applyReportEdit(u) {
+    var st = studioLib();
+    u.state = "pending";
+    u.outcome = "Applying report edits…";
+    st.applyOps(u.args.ops).then(function (notes) {
+      u.state = "applied";
+      u.before = { report_id: st.info().report_id };
+      u.outcome = "Report: " + ((u.args.note || (notes || []).join("; ")) || "updated") + " (unsaved — press Save in the Studio).";
+    }, function (e) {
+      u.state = "refused";
+      u.outcome = "Refused: " + ((e && e.message) || "invalid edit") +
+        ((e && e.errors && e.errors.length) ? " — " + e.errors.slice(0, 3).join("; ") : "") + ".";
+    }).then(function () { save(); renderAll(); });
+  }
+
   function undoUiAction(u) {
     if (u.state !== "applied" || !u.before) return;
+    if (u.name === "edit_report_layout") {
+      var st = studioLib(), info = st && st.info ? st.info() : null;
+      if (!info || info.report_id !== u.before.report_id) {
+        u.outcome = "Open that report in the Studio to undo (use its Undo button).";
+        save(); renderAll();
+        return;
+      }
+      st.undo();
+      u.state = "undone";
+      u.outcome = (u.outcome || "Report edit") + " — undone.";
+      save(); renderAll();
+      return;
+    }
     restore(u.before);
     u.state = "undone";
     u.outcome = describeUi(u.name, u.args) + " \u2014 undone.";
@@ -374,7 +436,7 @@
   function uiActionChip(u) {
     var box = el("div", "llm-ui-action " + (u.state || "applied"));
     var badge = { applied: "severity-ok", undone: "", refused: "severity-warning" }[u.state] || "";
-    var label = { applied: "applied", undone: "undone", refused: "refused" }[u.state] || "\u2026";
+    var label = { applied: "applied", undone: "undone", refused: "refused", pending: "applying" }[u.state] || "\u2026";
     var head = el("span", "llm-ui-action-text");
     head.innerHTML = '<span class="badge ' + badge + '">' + esc(label) + "</span> " + esc(u.outcome || u.name);
     box.appendChild(head);
@@ -794,7 +856,7 @@
      open its run page. A draft is never executed by the worker — the human
      presses the (breathing) ▶ on the run page to launch it. */
   function openDraft(p) {
-    if (!/^\/api\/v1\/(job-drafts|pipelines\/[A-Za-z0-9_\-%.]+\/draft)$/.test(p.path || "") ||
+    if (!/^\/api\/v1\/(job-drafts|report-drafts|pipelines\/[A-Za-z0-9_\-%.]+\/draft)$/.test(p.path || "") ||
         p.method !== "POST") {
       p.state = "failed";
       p.outcome = "Refused: not a draft-job route.";
@@ -812,6 +874,15 @@
         return { status: resp.status, ok: resp.ok, data: data };
       });
     }).then(function (r) {
+      if (r.ok && r.data && r.data.report_id && p.path === "/api/v1/report-drafts") {
+        var rurl = "/reports/" + encodeURIComponent(r.data.report_id);
+        p.state = "done";
+        p.url = rurl;
+        p.outcome = "Draft report created — review it in the Report Studio and press Save to keep it.";
+        save(); renderAll();
+        window.location.assign(rurl);
+        return;
+      }
       if (r.ok && r.data && r.data.instance_id) {
         var url = "/runs/" + encodeURIComponent(r.data.instance_id);
         p.state = "done";

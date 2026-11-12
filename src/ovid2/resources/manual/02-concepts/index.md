@@ -28,7 +28,7 @@ into a **CDM**.
 
 ```text
             ┌──────────── pipeline (formatters · mappers · fixers) ───────────┐
-input  ─►   │  format ─► deduplicate ─► map ─► fix ─► write                   │   ─► output
+input  ─►   │  format ─► deduplicate ─► transform ─► map ─► fix ─► write      │   ─► output
 address     └──────────────────────── on an engine ───────────────────────────┘      address
 (connection + location)                 shaped to a CDM                     (connection + location)
 ```

@@ -95,7 +95,7 @@
   <script src="/static/vendor/d3.v7.min.js" defer></script>
   <script src="/static/live.js" type="module"></script>
 </head>
-<body>
+<body hx-headers='{"X-CSRF-Token": "{{ csrf_token() }}"}'>
   {% import "_icons.html" as icons %}
 
   {# Derive active-nav marker from the request path (first match wins). #}
@@ -105,8 +105,11 @@
   {% elif path.startswith('/submit') %}{% set nav_active = 'submit' %}
   {% elif path.startswith('/jobs') %}{% set nav_active = 'runs' %}
   {% elif path.startswith('/runs') %}{% set nav_active = 'runs' %}
-  {% elif path.startswith('/pipeline-packages') or path.startswith('/pipelines') %}{% set nav_active = 'pipelines' %}
+  {% elif path.startswith('/pipeline-packages') %}{% set nav_active = 'packages' %}
+  {% elif path.startswith('/pipelines') %}{% set nav_active = 'pipelines' %}
+  {% elif path.startswith('/transforms') %}{% set nav_active = 'transforms' %}
   {% elif path.startswith('/dataspace') %}{% set nav_active = 'dataspace' %}
+  {% elif path.startswith('/reports') %}{% set nav_active = 'reports' %}
   {% elif path.startswith('/storage') or path.startswith('/connections') or path.startswith('/addresses') %}{% set nav_active = 'storage' %}
   {% elif path.startswith('/warehouses') or path.startswith('/engines') %}{% set nav_active = 'warehouses' %}
   {% elif path.startswith('/llms') %}{% set nav_active = 'llms' %}
@@ -168,6 +171,12 @@
       <a href="/pipelines" class="nav-item {% if nav_active == 'pipelines' %}active{% endif %}" data-nav="pipelines">
         {{ icons.icon("submit", size=18, cls="nav-icon") }}<span class="nav-label">Pipelines</span>
       </a>
+      <a href="/pipeline-packages" class="nav-item {% if nav_active == 'packages' %}active{% endif %}" data-nav="packages" title="Installed ovid2_pipelines.* code packages">
+        {{ icons.icon("cdms", size=18, cls="nav-icon") }}<span class="nav-label">Packages</span>
+      </a>
+      <a href="/transforms" class="nav-item {% if nav_active == 'transforms' %}active{% endif %}" data-nav="transforms" title="Reusable transform chains (UDFs) you can assign to pipelines">
+        {{ icons.icon("zap", size=18, cls="nav-icon") }}<span class="nav-label">Transforms</span>
+      </a>
       {% endif %}
       {% if has_cap(request, 'view_runs') %}
       <a href="/runs" class="nav-item {% if nav_active == 'runs' %}active{% endif %}" data-nav="runs">
@@ -175,10 +184,17 @@
       </a>
       {% endif %}
 
-      {% if has_cap(request, 'view_pipeline_data') %}
+      {% if has_cap(request, 'view_pipeline_data') or has_cap(request, 'view_runs') %}
       <div class="side-group">Explore</div>
+      {% endif %}
+      {% if has_cap(request, 'view_pipeline_data') %}
       <a href="/dataspace" class="nav-item {% if nav_active == 'dataspace' %}active{% endif %}" data-nav="dataspace">
         {{ icons.icon("pipelines", size=18, cls="nav-icon") }}<span class="nav-label">Data Space</span>
+      </a>
+      {% endif %}
+      {% if has_cap(request, 'view_runs') %}
+      <a href="/reports" class="nav-item {% if nav_active == 'reports' %}active{% endif %}" data-nav="reports" title="Report Studio: organise, design, share and export reports">
+        {{ icons.icon("report", size=18, cls="nav-icon") }}<span class="nav-label">Reports</span>
       </a>
       {% endif %}
 

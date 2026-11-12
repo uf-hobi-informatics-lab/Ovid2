@@ -122,9 +122,22 @@ def read_fixes(script: Path) -> list[LegacyFixEntry]:
     return []
 
 
+def vendor_partner(pipeline: str) -> str:
+    """Return the vendored legacy partner folder for ``pipeline``.
+
+    A pipeline cloned from a ``legacy_ovid`` port records the template in
+    ``LEGACY_VENDOR_PARTNER`` (set by ``ovid2 tools new-pipeline``); the
+    vendored fixer scripts live under that name. Defaults to the
+    pipeline's own name.
+    """
+    from ovid2.legacy.profile import pipeline_setting
+
+    return str(pipeline_setting(pipeline, "LEGACY_VENDOR_PARTNER", None) or pipeline)
+
+
 def fixer_tables(partner: str) -> list[str]:
     """Return the tables that have a legacy ``<t>_fixer.py`` (excl. multi_tables)."""
-    folder = vendor_root() / "partners" / partner / "fixer_scripts"
+    folder = vendor_root() / "partners" / vendor_partner(partner) / "fixer_scripts"
     return sorted(
         p.name[: -len("_fixer.py")]
         for p in folder.glob("*_fixer.py")
@@ -182,7 +195,12 @@ def _script_path(entry: LegacyFixEntry, partner: str) -> Path:
     vendor = vendor_root()
     if entry.fix_type == "custom":
         return (
-            vendor / "partners" / partner / "custom_fixes" / entry.fix_name / f"{entry.version}.py"
+            vendor
+            / "partners"
+            / vendor_partner(partner)
+            / "custom_fixes"
+            / entry.fix_name
+            / f"{entry.version}.py"
         )
     return vendor / "common" / "common_fixes" / entry.fix_name / f"{entry.version}.py"
 
@@ -267,7 +285,9 @@ def run_table_fixes(
         work_root: Scratch root holding ``mapper_output/`` and ``fixer_output/``.
         folder_label: Legacy ``input_data_folder`` (messages only).
     """
-    script = vendor_root() / "partners" / partner / "fixer_scripts" / f"{table}_fixer.py"
+    script = (
+        vendor_root() / "partners" / vendor_partner(partner) / "fixer_scripts" / f"{table}_fixer.py"
+    )
     mapper_out = os.path.join(work_root, "mapper_output") + "/"
     fixer_out = os.path.join(work_root, "fixer_output") + "/"
     mapped = f"mapped_{table}.csv"
@@ -320,7 +340,13 @@ def run_multi_table_fixes(
     spark: SparkSession, *, partner: str, work_root: str, folder_label: str
 ) -> None:
     """Run legacy ``multi_tables_fixer.py`` (``-i/-o fixer_output/``)."""
-    script = vendor_root() / "partners" / partner / "fixer_scripts" / "multi_tables_fixer.py"
+    script = (
+        vendor_root()
+        / "partners"
+        / vendor_partner(partner)
+        / "fixer_scripts"
+        / "multi_tables_fixer.py"
+    )
     if not script.is_file():
         return
     fixer_out = os.path.join(work_root, "fixer_output") + "/"

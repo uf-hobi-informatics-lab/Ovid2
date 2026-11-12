@@ -21,5 +21,5 @@ ARGS_MODEL = ListFormattersArgs
 
 
 async def run(client: WebApiClient, args: ListFormattersArgs) -> Any:
-    """Call ``GET /api/v1/pipelines/{pipeline}/formatters``."""
-    return await client.get(f"/api/v1/pipelines/{args.pipeline}/formatters")
+    """Call ``GET /api/v1/pipeline-packages/{pipeline}/formatters``."""
+    return await client.get(f"/api/v1/pipeline-packages/{args.pipeline}/formatters")

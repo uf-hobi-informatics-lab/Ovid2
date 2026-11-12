@@ -113,3 +113,55 @@ def test_column_name_with_delimiter_still_nul_wrapped(engine: DuckDBEngine, tmp_
     target = tmp_path / "w.csv"
     write_csv_file(engine, frame, str(target), delimiter="\t")
     assert target.read_bytes() == b"\x00a\tb\x00\nv\n"
+
+
+def test_java_double_fast_path_matches_general_macro() -> None:
+    """``__ovid2_java_double`` fast path == the general rewrite on fuzzed doubles."""
+    import random
+    import struct
+
+    con = duckdb_mod().connect()
+    _shortest_double_text(con)
+    rng = random.Random(1)
+    vals: list[float] = [
+        1e-3,
+        9.99999e-4,
+        1e7,
+        9999999.999,
+        1e-4,
+        -1e7,
+        0.001,
+        1234567.0,
+        1e21,
+        123e-10,
+        5e-324,
+        1.7976931348623157e308,
+        float(2**53),
+        0.1,
+        0.30000000000000004,
+        -0.0,
+        0.0,
+        math.nan,
+        math.inf,
+        -math.inf,
+    ]
+    for _ in range(50000):
+        k = rng.random()
+        if k < 0.4:
+            vals.append(rng.uniform(-1e7, 1e7))
+        elif k < 0.7:
+            vals.append(round(rng.uniform(-1000, 1000), rng.randint(0, 6)))
+        else:
+            vals.append(struct.unpack("d", struct.pack("Q", rng.getrandbits(64)))[0])
+    con.execute("CREATE TABLE t (x DOUBLE)")
+    con.executemany("INSERT INTO t VALUES (?)", [(v,) for v in vals])
+    bad = con.sql(
+        "SELECT x FROM t WHERE __ovid2_java_double(x) IS DISTINCT FROM __ovid2_java_double_slow(x)"
+    ).fetchall()
+    assert bad == []
+
+
+def duckdb_mod():  # type: ignore[no-untyped-def]
+    import duckdb
+
+    return duckdb

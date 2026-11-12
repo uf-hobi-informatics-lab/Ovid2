@@ -16,5 +16,5 @@ ARGS_MODEL = None
 
 
 async def run(client: WebApiClient, args: None = None) -> Any:
-    """Call ``GET /api/v1/pipelines``."""
-    return await client.get("/api/v1/pipelines")
+    """Call ``GET /api/v1/pipeline-packages``."""
+    return await client.get("/api/v1/pipeline-packages")

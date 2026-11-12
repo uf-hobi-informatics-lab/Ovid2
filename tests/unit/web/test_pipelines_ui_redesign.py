@@ -166,7 +166,16 @@ def test_pipelines_empty_state_has_cta(web_client: object, isolated_xdg: Path) -
 def test_new_pipeline_wizard_structure(web_client: object) -> None:
     body = web_client.get("/pipelines/new").text  # type: ignore[attr-defined]
     steps = re.findall(r'class="wz-step builder-card" id="wz-step-(\w+)"', body)
-    assert steps == ["type", "source", "engine", "destination", "automation"]
+    assert steps == [
+        "type",
+        "template",
+        "identity",
+        "source",
+        "engine",
+        "destination",
+        "automation",
+        "review",
+    ]
     for key in steps:
         assert f'data-rail="{key}"' in body
     # kind tiles drive the still-posted native select
@@ -182,7 +191,33 @@ def test_new_pipeline_wizard_structure(web_client: object) -> None:
 @pytest.mark.unit
 def test_wizard_js_tags_requirements_by_step() -> None:
     js = (_STATIC / "pipeline_builder.js").read_text(encoding="utf-8")
-    for step in ("type", "source", "engine", "destination", "automation"):
+    for step in ("type", "template", "identity", "source", "engine", "destination", "automation"):
         assert f'add("{step}"' in js
     assert "setupWizard" in js
     assert 'classList.add("wz-js")' in js
+
+
+@pytest.mark.unit
+def test_new_pipeline_wizard_v2_surfaces(web_client: object) -> None:
+    """Template tables grid, identity, checks, flow graph, engine families."""
+    body = web_client.get("/pipelines/new").text  # type: ignore[attr-defined]
+    assert "data-provides-tables" in body  # tables the template provides
+    assert 'name="etl_tables_mode"' in body
+    assert 'id="identity-fields"' in body and 'id="identity-bindings"' in body
+    assert 'data-only-kinds="etl"' in body  # identity step is ETL-only
+    assert 'id="flow-graph"' in body and "flow-graph-svg" in body
+    assert "data-engine-families=" in body and '"duckdb": "duckdb"' in body
+    assert 'id="source-match"' in body
+    # the dark, hard-coded canvas is gone
+    assert "builder-svg" not in body and "mat-spark" not in body
+    js = (_STATIC / "pipeline_builder.js").read_text(encoding="utf-8")
+    assert "/api/v1/pipeline-templates/" in js
+    assert "identity__" in js
+    assert 'import { FlowGraph } from "/static/flow_graph.js"' in js
+
+
+@pytest.mark.unit
+def test_new_pipeline_preselect_kind(web_client: object) -> None:
+    body = web_client.get("/pipelines/new?kind=copy").text  # type: ignore[attr-defined]
+    assert 'data-kind="copy"' in body
+    assert '<option value="copy" title=' in body and "selected" in body

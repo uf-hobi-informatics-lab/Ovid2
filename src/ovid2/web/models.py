@@ -240,6 +240,14 @@ class ScaffoldPipelineRequest(BaseModel):
             "Target CDM name. Required with `source_pipeline`; taken from the template otherwise."
         ),
     )
+    identity: dict[str, Any] | None = Field(
+        None,
+        description=(
+            "Identity constants for the clone's pipeline_settings.py (NETWORKID, "
+            "DATAMARTID, DATAVANT_KEY, …). Unset keys get name-derived defaults; "
+            "see GET /api/v1/pipeline-templates/{id}."
+        ),
+    )
 
 
 class ScaffoldPipelineResponse(BaseModel):
@@ -842,6 +850,34 @@ class FormatterWrite(BaseModel):
     """
 
     raw_text: str = Field(..., description="Full YAML source (UTF-8).")
+
+
+class BuilderRawText(BaseModel):
+    """Raw YAML document body for a pipeline-builder save."""
+
+    raw_text: str = Field(..., description="Full YAML source (UTF-8).")
+
+
+class BuilderValidateRequest(BaseModel):
+    """Validate (without saving) one builder document."""
+
+    doc_type: Literal["transform", "assignments", "fixers", "formatter", "mapper"] = Field(
+        ..., description="Which schema / registry checks to run."
+    )
+    raw_text: str = Field(..., description="Full YAML source (UTF-8).")
+
+
+class TransformAssignRequest(BaseModel):
+    """Assign a named transform chain to tables of a pipeline."""
+
+    pipeline: str = Field(..., description="Pipeline package to assign the chain to.")
+    tables: list[str] = Field(..., min_length=1, description="CDM tables, or ['*'] for all.")
+
+
+class SettingsWrite(BaseModel):
+    """Literal-constant updates for ``pipeline_settings.py``."""
+
+    values: dict[str, Any] = Field(..., description="{CONSTANT: new value}.")
 
 
 class MapperWrite(BaseModel):
@@ -1893,6 +1929,13 @@ class LlmUiContext(BaseModel):
     colors: dict[str, str] = Field(default_factory=dict, max_length=8)
     appearance: dict[str, str] = Field(default_factory=dict, max_length=40)
     saved_themes: list[str] = Field(default_factory=list, max_length=30)
+    report: dict[str, Any] | None = Field(
+        None,
+        description=(
+            "Outline of the report open in the Report Studio (ids, titles, chart kinds, "
+            "visibility) so edit_report_layout ops can target it. Re-sanitised by the executor."
+        ),
+    )
 
 
 class LlmChatRequest(BaseModel):
@@ -2286,3 +2329,117 @@ class UserRoleRequest(BaseModel):
     """
 
     role: str
+
+
+# ---------------------------------------------------------------------------
+# Report Studio (adr-report-studio.md)
+# ---------------------------------------------------------------------------
+
+
+class ReportCreateRequest(BaseModel):
+    """Body of ``POST /api/v1/reports`` and ``POST /api/v1/report-drafts``.
+
+    Give ``template_id`` *or* ``layout`` (a ``report_layout.v1`` document);
+    with neither, the source's first recommended template is used.
+    """
+
+    source_id: str = Field(..., description="Report source id (GET /api/v1/report-sources).")
+    template_id: str | None = Field(None, description="Built-in or user template id.")
+    layout: dict[str, Any] | None = Field(None, description="Full report_layout.v1 document.")
+    title: str | None = Field(None, max_length=160)
+    description: str = Field("", max_length=2000)
+    folder: str = Field("", max_length=120, description="Slash-separated folder, e.g. 'EDC/2026'.")
+    tags: list[str] = Field(default_factory=list, max_length=12)
+
+
+class ReportUpdateRequest(BaseModel):
+    """Body of ``PUT /api/v1/reports/{id}`` (only given fields change)."""
+
+    layout: dict[str, Any] | None = None
+    title: str | None = Field(None, max_length=160)
+    description: str | None = Field(None, max_length=2000)
+    folder: str | None = Field(None, max_length=120)
+    tags: list[str] | None = Field(None, max_length=12)
+    expected_version: int | None = Field(
+        None, description="Reject with 409 when the stored version differs (optimistic lock)."
+    )
+    note: str = Field("", max_length=200, description="Version-history note.")
+
+
+class ReportOpsRequest(BaseModel):
+    """Body of ``POST /api/v1/reports/{id}/ops`` — declarative layout edits."""
+
+    ops: list[dict[str, Any]] = Field(..., min_length=1, max_length=40)
+    expected_version: int | None = None
+    save: bool = Field(True, description="False = validate + return the new layout only.")
+    layout: dict[str, Any] | None = Field(
+        None,
+        description="save=false only: apply to this unsaved working copy instead of the saved layout.",
+    )
+    render: bool = Field(False, description="save=false only: also return the render model.")
+
+
+class ReportPreviewRequest(BaseModel):
+    """Body of ``POST /api/v1/reports/{id}/preview`` (render an unsaved layout)."""
+
+    layout: dict[str, Any]
+
+
+class ReportShareRequest(BaseModel):
+    """Body of ``PUT /api/v1/reports/{id}/shares``."""
+
+    principal_kind: str = Field(..., pattern="^(user|role)$")
+    principal: str = Field(..., min_length=1, max_length=200)
+    permission: str = Field("view", pattern="^(view|edit)$")
+
+
+class ReportFavoriteRequest(BaseModel):
+    """Body of ``PUT /api/v1/reports/{id}/favorite``."""
+
+    favorite: bool = True
+
+
+class ReportDuplicateRequest(BaseModel):
+    """Body of ``POST /api/v1/reports/{id}/duplicate``."""
+
+    title: str | None = Field(None, max_length=160)
+
+
+class ReportExportRequest(BaseModel):
+    """Body of ``POST /api/v1/reports/{id}/exports``."""
+
+    format: str = Field(..., pattern="^(pdf|html|docx|xlsx|svg|png|md|json)$")
+    block_id: str | None = Field(None, description="svg / png only: just this chart block.")
+    layout: dict[str, Any] | None = Field(
+        None, description="Export unsaved edits instead of the saved layout."
+    )
+
+
+class ReportExportResult(BaseModel):
+    """A finished export, downloadable once from ``download_url`` (1 h TTL)."""
+
+    export_id: str
+    filename: str
+    media_type: str
+    size: int
+    download_url: str
+
+
+class ReportTemplateSaveRequest(BaseModel):
+    """Body of ``POST /api/v1/reports/{id}/save-as-template``."""
+
+    name: str = Field(..., min_length=1, max_length=160)
+    description: str = Field("", max_length=2000)
+    shared: bool = Field(False, description="Visible to every user (else private).")
+
+
+class ReportSourceIngestRequest(BaseModel):
+    """Body of ``POST /api/v1/report-sources/ingest``."""
+
+    instance_id: str = Field(..., pattern=r"^[0-9]{8}-[0-9]{6}-[0-9a-f]{6}$")
+
+
+class ReportTrendRequest(BaseModel):
+    """Body of ``POST /api/v1/report-sources/trend``."""
+
+    source_ids: list[str] = Field(..., min_length=2, max_length=24)

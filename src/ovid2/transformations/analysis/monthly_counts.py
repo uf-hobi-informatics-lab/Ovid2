@@ -1,7 +1,9 @@
 """Monthly-counts analysis transformer.
 
 Groups records by ``yyyy-MM`` for every column containing ``DATE`` in
-its name. Logs the number of distinct months found for each column;
+its name. Logs the number of distinct months found for each column and
+appends the monthly buckets to the run's analysis artifact
+(:mod:`ovid2.reports.artifacts`, consumed by Report Studio);
 returns the input DataFrame unchanged (pass-through) so the pipeline
 can continue.
 
@@ -16,12 +18,16 @@ from typing import TYPE_CHECKING, Any
 
 from ovid2.core.engines.dsl import col, count, date_format, to_date
 from ovid2.core.events import log_event
+from ovid2.reports.artifacts import append_analysis_record
 from ovid2.transformations.base import BaseTransformer
 
 if TYPE_CHECKING:
     from pyspark.sql import DataFrame
 
 logger = logging.getLogger(__name__)
+
+#: Upper bound on monthly buckets persisted per column (~100 years).
+_MAX_MONTHS = 1200
 
 
 class MonthlyCountsTransformer(BaseTransformer):
@@ -46,7 +52,22 @@ class MonthlyCountsTransformer(BaseTransformer):
                 .agg(count("*").alias("record_count"))
                 .orderBy(col("_year_month").desc())
             )
-            n_months = monthly.count()  # noqa: OVID2001 analysis pass — deliberate action
+            # Analysis pass — deliberate, bounded action: one row per month
+            # (capped), persisted as a Report Studio aggregate.
+            rows = monthly.limit(_MAX_MONTHS).collect()  # noqa: OVID2001
+            n_months = len(rows)
+            append_analysis_record(
+                instance_id,
+                {
+                    "type": "monthly",
+                    "table": table_name,
+                    "column": date_col,
+                    "rows": [
+                        {"month": str(r["_year_month"]), "records": int(r["record_count"])}
+                        for r in rows
+                    ],
+                },
+            )
             message = f"monthly_counts {table_name}.{date_col}: {n_months} distinct months"
             logger.info(message)
             if bus is not None:

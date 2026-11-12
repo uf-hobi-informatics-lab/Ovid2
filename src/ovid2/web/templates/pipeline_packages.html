@@ -24,7 +24,8 @@
       <tbody>
         {% for p in pipelines %}
           <tr>
-            <td><a href="/pipelines/{{ p.name }}/config"><strong>{{ p.name }}</strong></a></td>
+            <td><a href="/pipeline-packages/{{ p.name }}"><strong>{{ p.name }}</strong></a>
+                <a href="/pipeline-packages/{{ p.name }}/builder" class="small" title="Open the pipeline builder">customize</a></td>
             <td>{{ p.mappers_type or "&mdash;"|safe }}</td>
             <td>{{ p.default_db or "&mdash;"|safe }}</td>
             <td class="num">{{ p.formatter_count }}</td>

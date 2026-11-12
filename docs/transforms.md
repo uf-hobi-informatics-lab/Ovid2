@@ -126,3 +126,20 @@ ops:
 
 See the adr-public-transforms-library design note for the
 design rationale.
+
+## User-defined transforms, the library and the transform stage
+
+See the manual page `06-authoring/transforms.md` and
+the adr-pipeline-builder design note. In short:
+
+- `derive_column {column, expr, cast?}` computes a column from an
+  allow-listed Spark-SQL row expression (`ovid2.config.sql_expr_guard`);
+  `filter_expr` uses the same guard.
+- Chains are found pipeline-private → `$XDG_CONFIG_HOME/ovid2/transforms`
+  (user library) → shipped.
+- `<pkg>/transforms/assignments.yaml` assigns chains to tables; the
+  `transform` stage (between deduplicate and map) runs them on the active
+  engine.
+- Edit everything in the web pipeline builder
+  (`/pipeline-packages/<p>/builder`) and the `/transforms` library page.
+

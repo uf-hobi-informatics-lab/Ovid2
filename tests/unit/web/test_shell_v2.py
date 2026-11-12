@@ -82,6 +82,7 @@ def test_shell_uses_wordmark(web_client: object) -> None:
         ("/addresses", "/storage"),
         ("/pipelines", "/pipelines"),
         ("/routes", "/pipelines"),
+        ("/pipeline-packages", "/pipeline-packages"),
         ("/secrets", "/secrets"),
         ("/install", "/install"),
         ("/health", "/health"),

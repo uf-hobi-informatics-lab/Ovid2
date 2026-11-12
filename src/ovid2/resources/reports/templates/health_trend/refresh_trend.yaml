@@ -1,0 +1,24 @@
+name: Refresh-over-refresh trend
+description: >-
+  Pass rate and exception counts across refreshes, plus a check × run
+  status grid to see which checks regressed.
+layout:
+  v: 1
+  title: Data-health trend
+  theme: publication
+  page: {size: letter, orientation: landscape}
+  options: {show_provenance: true}
+  sections:
+    - id: trend
+      title: Trend
+      blocks:
+        - {id: intro, type: text, text_ref: overview}
+        - {id: pass, type: chart, chart: line, dataset: runs, title: Pass rate per run,
+           params: {x: run, y: pass_rate, agg: none}}
+        - {id: status, type: chart, chart: stacked_bar, dataset: status, title: Outcomes per run,
+           params: {category: run, value: checks, stack_by: status, color_scheme: status, sort: none}}
+    - id: grid
+      title: Check status grid
+      blocks:
+        - {id: heat, type: chart, chart: heatmap, dataset: checks, title: Check status by run,
+           params: {x: run, y: check_name, value: status, color_scheme: status}}

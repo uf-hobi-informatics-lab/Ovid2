@@ -8,7 +8,9 @@ A `health` or `dq_checks` run produces:
 
 - a **results table**, `dcq_results`, at its output address: one row per
   check per metric;
-- a **report** at `/runs/<instance_id>/report` in the web panel.
+- a **report** at `/runs/<instance_id>/report` in the web panel. Press
+  **Open in Report Studio** there to build a designed, shareable and
+  exportable report from it (see [Report Studio](report-studio.md)).
 
 ## Outcomes
 

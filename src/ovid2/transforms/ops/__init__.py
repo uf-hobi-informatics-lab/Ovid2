@@ -32,6 +32,7 @@ from ovid2.transforms.ops.columns import (
 from ovid2.transforms.ops.correction import (
     ClampTransform,
     DedupTransform,
+    DeriveColumnTransform,
     DistinctTransform,
     FilterExprTransform,
     NullIfTransform,
@@ -70,6 +71,7 @@ __all__ = [
     "DedupTransform",
     "DefaultValueTransform",
     "DenseRankTransform",
+    "DeriveColumnTransform",
     "DistinctTransform",
     "DropColumnsTransform",
     "ExplodeTransform",

@@ -28,8 +28,8 @@ ARGS_MODEL = SaveFormatterArgs
 
 
 async def run(client: WebApiClient, args: SaveFormatterArgs) -> Any:
-    """Call ``PUT /api/v1/pipelines/{pipeline}/formatters/{table}``."""
+    """Call ``PUT /api/v1/pipeline-packages/{pipeline}/formatters/{table}``."""
     return await client.put(
-        f"/api/v1/pipelines/{args.pipeline}/formatters/{args.table}",
+        f"/api/v1/pipeline-packages/{args.pipeline}/formatters/{args.table}",
         json_body={"raw_text": args.raw_text},
     )

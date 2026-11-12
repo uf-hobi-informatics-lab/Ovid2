@@ -203,3 +203,86 @@ def test_list_templates_without_pipelines_namespace(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(importlib.util, "find_spec", _boom)
     assert tmod.list_templates() == []
     assert tmod.get_template("pcornet_etl") is None
+
+
+# ---------------------------------------------------------------------------
+# Self-contained clones + identity (pipeline-builder A1)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("source", "cdm"),
+    [("example_pcornet", "pcornet_7_0"), ("pcornet_to_omop", "omop_5_3"), ("acme", "pcornet_7_0")],
+)
+def test_clone_has_no_template_references(tmp_path: Path, source: str, cdm: str) -> None:
+    """A clone never imports / dotted-paths back into its template package."""
+    import importlib.util
+
+    if importlib.util.find_spec(f"ovid2_pipelines.{source}") is None:
+        pytest.skip(f"{source} not installed")
+    dest = scaffold_pipeline("clonehosp", source_pipeline=source, cdm=cdm, pipelines_root=tmp_path)
+    assert new_pipeline.template_references(dest, source) == []
+    for py in dest.rglob("*.py"):
+        assert f"partner_name = '{source}'" not in py.read_text(encoding="utf-8")
+
+
+@pytest.mark.unit
+def test_clone_rewrites_aliased_db_constant(tmp_path: Path) -> None:
+    """``DEFAULT_PIPELINE_DB_NAME = DEFAULT_PARTNER_DB_NAME`` follows the alias."""
+    import importlib.util
+
+    if importlib.util.find_spec("ovid2_pipelines.acme") is None:
+        pytest.skip("acme not installed")
+    from ovid2.tools.pipeline_identity import read_settings_constants
+
+    dest = scaffold_pipeline(
+        "newsite", source_pipeline="acme", cdm="pcornet_7_0", pipelines_root=tmp_path
+    )
+    consts = read_settings_constants((dest / "pipeline_settings.py").read_text(encoding="utf-8"))
+    assert consts["DEFAULT_PIPELINE_DB_NAME"] == "CHAR_NEWSITE"
+    assert consts["MERGE_DATABASE_NAME"] == "CHAR_NEWSITE"
+    assert consts["DATAVANT_KEY"] == "newsite"
+    assert consts["LEGACY_VENDOR_PARTNER"] == "acme"
+    assert "CHAR_ACME" not in (dest / "pipeline_settings.py").read_text(encoding="utf-8")
+
+
+@pytest.mark.unit
+def test_clone_identity_overrides_win(tmp_path: Path) -> None:
+    from ovid2.tools.pipeline_identity import read_settings_constants
+
+    dest = scaffold_pipeline(
+        "mysite",
+        source_pipeline="example_pcornet",
+        cdm="pcornet_7_0",
+        pipelines_root=tmp_path,
+        identity={"NETWORKID": "C99", "DATAVANT_KEY": "mysite_dv", "NETWORK_NAME": "Demo Net"},
+    )
+    consts = read_settings_constants((dest / "pipeline_settings.py").read_text(encoding="utf-8"))
+    assert consts["NETWORKID"] == "C99"
+    assert consts["DATAMARTID"] == "C99MYSITE"  # re-derived from the overridden network
+    assert consts["NETWORK_NAME"] == "Demo Net"
+    assert consts["DATAVANT_KEY"] == "mysite_dv"
+    # The cloned HARVEST formatter reads the clone's own settings.
+    harvest = (dest / "formatters_custom" / "harvest_formatter.py").read_text(encoding="utf-8")
+    assert "ovid2_pipelines.mysite import pipeline_settings" in harvest
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("bad", ["my-hospital", "1site", "a.b"])
+def test_scaffold_rejects_non_identifier(tmp_path: Path, bad: str) -> None:
+    with pytest.raises(NewPipelineError, match="identifier"):
+        scaffold_pipeline(
+            bad, source_pipeline="example_pcornet", cdm="pcornet_7_0", pipelines_root=tmp_path
+        )
+    assert not (tmp_path / bad).exists()
+
+
+@pytest.mark.unit
+def test_rewrite_settings_preserves_layout_and_quotes() -> None:
+    from ovid2.tools.pipeline_identity import rewrite_settings
+
+    src = "A =  'x'  # keep\nB = \"y\"\nC = A\n"
+    out = rewrite_settings(src, {"C": "z", "B": "w"})
+    assert out == "A =  'z'  # keep\nB = \"w\"\nC = A\n"
+    assert rewrite_settings("X = 1\n", {"cdm": "omop_5_3"}).endswith("cdm = 'omop_5_3'\n")

@@ -191,6 +191,74 @@ def _int(group: str) -> str:
     return f"TRY_CAST(NULLIF(__ovr.{group}, '') AS BIGINT)"
 
 
+#: Pattern letter -> (canonical digit count, strptime directive) for the
+#: :func:`_fast_path` guard.
+_FAST_FIELDS: dict[str, tuple[int, str]] = {
+    "y": (4, "%Y"),
+    "M": (2, "%m"),
+    "d": (2, "%d"),
+    "H": (2, "%H"),
+    "m": (2, "%M"),
+    "s": (2, "%S"),
+}
+
+
+def _fast_path(value_sql: str, pattern: str) -> tuple[str, str] | None:
+    """Return ``(guard_sql, parse_sql)`` for the canonical layout, if any.
+
+    For a pattern made only of non-abutting ``y``/``M``/``d``/``H``/``m``/``s``
+    fields (``yyyy`` 4 wide, the rest 1–2 wide) separated by single
+    non-alphanumeric literals, a value whose prefix is *exactly* the
+    zero-padded canonical layout (``2026-01-02 03:04:05``) followed by a
+    non-digit or the end parses identically under LEGACY
+    ``SimpleDateFormat`` and DuckDB's native ``try_strptime`` on that
+    prefix — including the strict range checks (Feb 30, hour 24 → NULL).
+    Everything else (leading spaces, 1-digit fields, trailing digits,
+    other letters) takes the general regex path.
+    """
+    tokens = tokenize(pattern)
+    regex = ["^"]
+    fmt: list[str] = []
+    width = 0
+    prev_field = False
+    for tok in tokens:
+        if tok.letter:
+            spec = _FAST_FIELDS.get(tok.letter)
+            if spec is None or prev_field:
+                return None
+            if tok.letter == "y" and tok.width != 4:
+                return None
+            if tok.letter != "y" and tok.width > 2:
+                return None
+            digits, directive = spec
+            regex.append(f"\\d{{{digits}}}")
+            fmt.append(directive)
+            width += digits
+            prev_field = True
+            continue
+        if len(tok.text) != 1 or tok.text.isalnum() or tok.text in "%\\":
+            return None
+        regex.append(re.escape(tok.text))
+        fmt.append(tok.text)
+        width += 1
+        prev_field = False
+    letters = [t.letter for t in tokens if t.letter]
+    # Only full dates: a missing field defaults to 1970-01-01 in Spark,
+    # which strptime does not reproduce; a pattern must also *start*
+    # with its year so the guard's canonical layout is unambiguous.
+    if sorted(set(letters)) != sorted(letters) or not {"y", "M", "d"} <= set(letters):
+        return None
+    if letters[0] != "y":
+        return None
+    regex.append("(?:[^0-9]|$)")
+    guard = f"regexp_matches(CAST({value_sql} AS VARCHAR), {sql_string(''.join(regex))})"
+    parse = (
+        f"CAST(try_strptime(CAST({value_sql} AS VARCHAR)[1:{width}], "
+        f"{sql_string(''.join(fmt))}) AS TIMESTAMP)"
+    )
+    return guard, parse
+
+
 def parse_sql(value_sql: str, pattern: str) -> str:
     """Return SQL parsing ``value_sql`` (VARCHAR) with a Java pattern.
 
@@ -288,10 +356,17 @@ def parse_sql(value_sql: str, pattern: str) -> str:
     names_sql = "[" + ", ".join(sql_string(g) for g in groups) + "]"
     regex_sql = sql_string("".join(regex))
     body = f"CASE WHEN {' AND '.join(checks)} THEN {build} END"
-    return (
+    general = (
         f"list_transform([regexp_extract(CAST({value_sql} AS VARCHAR), {regex_sql}, {names_sql})], "
         f"lambda __ovr: {body})[1]"
     )
+    fast = _fast_path(value_sql, pattern)
+    if fast is None:
+        return general
+    # The canonical layout (the overwhelmingly common case) goes through
+    # the native parser — ~3x cheaper than regexp_extract + lambda.
+    guard, parse = fast
+    return f"(CASE WHEN {guard} THEN {parse} ELSE {general} END)"
 
 
 def _year_expr(roles: dict[str, str]) -> str:

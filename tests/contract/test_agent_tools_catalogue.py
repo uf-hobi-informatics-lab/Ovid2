@@ -142,7 +142,12 @@ def test_mutating_flag_and_no_delete() -> None:
 # runs the call without a proposal click) is allowed ONLY on these — the
 # human gate is the ▶ on the draft's run page. Widening this list is an
 # ADR change (adr-llm-dual-system.md, "Draft jobs").
-_DRAFT_ROUTES = {("POST", "/api/v1/job-drafts"), ("POST", "/api/v1/pipelines/{name}/draft")}
+_DRAFT_ROUTES = {
+    ("POST", "/api/v1/job-drafts"),
+    ("POST", "/api/v1/pipelines/{name}/draft"),
+    # Report Studio: a private, unshared draft report (adr-report-studio.md).
+    ("POST", "/api/v1/report-drafts"),
+}
 
 
 @pytest.mark.contract
@@ -171,6 +176,8 @@ def test_draft_routes_never_queue() -> None:
     assert "jobs_svc.create_draft(" in a and "jobs_svc.submit(" not in a
     b = _body("api_draft_pipeline_config")
     assert "draft=True" in b and "jobs_svc.submit(" not in b
+    c = _body("api_create_report_draft")
+    assert 'status="draft"' in c and "jobs_svc." not in c and "export_report(" not in c
 
 
 @pytest.mark.contract
@@ -235,7 +242,14 @@ def test_agent_tools_package_is_tier_neutral(src_root: Path) -> None:
 # re-validating handler in llm_panel.js and must stay cosmetic + undoable.
 # ---------------------------------------------------------------------------
 
-_UI_ACTIONS = {"set_appearance", "save_appearance", "apply_saved_appearance"}
+_UI_ACTIONS = {
+    "set_appearance",
+    "save_appearance",
+    "apply_saved_appearance",
+    # Report Studio working-copy edits (adr-report-studio.md): validated by
+    # the server-side layout validator, undoable, never saved by the agent.
+    "edit_report_layout",
+}
 _STATIC = Path(__file__).resolve().parents[2] / "src" / "ovid2" / "web" / "static"
 _TEMPLATES = _STATIC.parent / "templates"
 
@@ -265,6 +279,27 @@ def test_ui_actions_handled_and_revalidated_in_browser() -> None:
     body = js[js.index("function applyUiAction") : js.index("function undoUiAction")]
     assert "checkUiArgs(" in body and "fetch(" not in body
     assert "isKnownSlug" in js and "ALLOWED_VARS" in js
+
+
+@pytest.mark.contract
+def test_edit_report_layout_ops_match_layout_and_browser() -> None:
+    """The report-edit op vocabulary agrees across catalogue, server and browser."""
+    from ovid2.agent_tools import get_tool
+    from ovid2.reports.layout import OPS
+
+    tool = get_tool("edit_report_layout")
+    assert tool is not None
+    enum = tool.params["properties"]["ops"]["items"]["properties"]["op"]["enum"]
+    assert list(enum) == list(OPS)
+    panel = (_STATIC / "llm_panel.js").read_text(encoding="utf-8")
+    assert _js_list(panel, "REPORT_OPS") == list(OPS)
+    studio = (_STATIC / "report_studio.js").read_text(encoding="utf-8")
+    assert _js_list(studio, "OPS") == list(OPS)
+    # The Studio applies agent ops through the same server validator and never saves.
+    hook = studio[studio.index("window.Ovid2ReportStudio = {") :]
+    assert "applyOps: function (ops) { return applyOps(ops); }" in hook
+    body = studio[studio.index("function applyOps(") : studio.index("function rerender(")]
+    assert "save: false" in body and '"PUT"' not in body
 
 
 @pytest.mark.contract

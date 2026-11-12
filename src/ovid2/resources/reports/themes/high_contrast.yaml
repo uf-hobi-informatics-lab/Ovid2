@@ -1,0 +1,18 @@
+name: high_contrast
+label: High contrast
+description: Maximum legibility — pure black on white, heavy strokes, large text (WCAG AAA).
+mode: light
+fonts: {body: "Arial, Helvetica, sans-serif", heading: "Arial Black, Arial, sans-serif", mono: "Courier New, monospace"}
+colors:
+  background: "#ffffff"
+  surface: "#ffffff"
+  text: "#000000"
+  muted: "#000000"
+  border: "#000000"
+  accent: "#0000c8"
+  grid: "#b3b3b3"
+palette: ["#0000c8", "#c80000", "#006400", "#000000", "#8b008b", "#b35900"]
+sequential: darkblue
+diverging: redblue
+status: {passed: "#006400", exception: "#c80000", error: "#8b008b", skipped: "#555555", not_applicable: "#999999", warning: "#b35900"}
+sizes: {base: 13, title: 24, heading: 17, axis: 12}

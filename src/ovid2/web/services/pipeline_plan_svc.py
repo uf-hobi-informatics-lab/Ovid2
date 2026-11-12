@@ -48,7 +48,7 @@ from ovid2.web.models import (
 #: Canonical ETL transformation stages, in run order. Mirrors
 #: :func:`ovid2.core.loaders.get_all_transformations` — a fixed constant,
 #: intentionally duplicated so the web tier need not import the pipeline.
-TRANSFORMATION_STAGES: tuple[str, ...] = ("format", "deduplicate", "map", "fix")
+TRANSFORMATION_STAGES: tuple[str, ...] = ("format", "deduplicate", "transform", "map", "fix")
 
 __all__ = [
     "TRANSFORMATION_STAGES",
@@ -160,15 +160,18 @@ def list_pipeline_fixers(
 ) -> tuple[dict[str, list[FixerPlanEntry]], list[FixerPlanEntry]]:
     """Return ``(per_table_chains, multi_table)`` from the pipeline's config.
 
-    Reads ``ovid2_pipelines.<pipeline>.fixer_configs``. A pipeline with no
-    such module (or no chains) yields empty structures — never raises.
+    Reads the pipeline's ``fixer_configs.yaml`` (preferred) or
+    ``fixer_configs.py`` through :func:`ovid2.config.fixer_configs.load_fixer_configs`.
+    A pipeline with no fixer configs (or an invalid YAML) yields empty
+    structures — never raises.
     """
-    try:
-        mod = importlib.import_module(f"ovid2_pipelines.{pipeline}.fixer_configs")
-    except ModuleNotFoundError:
-        return {}, []
+    from ovid2.config.fixer_configs import FixerConfigsError, load_fixer_configs
 
-    chains_raw = getattr(mod, "FIXER_CHAINS", {}) or {}
+    try:
+        chains_raw, multi_raw, _source = load_fixer_configs(pipeline)
+    except FixerConfigsError:
+        return {}, []
+    chains_raw = chains_raw or {}
     per_table: dict[str, list[FixerPlanEntry]] = {}
     if isinstance(chains_raw, dict):
         for table, configs in chains_raw.items():
@@ -178,7 +181,7 @@ def list_pipeline_fixers(
             if entries:
                 per_table[str(table)] = entries
 
-    multi_raw = getattr(mod, "MULTI_TABLE_FIXES", []) or []
+    multi_raw = multi_raw or []
     multi: list[FixerPlanEntry] = []
     if isinstance(multi_raw, (list, tuple)):
         multi = [e for e in (_coerce_fixer_entry(c) for c in multi_raw) if e is not None]

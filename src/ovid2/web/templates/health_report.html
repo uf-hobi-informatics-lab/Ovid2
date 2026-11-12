@@ -2,7 +2,11 @@
 {% block title %}Health report {{ instance_id }} &mdash; Ovid2{% endblock %}
 {% block content %}
 <section class="page health-report">
-  <p><a href="/runs/{{ instance_id }}">&larr; back to run</a></p>
+  <p class="health-report-links"><a href="/runs/{{ instance_id }}">&larr; back to run</a>
+    {% if has_cap(request, 'run_reports') %}
+    <a class="button small primary" href="/reports?ingest={{ instance_id }}" data-open-studio>Open in Report Studio &rarr;</a>
+    {% endif %}
+  </p>
 
   {# ---- Summary header ---- #}
   <header class="health-report-head">

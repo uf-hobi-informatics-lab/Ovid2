@@ -22,7 +22,7 @@ produce CDM tables. The stages are explained in
 | Option | CLI | Default | Notes |
 | --- | --- | --- | --- |
 | Tables | `--tables` | `all` | names from the CDM, e.g. `demographic encounter` |
-| Stages | `--transformations` | `all` | any of `format deduplicate map fix`, applied in canonical order |
+| Stages | `--transformations` | `all` | any of `format deduplicate transform map fix`, applied in canonical order (`transform` runs the chains in `transforms/assignments.yaml`; a no-op when none) |
 | Engine | `--engine` | `pyspark` | or a named engine config. See [Engines](../02-concepts/engines.md). |
 | Workers | `--workers` | 25 | Spark: worker containers. DuckDB: tables at once. |
 | CDM | `--cdm` | from `pipeline_settings.cdm` | override, rarely needed |

@@ -868,6 +868,30 @@ class Worker:
             returncode,
             was_cancel,
         )
+        _ingest_report_sources(record.instance_id)
+
+
+def _ingest_report_sources(instance_id: str) -> None:
+    """Persist the run's Report Studio sources (best-effort, never raises).
+
+    ``WORK_DIR`` is tmpfs, so the health report / analysis artifact / event
+    log would vanish on reboot; :func:`report_sources_svc.ingest_for_instance`
+    folds them into durable, aggregated report sources.
+    """
+    try:
+        from ovid2.web.services import report_sources_svc
+
+        stored = report_sources_svc.ingest_for_instance(instance_id, actor="worker")
+    except Exception as exc:
+        logger.warning("Report-source ingest for %s failed: %s", instance_id, exc)
+        return
+    if stored:
+        logger.info(
+            "Ingested %d report source(s) for %s: %s",
+            len(stored),
+            instance_id,
+            ", ".join(str(s.get("source_id")) for s in stored),
+        )
 
 
 # ---------------------------------------------------------------------------

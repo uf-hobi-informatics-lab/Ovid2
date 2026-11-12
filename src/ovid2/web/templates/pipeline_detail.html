@@ -3,7 +3,8 @@
 {% block content %}
 <section class="page">
   <p><a href="/pipeline-packages">&larr; all pipelines</a></p>
-  <h1>Pipeline: {{ pipeline.name }}</h1>
+  <h1>Pipeline: {{ pipeline.name }}
+    <a href="/pipeline-packages/{{ pipeline.name }}/builder" class="button primary small">Customize &rarr;</a></h1>
   <p class="mono small">{{ pipeline.path }}</p>
 
   {% if pipeline_config %}
@@ -66,9 +67,10 @@
         {% endfor %}
       </ul>
       <p class="note">
-        Python sources are read-only in the UI. Edit on disk (git) or via
-        pull request — the "configuration as data" rule in AGENTS.md
-        preserves the audit trail.
+        Fixer chains and literal settings are editable in the
+        <a href="/pipeline-packages/{{ pipeline.name }}/builder">pipeline builder</a>
+        (fixer chains are saved as <code>fixer_configs.yaml</code>). Other Python
+        sources are read-only in the UI &mdash; edit on disk (git) or via pull request.
       </p>
     </section>
   </div>

@@ -56,7 +56,7 @@ ovid2 etl \
 | Flag | Meaning |
 | --- | --- |
 | `--tables all` | every table the pipeline has a formatter for |
-| `--transformations all` | format → deduplicate → map → fix → write |
+| `--transformations all` | format → deduplicate → transform → map → fix → write |
 | `--workers 4` | four Spark worker containers (for DuckDB: four tables at once) |
 | `--engine duckdb` | optional: one container, no cluster, often fastest for one host |
 

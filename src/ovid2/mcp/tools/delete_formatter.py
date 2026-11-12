@@ -25,5 +25,5 @@ ARGS_MODEL = DeleteFormatterArgs
 
 
 async def run(client: WebApiClient, args: DeleteFormatterArgs) -> Any:
-    """Call ``DELETE /api/v1/pipelines/{pipeline}/formatters/{table}``."""
-    return await client.delete(f"/api/v1/pipelines/{args.pipeline}/formatters/{args.table}")
+    """Call ``DELETE /api/v1/pipeline-packages/{pipeline}/formatters/{table}``."""
+    return await client.delete(f"/api/v1/pipeline-packages/{args.pipeline}/formatters/{args.table}")

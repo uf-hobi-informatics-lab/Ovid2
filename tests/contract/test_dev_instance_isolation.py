@@ -36,6 +36,8 @@ _SHARED_OK: frozenset[str] = frozenset(
         "OVID2_VOCAB_CACHE_DIR",
         # Pre-installed DuckDB extensions (read-only, image-baked).
         "OVID2_DUCKDB_EXTENSION_DIR",
+        # Read-only ``ovid2_pipelines`` code tree (CLI / web sys.path).
+        "OVID2_PIPELINE_PACKAGES_DIR",
         # legacy_ovid profile: vendored legacy code + Datavant credential
         # file name inside OVID2_CREDENTIALS_DIR (read-only shared inputs).
         "OVID2_LEGACY_VENDOR_DIR",

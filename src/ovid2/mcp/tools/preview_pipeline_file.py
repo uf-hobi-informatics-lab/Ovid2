@@ -33,8 +33,8 @@ ARGS_MODEL = PreviewPipelineFileArgs
 
 
 async def run(client: WebApiClient, args: PreviewPipelineFileArgs) -> Any:
-    """Call ``GET /api/v1/pipelines/{pipeline}/file?relative_path=...``."""
+    """Call ``GET /api/v1/pipeline-packages/{pipeline}/file?relative_path=...``."""
     return await client.get(
-        f"/api/v1/pipelines/{args.pipeline}/file",
+        f"/api/v1/pipeline-packages/{args.pipeline}/file",
         relative_path=args.relative_path,
     )

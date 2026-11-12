@@ -1,0 +1,18 @@
+name: colorblind_safe
+label: Colour-blind safe
+description: Okabe-Ito palette, distinguishable under the common colour-vision deficiencies.
+mode: light
+fonts: {body: "Verdana, Geneva, sans-serif", heading: "Verdana, Geneva, sans-serif", mono: "Menlo, Consolas, monospace"}
+colors:
+  background: "#ffffff"
+  surface: "#f7f7f7"
+  text: "#111111"
+  muted: "#555555"
+  border: "#cccccc"
+  accent: "#0072b2"
+  grid: "#e5e5e5"
+palette: ["#0072b2", "#e69f00", "#009e73", "#cc79a7", "#56b4e9", "#d55e00", "#f0e442", "#000000"]
+sequential: viridis
+diverging: purpleorange
+status: {passed: "#009e73", exception: "#d55e00", error: "#cc79a7", skipped: "#999999", not_applicable: "#cccccc", warning: "#e69f00"}
+sizes: {base: 11, title: 20, heading: 15, axis: 10}

@@ -45,20 +45,25 @@
     <a href="/submit?pipeline={{ pipeline_config.name }}" class="button primary"
        title="Choose storage &amp; run">{{ icons.icon("play", size=16) }} Run&hellip;</a>
     {% else %}
-    <form action="/pipelines/{{ pipeline_config.name }}/run" method="post" style="display:inline;">
+    <form action="/pipelines/{{ pipeline_config.name }}/run" method="post" style="display:inline;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="button primary" title="Run now">
         {{ icons.icon("play", size=16) }} Run
       </button>
     </form>
     {% endif %}
     <form action="/pipelines/{{ pipeline_config.name }}/{% if pipeline_config.enabled %}disable{% else %}enable{% endif %}"
-          method="post" style="display:inline;">
+          method="post" style="display:inline;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="button">{% if pipeline_config.enabled %}Disable{% else %}Enable{% endif %}</button>
     </form>
     <a href="/pipelines/{{ pipeline_config.name }}/edit" class="button" title="Edit">
       {{ icons.icon("edit", size=16) }} Edit</a>
+    {% if has_package %}
+    <a href="/pipeline-packages/{{ pipeline_config.pipeline }}/builder" class="button"
+       title="Edit the package's formatters, mappers, transforms, fixers and settings">
+      {{ icons.icon("sliders", size=16) }} Customize</a>
+    {% endif %}
     <form action="/pipelines/{{ pipeline_config.name }}/delete" method="post" style="display:inline;"
-          onsubmit="return confirm('Delete pipeline {{ pipeline_config.name }}?')">
+          onsubmit="return confirm('Delete pipeline {{ pipeline_config.name }}?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="button danger" title="Delete">
         {{ icons.icon("trash", size=16) }} Delete
       </button>

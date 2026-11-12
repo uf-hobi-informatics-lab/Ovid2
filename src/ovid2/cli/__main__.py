@@ -16,6 +16,7 @@ import sys
 from collections.abc import Sequence
 
 from ovid2 import __version__
+from ovid2.config.pipeline_packages import ensure_pipeline_packages_on_path
 
 # ---------------------------------------------------------------------------
 # Subcommand registry
@@ -180,6 +181,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     Returns:
         Process exit code.
     """
+    # Pipeline packages (``pipelines/ovid2_pipelines/<name>``) are not in
+    # the wheel; make a repo checkout's tree importable for every
+    # subcommand, mirroring ``ovid2 web``.
+    ensure_pipeline_packages_on_path()
     parser = _build_parser()
     args = parser.parse_args(argv)
     _configure_logging(getattr(args, "verbose", 0))

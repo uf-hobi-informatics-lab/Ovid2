@@ -410,6 +410,15 @@ Copy an existing pipeline package (or a curated pipeline template) under a new n
 | `--source` `SOURCE` | Explicit source pipeline to clone (used with --cdm; an alternative to --template). |  |  |
 | `--cdm` `CDM` | Target CDM name (required with --source; taken from the template otherwise). |  |  |
 
+### `ovid2 tools migrate-fixers`
+
+Convert a pipeline's fixer_configs.py into editable fixer_configs.yaml.
+
+| Argument | Description | Choices | Default |
+| --- | --- | --- | --- |
+| `--pipeline` `PIPELINE` | Pipeline package name. |  |  |
+| `--remove-python` | Rename fixer_configs.py to fixer_configs.py.bak after converting. |  |  |
+
 ### `ovid2 tools ods`
 
 Read-only utilities over the Ovid Data Space: every storage account is a tree of plain directories, /<account>/<path…>. Output is JSON on stdout so the commands compose with other tools.
@@ -476,6 +485,17 @@ Export a table / data file to csv / xlsx / pdf / docx, print JSON.
 | `--limit` `LIMIT` | Maximum rows (default: the whole table). |  |  |
 | `--out` `OUT` | Output file path. |  |  |
 | `--in-process` | Run the export in this process even when unbounded (default: exports over the host row limit run in a container). |  |  |
+
+### `ovid2 tools report-export`
+
+Render a Report Studio bundle (layout + source) to pdf/html/docx/xlsx/svg/png/md/json.
+
+| Argument | Description | Choices | Default |
+| --- | --- | --- | --- |
+| `--bundle` `BUNDLE` | Path to the JSON bundle {layout, source, meta}. |  |  |
+| `--format` `FMT` |  | `docx`, `html`, `json`, `md`, `pdf`, `png`, `svg`, `xlsx` |  |
+| `--out-dir` `OUT_DIR` | Existing directory for the output file. |  |  |
+| `--block` `BLOCK` | svg/png only: export just this chart block id. |  |  |
 
 ## `ovid2 scheduler`
 

@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response, Streami
 
 from ovid2.web.auth.csrf import require_json_content_type
 from ovid2.web.auth.deps import AuthContext, require_capability
-from ovid2.web.auth.roles import Capability, Role
+from ovid2.web.auth.roles import Capability, Role, has_capability
 from ovid2.web.models import (
     AddressDetail,
     AddressSummary,
@@ -28,6 +28,8 @@ from ovid2.web.models import (
     ApprovalSummary,
     BootstrapRequest,
     BootstrapResponse,
+    BuilderRawText,
+    BuilderValidateRequest,
     CdmDetail,
     CdmSummary,
     ConnectionDetail,
@@ -85,6 +87,18 @@ from ovid2.web.models import (
     PipelineTemplateSummary,
     PipelineVerifyResponse,
     PipelineWrite,
+    ReportCreateRequest,
+    ReportDuplicateRequest,
+    ReportExportRequest,
+    ReportExportResult,
+    ReportFavoriteRequest,
+    ReportOpsRequest,
+    ReportPreviewRequest,
+    ReportShareRequest,
+    ReportSourceIngestRequest,
+    ReportTemplateSaveRequest,
+    ReportTrendRequest,
+    ReportUpdateRequest,
     RunEventPage,
     RunListResponse,
     RunSummary,
@@ -94,9 +108,11 @@ from ovid2.web.models import (
     SecretDetail,
     SecretSummary,
     SecretWrite,
+    SettingsWrite,
     SnowflakeSaveResponse,
     SourceTablesResponse,
     StorageBrowseResponse,
+    TransformAssignRequest,
     TransformSummary,
     TransformValidateReport,
     TransformValidateRequest,
@@ -109,6 +125,7 @@ from ovid2.web.models import (
 from ovid2.web.services import (
     addresses_svc,
     approvals_svc,
+    builder_svc,
     cdms_svc,
     connections_svc,
     dataspace_svc,
@@ -124,10 +141,13 @@ from ovid2.web.services import (
     llm_chat_svc,
     llms_svc,
     mappers_svc,
+    pipeline_inspect_svc,
     pipeline_plan_svc,
     pipelines_meta_svc,
     pipelines_svc,
     prefs_svc,
+    report_sources_svc,
+    reports_svc,
     runs_svc,
     secrets_svc,
     settings_svc,
@@ -862,11 +882,374 @@ def api_list_transforms(
 def api_validate_transform(payload: TransformValidateRequest) -> TransformValidateReport:
     """Validate a transform spec against the schema and the op catalogue.
 
-    Lets an agent catch an unknown op or malformed step *before* saving
-    the spec. Returns ``{ok, errors}``.
+    Lets an agent catch an unknown op, a malformed step, a parameter that
+    violates the op's ``params_schema`` or an expression outside the SQL
+    allow-list *before* saving the spec. Returns ``{ok, errors}``.
     """
-    result = transforms_svc.validate_transform_spec(payload.spec)
+    result = builder_svc.validate_transform(payload.spec)
     return TransformValidateReport(ok=bool(result["ok"]), errors=list(result["errors"]))
+
+
+# ---------------------------------------------------------------------------
+# Pipeline builder — transform library, package specs, inspection
+# ---------------------------------------------------------------------------
+
+
+def _builder_error(exc: builder_svc.BuilderError) -> HTTPException:
+    return HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get(
+    "/transform-library",
+    summary="List user + shipped transform chains (the UDF library)",
+    response_model=list[dict[str, Any]],
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_list_transform_library() -> list[dict[str, Any]]:
+    """Return reusable chains from ``$XDG_CONFIG_HOME/ovid2/transforms`` + shipped."""
+    return builder_svc.list_library_transforms()
+
+
+@router.get(
+    "/transform-library/{name}",
+    summary="Get one transform-library chain",
+    response_model=dict[str, Any],
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_get_transform_library(name: str) -> dict[str, Any]:
+    """Return raw + parsed YAML of a library chain."""
+    try:
+        doc = builder_svc.get_library_transform(name)
+    except builder_svc.BuilderError as exc:
+        raise _builder_error(exc) from None
+    if doc is None:
+        raise HTTPException(status_code=404, detail=f"Transform '{name}' not found.")
+    return doc
+
+
+@router.put(
+    "/transform-library/{name}",
+    summary="Create or update a user transform-library chain",
+    response_model=WriteResult,
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG))],
+)
+def api_put_transform_library(
+    name: str,
+    payload: BuilderRawText,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_CONFIG)),
+) -> WriteResult:
+    """Validate (schema, op params, SQL allow-list) and save a library chain."""
+    try:
+        return WriteResult(
+            **builder_svc.save_library_transform(name, payload.raw_text, actor=_actor(ctx))
+        )
+    except builder_svc.BuilderError as exc:
+        raise _builder_error(exc) from None
+
+
+@router.delete(
+    "/transform-library/{name}",
+    summary="Delete a user transform-library chain",
+    response_model=WriteResult,
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG))],
+)
+def api_delete_transform_library(
+    name: str,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_CONFIG)),
+) -> WriteResult:
+    """Delete a user chain (human-approval gated: pipelines may depend on it)."""
+    _gate("transform.delete", f"library:{name}", requested_by=_actor(ctx))
+    try:
+        return WriteResult(**builder_svc.delete_library_transform(name, actor=_actor(ctx)))
+    except builder_svc.BuilderError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+
+
+@router.post(
+    "/transform-library/{name}/assign",
+    summary="Assign a library chain to tables of a pipeline",
+    response_model=WriteResult,
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG))],
+)
+def api_assign_transform(
+    name: str,
+    payload: TransformAssignRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_CONFIG)),
+) -> WriteResult:
+    """Append ``{spec: name}`` to the pipeline's ``transforms/assignments.yaml``."""
+    try:
+        return WriteResult(
+            **builder_svc.assign_chain(payload.pipeline, name, payload.tables, actor=_actor(ctx))
+        )
+    except builder_svc.BuilderError as exc:
+        raise _builder_error(exc) from None
+
+
+@router.get(
+    "/pipeline-templates/{template_id}",
+    summary="Inspect a pipeline template (tables, identity, requirements, bindings)",
+    response_model=dict[str, Any],
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_inspect_template(
+    template_id: str,
+    name: str | None = Query(default=None, description="Clone name (drives identity defaults)."),
+    engine: str | None = Query(default=None, description="Engine to check family against."),
+) -> dict[str, Any]:
+    """Return what the template provides and every name the clone must match."""
+    try:
+        return pipeline_inspect_svc.inspect_template(template_id, new_name=name, engine=engine)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+
+
+@router.get(
+    "/pipeline-packages/{pipeline}/inspect",
+    summary="Inspect a pipeline package (tables x stages, identity, bindings)",
+    response_model=dict[str, Any],
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_inspect_package(
+    pipeline: str,
+    engine: str | None = Query(default=None, description="Engine to check family against."),
+) -> dict[str, Any]:
+    """Static inspection of an installed package (never executes it)."""
+    try:
+        return pipeline_inspect_svc.inspect_package(pipeline, engine=engine).to_dict()
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+
+
+@router.get(
+    "/pipeline-packages/{pipeline}/bindings",
+    summary="Check every name a pipeline must match against other configuration",
+    response_model=list[dict[str, Any]],
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_package_bindings(
+    pipeline: str,
+    engine: str | None = Query(default=None, description="Engine to check family against."),
+) -> list[dict[str, Any]]:
+    """Return ``[{id, category, label, value, must_match, status, detail, where}]``."""
+    try:
+        inspection = pipeline_inspect_svc.inspect_package(pipeline, engine=engine)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    return pipeline_inspect_svc.bindings_as_dicts(inspection.bindings)
+
+
+@router.get(
+    "/pipeline-packages/{pipeline}/transforms",
+    summary="List a pipeline's private transform chains",
+    response_model=list[dict[str, Any]],
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_list_pipeline_transforms(pipeline: str) -> list[dict[str, Any]]:
+    """Return ``<pkg>/transforms/*.yaml`` chains."""
+    try:
+        return builder_svc.list_pipeline_transforms(pipeline)
+    except builder_svc.BuilderError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+
+
+@router.get(
+    "/pipeline-packages/{pipeline}/transforms/{name}",
+    summary="Get one pipeline-private transform chain",
+    response_model=dict[str, Any],
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_get_pipeline_transform(pipeline: str, name: str) -> dict[str, Any]:
+    """Return raw + parsed YAML of a package-private chain."""
+    try:
+        doc = builder_svc.get_pipeline_transform(pipeline, name)
+    except builder_svc.BuilderError as exc:
+        raise _builder_error(exc) from None
+    if doc is None:
+        raise HTTPException(status_code=404, detail=f"Transform '{pipeline}/{name}' not found.")
+    return doc
+
+
+@router.put(
+    "/pipeline-packages/{pipeline}/transforms/{name}",
+    summary="Create or update a pipeline-private transform chain",
+    response_model=WriteResult,
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG))],
+)
+def api_put_pipeline_transform(
+    pipeline: str,
+    name: str,
+    payload: BuilderRawText,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_CONFIG)),
+) -> WriteResult:
+    """Validate and save ``<pkg>/transforms/<name>.yaml``."""
+    try:
+        return WriteResult(
+            **builder_svc.save_pipeline_transform(
+                pipeline, name, payload.raw_text, actor=_actor(ctx)
+            )
+        )
+    except builder_svc.BuilderError as exc:
+        raise _builder_error(exc) from None
+
+
+@router.delete(
+    "/pipeline-packages/{pipeline}/transforms/{name}",
+    summary="Delete a pipeline-private transform chain",
+    response_model=WriteResult,
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG))],
+)
+def api_delete_pipeline_transform(
+    pipeline: str,
+    name: str,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_CONFIG)),
+) -> WriteResult:
+    """Delete ``<pkg>/transforms/<name>.yaml``."""
+    try:
+        return WriteResult(
+            **builder_svc.delete_pipeline_transform(pipeline, name, actor=_actor(ctx))
+        )
+    except builder_svc.BuilderError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+
+
+@router.get(
+    "/pipeline-packages/{pipeline}/transform-assignments",
+    summary="Get a pipeline's transform assignments",
+    response_model=dict[str, Any],
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_get_assignments(pipeline: str) -> dict[str, Any]:
+    """Return ``transforms/assignments.yaml`` (empty template when absent)."""
+    try:
+        return builder_svc.get_assignments(pipeline)
+    except builder_svc.BuilderError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+
+
+@router.put(
+    "/pipeline-packages/{pipeline}/transform-assignments",
+    summary="Save a pipeline's transform assignments",
+    response_model=WriteResult,
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG))],
+)
+def api_put_assignments(
+    pipeline: str,
+    payload: BuilderRawText,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_CONFIG)),
+) -> WriteResult:
+    """Validate (schema, CDM tables, known chains, params) and save."""
+    try:
+        return WriteResult(
+            **builder_svc.save_assignments(pipeline, payload.raw_text, actor=_actor(ctx))
+        )
+    except builder_svc.BuilderError as exc:
+        raise _builder_error(exc) from None
+
+
+@router.get(
+    "/pipeline-packages/{pipeline}/fixers",
+    summary="Get a pipeline's fixer chains as YAML",
+    response_model=dict[str, Any],
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_get_fixers(pipeline: str) -> dict[str, Any]:
+    """Return ``fixer_configs.yaml`` (converted from ``fixer_configs.py`` when absent)."""
+    try:
+        return builder_svc.get_fixers(pipeline)
+    except builder_svc.BuilderError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+
+
+@router.put(
+    "/pipeline-packages/{pipeline}/fixers",
+    summary="Save a pipeline's fixer chains (fixer_configs.yaml)",
+    response_model=WriteResult,
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG))],
+)
+def api_put_fixers(
+    pipeline: str,
+    payload: BuilderRawText,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_CONFIG)),
+) -> WriteResult:
+    """Validate against the fixer registry and save ``fixer_configs.yaml``."""
+    try:
+        return WriteResult(**builder_svc.save_fixers(pipeline, payload.raw_text, actor=_actor(ctx)))
+    except builder_svc.BuilderError as exc:
+        raise _builder_error(exc) from None
+
+
+@router.get(
+    "/pipeline-packages/{pipeline}/settings",
+    summary="Get a pipeline's settings constants (editable flags)",
+    response_model=dict[str, Any],
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_get_pipeline_settings(pipeline: str) -> dict[str, Any]:
+    """Return every ``pipeline_settings.py`` constant with ``editable``."""
+    try:
+        return builder_svc.get_settings(pipeline)
+    except builder_svc.BuilderError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+
+
+@router.patch(
+    "/pipeline-packages/{pipeline}/settings",
+    summary="Update literal constants in pipeline_settings.py",
+    response_model=WriteResult,
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG))],
+)
+def api_patch_pipeline_settings(
+    pipeline: str,
+    payload: SettingsWrite,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_CONFIG)),
+) -> WriteResult:
+    """Rewrite literal constants in place (computed values stay read-only)."""
+    try:
+        return WriteResult(**builder_svc.save_settings(pipeline, payload.values, actor=_actor(ctx)))
+    except builder_svc.BuilderError as exc:
+        raise _builder_error(exc) from None
+
+
+@router.get(
+    "/mapper-ops",
+    summary="Mapper op catalogue (names, summaries, params_schema)",
+    response_model=list[dict[str, Any]],
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_list_mapper_ops() -> list[dict[str, Any]]:
+    """Return the web-safe mapper-op catalogue used by the builder form."""
+    from ovid2.config.mapper_ops_catalogue import list_mapper_ops
+
+    return list_mapper_ops()
+
+
+@router.post(
+    "/pipeline-packages/{pipeline}/builder:validate",
+    summary="Validate a builder document (transform / assignments / fixers / formatter / mapper)",
+    response_model=dict[str, Any],
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_builder_validate(pipeline: str, payload: BuilderValidateRequest) -> dict[str, Any]:
+    """Validate without saving — powers the editor's live lint.
+
+    Returns ``{ok, errors: [{path, message}]}``; never writes.
+    """
+    return builder_svc.validate_document(pipeline, payload.doc_type, payload.raw_text)
+
+
+@router.get(
+    "/fixers",
+    summary="Common fixer catalogue (names, scope, aliases)",
+    response_model=list[dict[str, Any]],
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_list_fixers(
+    cdm: str | None = Query(default=None, description="Only fixers usable under this CDM."),
+) -> list[dict[str, Any]]:
+    """Return the web-safe fixer catalogue (mirror of the fixer registry)."""
+    from ovid2.config.fixers_catalogue import list_fixers
+
+    return list_fixers(cdm)
 
 
 @router.get(
@@ -2470,3 +2853,624 @@ def api_enable_user(user_id: str) -> UserDetail:
     except users_svc.UserError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return UserDetail(**record)
+
+
+# ---------------------------------------------------------------------------
+# Report Studio (adr-report-studio.md)
+#
+# Reads need VIEW_RUNS; creating / editing / sharing / exporting need
+# RUN_REPORTS. Per-report access is the owner + share ACL in reports_svc
+# (an invisible report answers 404, never 403, so ids cannot be probed).
+# Columns tagged ``row_values`` are masked for agents and for humans
+# without VIEW_PIPELINE_DATA.
+# ---------------------------------------------------------------------------
+
+
+def _report_principal(ctx: AuthContext) -> reports_svc.Principal:
+    """Map the request principal onto the Report Studio ACL principal."""
+    return reports_svc.Principal.of(ctx.user_id, ctx.role.value)
+
+
+def _redact_rows(ctx: AuthContext) -> bool:
+    """``True`` when ``row_values`` columns must be masked for this caller."""
+    return _is_agent(ctx) or not has_capability(ctx.role, Capability.VIEW_PIPELINE_DATA)
+
+
+def _report_http(exc: Exception) -> HTTPException:
+    """Map a reports_svc exception onto an HTTP error."""
+    if isinstance(exc, reports_svc.ReportNotFound):
+        return HTTPException(status_code=404, detail=f"Report not found: {exc}")
+    if isinstance(exc, reports_svc.ReportForbidden):
+        return HTTPException(status_code=403, detail=str(exc))
+    if isinstance(exc, reports_svc.ReportConflict):
+        return HTTPException(
+            status_code=409, detail={"message": str(exc), "current_version": exc.current}
+        )
+    if isinstance(exc, reports_svc.ReportError):
+        return HTTPException(status_code=400, detail={"message": str(exc), "errors": exc.errors})
+    return HTTPException(status_code=500, detail=str(exc))
+
+
+_REPORT_ERRORS = (
+    reports_svc.ReportNotFound,
+    reports_svc.ReportForbidden,
+    reports_svc.ReportConflict,
+    reports_svc.ReportError,
+)
+
+
+@router.get(
+    "/report-catalogue",
+    summary="Report Studio catalogue: chart kinds, report themes, export formats",
+    response_model=dict,
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def api_report_catalogue() -> dict[str, Any]:
+    """Return chart kinds (with params schemas), themes, layout edit ops, formats."""
+    from ovid2.reports import catalogue as report_catalogue
+    from ovid2.reports.layout import OPS
+
+    return {
+        "categories": report_catalogue.chart_categories(),
+        "charts": [c.as_dict() for c in report_catalogue.list_charts()],
+        "themes": [t.as_dict() for t in report_catalogue.list_themes()],
+        "default_theme": report_catalogue.DEFAULT_THEME,
+        "ops": list(OPS),
+        "export_formats": reports_svc.export_formats(),
+        "source_kinds": report_sources_svc.list_kinds(),
+    }
+
+
+@router.get(
+    "/report-sources",
+    summary="List report sources (durable, aggregated run datasets)",
+    response_model=dict,
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def api_list_report_sources(
+    kind: str | None = Query(None, description="health | analysis | run_summary | health_trend"),
+    pipeline: str | None = Query(None),
+    instance_id: str | None = Query(None),
+    q: str | None = Query(None, max_length=120, description="Substring of title / batch / id."),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> dict[str, Any]:
+    """Return a page of report sources, newest first (no rows)."""
+    return report_sources_svc.list_sources(
+        kind=kind, pipeline=pipeline, instance_id=instance_id, q=q, limit=limit, offset=offset
+    )
+
+
+@router.get(
+    "/report-sources/{source_id}",
+    summary="Describe one report source: datasets, columns, types, examples (no rows)",
+    response_model=dict,
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def api_get_report_source(
+    source_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_RUNS)),
+) -> dict[str, Any]:
+    """Return the row-free description the planner uses to pick charts."""
+    try:
+        return report_sources_svc.describe(source_id, redact_row_values=_redact_rows(ctx))
+    except report_sources_svc.SourceNotFound as exc:
+        raise HTTPException(status_code=404, detail=f"Report source not found: {exc}") from exc
+
+
+@router.post(
+    "/report-sources/ingest",
+    summary="Ingest a finished run's artifacts into report sources",
+    response_model=dict,
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_ingest_report_sources(
+    payload: ReportSourceIngestRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.RUN_REPORTS)),
+) -> dict[str, Any]:
+    """Idempotently (re)build every source a run produced (health / analysis / summary)."""
+    try:
+        stored = report_sources_svc.ingest_for_instance(payload.instance_id, actor=_actor(ctx))
+    except report_sources_svc.SourceNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"instance_id": payload.instance_id, "sources": stored}
+
+
+@router.post(
+    "/report-sources/trend",
+    summary="Build a data-health trend source from 2+ health sources",
+    response_model=dict,
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_build_report_trend(
+    payload: ReportTrendRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.RUN_REPORTS)),
+) -> dict[str, Any]:
+    """Combine several health runs (refresh-over-refresh) into one trend source."""
+    from ovid2.reports.sources import SourceError
+
+    try:
+        return report_sources_svc.build_trend(payload.source_ids, actor=_actor(ctx))
+    except report_sources_svc.SourceNotFound as exc:
+        raise HTTPException(status_code=404, detail=f"Report source not found: {exc}") from exc
+    except SourceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get(
+    "/report-templates",
+    summary="List report templates (built-in + your own + shared)",
+    response_model=list,
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def api_list_report_templates(
+    source_kind: str | None = Query(None),
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_RUNS)),
+) -> list[dict[str, Any]]:
+    """Return recommended layouts, optionally for one source kind."""
+    return reports_svc.list_templates(_report_principal(ctx), source_kind)
+
+
+@router.get(
+    "/report-templates/{template_id}",
+    summary="Get one report template with its layout",
+    response_model=dict,
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def api_get_report_template(
+    template_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_RUNS)),
+) -> dict[str, Any]:
+    """Return a template (layout included)."""
+    try:
+        return reports_svc.get_template(template_id, _report_principal(ctx))
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.delete(
+    "/report-templates/{template_id}",
+    summary="Delete one of your report templates",
+    response_model=dict,
+)
+def api_delete_report_template(
+    template_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.RUN_REPORTS)),
+) -> dict[str, Any]:
+    """Delete a user template you own (built-ins are read-only)."""
+    try:
+        return reports_svc.delete_user_template(template_id, _report_principal(ctx))
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.get(
+    "/reports",
+    summary="List reports visible to you",
+    response_model=dict,
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def api_list_reports(
+    scope: str = Query("all", pattern="^(all|mine|shared|favorites)$"),
+    q: str | None = Query(None, max_length=120),
+    folder: str | None = Query(None, max_length=120),
+    tag: str | None = Query(None, max_length=40),
+    source_id: str | None = Query(None),
+    archived: bool = Query(False),
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_RUNS)),
+) -> dict[str, Any]:
+    """Return report summaries (no layouts), newest first."""
+    who = _report_principal(ctx)
+    out = reports_svc.list_reports(
+        who, scope=scope, q=q, folder=folder, tag=tag, source_id=source_id, archived=archived
+    )
+    out["folders"] = reports_svc.list_folders(who)
+    return out
+
+
+@router.post(
+    "/reports",
+    summary="Create a report (from a template, a layout, or the source's recommendation)",
+    response_model=dict,
+    status_code=201,
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_create_report(
+    payload: ReportCreateRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.RUN_REPORTS)),
+) -> dict[str, Any]:
+    """Create and save a new report owned by the caller."""
+    try:
+        return reports_svc.create_report(_report_principal(ctx), **payload.model_dump())
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.post(
+    "/report-drafts",
+    summary="Create a draft report and open it in the Studio (assistant)",
+    response_model=dict,
+    status_code=201,
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_create_report_draft(
+    payload: ReportCreateRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.RUN_REPORTS)),
+) -> dict[str, Any]:
+    """Like ``POST /reports`` but marked ``draft``; the browser opens ``url``.
+
+    A draft is an ordinary private report (status ``draft`` until first
+    saved). Nothing is shared or exported.
+    """
+    try:
+        report = reports_svc.create_report(
+            _report_principal(ctx), status="draft", **payload.model_dump()
+        )
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+    report["url"] = f"/reports/{report['report_id']}"
+    return report
+
+
+@router.get(
+    "/reports/{report_id}",
+    summary="Get one report: metadata, layout and (owner) shares",
+    response_model=dict,
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def api_get_report(
+    report_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_RUNS)),
+) -> dict[str, Any]:
+    """Return the report and its layout (outline included for planners)."""
+    from ovid2.reports.layout import outline
+
+    try:
+        report = reports_svc.get_report(report_id, _report_principal(ctx))
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+    report["outline"] = outline(report["layout"])
+    return report
+
+
+@router.put(
+    "/reports/{report_id}",
+    summary="Save a report (layout / title / description / folder / tags)",
+    response_model=dict,
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_update_report(
+    report_id: str,
+    payload: ReportUpdateRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.RUN_REPORTS)),
+) -> dict[str, Any]:
+    """Save changes; a layout change creates a new version (409 on a stale version)."""
+    try:
+        return reports_svc.update_report(report_id, _report_principal(ctx), **payload.model_dump())
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.post(
+    "/reports/{report_id}/ops",
+    summary="Apply declarative layout edit ops (add / move / hide / restyle blocks)",
+    response_model=dict,
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_report_ops(
+    report_id: str,
+    payload: ReportOpsRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.RUN_REPORTS)),
+) -> dict[str, Any]:
+    """Apply ops atomically; ``save=false`` only validates and returns the layout."""
+    try:
+        return reports_svc.apply_ops(
+            report_id,
+            _report_principal(ctx),
+            payload.ops,
+            expected_version=payload.expected_version,
+            save=payload.save,
+            base_layout=payload.layout,
+            render=payload.render,
+            redact=_redact_rows(ctx),
+        )
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.get(
+    "/reports/{report_id}/render",
+    summary="Render model of the saved report (what the Studio canvas draws)",
+    response_model=dict,
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def api_render_report(
+    report_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_RUNS)),
+) -> dict[str, Any]:
+    """Return resolved blocks (Vega-Lite specs, KPI values, tables) in the report theme."""
+    try:
+        return reports_svc.render_report(
+            report_id, _report_principal(ctx), redact=_redact_rows(ctx)
+        )
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.post(
+    "/reports/{report_id}/preview",
+    summary="Render an unsaved layout against the report's source",
+    response_model=dict,
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_preview_report(
+    report_id: str,
+    payload: ReportPreviewRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.RUN_REPORTS)),
+) -> dict[str, Any]:
+    """Validate ``layout`` and return its render model (nothing is saved)."""
+    try:
+        return reports_svc.preview_model(
+            report_id, _report_principal(ctx), payload.layout, redact=_redact_rows(ctx)
+        )
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.get(
+    "/reports/{report_id}/versions",
+    summary="Version history of a report",
+    response_model=list,
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def api_report_versions(
+    report_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_RUNS)),
+) -> list[dict[str, Any]]:
+    """Return ``[{version, saved_at, saved_by, note}]`` newest first."""
+    try:
+        return reports_svc.list_versions(report_id, _report_principal(ctx))
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.get(
+    "/reports/{report_id}/versions/{version}",
+    summary="One saved version of a report (with layout)",
+    response_model=dict,
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def api_report_version(
+    report_id: str,
+    version: int,
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_RUNS)),
+) -> dict[str, Any]:
+    """Return a snapshot."""
+    try:
+        return reports_svc.get_version(report_id, version, _report_principal(ctx))
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.post(
+    "/reports/{report_id}/versions/{version}/restore",
+    summary="Restore an old version (saved as the newest version)",
+    response_model=dict,
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_restore_report_version(
+    report_id: str,
+    version: int,
+    ctx: AuthContext = Depends(require_capability(Capability.RUN_REPORTS)),
+) -> dict[str, Any]:
+    """Re-save the snapshot; history is never rewritten."""
+    try:
+        return reports_svc.restore_version(report_id, version, _report_principal(ctx))
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.post(
+    "/reports/{report_id}/duplicate",
+    summary="Copy a report into a new one you own",
+    response_model=dict,
+    status_code=201,
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_duplicate_report(
+    report_id: str,
+    payload: ReportDuplicateRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.RUN_REPORTS)),
+) -> dict[str, Any]:
+    """Duplicate any report you can view."""
+    try:
+        return reports_svc.duplicate_report(report_id, _report_principal(ctx), title=payload.title)
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.put(
+    "/reports/{report_id}/favorite",
+    summary="Star or un-star a report",
+    response_model=dict,
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_favorite_report(
+    report_id: str,
+    payload: ReportFavoriteRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_RUNS)),
+) -> dict[str, Any]:
+    """Per-user favourite flag."""
+    try:
+        return reports_svc.set_favorite(report_id, _report_principal(ctx), payload.favorite)
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.post(
+    "/reports/{report_id}/archive",
+    summary="Archive a report (owner; reversible)",
+    response_model=dict,
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_archive_report(
+    report_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.RUN_REPORTS)),
+) -> dict[str, Any]:
+    """Soft-delete; restore with ``/restore``."""
+    try:
+        return reports_svc.archive_report(report_id, _report_principal(ctx))
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.post(
+    "/reports/{report_id}/restore",
+    summary="Restore an archived report (owner)",
+    response_model=dict,
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_unarchive_report(
+    report_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.RUN_REPORTS)),
+) -> dict[str, Any]:
+    """Un-archive."""
+    try:
+        return reports_svc.restore_report(report_id, _report_principal(ctx))
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.get(
+    "/reports/{report_id}/shares",
+    summary="Who a report is shared with (owner)",
+    response_model=list,
+    dependencies=[Depends(require_capability(Capability.RUN_REPORTS))],
+)
+def api_report_shares(
+    report_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.RUN_REPORTS)),
+) -> list[dict[str, Any]]:
+    """Return the share ACL."""
+    try:
+        return reports_svc.list_shares(report_id, _report_principal(ctx))
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.put(
+    "/reports/{report_id}/shares",
+    summary="Share a report with a user or a role (owner; audited)",
+    response_model=list,
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_share_report(
+    report_id: str,
+    payload: ReportShareRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.RUN_REPORTS)),
+) -> list[dict[str, Any]]:
+    """Grant view / edit. Human-only: agent principals get 403."""
+    try:
+        return reports_svc.set_share(report_id, _report_principal(ctx), **payload.model_dump())
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.delete(
+    "/reports/{report_id}/shares/{principal_kind}/{principal}",
+    summary="Stop sharing a report with a user or role (owner; audited)",
+    response_model=list,
+)
+def api_unshare_report(
+    report_id: str,
+    principal_kind: str,
+    principal: str,
+    ctx: AuthContext = Depends(require_capability(Capability.RUN_REPORTS)),
+) -> list[dict[str, Any]]:
+    """Revoke a grant."""
+    try:
+        return reports_svc.revoke_share(
+            report_id, _report_principal(ctx), principal_kind=principal_kind, principal=principal
+        )
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.post(
+    "/reports/{report_id}/save-as-template",
+    summary="Save a report's layout as a reusable template",
+    response_model=dict,
+    status_code=201,
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_report_save_template(
+    report_id: str,
+    payload: ReportTemplateSaveRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.RUN_REPORTS)),
+) -> dict[str, Any]:
+    """Private by default; ``shared=true`` publishes it to every user."""
+    try:
+        return reports_svc.save_as_template(
+            report_id, _report_principal(ctx), **payload.model_dump()
+        )
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.post(
+    "/reports/{report_id}/exports",
+    summary="Export a report (pdf / html / docx / xlsx / svg / png / md / json)",
+    response_model=ReportExportResult,
+    status_code=201,
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_export_report(
+    report_id: str,
+    payload: ReportExportRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.RUN_REPORTS)),
+) -> ReportExportResult:
+    """Render in an executor subprocess; download from ``download_url``.
+
+    Hidden sections / blocks are never exported; every export is audited.
+    """
+    try:
+        out = reports_svc.export_report(
+            report_id,
+            _report_principal(ctx),
+            payload.format,
+            layout=payload.layout,
+            block_id=payload.block_id,
+            redact=_redact_rows(ctx),
+        )
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+    return ReportExportResult(
+        export_id=out.export_id,
+        filename=out.filename,
+        media_type=out.media_type,
+        size=out.size,
+        download_url=f"/api/v1/report-exports/{out.export_id}",
+    )
+
+
+@router.get(
+    "/report-exports/{export_id}",
+    summary="Download a finished report export (the user who made it; 1 h)",
+    response_class=FileResponse,
+    responses={200: {"description": "The exported file (attachment)."}},
+)
+def api_download_report_export(
+    export_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.RUN_REPORTS)),
+) -> FileResponse:
+    """Stream the file. Only the user who produced it can download it."""
+    try:
+        out = reports_svc.get_export(export_id, _report_principal(ctx))
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+    return FileResponse(
+        out.path,
+        media_type=out.media_type,
+        filename=out.filename,
+        headers={"Cache-Control": "no-store"},
+    )

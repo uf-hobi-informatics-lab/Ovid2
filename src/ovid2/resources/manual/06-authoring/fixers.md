@@ -4,8 +4,29 @@ summary: Choose, order and parameterise the data corrections applied to each tab
 audience: [developer, researcher]
 ---
 
-`fixer_configs.py` declares, for each table, an ordered list of
-**common fixers** from the shared catalogue:
+A pipeline declares, for each table, an ordered list of **common
+fixers** from the shared catalogue. Two forms are accepted; when both
+exist, `fixer_configs.yaml` wins.
+
+**YAML** (`fixer_configs.yaml`) — editable in the pipeline builder
+(*Fixer chains*, or the *Fix* stage of a table), schema
+`resources/schemas/fixer_configs.v1.json`:
+
+```yaml
+v: 1
+fixer_chains:
+  demographic:
+    - {fix: race_eth, race_column: RACE, hispanic_column: HISPANIC}
+  encounter:
+    - {fix: patid_orphans, reference_table: demographic}
+multi_table_fixes: []
+```
+
+Convert an existing package with `ovid2 tools migrate-fixers --pipeline <name>`
+(add `--remove-python` to rename the `.py` to `.py.bak`). Saving from the
+builder does the same conversion.
+
+**Python** (`fixer_configs.py`):
 
 ```python
 FIXER_CHAINS: dict[str, list[dict[str, str]]] = {

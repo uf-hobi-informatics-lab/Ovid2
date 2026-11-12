@@ -25,5 +25,5 @@ ARGS_MODEL = ValidateFormattersArgs
 
 
 async def run(client: WebApiClient, args: ValidateFormattersArgs) -> Any:
-    """Call ``POST /api/v1/pipelines/{pipeline}/formatters:validate``."""
-    return await client.post(f"/api/v1/pipelines/{args.pipeline}/formatters:validate")
+    """Call ``POST /api/v1/pipeline-packages/{pipeline}/formatters:validate``."""
+    return await client.post(f"/api/v1/pipeline-packages/{args.pipeline}/formatters:validate")

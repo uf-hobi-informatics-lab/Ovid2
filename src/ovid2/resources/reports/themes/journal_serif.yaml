@@ -1,0 +1,18 @@
+name: journal_serif
+label: Journal (serif)
+description: Muted, print-like palette with serif type — in the style of medical journals.
+mode: light
+fonts: {body: "'Palatino Linotype', Palatino, Georgia, serif", heading: "'Palatino Linotype', Palatino, Georgia, serif", mono: "Courier New, monospace"}
+colors:
+  background: "#fffdf8"
+  surface: "#f5f1e8"
+  text: "#2b2b2b"
+  muted: "#6b6459"
+  border: "#cfc6b4"
+  accent: "#8c2d19"
+  grid: "#e7e0d1"
+palette: ["#3b5b92", "#8c2d19", "#5f7f3a", "#c08a2d", "#6c4f7c", "#2e7d7a", "#a65e5e", "#7a7a7a"]
+sequential: browns
+diverging: brownbluegreen
+status: {passed: "#5f7f3a", exception: "#8c2d19", error: "#6c4f7c", skipped: "#a39d92", not_applicable: "#cfc6b4", warning: "#c08a2d"}
+sizes: {base: 11, title: 19, heading: 14, axis: 10}

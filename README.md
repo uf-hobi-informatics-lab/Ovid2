@@ -4,7 +4,7 @@ Developed and maintained by **OneFlorida+**
 - Alexander T. Loiacono - atloiaco@ufl.edu
 - Abdelali Nouina - abdelali@ufl.edu
 
-Last Updated: 2026-10-22
+Last Updated: 2026-11-11
 
 # Ovid2
 
@@ -55,7 +55,7 @@ touching the others:
 | Formatter / mapper / fixer spec engines, transforms library | PCORnet → OMOP converter (18/18 tables) |
 | CDM registry (`CdmHandle`) and semantic layer (vocabularies + bindings) | Clinical vocabularies: LOINC, SNOMED, ICD-10/9-CM, RxNorm, NDC, OMOP CONCEPT |
 | Data-health check framework (operators, packages, reports) | PCORnet EDC check packages (`dcq_v7_03`, `20r1`) and clinical fixers |
-| Web panel, REST API, MCP server, LLM assistant, scheduler | `hash_id` patient-identifier hashing, PHI-aware defaults |
+| Web panel, REST API, MCP server, LLM assistant, scheduler, Report Studio | `hash_id` patient-identifier hashing, PHI-aware defaults |
 
 A new domain is a new CDM directory (`resources/cdms/<model>/`), optional
 vocabularies and bindings (`resources/semantic/`), and pipeline specs — see
@@ -64,7 +64,9 @@ vocabularies and bindings (`resources/semantic/`), and pipeline specs — see
 
 Around that engine sits an event-driven display layer, a pip/pipx-installable
 package, XDG-compliant paths, a **web control panel + JSON API**, an
-**MCP server** for AI agents, an optional **LLM assistant**, and a systemd
+**MCP server** for AI agents, an optional **LLM assistant**, a **Report
+Studio** for designing, sharing and exporting research reports from finished
+runs, and a systemd
 deployment story. Everything is **lazy end-to-end**: nothing materializes
 until the single terminal write at the end of a run.
 
@@ -90,6 +92,7 @@ deploying organization (see [Pipelines](#pipelines-adapters-mappers--fixes)).
 | Web control panel + JSON API + MCP server | Feature-complete, alpha |
 | Web authentication (OIDC SSO + RBAC) | Implemented, **off by default** |
 | LLM assistant (general + System 1) | Implemented, **off until you configure a model** |
+| Report Studio (reports, charts, themes, sharing, exports) | Implemented, alpha |
 | Native drivers | `disc`, `s3`, `azure_blob`, `snowflake`, `access`; the rest run through a legacy adapter |
 | Version | `0.1.0` (pre-1.0; no stability guarantees) |
 
@@ -110,6 +113,7 @@ deploying organization (see [Pipelines](#pipelines-adapters-mappers--fixes)).
 - [Data health & EDC checks](#data-health--edc-checks)
 - [Web control panel & MCP](#web-control-panel--mcp)
 - [LLM assistant](#llm-assistant)
+- [Report Studio](#report-studio)
 - [Scheduling & the worker](#scheduling--the-worker)
 - [Testing](#testing)
 - [Documentation](#documentation)
@@ -605,6 +609,19 @@ wired into the map stage via the `apply_transforms` mapper op. The catalogue
 is browsable at `GET /api/v1/transforms` and via MCP. See
 [`docs/transforms.md`](docs/transforms.md).
 
+### Report Studio
+
+`src/ovid2/reports/` turns finished runs into research reports. When a job
+finalises, the worker ingests a durable, aggregated **report source**
+(`health`, `analysis`, `run_summary`, or a `health_trend` across runs); a
+report is a declarative **layout** (`report_layout.v1.json`) of sections and
+blocks over one source. Charts are a curated *kind* + params from
+`resources/reports/charts.yaml` (28 kinds) — never raw Vega-Lite — and
+layouts change only through a closed list of edit ops, which is also the only
+way the assistant can touch a report. The package is tier-neutral; the
+renderers (`reports/render/`) are executor-only and run via
+`ovid2 tools report-export`. See [Report Studio](#report-studio).
+
 ### Data Space (ODS)
 
 Every storage account — disc, object store or warehouse — is a tree of plain
@@ -686,6 +703,7 @@ ovid2/
     formatters/             Spec engine + adapter registry (adapters/)
     mappers/                Declarative mapper spec engine + ops/
     transforms/             CDM-agnostic transforms library (ops/)
+    reports/                Report Studio: sources, charts, layouts, render/
     transformations/        deduplicators/, mappers/, fixers/, analysis/,
                             quality/ (health/EDC), plus format/map/fix/
                             deduplicate orchestrators
@@ -708,7 +726,8 @@ ovid2/
     schema/                 CDM schema/DDL helpers
     utils/                  logging, datavant, geocoding, io, common helpers
     resources/              JSON schemas, CDMs, semantic vocabs, health
-                            checks, agent-tool catalogue, systemd templates,
+                            checks, report charts / themes / templates,
+                            agent-tool catalogue, systemd templates,
                             branding (packaged into the wheel)
   pipelines/
     ovid2_pipelines/        PEP 420 namespace package
@@ -860,6 +879,7 @@ templates.
 | `tools probe-connection` | Probe a connection's credentials/reachability |
 | `tools browse-storage` | List a storage location (host-side filesystem browser) |
 | `tools test-llm` / `tools llm-chat` | Probe an LLM connection / run one routed chat turn (executor side) |
+| `tools report-export` | Render a Report Studio report to pdf / html / docx / xlsx / svg / png / md / json (executor side; needs the `reports` extra) |
 | `tools migrate-addresses` | Migrate legacy `{src_name, src_args}` addresses to the connection shape |
 
 ### To run the full ETL pipeline
@@ -1008,10 +1028,10 @@ See [`docs/pipelines.md`](docs/pipelines.md#health-checks-report-cycle-packages-
 
 `ovid2 web` serves a FastAPI + HTMX control panel (loopback
 `127.0.0.1:8090` by default; put TLS in front with a reverse proxy) with a
-JSON API at `/api/v1` (**88 paths**; interactive docs at `/docs`, schema at `/openapi.json`) and a live D3
+JSON API at `/api/v1` (**132 paths**; interactive docs at `/docs`, schema at `/openapi.json`) and a live D3
 run canvas. Submit, monitor, cancel, rerun, and schedule runs; browse
 pipelines, formatters, mappers, transforms, connections, addresses, engines,
-CDMs, health reports, and the Data Space; edit configs and secrets (secret
+CDMs, health reports, research reports (Report Studio), and the Data Space; edit configs and secrets (secret
 *values* are never returned by the API). Appearance is themeable (several
 built-in themes plus custom overrides).
 
@@ -1033,7 +1053,7 @@ Capabilities are cumulative:
 | View pipeline data, submit / cancel jobs | | | ✓ | ✓ |
 | Manage config / secrets / users / LLMs, settings, install | | | | ✓ |
 
-`ovid2 mcp` exposes a curated **88-tool** MCP surface over that API for AI
+`ovid2 mcp` exposes a curated **100-tool** MCP surface over that API for AI
 agents (stdio or streamable-HTTP transport). It speaks *only* HTTP to the API
 and imports no pipeline, driver, or secret module — the agent tier is the
 untrusted planner. Agents can browse metadata freely, but reading row values
@@ -1060,20 +1080,71 @@ answer text is stored.
 
 With **assistant tools** enabled, the general model can call a pinned
 allow-list of Ovid2 API routes
-(`src/ovid2/resources/agent_tools/catalogue.yaml`, 44 tools):
+(`src/ovid2/resources/agent_tools/catalogue.yaml`, 62 tools):
 
-- **Read tools** (34 GET routes) run automatically with a per-turn,
+- **Read tools** (46 GET routes) run automatically with a per-turn,
   GET-only token capped at the user's role (at most pipeline operator).
 - **Proposals and drafts** (submit / cancel / rerun / draft a job) are never
   executed by the model: they appear as cards you click **Run** on, or as a
   draft job you launch with ▶.
-- **UI actions** restyle *your* page (theme, fonts, saved appearances) after
-  your browser re-validates every value; nothing reaches the API.
+- **UI actions** restyle *your* page (theme, fonts, saved appearances) or
+  edit the open report's unsaved working copy, after your browser
+  re-validates every value; nothing reaches the API.
 - Secrets, settings, users, approvals, LLM connections, file system browsing,
   and every DELETE are **never** exposed (enforced by
   `tests/contract/test_agent_tools_catalogue.py`).
 
 Full guide: [`docs/llm.md`](docs/llm.md).
+
+## Report Studio
+
+The **Report Studio** (*Explore → Reports*, `/reports`) is where results of
+finished runs become shareable research reports.
+
+- **Report sources.** When a job finalises, the worker stores a small,
+  aggregated source — never the raw tables — that survives restarts
+  (`$XDG_STATE_HOME/ovid2/reports/`, mode 0600):
+
+  | Kind | Produced by |
+  |---|---|
+  | `health` | `health` / `dq_checks` runs |
+  | `analysis` | `analysis` runs (`monthly_counts`, `distinct_values`) |
+  | `run_summary` | every run (stages, tables, fixes, timings) |
+  | `health_trend` | **Build trend** over two or more health sources |
+
+- **Library.** All / mine / shared / favourites / archived views, folders,
+  tags and search; create a report from a recommended template, your own
+  template, or blank. A health report page has **Open in Report Studio**.
+- **Editor.** Outline (drag to restack, hide), a live canvas, and an
+  inspector with a **28-kind chart gallery** (bars, lines, areas,
+  distributions, heatmaps, part-to-whole, KPI tiles, tables), filters,
+  top-N and captions. Undo / redo, versioned saves with history and
+  restore, duplicate, save-as-template.
+- **Report themes** — publication, grayscale print, colour-blind safe,
+  presentation dark, high contrast, journal serif — independent of the page
+  theme. Charts render fully offline (vendored Vega / Vega-Lite).
+- **Sharing.** Reports are private by default; owners grant `view` / `edit`
+  to a user or a role. Reading needs *view runs*; creating, editing,
+  sharing and exporting need *run reports*. Every share and export is
+  audited.
+- **Privacy.** Columns that may carry raw source values are masked for
+  users without *view pipeline data* and for the assistant; an optional
+  small-cell suppression threshold applies to counts; hidden blocks are
+  never rendered or exported.
+- **Exports** — pdf (vector charts), single-file interactive html, docx,
+  xlsx (data + provenance), svg / png, md, and re-importable json —
+  rendered by the executor (`ovid2 tools report-export`), never by the web
+  server. Install the renderers with `pip install 'ovid2[reports]'` (already
+  in the Docker image).
+- **Assistant as planner.** The assistant can read sources and reports,
+  open a private draft, and propose layout edits drawn from a closed list of
+  ops, which you see applied to the unsaved copy with Undo — it never saves,
+  shares or exports on its own. MCP exposes `list_report_sources`,
+  `get_report_source`, `get_report_catalogue`, `list_reports`, `get_report`,
+  `create_report_draft` and `edit_report`.
+
+Full guide: [Report Studio](src/ovid2/resources/manual/05-data/report-studio.md)
+in the Ovid2 Manual (also on the project wiki).
 
 ## Scheduling & the worker
 

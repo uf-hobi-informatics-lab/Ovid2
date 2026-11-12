@@ -1,0 +1,74 @@
+/* Ovid2 Report Studio — report canvas styles.
+ *
+ * Every rule is scoped to .ovr-report and uses only --ovr-* variables set
+ * from the *report* theme (report_render.js applyTheme). The web page's
+ * theme tokens (--bg, --fg, --accent, html[data-theme]) are never read, so
+ * a report looks identical in the Studio under any page theme and in every
+ * export. Pinned by tests/contract/test_report_theme_independence.py.
+ */
+.ovr-report {
+  --ovr-bg: #ffffff; --ovr-surface: #f6f7f9; --ovr-text: #1f2328; --ovr-muted: #59636e;
+  --ovr-border: #d0d7de; --ovr-accent: #1f6feb; --ovr-grid: #e6e8eb;
+  --ovr-font: Helvetica, Arial, sans-serif; --ovr-font-heading: var(--ovr-font);
+  --ovr-font-mono: Menlo, Consolas, monospace;
+  --ovr-size: 11pt; --ovr-size-title: 20pt; --ovr-size-heading: 15pt;
+  background: var(--ovr-bg);
+  color: var(--ovr-text);
+  font-family: var(--ovr-font);
+  font-size: var(--ovr-size);
+  line-height: 1.45;
+  padding: 32px 40px 28px;
+  max-width: 1040px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  color-scheme: light;
+}
+.ovr-report[data-report-mode="dark"] { color-scheme: dark; }
+.ovr-report.ovr-page-landscape { max-width: 1280px; }
+.ovr-report *, .ovr-report *::before, .ovr-report *::after { box-sizing: border-box; }
+.ovr-report h1, .ovr-report h2, .ovr-report h3 { font-family: var(--ovr-font-heading); color: var(--ovr-text); margin: 0; }
+.ovr-report .ovr-title { font-size: var(--ovr-size-title); line-height: 1.2; }
+.ovr-report .ovr-subtitle { color: var(--ovr-muted); font-style: italic; margin: 4px 0 0; }
+.ovr-report .ovr-head { border-bottom: 2px solid var(--ovr-accent); padding-bottom: 12px; margin-bottom: 18px; }
+.ovr-report .ovr-section { margin: 22px 0 10px; }
+.ovr-report .ovr-section-title { font-size: var(--ovr-size-heading); border-bottom: 1px solid var(--ovr-border); padding-bottom: 4px; margin-bottom: 10px; }
+.ovr-report .ovr-grid { display: flex; flex-wrap: wrap; gap: 14px; }
+.ovr-report .ovr-block { margin: 0; flex: 1 1 100%; min-width: 0; }
+.ovr-report .ovr-w-half { flex: 1 1 calc(50% - 14px); }
+.ovr-report .ovr-w-third { flex: 1 1 calc(33.333% - 14px); }
+.ovr-report .ovr-w-two_thirds { flex: 1 1 calc(66.666% - 14px); }
+.ovr-report .ovr-block-title { font-size: calc(var(--ovr-size) * 1.08); margin-bottom: 6px; }
+.ovr-report .ovr-chart { width: 100%; min-height: 40px; }
+.ovr-report .ovr-chart .vega-embed { width: 100%; }
+.ovr-report .ovr-caption { color: var(--ovr-muted); font-size: calc(var(--ovr-size) * 0.88); margin-top: 4px; }
+.ovr-report .ovr-muted { color: var(--ovr-muted); }
+.ovr-report .ovr-small { font-size: calc(var(--ovr-size) * 0.82); margin: 2px 0 0; }
+.ovr-report .ovr-error { color: var(--ovr-status-exception, #d1242f); }
+.ovr-report .ovr-text p { margin: 0 0 6px; }
+.ovr-report .ovr-text code, .ovr-report .ovr-callout code { font-family: var(--ovr-font-mono); background: var(--ovr-surface); padding: 0 3px; border-radius: 3px; }
+.ovr-report .ovr-callout { border-left: 4px solid var(--ovr-accent); background: var(--ovr-surface); padding: 8px 12px; border-radius: 0 4px 4px 0; }
+.ovr-report .ovr-tone-success { border-left-color: var(--ovr-status-passed, #2da44e); }
+.ovr-report .ovr-tone-warning { border-left-color: var(--ovr-status-warning, #bf8700); }
+.ovr-report .ovr-tone-danger { border-left-color: var(--ovr-status-exception, #d1242f); }
+.ovr-report .ovr-kpi { border: 1px solid var(--ovr-border); background: var(--ovr-surface); border-radius: 6px; padding: 12px 16px; }
+.ovr-report .ovr-kpi-value { font-family: var(--ovr-font-heading); font-size: calc(var(--ovr-size-title) * 1.2); font-weight: 700; line-height: 1.1; }
+.ovr-report .ovr-kpi-label { color: var(--ovr-muted); margin-top: 2px; }
+.ovr-report .ovr-table-wrap { overflow-x: auto; }
+.ovr-report .ovr-table { border-collapse: collapse; width: 100%; font-size: calc(var(--ovr-size) * 0.88); }
+.ovr-report .ovr-table th { text-align: left; background: var(--ovr-surface); border-bottom: 1.5px solid var(--ovr-border); padding: 4px 8px; }
+.ovr-report .ovr-table td { border-bottom: 1px solid var(--ovr-grid); padding: 3px 8px; vertical-align: top; }
+.ovr-report .ovr-zebra tbody tr:nth-child(even) td { background: var(--ovr-surface); }
+.ovr-report .ovr-status { color: var(--ovr-chip); font-weight: 600; box-shadow: inset 3px 0 0 var(--ovr-chip); }
+.ovr-report .ovr-toc { background: var(--ovr-surface); border: 1px solid var(--ovr-border); padding: 8px 16px; border-radius: 4px; margin-bottom: 12px; }
+.ovr-report .ovr-toc-title { font-size: var(--ovr-size); }
+.ovr-report .ovr-toc a { color: var(--ovr-accent); }
+.ovr-report .ovr-provenance { margin-top: 28px; border-top: 1px solid var(--ovr-border); padding-top: 8px; color: var(--ovr-muted); font-size: calc(var(--ovr-size) * 0.8); }
+.ovr-report .ovr-prov-title { font-size: calc(var(--ovr-size) * 0.95); }
+.ovr-report .ovr-provenance dl { display: grid; grid-template-columns: max-content 1fr; gap: 1px 12px; margin: 4px 0 0; }
+.ovr-report .ovr-provenance dt { font-weight: 600; }
+.ovr-report .ovr-provenance dd { margin: 0; word-break: break-all; }
+@media print {
+  .ovr-report { max-width: none; padding: 0; }
+  .ovr-report .ovr-break { break-before: page; }
+  .ovr-report .ovr-block { break-inside: avoid; }
+}

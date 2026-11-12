@@ -1004,3 +1004,68 @@ def test_run_modal_shows_tables_field_for_copy_only(
     # modal carries a tables input.
     assert 'data-tables-required="true"' in body
     assert "data-run-tables-input" in body
+
+
+@pytest.mark.unit
+def test_create_etl_with_identity_and_table_subset(
+    web_client, isolated_xdg: Path, tmp_path: Path, temp_pipelines_root: Path
+) -> None:  # type: ignore[no-untyped-def]
+    """Wizard v2: identity overrides reach the clone; a table subset is saved."""
+    from ovid2.tools.pipeline_identity import read_settings_constants
+
+    root = tmp_path / "disc_data"
+    root.mkdir()
+    _write_disc_connection(isolated_xdg, "local_disc", str(root))
+    r = web_client.post(
+        "/pipelines",
+        data={
+            "name": "idhosp",
+            "kind": "etl",
+            "template": "pcornet_etl",
+            "identity__NETWORKID": "C77",
+            "identity__DATAVANT_KEY": "idhosp_dv",
+            "etl_tables_mode": "pick",
+            "etl_tables": ["demographic", "encounter"],
+            "input_connection": "local_disc",
+            "input_location": "",
+            "output_connection": "local_disc",
+            "output_location": "out",
+            "engine": "pyspark",
+            "trigger_type": "manual",
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code == 303, r.text
+    settings = (temp_pipelines_root / "idhosp" / "pipeline_settings.py").read_text(encoding="utf-8")
+    consts = read_settings_constants(settings)
+    assert consts["NETWORKID"] == "C77"
+    assert consts["DATAMARTID"] == "C77IDHOSP"
+    assert consts["DATAVANT_KEY"] == "idhosp_dv"
+    doc = json.loads((isolated_xdg / "config" / "ovid2" / "pipelines" / "idhosp.json").read_text())
+    assert doc["tables"] == ["demographic", "encounter"]
+
+
+@pytest.mark.unit
+def test_create_etl_rejects_non_identifier_name(
+    web_client, isolated_xdg: Path, tmp_path: Path, temp_pipelines_root: Path
+) -> None:  # type: ignore[no-untyped-def]
+    root = tmp_path / "disc_data"
+    root.mkdir()
+    _write_disc_connection(isolated_xdg, "local_disc", str(root))
+    r = web_client.post(
+        "/pipelines",
+        data={
+            "name": "my-hosp",
+            "kind": "etl",
+            "template": "pcornet_etl",
+            "identity__NETWORKID": "C88",
+            "input_connection": "local_disc",
+            "output_connection": "local_disc",
+            "engine": "pyspark",
+            "trigger_type": "manual",
+        },
+    )
+    assert r.status_code == 400
+    assert "identifier" in r.text
+    # Typed identity survives the error re-render.
+    assert '"NETWORKID": "C88"' in r.text

@@ -19,8 +19,9 @@ from ovid2.web.auth.deps import require_capability
 from ovid2.web.auth.roles import Capability, Role
 
 # TODO(csrf): wire require_csrf + {{ csrf_token() }} into the remaining
-# mutation forms (addresses, connections, engines, routes/pipelines,
-# formatters, mappers, submit, install). Wave-3 todo 15 wires only the
+# mutation forms (addresses, connections, engines, submit, install).
+# Pipelines, pipeline packages, formatters and mappers are wired
+# (pipeline-builder change). Wave-3 todo 15 wires only the
 # settings + secrets forms as the proof-of-concept to keep parallel-edit
 # risk low; the rest are a follow-up pass.
 from ovid2.web.models import (
@@ -57,6 +58,7 @@ from ovid2.web.services import (
     install_svc,
     jobs_svc,
     mappers_svc,
+    pipeline_inspect_svc,
     pipelines_meta_svc,
     pipelines_svc,
     runs_svc,
@@ -1235,6 +1237,7 @@ def pipeline_new_page(request: Request, error: str | None = None) -> HTMLRespons
     response_class=HTMLResponse,
     response_model=None,
     include_in_schema=False,
+    dependencies=[Depends(require_csrf), Depends(require_capability(Capability.MANAGE_CONFIG))],
 )
 async def pipeline_new_post(request: Request) -> HTMLResponse | RedirectResponse:
     """Scaffold a pipeline from a template, then open the pipeline editor.
@@ -1266,6 +1269,135 @@ async def pipeline_new_post(request: Request) -> HTMLResponse | RedirectResponse
         url=f"/pipeline-packages/{result.name}",
         status_code=303,
     )
+
+
+@router.get(
+    "/pipeline-packages/{name}/builder",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+)
+def pipeline_builder_page(
+    request: Request,
+    name: str,
+    table: str | None = None,
+    doc: str | None = None,
+) -> HTMLResponse:
+    """The pipeline builder: navigate and edit every spec of a package.
+
+    Left — a tree of the package's CDM tables (with per-stage status dots)
+    plus package-level documents (transform assignments, private transform
+    chains, fixer chains, settings). Centre — a per-table flow graph
+    (Source files → Format → Transform → Map → Fix → CDM table). Right —
+    the editor with **Form** and **YAML** tabs kept in sync (CodeMirror,
+    live-linted through ``POST /api/v1/pipeline-packages/{p}/builder:validate``).
+
+    All reads / writes go through the JSON API (``static/spec_builder.js``);
+    this handler renders only the shell and the static inspection.
+    """
+    try:
+        inspection = pipeline_inspect_svc.inspect_package(name).to_dict()
+    except LookupError:
+        raise HTTPException(status_code=404, detail=f"Pipeline '{name}' not found.") from None
+    pipeline_config = next((s for s in pipelines_svc.list_pipelines() if s.pipeline == name), None)
+    return templates.TemplateResponse(
+        request,
+        "pipeline_builder.html",
+        {
+            "pipeline": name,
+            "inspection": inspection,
+            "pipeline_config": pipeline_config,
+            "initial_table": table or "",
+            "initial_doc": doc or "",
+            "can_write": _can_manage_config(request),
+        },
+    )
+
+
+@router.get("/transforms", response_class=HTMLResponse, include_in_schema=False)
+def transforms_library_page(request: Request, name: str | None = None) -> HTMLResponse:
+    """The transform library: reusable chains ("UDFs") + the op catalogue.
+
+    Lists user chains (``$XDG_CONFIG_HOME/ovid2/transforms``) and shipped
+    chains, lets the operator create / edit / duplicate a chain in the
+    Form ↔ YAML builder, and assign it to tables of any pipeline.
+    """
+    return templates.TemplateResponse(
+        request,
+        "transforms_library.html",
+        {
+            "initial_name": name or "",
+            "pipelines": pipelines_meta_svc.discover_pipelines(),
+            "can_write": _can_manage_config(request),
+        },
+    )
+
+
+@router.get(
+    "/reports",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def reports_library_page(request: Request) -> HTMLResponse:
+    """Report Studio library: my / shared / favourite reports + report sources.
+
+    The page is a static shell; ``static/report_library.js`` drives it
+    through ``/api/v1/reports`` and ``/api/v1/report-sources``.
+    """
+    from ovid2.web.templating import has_cap
+
+    return templates.TemplateResponse(
+        request,
+        "reports.html",
+        {
+            "can_write": bool(has_cap(request, "run_reports")),
+            "initial_source": request.query_params.get("source") or "",
+        },
+    )
+
+
+@router.get(
+    "/reports/{report_id}",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def report_studio_page(request: Request, report_id: str) -> HTMLResponse:
+    """Report Studio editor / viewer for one report.
+
+    Outline (drag to reorder, eye toggles), canvas in the *report* theme,
+    block inspector with the chart gallery, versions, sharing and export.
+    ``static/report_studio.js`` loads everything over ``/api/v1``.
+    """
+    from ovid2.web.services import reports_svc
+    from ovid2.web.templating import _current_ctx, has_cap
+
+    ctx = _current_ctx(request)
+    if ctx is None:
+        raise HTTPException(status_code=401)
+    try:
+        report = reports_svc.get_report(
+            report_id, reports_svc.Principal.of(ctx.user_id, ctx.role.value)
+        )
+    except reports_svc.ReportNotFound as exc:
+        raise HTTPException(status_code=404, detail=f"Report '{report_id}' not found.") from exc
+    return templates.TemplateResponse(
+        request,
+        "report_studio.html",
+        {
+            "report": report,
+            "can_edit": bool(has_cap(request, "run_reports"))
+            and report["permission"] in ("owner", "edit"),
+            "is_owner": report["permission"] == "owner",
+        },
+    )
+
+
+def _can_manage_config(request: Request) -> bool:
+    """Return ``True`` when the caller may save specs (MANAGE_CONFIG)."""
+    from ovid2.web.templating import has_cap
+
+    return bool(has_cap(request, "manage_config"))
 
 
 @router.get(
@@ -1424,6 +1556,7 @@ def formatter_edit_page(
     "/pipeline-packages/{name}/formatters/new",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_csrf), Depends(require_capability(Capability.MANAGE_CONFIG))],
 )
 async def formatter_create_post(request: Request, name: str) -> RedirectResponse:
     """Save a brand-new formatter YAML spec."""
@@ -1447,6 +1580,7 @@ async def formatter_create_post(request: Request, name: str) -> RedirectResponse
     "/pipeline-packages/{name}/formatters/{table}/edit",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_csrf), Depends(require_capability(Capability.MANAGE_CONFIG))],
 )
 async def formatter_update_post(request: Request, name: str, table: str) -> RedirectResponse:
     """Save an edited formatter YAML spec."""
@@ -1470,6 +1604,7 @@ async def formatter_update_post(request: Request, name: str, table: str) -> Redi
     "/pipeline-packages/{name}/formatters/{table}/delete",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_csrf), Depends(require_capability(Capability.MANAGE_CONFIG))],
 )
 def formatter_delete_post(request: Request, name: str, table: str) -> RedirectResponse:
     """Delete a formatter YAML spec."""
@@ -1590,6 +1725,7 @@ def mapper_edit_page(
     "/pipeline-packages/{name}/mappers/new",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_csrf), Depends(require_capability(Capability.MANAGE_CONFIG))],
 )
 async def mapper_create_post(request: Request, name: str) -> RedirectResponse:
     """Save a brand-new mapper YAML spec."""
@@ -1611,6 +1747,7 @@ async def mapper_create_post(request: Request, name: str) -> RedirectResponse:
     "/pipeline-packages/{name}/mappers/{table}/edit",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_csrf), Depends(require_capability(Capability.MANAGE_CONFIG))],
 )
 async def mapper_update_post(request: Request, name: str, table: str) -> RedirectResponse:
     """Save an edited mapper YAML spec."""
@@ -1632,6 +1769,7 @@ async def mapper_update_post(request: Request, name: str, table: str) -> Redirec
     "/pipeline-packages/{name}/mappers/{table}/delete",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_csrf), Depends(require_capability(Capability.MANAGE_CONFIG))],
 )
 def mapper_delete_post(request: Request, name: str, table: str) -> RedirectResponse:
     """Delete a mapper YAML spec."""
@@ -2834,6 +2972,9 @@ def _build_new_pipeline_write(
     _spec = _get_kind(kind)
     if _spec and _spec.tables_mode == "explicit":
         extra["tables"] = [t for t in form.get("tables", "").split() if t and t != "all"]
+    elif form.get("etl_tables", "").strip():
+        # Wizard ETL table subset (``all`` when not narrowed).
+        extra["tables"] = form["etl_tables"].split()
     return PipelineWrite(
         kind=kind,
         cdm=cdm,
@@ -2915,6 +3056,8 @@ def pipelines_page(request: Request) -> HTMLResponse:
             "storage_accounts": connections_svc.list_connections(),
             "explicit_tables_kinds": explicit_tables_kinds,
             "supports_all_names": supports_all_names,
+            # Packages the "Customize" builder can open.
+            "package_names": set(pipelines_meta_svc.discover_pipelines()),
         },
     )
 
@@ -2967,15 +3110,33 @@ def _new_pipeline_context(
         # engine kind — a fresh install with no saved engine configs is
         # not limited to the built-in pyspark default.
         "engine_types": [t.type for t in engines_svc.list_engine_types()],
+        # Engine type → family (spark / duckdb / snowpark) so the wizard
+        # can disable engines a template's family requirement excludes.
+        "engine_families": _engine_families(),
+        # Identity overrides submitted on an error re-render
+        # (``identity__<KEY>`` fields) — re-applied over template defaults.
+        "identity_prefill": {
+            k[len("identity__") :]: v for k, v in (form or {}).items() if k.startswith("identity__")
+        },
+        "is_preset": False,
         "error": error,
         "form": form,
     }
+
+
+def _engine_families() -> dict[str, str]:
+    """Return ``{engine_type: family}`` for every registered engine type."""
+    from ovid2.config.engines import engine_family, list_engine_types
+
+    return {t: engine_family(t) or "" for t in list_engine_types()}
 
 
 @router.get("/pipelines/new", response_class=HTMLResponse, include_in_schema=False)
 def pipeline_config_new_page(
     request: Request,
     error: str | None = None,
+    kind: str | None = None,
+    template: str | None = None,
 ) -> HTMLResponse:
     """Render the "new pipeline" form.
 
@@ -2987,11 +3148,13 @@ def pipeline_config_new_page(
     operator never picks from a list of installed packages (the package
     is named after the pipeline). See :func:`pipeline_config_create_post`.
     """
-    return templates.TemplateResponse(
-        request,
-        "pipeline_new_config.html",
-        _new_pipeline_context(error=error),
-    )
+    preset: dict[str, str] | None = None
+    if kind or template:
+        # ``?kind=`` / ``?template=`` preselect (e.g. from the packages page).
+        preset = {"kind": normalize_kind(kind) if kind else "etl", "template": template or ""}
+    context = _new_pipeline_context(error=error, form=preset)
+    context["is_preset"] = preset is not None
+    return templates.TemplateResponse(request, "pipeline_new_config.html", context)
 
 
 @router.post(
@@ -2999,6 +3162,7 @@ def pipeline_config_new_page(
     response_class=HTMLResponse,
     response_model=None,
     include_in_schema=False,
+    dependencies=[Depends(require_csrf), Depends(require_capability(Capability.MANAGE_CONFIG))],
 )
 async def pipeline_config_create_post(
     request: Request,
@@ -3027,6 +3191,13 @@ async def pipeline_config_create_post(
     picked_packages = [str(v) for v in raw_form.getlist("packages") if str(v).strip()]
     if picked_packages:
         form["packages"] = " ".join(picked_packages)
+    # ETL table subset (wizard "Tables" picker): every checked table, or
+    # the ``all`` sentinel when the operator kept every configured table.
+    picked_tables = [str(v) for v in raw_form.getlist("etl_tables") if str(v).strip()]
+    if picked_tables and form.get("etl_tables_mode", "all") == "pick":
+        form["etl_tables"] = " ".join(picked_tables)
+    else:
+        form.pop("etl_tables", None)
     name = form.get("name", "").strip()
 
     def _error(message: str) -> HTMLResponse:
@@ -3060,8 +3231,13 @@ async def pipeline_config_create_post(
             template_id = form.get("template", "").strip()
             if not template_id:
                 return _error("Pick an ETL template.")
+            identity = {
+                k[len("identity__") :]: v.strip()
+                for k, v in form.items()
+                if k.startswith("identity__") and v.strip()
+            }
             scaffold = templates_svc.scaffold_pipeline(
-                ScaffoldPipelineRequest(name=name, template=template_id),
+                ScaffoldPipelineRequest(name=name, template=template_id, identity=identity),
                 actor="web",
             )
             # Default the CDM to the template's target when unset.
@@ -3170,6 +3346,7 @@ def pipeline_config_edit_page(
     "/pipelines/{name}/delete",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_csrf), Depends(require_capability(Capability.MANAGE_CONFIG))],
 )
 def pipeline_config_delete_post(request: Request, name: str) -> RedirectResponse:
     """Delete a pipeline and return to the index."""
@@ -3185,6 +3362,7 @@ def pipeline_config_delete_post(request: Request, name: str) -> RedirectResponse
     response_class=HTMLResponse,
     response_model=None,
     include_in_schema=False,
+    dependencies=[Depends(require_csrf), Depends(require_capability(Capability.SUBMIT_JOBS))],
 )
 async def pipeline_config_run_post(
     request: Request,
@@ -3368,6 +3546,7 @@ async def pipeline_config_run_post(
     "/pipelines/{name}/enable",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_csrf), Depends(require_capability(Capability.SUBMIT_JOBS))],
 )
 def pipeline_config_enable_post(request: Request, name: str) -> RedirectResponse:
     """Enable a pipeline and redirect to its detail page."""
@@ -3382,6 +3561,7 @@ def pipeline_config_enable_post(request: Request, name: str) -> RedirectResponse
     "/pipelines/{name}/disable",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_csrf), Depends(require_capability(Capability.SUBMIT_JOBS))],
 )
 def pipeline_config_disable_post(request: Request, name: str) -> RedirectResponse:
     """Disable a pipeline and redirect to its detail page."""
@@ -3403,7 +3583,11 @@ def pipeline_config_detail_page(
     return templates.TemplateResponse(
         request,
         "pipeline_config_detail.html",
-        {"pipeline_config": detail, "flash": flash},
+        {
+            "pipeline_config": detail,
+            "flash": flash,
+            "has_package": detail.pipeline in set(pipelines_meta_svc.discover_pipelines()),
+        },
     )
 
 
@@ -3411,6 +3595,7 @@ def pipeline_config_detail_page(
     "/pipelines/{name}",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_csrf), Depends(require_capability(Capability.MANAGE_CONFIG))],
 )
 async def pipeline_config_update_post(request: Request, name: str) -> RedirectResponse:
     """Save an edited pipeline."""

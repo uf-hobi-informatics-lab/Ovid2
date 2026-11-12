@@ -23,6 +23,7 @@ from ovid2.transforms.ops import (
     DedupTransform,
     DefaultValueTransform,
     DenseRankTransform,
+    DeriveColumnTransform,
     DistinctTransform,
     DropColumnsTransform,
     ExplodeTransform,
@@ -63,6 +64,7 @@ TRANSFORMS: dict[str, type[BaseTransform]] = {
     "cast": CastTransform,
     "coalesce_columns": CoalesceColumnsTransform,
     "default_value": DefaultValueTransform,
+    "derive_column": DeriveColumnTransform,
     # correction
     "null_if": NullIfTransform,
     "clamp": ClampTransform,

@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% import "_help.html" as help %}
+{% block title %}Reports &mdash; Ovid2{% endblock %}
+{% block content %}
+{#
+  Report Studio library (adr-report-studio.md).
+
+  Left: scopes (all / mine / shared with me / favourites / archived) and the
+  caller's folders. Main: report cards with search, tag and source filters.
+  Second tab: report *sources* — durable, aggregated datasets ingested from
+  finished runs (health / analysis / run summary / trends) — each with
+  "Create report" from a recommended template.
+
+  Driven by static/report_library.js over /api/v1/reports* and
+  /api/v1/report-sources*. ?ingest=<instance_id> ingests that run first
+  (the "Open in Report Studio" link on a health report).
+#}
+<section class="page pl-page rs-page" id="report-library"
+         data-can-write="{{ 'true' if can_write else 'false' }}"
+         data-ingest="{{ request.query_params.get('ingest', '') }}"
+         data-source="{{ initial_source }}">
+  <header class="page-header pl-header">
+    <div class="pl-title">
+      <h1>Reports
+        {% call help.tip_block(label="Report Studio") %}
+          A <strong>report</strong> is a layout of sections and blocks (charts, KPI
+          tiles, tables, text) drawn from a <strong>report source</strong>: the
+          aggregated results of a finished run. Start from a recommended template,
+          then reorder, hide, restyle and add blocks from the chart library. The
+          report theme is independent of the page theme, so exports look the same
+          for everyone. Reports are private until you share them.
+        {% endcall %}
+      </h1>
+      <p class="pl-subtitle">Organise, design, share and export research reports.</p>
+    </div>
+    <div class="page-actions">
+      <button type="button" class="button" data-tab-btn="sources">{{ icons.icon("database", size=15) }} Sources</button>
+      <button type="button" class="button primary" data-new-report {% if not can_write %}disabled title="Requires the run-reports capability"{% endif %}>{{ icons.icon("plus", size=15) }} New report</button>
+    </div>
+  </header>
+
+  <div class="rs-notice" data-notice hidden></div>
+
+  <div class="rs-layout">
+    <nav class="rs-side" aria-label="Report library">
+      <p class="rs-side-group">Library</p>
+      <button type="button" class="rs-side-item" data-scope="all" aria-current="true">{{ icons.icon("layers", size=15) }}<span>All reports</span><span class="rs-count" data-count="all"></span></button>
+      <button type="button" class="rs-side-item" data-scope="mine">{{ icons.icon("file", size=15) }}<span>My reports</span></button>
+      <button type="button" class="rs-side-item" data-scope="shared">{{ icons.icon("share", size=15) }}<span>Shared with me</span></button>
+      <button type="button" class="rs-side-item" data-scope="favorites">{{ icons.icon("star", size=15) }}<span>Favourites</span></button>
+      <button type="button" class="rs-side-item" data-scope="archived">{{ icons.icon("trash", size=15) }}<span>Archived</span></button>
+      <p class="rs-side-group">Folders</p>
+      <div data-folders><p class="note small">No folders yet.</p></div>
+      <p class="rs-side-group">Data</p>
+      <button type="button" class="rs-side-item" data-tab-btn="sources">{{ icons.icon("database", size=15) }}<span>Report sources</span></button>
+    </nav>
+
+    <div class="rs-main">
+      <div data-tab="reports">
+        <div class="rs-toolbar">
+          <input type="search" class="rs-search" placeholder="Search title, description, tags…" aria-label="Search reports" data-q>
+          <select data-tag aria-label="Filter by tag"><option value="">Any tag</option></select>
+          <select data-sort aria-label="Sort">
+            <option value="updated">Recently updated</option>
+            <option value="title">Title</option>
+            <option value="created">Recently created</option>
+          </select>
+        </div>
+        <div class="rs-grid" data-reports><p class="note">Loading…</p></div>
+      </div>
+
+      <div data-tab="sources" hidden>
+        <div class="rs-toolbar">
+          <input type="search" class="rs-search" placeholder="Search sources (title, batch, id)…" aria-label="Search sources" data-src-q>
+          <select data-src-kind aria-label="Source kind"><option value="">All kinds</option></select>
+          <button type="button" class="button small" data-trend {% if not can_write %}disabled{% endif %} title="Combine 2+ health sources into a trend source">{{ icons.icon("activity", size=14) }} Build trend</button>
+          <button type="button" class="button small" data-tab-btn="reports">{{ icons.icon("chevron-left", size=14) }} Back to reports</button>
+        </div>
+        <p class="note small">Sources are created automatically when a run finishes. To add an older run, enter its instance id:
+          <input type="text" class="mono rs-ingest" placeholder="20261111-120000-abc123" data-ingest-id aria-label="Run instance id">
+          <button type="button" class="button small" data-ingest-btn {% if not can_write %}disabled{% endif %}>Ingest</button>
+        </p>
+        <div class="rs-sources" data-sources><p class="note">Loading…</p></div>
+      </div>
+    </div>
+  </div>
+
+  <dialog class="rs-dialog" data-new-dialog>
+    <form method="dialog" class="rs-dialog-body" data-new-form>
+      <h2>New report</h2>
+      <label>Source
+        <select name="source_id" required data-new-source></select>
+      </label>
+      <label>Start from
+        <select name="template_id" data-new-template></select>
+      </label>
+      <p class="note small" data-new-template-desc></p>
+      <label>Title <input type="text" name="title" maxlength="160" placeholder="Defaults to the template title"></label>
+      <label>Folder <input type="text" name="folder" maxlength="120" placeholder="e.g. EDC/2026" list="rs-folder-list"></label>
+      <datalist id="rs-folder-list" data-folder-list></datalist>
+      <label>Tags <input type="text" name="tags" placeholder="comma separated"></label>
+      <ul class="pb-errors" data-new-errors hidden></ul>
+      <div class="rs-dialog-actions">
+        <button type="button" class="button" value="cancel" data-close>Cancel</button>
+        <button type="submit" class="button primary" value="ok">{{ icons.icon("check", size=14) }} Create</button>
+      </div>
+    </form>
+  </dialog>
+</section>
+<script src="/static/report_library.js" defer></script>
+{% endblock %}

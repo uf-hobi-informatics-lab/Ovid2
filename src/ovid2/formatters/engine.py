@@ -249,6 +249,33 @@ class _SpecFormatter(BaseFormatter):
         return list(self._spec.auxiliary_tables)
 
     @property
+    def source_globs(self) -> list[str]:
+        """Every source glob of the spec (or the custom class's list)."""
+        if self._spec.adapter == "custom" and self._spec.class_path:
+            globs = self._custom_class_source_globs()
+            if globs:
+                return globs
+        globs = [s.glob for s in self._spec.sources.values()]
+        primary = self.input_file_name
+        if primary and primary != "*" and primary not in globs:
+            globs.insert(0, primary)
+        return globs
+
+    def _custom_class_source_globs(self) -> list[str] | None:
+        """Return ``source_globs`` declared by a ``custom`` class, if any."""
+        import importlib
+
+        try:
+            module_name, _, class_name = self._spec.class_path.rpartition(".")  # type: ignore[union-attr]
+            module = importlib.import_module(module_name)
+            return [str(g) for g in getattr(module, class_name)().source_globs]
+        except Exception:
+            logger.debug(
+                "No source_globs from custom class %r", self._spec.class_path, exc_info=True
+            )
+            return None
+
+    @property
     def primary_source_optional(self) -> bool:
         """Report whether the spec's primary source is declared optional.
 
