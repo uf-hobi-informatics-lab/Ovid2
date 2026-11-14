@@ -90,9 +90,12 @@ class PipelineBuilder {
   }
 
   kind() { return this.value("kind") || "etl"; }
+  /* The kind's registry flags (UI rule U1 — never kind-name literals). */
+  spec() { return (window.Ovid2Visibility && window.Ovid2Visibility.kindSpec(this.kind())) || {}; }
+  isScaffold() { return this.spec().create_flow === "scaffold_package"; }
   isOpen(role) { return this.value(role + "_open") === "1"; }
   isTablesOpen() { return this.value("tables_open") === "1"; }
-  visible(id) { const n = document.getElementById(id); return n ? n.style.display !== "none" : false; }
+  visible(id) { const n = document.getElementById(id); return n ? !n.hidden : false; }
 
   connType(role) {
     const sel = this.form.querySelector('[data-storage-picker="' + role + '"] [data-role=storage-select]');
@@ -149,7 +152,7 @@ class PipelineBuilder {
       const picker = this.form.querySelector('[data-storage-picker="' + role + '"]');
       if (!picker) continue;
       const open = this.isOpen(role);
-      picker.style.display = open ? "none" : "";
+      picker.hidden = open;
       if (open) {
         const c = this.field(role + "_connection");
         const l = this.field(role + "_location");
@@ -167,14 +170,14 @@ class PipelineBuilder {
     }
     if (inputOpen && trigger.value === "watch") {
       trigger.value = "manual";
-      if (typeof window.ovid2_toggle_new_trigger_fields === "function") window.ovid2_toggle_new_trigger_fields();
+      if (window.Ovid2Visibility) window.Ovid2Visibility.refresh(this.root);
     }
   }
 
   /* ---------------- template inspection ---------------- */
 
   async inspect() {
-    const tmpl = this.kind() === "etl" ? this.value("template") : "";
+    const tmpl = this.isScaffold() ? this.value("template") : "";
     if (!tmpl) {
       this.inspection = null;
       this.renderProvides();
@@ -287,7 +290,7 @@ class PipelineBuilder {
     if (!host) return;
     const ins = this.inspection;
     if (!ins || ins.error || !ins.identity) {
-      host.innerHTML = '<p class="note">' + (this.kind() === "etl" ? "Pick a template to see the identity fields it declares." : "Identity applies to ETL pipelines only.") + "</p>";
+      host.innerHTML = '<p class="note">' + (this.isScaffold() ? "Pick a template first." : "Not used by this type.") + "</p>";
       if (list) list.innerHTML = "";
       return;
     }
@@ -348,7 +351,7 @@ class PipelineBuilder {
     if (!box) return;
     const ins = this.inspection;
     const conn = this.value("input_connection");
-    if (this.kind() !== "etl" || !ins || !ins.tables || this.isOpen("input")) { box.hidden = true; return; }
+    if (!this.isScaffold() || !ins || !ins.tables || this.isOpen("input")) { box.hidden = true; return; }
     const tables = ins.tables.filter((t) => t.configured && t.inputs && t.inputs.length);
     if (!tables.length) { box.hidden = true; return; }
     box.hidden = false;
@@ -387,16 +390,17 @@ class PipelineBuilder {
   /* ---------------- requirements ---------------- */
 
   requirements() {
-    const kind = this.kind();
+    const spec = this.spec();
+    const scaffold = this.isScaffold();
     const reqs = [];
     const add = (step, text) => reqs.push({ step, text });
     const name = this.value("name");
     if (!name) add("type", "give the pipeline a name");
     else if (!/^[A-Za-z0-9._-]+$/.test(name)) add("type", "use only letters, numbers, . _ - in the name");
-    else if (kind === "etl" && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
-      add("type", "an ETL pipeline name must be a Python identifier (letters, digits, _)");
+    else if (scaffold && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+      add("type", "a scaffolded pipeline name must be a Python identifier (letters, digits, _)");
     }
-    if (kind === "etl") {
+    if (scaffold) {
       if (!this.form.querySelector('input[name="template"]:checked')) add("template", "pick an ETL template");
       if (this.value("etl_tables_mode") === "pick" && !this.pickedTables().length) add("template", "pick at least one table");
       const ins = this.inspection;
@@ -411,9 +415,9 @@ class PipelineBuilder {
         if (!String(i.value || "").trim()) add("identity", "fill in " + i.dataset.identityKey);
       }
     }
-    if (kind === "analysis" && !this.value("package")) add("template", "pick a pipeline package to analyse");
-    if (kind === "dq_checks" && !this.form.querySelector('input[name="packages"]:checked')) add("template", "pick at least one EDC report cycle");
-    if ((kind === "copy" || kind === "move") && !this.isTablesOpen() && !this.value("tables")) {
+    if (spec.create_flow === "pick_package" && !this.value("package")) add("template", "pick a pipeline package to analyse");
+    if (spec.create_flow === "cycle_packages" && !this.form.querySelector('input[name="packages"]:checked')) add("template", "pick at least one EDC report cycle");
+    if (spec.tables_mode === "explicit" && !this.isTablesOpen() && !this.value("tables")) {
       add("template", "list the tables to copy, or keep them open");
     }
     if (!this.isOpen("input") && !this.value("input_connection")) add("source", "choose input storage (or keep it open)");
@@ -464,10 +468,16 @@ class PipelineBuilder {
     this.goTo(first, { focus: false });
   }
 
-  /* Steps applicable to the current kind (Identity is ETL-only). */
+  /* Steps applicable to the current kind (Identity: scaffolding kinds). */
   stepKeys() {
-    const kind = this.kind();
-    return this.allSteps.filter((s) => !s.dataset.onlyKinds || s.dataset.onlyKinds.split(" ").includes(kind))
+    const spec = this.spec();
+    // ``data-only-flag="flag=value"`` — a step that applies only when the
+    // kind's registry flag matches (Identity: scaffolding kinds).
+    const holds = (term) => {
+      const m = String(term).match(/^([A-Za-z_]+)=(.*)$/);
+      return m ? String(spec[m[1]]) === m[2] : Boolean(spec[term]);
+    };
+    return this.allSteps.filter((s) => !s.dataset.onlyFlag || s.dataset.onlyFlag.split(" ").every(holds))
       .map((s) => s.dataset.step);
   }
 
@@ -549,17 +559,16 @@ class PipelineBuilder {
   /* ---------------- engine gating ---------------- */
 
   renderEngines() {
-    const required = this.kind() === "etl" && this.inspection ? this.inspection.requires_family : "";
+    // UI rule U1: engines the template cannot run on are hidden (not
+    // merely disabled) — a flash line says why.
+    const required = this.isScaffold() && this.inspection ? this.inspection.requires_family : "";
     const hint = this.form.querySelector("[data-engine-hint]");
     for (const input of this.form.querySelectorAll('input[name="engine"]')) {
       const fam = input.getAttribute("data-family") || "";
       const bad = Boolean(required && fam && fam !== required);
       input.disabled = bad;
       const tile = input.closest(".nw-engine-tile");
-      if (tile) {
-        tile.classList.toggle("is-disabled", bad);
-        tile.title = bad ? "This template requires a " + required + " engine." : "";
-      }
+      if (tile) tile.hidden = bad;
       if (bad && input.checked) {
         input.checked = false;
         const ok = this.form.querySelector('input[name="engine"]:not(:disabled)');
@@ -568,7 +577,7 @@ class PipelineBuilder {
     }
     if (hint) {
       hint.hidden = !required;
-      hint.textContent = required ? "This template requires a " + required + "-family engine; other engines are disabled." : "";
+      hint.textContent = required ? "This template runs on " + required + "-family engines only." : "";
     }
   }
 
@@ -578,9 +587,10 @@ class PipelineBuilder {
     const dl = document.getElementById("review-list");
     if (!dl) return;
     const kind = this.kind();
+    const spec = this.spec();
     const ins = this.inspection;
-    const rows = [["Name", this.value("name") || "—"], ["Type", kind]];
-    if (kind === "etl") {
+    const rows = [["Name", this.value("name") || "—"], ["Type", spec.label || kind]];
+    if (this.isScaffold()) {
       const t = this.checkedRadio("template");
       rows.push(["Template", t ? t.value : "—"]);
       rows.push(["CDM", this.value("cdm") || (ins && ins.cdm) || "auto"]);
@@ -588,7 +598,7 @@ class PipelineBuilder {
       rows.push(["Tables", pick ? this.pickedTables().join(", ") || "—" : "all configured (" + ((ins && ins.summary && ins.summary.configured) || "?") + ")"]);
       const ids = Array.from(this.form.querySelectorAll("[data-identity-key]")).map((i) => i.dataset.identityKey + " = " + i.value);
       if (ids.length) rows.push(["Identity", ids.join(" · ")]);
-    } else if (kind === "analysis") rows.push(["Package", this.value("package") || "—"]);
+    } else if (spec.create_flow === "pick_package") rows.push(["Package", this.value("package") || "—"]);
     rows.push(["Input", this.isOpen("input") ? "open (choose at run time)" : [this.value("input_connection"), this.value("input_location")].filter(Boolean).join(" / ") || "—"]);
     rows.push(["Engine", this.value("engine") || "—"]);
     rows.push(["Output", this.isOpen("output") ? "open (choose at run time)" : [this.value("output_connection"), this.value("output_location")].filter(Boolean).join(" / ") || "—"]);
@@ -610,12 +620,13 @@ class PipelineBuilder {
     const outOpen = this.isOpen("output");
     const inConn = this.value("input_connection");
     const outConn = this.value("output_connection");
+    const scaffold = this.isScaffold();
     const nodes = [{
       id: "source", title: "Source", logo: inOpen ? "folder" : STORAGE_LOGO(this.connType("input")),
       value: inOpen ? "open · run time" : inConn || "not set", sub: this.value("input_location"),
       state: inOpen || inConn ? "done" : "todo", active: this.current === "source",
     }];
-    if (kind === "etl") {
+    if (scaffold) {
       const s = ins && ins.summary ? ins.summary : null;
       const tmpl = this.value("template");
       const sel = this.value("etl_tables_mode") === "pick" ? this.pickedTables().length : s ? s.configured : 0;
@@ -653,7 +664,7 @@ class PipelineBuilder {
     if (chips) {
       const trig = document.getElementById("trigger_type");
       const c = [["automation", "Trigger", trig ? trig.value : ""]];
-      if (kind === "etl" && ins && ins.summary) {
+      if (scaffold && ins && ins.summary) {
         c.push(["identity", "Checks", ins.summary.errors ? ins.summary.errors + " errors" : ins.summary.warnings ? ins.summary.warnings + " warnings" : "ok"]);
       }
       chips.innerHTML = c.map(([slot, label, value]) =>
@@ -673,7 +684,7 @@ class PipelineBuilder {
     const hint = this.form.querySelector("[data-name-hint]");
     if (hint) {
       const n = this.value("name");
-      hint.hidden = !(n && this.kind() === "etl");
+      hint.hidden = !(n && this.isScaffold());
       hint.innerHTML = n ? "Package <code>ovid2_pipelines." + esc(n) + "</code> · secrets <code>secrets.d/" + esc(n) + ".json</code>" : "";
     }
     this.canvas.classList.toggle("is-complete", complete);

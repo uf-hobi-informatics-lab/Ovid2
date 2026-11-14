@@ -42,6 +42,7 @@ from ovid2.web.models import (
     EngineTestReport,
     EngineTypeSpec,
     EngineWrite,
+    ExprCheckRequest,
     FormatterSpecDetail,
     FormatterValidationReport,
     FormatterWrite,
@@ -116,6 +117,7 @@ from ovid2.web.models import (
     TransformSummary,
     TransformValidateReport,
     TransformValidateRequest,
+    UdfApplyRequest,
     UserActivateRequest,
     UserDetail,
     UserRoleRequest,
@@ -142,6 +144,7 @@ from ovid2.web.services import (
     llms_svc,
     mappers_svc,
     pipeline_inspect_svc,
+    pipeline_lineage_svc,
     pipeline_plan_svc,
     pipelines_meta_svc,
     pipelines_svc,
@@ -1021,6 +1024,63 @@ def api_inspect_package(
 
 
 @router.get(
+    "/navigator",
+    summary="Pipeline packages grouped for the navigator (cdm / profile / kind / template)",
+    response_model=dict[str, Any],
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_navigator(
+    group_by: str = Query(
+        default="cdm",
+        description="Grouping axis: cdm, profile, kind, template or cdm_profile.",
+    ),
+) -> dict[str, Any]:
+    """Return ``{group_by, group_by_choices, groups: [{key, label, pipelines}]}``."""
+    try:
+        return pipeline_lineage_svc.navigator_tree(group_by)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+
+@router.get(
+    "/pipeline-packages/{pipeline}/lineage",
+    summary="Field-level lineage of a pipeline package (static; never executes it)",
+    response_model=dict[str, Any],
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_package_lineage(
+    pipeline: str,
+    table: str | None = Query(
+        default=None, description="One table: return its full per-field chain."
+    ),
+) -> dict[str, Any]:
+    """Without ``table``: a per-table summary; with it: fields, steps, table-wide steps."""
+    try:
+        if table:
+            return pipeline_lineage_svc.table_lineage(pipeline, table).to_dict()
+        return pipeline_lineage_svc.package_lineage(pipeline)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+
+
+@router.get(
+    "/pipeline-packages/{pipeline}/lineage/source",
+    summary="Read-only text of a lineage source outside the package (vendored fixer, CDM mapper)",
+    response_model=dict[str, Any],
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_lineage_source(
+    pipeline: str,
+    path: str = Query(..., description="A lineage step's source_ref.path."),
+) -> dict[str, Any]:
+    """Return ``{path, text, readonly: true}`` for a vendored / CDM-default source."""
+    try:
+        return pipeline_lineage_svc.read_source(pipeline, path)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+
+
+@router.get(
     "/pipeline-packages/{pipeline}/bindings",
     summary="Check every name a pipeline must match against other configuration",
     response_model=list[dict[str, Any]],
@@ -1142,6 +1202,75 @@ def api_put_assignments(
         return WriteResult(
             **builder_svc.save_assignments(pipeline, payload.raw_text, actor=_actor(ctx))
         )
+    except builder_svc.BuilderError as exc:
+        raise _builder_error(exc) from None
+
+
+@router.post(
+    "/pipeline-packages/{pipeline}/udfs:apply",
+    summary="Apply a declarative UDF (chain or new steps) to a table or every table",
+    response_model=dict[str, Any],
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG))],
+)
+def api_apply_udf(
+    pipeline: str,
+    payload: UdfApplyRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_CONFIG)),
+) -> dict[str, Any]:
+    """Validate, optionally save the chain, and append the assignment.
+
+    Steps are checked against each op's params schema and every
+    ``derive_column`` / ``filter_expr`` expression against the SQL
+    allow-list before anything is written. Refused on legacy ports.
+    """
+    try:
+        return builder_svc.apply_udf(
+            pipeline,
+            payload.table,
+            scope=payload.scope,
+            save_to=payload.save_to,
+            chain=payload.chain,
+            name=payload.name,
+            steps=payload.steps,
+            description=payload.description,
+            actor=_actor(ctx),
+        )
+    except builder_svc.BuilderError as exc:
+        raise _builder_error(exc) from None
+
+
+@router.post(
+    "/expressions:check",
+    summary="Check a Spark-SQL column expression against the UDF allow-list",
+    response_model=dict[str, Any],
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_check_expression(payload: ExprCheckRequest) -> dict[str, Any]:
+    """Return ``{ok, errors, columns, functions, unknown_columns}``; never writes."""
+    return builder_svc.check_expression_for(payload.pipeline, payload.table, payload.expr)
+
+
+@router.get(
+    "/expressions/functions",
+    summary="The Spark-SQL functions a UDF expression may call",
+    response_model=list[str],
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_expression_functions() -> list[str]:
+    """Return the sorted allow-list (for autocomplete)."""
+    return builder_svc.allowed_functions()
+
+
+@router.get(
+    "/transform-library/{name}/usage",
+    summary="Where a transform chain is assigned (pipeline, table, fields written)",
+    response_model=list[dict[str, Any]],
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_chain_usage(name: str) -> list[dict[str, Any]]:
+    """Return ``[{pipeline, table, fields}]`` for every assignment of ``name``."""
+    try:
+        return builder_svc.chain_usage(name)
     except builder_svc.BuilderError as exc:
         raise _builder_error(exc) from None
 
@@ -3419,7 +3548,7 @@ def api_report_save_template(
 
 @router.post(
     "/reports/{report_id}/exports",
-    summary="Export a report (pdf / html / docx / xlsx / svg / png / md / json)",
+    summary="Export a report (pdf / html / docx / pptx / xlsx / svg / png / md / json)",
     response_model=ReportExportResult,
     status_code=201,
     dependencies=[Depends(require_json_content_type)],

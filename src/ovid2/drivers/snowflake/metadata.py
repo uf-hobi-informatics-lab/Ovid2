@@ -28,6 +28,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from ovid2.drivers._choices import SNOWFLAKE_AUTHENTICATORS
 from ovid2.drivers.base import ConnectionFieldSpec, FieldSpec, LocationField
 
 logger = logging.getLogger(__name__)
@@ -74,7 +75,9 @@ def connection_fields() -> ConnectionFieldSpec:
             FieldSpec(
                 name="authenticator",
                 required=False,
-                help="e.g. externalbrowser / SNOWFLAKE.",
+                widget="choices",
+                choices=SNOWFLAKE_AUTHENTICATORS,
+                help="Snowflake authenticator (blank = connector default).",
             ),
             FieldSpec(
                 name="credentials_dir",

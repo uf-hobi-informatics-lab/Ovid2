@@ -297,9 +297,18 @@ def test_edit_report_layout_ops_match_layout_and_browser() -> None:
     assert _js_list(studio, "OPS") == list(OPS)
     # The Studio applies agent ops through the same server validator and never saves.
     hook = studio[studio.index("window.Ovid2ReportStudio = {") :]
-    assert "applyOps: function (ops) { return applyOps(ops); }" in hook
+    assert "applyOps: function (ops) {\n      return applyOps(ops).then(" in hook
+    assert "S.agentEdits = true" in hook
     body = studio[studio.index("function applyOps(") : studio.index("function rerender(")]
     assert "save: false" in body and '"PUT"' not in body
+    # Autosave must not turn an assistant edit into a save: every autosave
+    # entry point checks ``S.agentEdits`` (cleared only by a completed save).
+    auto = studio[
+        studio.index("function scheduleAutosave(") : studio.index("function flushAutosave(")
+    ]
+    assert auto.count("S.agentEdits") >= 2
+    flush = studio[studio.index("function flushAutosave(") :]
+    assert "!S.agentEdits" in flush[: flush.index("}")]
 
 
 @pytest.mark.contract

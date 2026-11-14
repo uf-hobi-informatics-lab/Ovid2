@@ -1,3 +1,4 @@
+{% import "_help.html" as help %}
 {#
   HTMX partial rendered inside #fs-picker-modal. Two states:
    1) `error` set → render a message + close button.
@@ -27,7 +28,7 @@
   {% if error %}
     <div class="flash error">{{ error }}</div>
     {% if roots %}
-      <p class="small">Jump to a curated starting point:</p>
+      <p class="small">Starting points</p>
       <ul class="mono">
         {% for r in roots %}
           <li>
@@ -109,12 +110,12 @@
     </div>
 
     <div style="margin-top: 0.75em;">
+      {{ help.tip("Type an absolute path and press Enter to jump directly.") }}
       <input type="text" id="fs-picker-typed" placeholder="/absolute/path"
              class="mono wide"
              onkeydown="if(event.key==='Enter'){event.preventDefault();
                htmx.ajax('GET','/fs/picker?path='+encodeURIComponent(this.value)+'&target={{ target }}',
                         {target:'#fs-picker-modal', swap:'innerHTML'});}">
-      <div class="small">Type an absolute path and press Enter to jump directly.</div>
     </div>
   {% endif %}
 </div>

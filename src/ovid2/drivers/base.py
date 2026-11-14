@@ -87,12 +87,16 @@ class FieldSpec:
     default: Any = None
     help: str = ""
     #: Rendering hint for the HTML form. ``str`` (default), ``bool``,
-    #: ``int``, ``multiline``, or ``path_picker``.
+    #: ``int``, ``multiline``, ``path_picker``, or ``choices`` (a
+    #: ``<select>`` over :attr:`choices` — UI rule U2: a field whose value
+    #: must come from a known list is never free text).
     widget: str = "str"
     #: Rare cases where a form field is a secret. Purely informational
     #: — secret storage is decided by which list the field appears in
     #: (``args`` vs ``secrets``) on :class:`ConnectionFieldSpec`.
     sensitive: bool = False
+    #: Allowed values when :attr:`widget` is ``choices``.
+    choices: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         """Return the JSON form the legacy catalogues emit."""
@@ -103,6 +107,8 @@ class FieldSpec:
             payload["help"] = self.help
         if self.widget not in {"str", ""}:
             payload["widget"] = self.widget
+        if self.choices:
+            payload["choices"] = list(self.choices)
         return payload
 
 

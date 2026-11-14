@@ -125,6 +125,7 @@ reports = [
     "svglib>=1.5",
     "reportlab>=4.0",
     "python-docx>=1.1",
+    "python-pptx>=1.0",    # PowerPoint presentation export
 ]
 web = [
     # HTTP control panel + REST API surface (W1+).
@@ -327,6 +328,8 @@ module = [
     "vl_convert",          # Report Studio Vega-Lite renderer (ovid2[reports])
     "vl_convert.*",
     "docx.*",
+    "pptx",                # Report Studio presentation export (ovid2[reports])
+    "pptx.*",
     "psycopg.*",
     "psycopg2.*",
     "pygments.*",          # manual renderer syntax highlighting (no bundled stubs)

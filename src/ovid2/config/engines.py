@@ -163,8 +163,9 @@ _FIELD_SPECS: dict[str, dict[str, list[dict[str, Any]]]] = {
             {
                 "name": "serverless",
                 "required": False,
+                "widget": "bool",
                 "default": "false",
-                "help": "'true' to route through serverless compute.",
+                "help": "Route through serverless compute.",
             },
         ],
         "secrets": [
@@ -176,6 +177,10 @@ _FIELD_SPECS: dict[str, dict[str, list[dict[str, Any]]]] = {
             {
                 "name": "connection",
                 "required": False,
+                # UI rule U2: a <select> over the saved Snowflake
+                # connections — the web route resolves ``choices_from``.
+                "widget": "choices",
+                "choices_from": "connections:snowflake",
                 "help": "Name of an existing Snowflake connection to reuse "
                 "for account + credentials (recommended). When set, "
                 "'account' and 'user' below are only used as an override; "
@@ -262,8 +267,9 @@ _FIELD_SPECS: dict[str, dict[str, list[dict[str, Any]]]] = {
             {
                 "name": "preserve_insertion_order",
                 "required": False,
+                "widget": "bool",
                 "default": "false",
-                "help": "'true' keeps input row order in outputs (slower, more memory).",
+                "help": "Keep input row order in outputs (slower, more memory).",
             },
             {
                 "name": "table_concurrency",

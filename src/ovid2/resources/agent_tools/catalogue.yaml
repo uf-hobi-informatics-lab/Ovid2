@@ -318,6 +318,22 @@ tools:
         pipeline: {type: string}
         engine: {type: string}
 
+  - name: inspect_pipeline_lineage
+    description: >-
+      Field-level lineage of a pipeline package (static, never runs it).
+      Without table: per-table stage summary. With table: every field and
+      the ordered steps (format, deduplicate, transform, map, fix) that read
+      or write it, with params and the defining document.
+    method: GET
+    path: /api/v1/pipeline-packages/{pipeline}/lineage
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [pipeline]
+      properties:
+        pipeline: {type: string}
+        table: {type: string}
+
   - name: check_pipeline_bindings
     description: >-
       Every name a pipeline package must match elsewhere (CDM, identity,
@@ -786,7 +802,7 @@ tools:
 
   - name: export_report
     description: >-
-      PROPOSE exporting a saved report (pdf / html / docx / xlsx / svg / png / md / json).
+      PROPOSE exporting a saved report (pdf / html / docx / pptx / xlsx / svg / png / md / json).
       Hidden sections are never exported. The user confirms and downloads the file.
     method: POST
     path: /api/v1/reports/{report_id}/exports
@@ -796,7 +812,7 @@ tools:
       required: [report_id, format]
       properties:
         report_id: {type: string}
-        format: {type: string, enum: [pdf, html, docx, xlsx, svg, png, md, json]}
+        format: {type: string, enum: [pdf, html, docx, pptx, xlsx, svg, png, md, json]}
         block_id: {type: string, description: "svg / png only: one chart block."}
 
   # ------------------------------------------------------------ UI actions

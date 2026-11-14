@@ -95,6 +95,7 @@ def _field_from_dict(f: dict[str, Any], *, cls: type = FieldSpec) -> Any:
         default=f.get("default"),
         help=str(f.get("help", "")),
         widget=str(widget),
+        choices=tuple(str(c) for c in (f.get("choices") or ())),
     )
 
 

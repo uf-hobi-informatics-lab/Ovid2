@@ -24,6 +24,7 @@
     <div class="pl-title">
       <h1>Transform library
         {% call help.tip_block(label="Transform library") %}
+          <strong>Reusable chains you can assign to any pipeline.</strong>
           A <strong>transform</strong> is a named, reusable chain of library ops
           &mdash; your own user-defined function. Build it with the form or write
           the YAML, then <strong>assign</strong> it to tables of any pipeline: it
@@ -34,7 +35,6 @@
           allow-list of row functions.
         {% endcall %}
       </h1>
-      <p class="pl-subtitle">Reusable chains you can assign to any pipeline.</p>
     </div>
     <button type="button" class="button primary" data-lib-new {% if not can_write %}disabled{% endif %}>{{ icons.icon("plus", size=15) }} New transform</button>
   </header>
@@ -83,13 +83,17 @@
             <option value="">(choose a pipeline package)</option>
             {% for p in pipelines %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
           </select>
-          <input type="text" data-assign-tables placeholder="tables, e.g. demographic encounter  (or *)" aria-label="Tables">
+          <select data-assign-tables multiple size="6" aria-label="Tables" disabled>
+            <option value="*">* (every table)</option>
+          </select>
           <button type="button" class="button" data-assign-go {% if not can_write %}disabled{% endif %}>Assign</button>
         </div>
+        <p class="small" data-usage></p>
         <p class="pb-status small" data-assign-status></p>
       </section>
     </div>
   </div>
 </section>
+<script type="application/json" id="pipeline-tables">{{ pipeline_tables | tojson }}</script>
 <script type="module" src="/static/spec_builder.js"></script>
 {% endblock %}

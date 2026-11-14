@@ -30,7 +30,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 
     p = subparsers.add_parser(
         "report-export",
-        help="Render a Report Studio bundle (layout + source) to pdf/html/docx/xlsx/svg/png/md/json.",
+        help="Render a Report Studio bundle (layout + source) to pdf/html/docx/pptx/xlsx/svg/png/md/json.",
     )
     p.add_argument(
         "--bundle", required=True, help="Path to the JSON bundle {layout, source, meta}."

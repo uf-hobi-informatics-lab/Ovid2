@@ -1,6 +1,18 @@
 {% extends "base.html" %}
+{% import "_help.html" as help %}
 {% block title %}{{ 'New pipeline' if mode == 'new' else 'Edit pipeline ' + name }} &mdash; Ovid2{% endblock %}
 {% block content %}
+{#
+  Pipeline editor. UI rules (AGENTS.md):
+    U1 — rows carry data-show-* attributes; static/field_visibility.js shows
+         only the fields the chosen kind / engine / trigger uses (driven by
+         the run-kind registry flags in the #kind-flags island).
+    U2 — engine, CDM, tables, stages and trigger are selects / checkboxes.
+    U3 — explanations sit under "?" tips.
+#}
+{% set stages = transformation_stages or ["format", "deduplicate", "transform", "map", "fix"] %}
+{% set cur_tx = pipeline_config.transformations or ["all"] %}
+{% set cur_tables = pipeline_config.tables or [] %}
 <section class="page">
   <p><a href="/pipelines">&larr; all pipelines</a></p>
   <h1>
@@ -12,7 +24,7 @@
 
   <form method="post"
         action="{% if mode == 'new' %}/pipelines{% else %}/pipelines/{{ name }}{% endif %}"
-        class="edit-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        class="edit-form" data-visibility-root data-kind="{{ pipeline_config.kind }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if mode == 'new' %}
       <div class="form-row">
         <label for="name">Name</label>
@@ -22,33 +34,34 @@
     {% endif %}
 
     <div class="form-row">
-      <label for="kind">Pipeline type</label>
-      <select id="kind" name="kind" onchange="ovid2_toggle_kind_fields();">
+      <label for="kind">Pipeline type
+        {% call help.tip_block(label="Pipeline types") %}
+          <span class="help-tip-list">
+          {% for k in kind_choices %}<span><strong>{{ k.label }}</strong> &mdash; {{ k.description }}</span>{% endfor %}
+          </span>
+        {% endcall %}
+      </label>
+      <select id="kind" name="kind">
         {% for k in kind_choices %}
-          <option value="{{ k.name }}" title="{{ k.description }}" {% if pipeline_config.kind == k.name %}selected{% endif %}>{{ k.label }}</option>
+          <option value="{{ k.name }}" {% if pipeline_config.kind == k.name %}selected{% endif %}>{{ k.label }}</option>
         {% endfor %}
       </select>
     </div>
-    <div class="form-row" id="cdm-row">
-      <label for="cdm">CDM</label>
+    <div class="form-row" id="cdm-row" data-show-kind-flag="uses_cdm">
+      <label for="cdm">CDM {{ help.tip("Leave on auto to resolve the CDM from the package's pipeline_settings.") }}</label>
       <select id="cdm" name="cdm">
-        <option value="">(auto — resolve from pipeline_settings)</option>
+        <option value="">(auto — from pipeline_settings)</option>
         {% for c in cdms %}
           <option value="{{ c }}" {% if pipeline_config.cdm == c %}selected{% endif %}>{{ c }}</option>
         {% endfor %}
       </select>
     </div>
 
-    <div class="form-row">
-      <label for="pipeline">Pipeline package</label>
-      <input type="text" id="pipeline" value="{{ pipeline_config.pipeline }}" readonly
-             class="mono">
-      {# The package is bound to the pipeline name at creation time and
-         is not re-pointable from the UI (re-pointing would orphan the
-         scaffolded identity). Submitted as a hidden field so the config
-         round-trips unchanged. #}
-      <input type="hidden" name="pipeline" value="{{ pipeline_config.pipeline }}">
+    <div class="form-row" data-show-kind-flag="package_required|health_selection">
+      <label for="pipeline">Pipeline package {{ help.tip("Bound to the pipeline at creation; not re-pointable here.") }}</label>
+      <input type="text" id="pipeline" value="{{ pipeline_config.pipeline }}" readonly class="mono">
     </div>
+    <input type="hidden" name="pipeline" value="{{ pipeline_config.pipeline }}">
 
     <div class="form-row">
       <label for="input_address">Input address</label>
@@ -68,25 +81,61 @@
       </select>
     </div>
 
-    <div class="form-row">
-      <label for="tables">Tables (space-separated, or <code>all</code>)</label>
-      <input type="text" id="tables" name="tables" value="{{ pipeline_config.tables | join(' ') }}">
+    {# Tables — etl/analysis pick from the pipeline's CDM roster (or all);
+       copy/move name source tables (no ``all``; blank = choose at run time). #}
+    <div class="form-row" id="tables-row" data-show-kind-flag="tables_mode=all" data-disable-hidden>
+      <label for="tables_all_mode">Tables {{ help.tip("Run every configured table, or pick a subset of the CDM's tables.") }}</label>
+      {% set is_all = (cur_tables == ['all'] or not cur_tables) %}
+      <select id="tables_all_mode" name="tables_mode">
+        <option value="all" {% if is_all %}selected{% endif %}>all configured tables</option>
+        <option value="pick" {% if not is_all %}selected{% endif %}>pick tables&hellip;</option>
+      </select>
+      <div class="check-grid" data-show-when="tables_mode=pick">
+        {% for t in cdm_tables %}
+          <label class="checkbox"><input type="checkbox" name="tables_pick" value="{{ t }}"{% if t in cur_tables %} checked{% endif %}> <span class="mono">{{ t }}</span></label>
+        {% else %}
+          <span class="small">CDM tables unavailable.</span>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="form-row" id="tables-explicit-row" data-show-kind-flag="tables_mode=explicit" data-disable-hidden>
+      <label for="tables">Tables {{ help.tip("Source tables to transfer, space-separated. There is no 'all' sentinel; leave blank to choose them on the Submit form each run.") }}</label>
+      <input type="text" id="tables" name="tables" class="mono" value="{{ cur_tables | reject('equalto', 'all') | join(' ') }}"
+             placeholder="e.g. demographic encounter">
     </div>
 
-    <div class="form-row" id="transformations-row">
-      <label for="transformations">Transformations</label>
-      <input type="text" id="transformations" name="transformations" value="{{ pipeline_config.transformations | join(' ') }}">
+    <div class="form-row" id="transformations-row" data-show-kind-flag="uses_transformations">
+      <label>Transformations {{ help.tip("The ETL stages, run in order. Untick one to skip it.") }}</label>
+      <div class="check-grid">
+        {% for st in stages %}
+          <label class="checkbox"><input type="checkbox" name="transformations" value="{{ st }}"{% if 'all' in cur_tx or st in cur_tx %} checked{% endif %}> <span class="mono">{{ st }}</span></label>
+        {% endfor %}
+      </div>
     </div>
 
-    <div class="form-row" id="engine-workers-row">
+    <div class="form-row" id="engine-row">
       <label for="engine">Warehouse</label>
-      <input type="text" id="engine" name="engine" value="{{ pipeline_config.engine }}">
-      <label for="workers" id="workers-label" title="Spark: worker containers in the run's cluster. DuckDB: tables run concurrently in one host-sized container.">Workers</label>
+      {% set ns = namespace(found=false) %}
+      <select id="engine" name="engine">
+        {% for e in engines %}
+          {% if e.name == pipeline_config.engine %}{% set ns.found = true %}{% endif %}
+          <option value="{{ e.name }}" data-family="{{ engine_families.get(e.type, '') }}" {% if e.name == pipeline_config.engine %}selected{% endif %}>{{ e.name }} ({{ e.type }})</option>
+        {% endfor %}
+        {% for t in engine_types %}{% if t not in (engines | map(attribute='name') | list) %}
+          {% if t == pipeline_config.engine %}{% set ns.found = true %}{% endif %}
+          <option value="{{ t }}" data-family="{{ engine_families.get(t, '') }}" {% if t == pipeline_config.engine %}selected{% endif %}>{{ t }} (engine type)</option>
+        {% endif %}{% endfor %}
+        {% if not ns.found and pipeline_config.engine %}
+          <option value="{{ pipeline_config.engine }}" selected>{{ pipeline_config.engine }} (not configured)</option>
+        {% endif %}
+      </select>
+    </div>
+    <div class="form-row" id="workers-row" data-show-kind-flag="uses_engine_overrides" data-hide-engine-family="snowpark">
+      <label for="workers">Workers {{ help.tip("Spark: worker containers in the run's cluster. DuckDB: tables run concurrently in one host-sized container.") }}</label>
       <input type="number" id="workers" name="workers" min="1" max="200" value="{{ pipeline_config.workers }}">
     </div>
-
-    <div class="form-row" id="sf-row">
-      <label for="sf_account">SF account (opt)</label>
+    <div class="form-row" id="sf-row" data-show-kind-flag="uses_engine_overrides" data-show-engine-family="snowpark">
+      <label for="sf_account">SF account {{ help.tip("Optional Snowflake ACCOUNT override for this pipeline's runs.") }}</label>
       <input type="text" id="sf_account" name="sf_account" value="{{ pipeline_config.sf_account or '' }}">
     </div>
 
@@ -94,48 +143,38 @@
       <label>
         <input type="checkbox" name="enabled" {% if pipeline_config.enabled %}checked{% endif %}> Enabled
       </label>
-      <label id="stderr-log-label">
+      <label id="stderr-log-label" data-show-kind-flag="uses_engine_overrides">
         <input type="checkbox" name="stderr_log" {% if pipeline_config.stderr_log %}checked{% endif %}> Mirror events to stderr
       </label>
-      <label id="allow-overwrite-label"
-             title="The output address is the exact write location. Scheduled / watch runs write to the same output, so they need a standing confirmation to replace what is already there.">
+      <label id="allow-overwrite-label">
         <input type="checkbox" name="allow_overwrite" {% if pipeline_config.allow_overwrite %}checked{% endif %}>
         Runs may overwrite existing output data
+        {{ help.tip("The output address is the exact write location. Scheduled / watch runs write to the same output, so they need a standing confirmation to replace what is already there.") }}
       </label>
     </div>
-
-    <p id="copy-hint" class="note" style="display: none;">
-      <strong>Copy pipeline.</strong> Every named table is read from
-      <em>Input address</em> and written to <em>Output address</em>
-      verbatim &mdash; no formatter, no mapper, no fixer. <code>tables</code>
-      must be an explicit space-separated list; <code>all</code> is
-      not accepted by <code>ovid2 tools copy</code>. CDM,
-      transformations, Snowflake overrides, and worker count are
-      scrubbed server-side.
-    </p>
 
     <h2>Trigger</h2>
     <div class="form-row">
       <label for="trigger_type">Type</label>
-      <select id="trigger_type" name="trigger_type" onchange="ovid2_toggle_trigger_fields();">
+      <select id="trigger_type" name="trigger_type">
         <option value="watch" {% if pipeline_config.trigger.type == 'watch' %}selected{% endif %}>watch (on new batch)</option>
         <option value="manual" {% if pipeline_config.trigger.type == 'manual' %}selected{% endif %}>manual</option>
         <option value="cron" {% if pipeline_config.trigger.type == 'cron' %}selected{% endif %}>cron</option>
         <option value="interval" {% if pipeline_config.trigger.type == 'interval' %}selected{% endif %}>interval</option>
       </select>
     </div>
-    <div class="form-row" id="trigger-watch-row">
+    <div class="form-row" id="trigger-watch-row" data-show-when="trigger_type=watch">
       <label for="watch_min_wait_minutes">Re-scan debounce (minutes)</label>
       <input type="number" id="watch_min_wait_minutes" name="watch_min_wait_minutes"
              min="0" value="{{ pipeline_config.trigger.watch_min_wait_minutes or '' }}"
              placeholder="0">
     </div>
-    <div class="form-row" id="trigger-cron-row">
+    <div class="form-row" id="trigger-cron-row" data-show-when="trigger_type=cron">
       <label for="cron">Cron expression</label>
       <input type="text" id="cron" name="cron" value="{{ pipeline_config.trigger.cron or '' }}"
              placeholder="0 3 * * *">
     </div>
-    <div class="form-row" id="trigger-interval-row">
+    <div class="form-row" id="trigger-interval-row" data-show-when="trigger_type=interval">
       <label for="interval_minutes">Interval (minutes)</label>
       <input type="number" id="interval_minutes" name="interval_minutes"
              min="1" value="{{ pipeline_config.trigger.interval_minutes or '' }}">
@@ -151,48 +190,5 @@
     </div>
   </form>
 </section>
-<script>
-function ovid2_toggle_trigger_fields() {
-  var t = document.getElementById('trigger_type').value;
-  document.getElementById('trigger-watch-row').style.display = (t === 'watch') ? '' : 'none';
-  document.getElementById('trigger-cron-row').style.display = (t === 'cron') ? '' : 'none';
-  document.getElementById('trigger-interval-row').style.display = (t === 'interval') ? '' : 'none';
-}
-// Show/hide fields that only apply to the etl-shape kinds
-// (cdm/analysis/dq_checks). Copy pipelines only need input/output
-// addresses, batch id, tables, engine. pipelines_svc._validate_kind
-// scrubs the hidden fields server-side; hiding them here reduces
-// confusion and prevents wasted operator time.
-function ovid2_toggle_kind_fields() {
-  var k = (document.getElementById('kind') || {}).value || 'etl';
-  var isCdm = (k === 'etl');
-  var isCopy = (k === 'copy');
-  document.getElementById('cdm-row').style.display = isCdm ? '' : 'none';
-  var copyHidden = [
-    'transformations-row',
-    'sf-row',
-  ];
-  for (var i = 0; i < copyHidden.length; i++) {
-    var el = document.getElementById(copyHidden[i]);
-    if (el) el.style.display = isCopy ? 'none' : '';
-  }
-  // Workers input is inside engine-workers-row; hide just the workers
-  // pair (label + input) so the Engine input stays visible.
-  var workersInput = document.getElementById('workers');
-  var workersLabel = document.getElementById('workers-label');
-  if (workersInput) workersInput.style.display = isCopy ? 'none' : '';
-  if (workersLabel) workersLabel.style.display = isCopy ? 'none' : '';
-  // Stderr-log label is inside the flags row; hide just that label
-  // (Enabled stays visible).
-  var stderrLabel = document.getElementById('stderr-log-label');
-  if (stderrLabel) stderrLabel.style.display = isCopy ? 'none' : '';
-  var hint = document.getElementById('copy-hint');
-  if (hint) hint.style.display = isCopy ? '' : 'none';
-}
-// Preserve the old function name so any external bookmark/JS that
-// calls it (there shouldn't be any, but defensive) still works.
-function ovid2_toggle_cdm_row() { ovid2_toggle_kind_fields(); }
-ovid2_toggle_trigger_fields();
-ovid2_toggle_kind_fields();
-</script>
+<script type="application/json" id="kind-flags">{{ kind_choices | tojson }}</script>
 {% endblock %}

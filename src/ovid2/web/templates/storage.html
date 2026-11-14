@@ -26,6 +26,7 @@
     <div class="pl-title">
       <h1>Storage accounts
         {% call help.tip_block(label="What is a storage account?") %}
+          <strong>Where data lives &mdash; filesystems, object stores and databases pipelines read from and write to.</strong>
           A <strong>storage account</strong> holds the credentials and shared
           endpoint metadata (host, region, account, bucket, container&hellip;)
           for one reachable system where data lives &mdash; a filesystem, an
@@ -35,7 +36,6 @@
           bucket / schema at run time.
         {% endcall %}
       </h1>
-      <p class="pl-subtitle">Where data lives &mdash; filesystems, object stores and databases pipelines read from and write to.</p>
     </div>
     <div class="page-actions">
       {% if connections %}
@@ -69,7 +69,7 @@
       {% endfor %}
     </div>
 
-    <div id="test-all-summary" class="flash" style="display: none;"></div>
+    <div id="test-all-summary" class="flash" hidden></div>
 
     {% set other = connections | rejectattr("type", "in", known_types) | list %}
     {% set cat_list = categories + ([("other", "Other", "layers", [])] if other else []) %}
@@ -148,10 +148,9 @@
       </div>
       <h2>No storage accounts yet
         {% call help.tip_block(label="Where are storage accounts stored?") %}
-          Files land under <code>$XDG_CONFIG_HOME/ovid2/connections/</code>.
+          Add a filesystem, object store or database so pipelines have somewhere to read from and write to. Files land under <code>$XDG_CONFIG_HOME/ovid2/connections/</code>.
         {% endcall %}
       </h2>
-      <p class="muted">Add a filesystem, object store or database so pipelines have somewhere to read from and write to.</p>
       <a href="/connections/new" class="button primary">{{ icons.icon("plus", size=16) }} New storage account</a>
     </div>
   {% endif %}
@@ -221,7 +220,7 @@
     var summary = document.getElementById("test-all-summary");
     if (summary) {
       summary.className = "flash";
-      summary.style.display = "block";
+      summary.hidden = false;
       summary.textContent = "Testing " + names.length + " storage accounts…";
     }
     var idx = 0;

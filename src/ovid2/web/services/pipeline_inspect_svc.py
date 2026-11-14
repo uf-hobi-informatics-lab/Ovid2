@@ -69,6 +69,9 @@ class TableInspection:
     transforms: list[str] = field(default_factory=list)
     requires_family: str = ""
     is_reference: bool = False
+    #: The CDM table's column names — the builder's column pickers
+    #: (UI rule U2) offer these instead of free text.
+    columns: list[str] = field(default_factory=list)
 
     @property
     def configured(self) -> bool:
@@ -118,6 +121,10 @@ class PackageInspection:
             "errors": sum(1 for b in self.bindings if b.status == "error"),
             "warnings": sum(1 for b in self.bindings if b.status == "warn"),
         }
+        # Closed sets the builder's pickers offer (UI rule U2).
+        out["reference_tables"] = sorted(t.name for t in self.tables if t.is_reference)
+        out["vocabularies"] = sorted(_known_vocabularies())
+        out["formatter_adapters"] = _formatter_adapters()
         return out
 
 
@@ -394,6 +401,10 @@ def inspect_package(
 
     rows: list[TableInspection] = []
     for table in tables:
+        try:
+            columns = list(handle.load_table_columns(table)) if cdm_name else []
+        except (KeyError, ValueError, OSError):
+            columns = []
         f = _formatter_info(pkg, pipeline, table)
         m = _mapper_info(pkg, cdm_name, table, legacy, mappers_type)
         rows.append(
@@ -412,6 +423,7 @@ def inspect_package(
                 transforms=[*assigned.get("*", []), *assigned.get(table, [])],
                 requires_family=f["requires_family"],
                 is_reference=table in reference,
+                columns=columns,
             )
         )
 
@@ -512,6 +524,23 @@ def _lists_dir() -> Path | None:
         return None
     path = Path(base) / "lists"
     return path if path.is_dir() else None
+
+
+def _formatter_adapters() -> list[str]:
+    """Return the adapter enum from ``formatter_spec.v1.json`` (the builder's select)."""
+    import json
+
+    import ovid2
+
+    path = (
+        Path(ovid2.__file__).resolve().parent / "resources" / "schemas" / "formatter_spec.v1.json"
+    )
+    try:
+        schema = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    adapter = (schema.get("properties") or {}).get("adapter") or {}
+    return [str(a) for a in adapter.get("enum") or []]
 
 
 def _known_vocabularies() -> set[str]:

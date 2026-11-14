@@ -24,6 +24,7 @@
     <div class="pl-title">
       <h1>Reports
         {% call help.tip_block(label="Report Studio") %}
+          <strong>Organise, design, share and export research reports.</strong>
           A <strong>report</strong> is a layout of sections and blocks (charts, KPI
           tiles, tables, text) drawn from a <strong>report source</strong>: the
           aggregated results of a finished run. Start from a recommended template,
@@ -32,7 +33,6 @@
           for everyone. Reports are private until you share them.
         {% endcall %}
       </h1>
-      <p class="pl-subtitle">Organise, design, share and export research reports.</p>
     </div>
     <div class="page-actions">
       <button type="button" class="button" data-tab-btn="sources">{{ icons.icon("database", size=15) }} Sources</button>
@@ -77,9 +77,13 @@
           <button type="button" class="button small" data-trend {% if not can_write %}disabled{% endif %} title="Combine 2+ health sources into a trend source">{{ icons.icon("activity", size=14) }} Build trend</button>
           <button type="button" class="button small" data-tab-btn="reports">{{ icons.icon("chevron-left", size=14) }} Back to reports</button>
         </div>
-        <p class="note small">Sources are created automatically when a run finishes. To add an older run, enter its instance id:
-          <input type="text" class="mono rs-ingest" placeholder="20261111-120000-abc123" data-ingest-id aria-label="Run instance id">
+        <p class="rs-ingest-row">
+          <select class="mono rs-ingest" data-ingest-id aria-label="Run to ingest">
+            <option value="">(choose a past run)</option>
+            {% for r in ingestable_runs %}<option value="{{ r.instance_id }}">{{ r.instance_id }} &middot; {{ r.pipeline or '?' }} &middot; {{ r.status | lower }}</option>{% endfor %}
+          </select>
           <button type="button" class="button small" data-ingest-btn {% if not can_write %}disabled{% endif %}>Ingest</button>
+          {{ help.tip("Sources are created automatically when a run finishes. Ingest an older run to add its artifacts as a source.") }}
         </p>
         <div class="rs-sources" data-sources><p class="note">Loading…</p></div>
       </div>
@@ -92,12 +96,11 @@
       <label>Source
         <select name="source_id" required data-new-source></select>
       </label>
-      <label>Start from
+      <label>Start from <span data-new-template-desc></span>
         <select name="template_id" data-new-template></select>
       </label>
-      <p class="note small" data-new-template-desc></p>
       <label>Title <input type="text" name="title" maxlength="160" placeholder="Defaults to the template title"></label>
-      <label>Folder <input type="text" name="folder" maxlength="120" placeholder="e.g. EDC/2026" list="rs-folder-list"></label>
+      <label>Folder <input type="text" name="folder" maxlength="120" placeholder="e.g. EDC/2026" list="rs-folder-list" data-allow-new></label>
       <datalist id="rs-folder-list" data-folder-list></datalist>
       <label>Tags <input type="text" name="tags" placeholder="comma separated"></label>
       <ul class="pb-errors" data-new-errors hidden></ul>

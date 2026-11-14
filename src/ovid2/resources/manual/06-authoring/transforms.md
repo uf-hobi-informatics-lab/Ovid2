@@ -131,3 +131,9 @@ Parameters for every op: [Transforms catalogue](../10-reference/transforms.md).
 | Save | `PUT /api/v1/transform-library/{name}`, MCP `save_transform` | validated on save |
 
 To write a new op, see [Extending Ovid2](../09-developers/extending.md#add-a-transform).
+
+## Applying a UDF from the navigator
+
+The [pipeline navigator](../03-web-panel/navigator.md) applies a computed
+column, a chain of functions or an existing chain to a field or table in
+one step, and shows where every chain is used.

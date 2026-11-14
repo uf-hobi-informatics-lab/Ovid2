@@ -29,6 +29,7 @@ Which links you see depends on your [role](../08-operations/auth.md).
 | Operate | Dashboard | queue, recent runs, environment checks | [Dashboard](dashboard.md) |
 | | Submit | the graphical job builder | [Submit](submit.md) |
 | | Pipelines | saved configs, packages, formatters, mappers | [Pipelines](pipelines.md) |
+| | Navigator | every pipeline → table → field → function, and UDFs | [Pipeline navigator](navigator.md) |
 | | Jobs | history, live run pages, reports | [Jobs & runs](jobs.md) |
 | Explore | Data Space | browse, inspect and export any table | [Data Space](dataspace.md) |
 | | Reports | design, organise, share and export research reports | [Report Studio](../05-data/report-studio.md) |
@@ -50,7 +51,18 @@ Which links you see depends on your [role](../08-operations/auth.md).
 ## Help tips
 
 A small **?** next to a heading or field opens an explanation. Hover over
-it, focus it with the keyboard, or tap it on a phone.
+it, focus it with the keyboard, or tap it on a phone. Pages keep their
+descriptions there, so the forms themselves stay short.
+
+## Forms only show what applies
+
+When you create, edit or run a pipeline, the form shows only the fields
+that matter for the job type, engine and trigger you picked. For example,
+*Workers* disappears for copy / move and Snowpark, and *Transformations*
+disappears for data-health jobs. Rarely used options, such as mirroring
+events to stderr or extra bind mounts, sit under **Advanced**. When a field
+must be one of a known set (a CDM, engine, table, column, file format,
+role or secret file), it is a drop-down list rather than a text box.
 
 ## Pages in this chapter
 

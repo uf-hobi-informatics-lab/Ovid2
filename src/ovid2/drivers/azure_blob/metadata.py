@@ -40,6 +40,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ovid2.drivers._choices import FILE_FORMATS
 from ovid2.drivers.base import ConnectionFieldSpec, FieldSpec, LocationField
 
 #: Recognised on-disk formats. Extension is tracked but not enforced —
@@ -253,7 +254,8 @@ def location_fields() -> tuple[LocationField, ...]:
         LocationField(
             name="format",
             required=False,
-            widget="str",
+            widget="choices",
+            choices=FILE_FORMATS,
             default="parquet",
             help="File format (parquet, csv, json, …).",
         ),

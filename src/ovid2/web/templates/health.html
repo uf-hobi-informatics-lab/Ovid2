@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Health &mdash; Ovid2{% endblock %}
 {% block content %}
+{% import "_help.html" as help %}
 <section class="page">
   <div class="page-header">
     <h1>Environment diagnostics</h1>
@@ -11,15 +12,14 @@
   <div class="table-wrap">
   <table class="check-table">
     <thead>
-      <tr><th>Severity</th><th>Check</th><th>Message</th><th>Hint</th></tr>
+      <tr><th>Severity</th><th>Check</th><th>Message</th></tr>
     </thead>
     <tbody>
       {% for check in health.checks %}
         <tr class="severity-{{ check.severity }}">
           <td><span class="badge severity-{{ check.severity }}">{{ check.severity|upper }}</span></td>
           <td class="mono">{{ check.name }}</td>
-          <td>{{ check.message }}</td>
-          <td>{{ check.hint or "" }}</td>
+          <td>{{ check.message }}{% if check.hint %} {{ help.tip(check.hint, label="How to fix") }}{% endif %}</td>
         </tr>
       {% endfor %}
     </tbody>

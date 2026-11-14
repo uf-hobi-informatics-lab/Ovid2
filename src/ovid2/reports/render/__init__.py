@@ -1,7 +1,7 @@
-"""Executor-only report renderers (PDF, DOCX, XLSX, HTML, SVG/PNG, MD, JSON).
+"""Executor-only report renderers (PDF, DOCX, PPTX, XLSX, HTML, SVG/PNG, MD, JSON).
 
 Never imported by the web / MCP tiers (``test_tier_import_closure.py``):
-they pull in reportlab, python-docx, xlsxwriter and vl-convert. Entry
+they pull in reportlab, python-docx, python-pptx, xlsxwriter and vl-convert. Entry
 point: :func:`export_report`, driven by ``ovid2 tools report-export``.
 """
 
@@ -80,6 +80,10 @@ def export_report(
         from ovid2.reports.render.docx import write_docx
 
         writers[fmt] = write_docx
+    elif fmt == "pptx":
+        from ovid2.reports.render.pptx import write_pptx
+
+        writers[fmt] = write_pptx
     elif fmt == "xlsx":
         from ovid2.reports.render.xlsx import write_xlsx
 
@@ -105,6 +109,7 @@ def export_report(
 _PAGE_CHART_WIDTH: dict[str, int] = {
     "pdf": 620,
     "docx": 620,
+    "pptx": 1100,
     "xlsx": 640,
     "html": 760,
     "md": 680,

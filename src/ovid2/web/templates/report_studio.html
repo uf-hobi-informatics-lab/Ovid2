@@ -56,6 +56,14 @@
         </div>
       </div>
       {% if can_edit %}
+      <span class="rs-autosave">
+        <label class="rs-autosave-switch" title="Autosave">
+          <input type="checkbox" role="switch" data-autosave aria-label="Autosave">
+          <span>Autosave</span>
+        </label>
+        {{ help.tip("When on, your edits are saved automatically a few seconds after you stop editing, and when you leave the page. Each autosave is a new version marked “Autosave” in History. If someone else saved in the meantime, or a save fails, autosave pauses until you reload. Your choice is remembered in this browser.") }}
+        <span class="note small" data-save-state hidden aria-live="polite"></span>
+      </span>
       <button type="button" class="button small primary" data-save disabled>{{ icons.icon("check", size=14) }} Save</button>
       {% endif %}
     </div>
@@ -83,7 +91,7 @@
     <div class="rs-canvas-wrap">
       <div class="rs-canvas-bar note small">
         <span data-theme-label></span>
-        <span class="rs-canvas-hint">Canvas uses the report theme, not the page theme.</span>
+        {{ help.tip("The canvas uses the report theme, not the page theme.") }}
       </div>
       <div class="rs-canvas" data-canvas><p class="note">Loading…</p></div>
     </div>
@@ -105,9 +113,9 @@
 
   <dialog class="rs-dialog" data-share-dialog>
     <form class="rs-dialog-body" data-share-form>
-      <h2>Share “<span data-share-title></span>”</h2>
+      <h2>Share “<span data-share-title></span>” {% call help.tip_block() %}Sharing is recorded in the audit log. Viewers still need the view-runs capability.{% endcall %}</h2>
       {% if not auth_enabled() %}
-      <p class="note small">Sign-in is turned off on this deployment, so everyone uses the same anonymous account and sharing has no effect until auth is enabled.</p>
+      <p class="flash">Sign-in is off on this deployment &mdash; sharing has no effect until auth is enabled.</p>
       {% endif %}
       <table class="data-table rs-share-table"><thead><tr><th>Who</th><th>Access</th><th></th></tr></thead><tbody data-share-rows></tbody></table>
       <div class="rs-share-add">
@@ -115,8 +123,13 @@
           <option value="user">User id / e-mail</option>
           <option value="role">Everyone with role</option>
         </select>
-        <input type="text" name="principal" maxlength="200" placeholder="user id" required aria-label="Principal" list="rs-role-list">
-        <datalist id="rs-role-list"><option value="viewer"><option value="pipeline_operator"><option value="system_admin"></datalist>
+        {# UI rule U2: a role principal is a select over the shareable roles;
+           a user principal is an id / e-mail (new values, never a listing
+           of every account). Only the active one is enabled. #}
+        <input type="text" name="principal" maxlength="200" placeholder="user id / e-mail" required aria-label="User" data-allow-new data-principal="user">
+        <select name="principal" aria-label="Role" data-principal="role" hidden disabled>
+          {% for r in shareable_roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+        </select>
         <select name="permission" aria-label="Access">
           <option value="view">can view</option>
           <option value="edit">can edit</option>
@@ -124,7 +137,6 @@
         <button type="submit" class="button primary small">Share</button>
       </div>
       <ul class="pb-errors" data-share-errors hidden></ul>
-      <p class="note small">Sharing is recorded in the audit log. Viewers still need the view-runs capability.</p>
       <div class="rs-dialog-actions"><button type="button" class="button" data-close>Done</button></div>
     </form>
   </dialog>

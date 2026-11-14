@@ -67,6 +67,14 @@ someone else saved in the meantime, Save is refused with a conflict instead
 of overwriting their work. **History** lists every version, and restoring
 one saves it again as the newest version.
 
+The **Autosave** switch in the toolbar saves your edits automatically a few
+seconds after you stop editing, and again when you leave the page. Each
+autosave is a version marked *Autosave* in History. Autosave pauses for the
+page (until you reload) if someone else saved in the meantime or a save
+fails. It also waits for you to press **Save** after the assistant has
+edited the report, because the assistant never saves on its own. The
+switch is off by default, and your choice is remembered in this browser.
+
 ### Chart library
 
 Every chart is a *kind* plus parameters, never hand-written chart code. The
@@ -122,6 +130,7 @@ server:
 | PDF | paginated document, vector charts, provenance |
 | HTML | single self-contained file, interactive charts, works offline |
 | DOCX | Word document with chart images and tables |
+| PPTX | PowerPoint presentation (16:9): a title slide, one slide per row of blocks (charts resized to fit, KPIs as tiles, long tables continued over several slides), and a provenance slide. Colours and fonts follow the report theme, so *Presentation (dark)* gives a dark deck |
 | XLSX | one sheet per visible block's data plus a provenance sheet |
 | SVG / PNG | every chart (zip), or one chart from the block inspector |
 | Markdown | text plus figures (zip) |

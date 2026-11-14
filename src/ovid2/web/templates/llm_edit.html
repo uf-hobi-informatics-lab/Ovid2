@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% block title %}{{ 'New LLM' if mode == 'new' else 'Edit LLM ' + name }} &mdash; Ovid2{% endblock %}
 {% block content %}
+{% import "_help.html" as help %}
+{% import "_field.html" as fld %}
 <section class="page">
   <p><a href="/llms">&larr; all LLMs</a></p>
-  <h1>{% if mode == 'new' %}New LLM connection{% else %}Edit LLM: <span class="mono">{{ name }}</span>{% endif %}</h1>
+  <h1>{% if mode == 'new' %}New LLM connection{% else %}Edit LLM: <span class="mono">{{ name }}</span>{% endif %}{% if spec.note %} {{ help.tip(spec.note) }}{% endif %}</h1>
 
   {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
-  {% if spec.note %}<p class="note">{{ spec.note }}</p>{% endif %}
 
   {% if mode == 'new' %}
   <form method="get" action="/llms/new" class="edit-form" style="margin-bottom: 1em;">
@@ -17,7 +18,7 @@
           <option value="{{ p }}" {% if provider == p %}selected{% endif %}>{{ p }}</option>
         {% endfor %}
       </select>
-      <span class="small">Changing the provider shows that provider's fields.</span>
+      {{ help.tip("Changing the provider shows that provider's fields.") }}
     </div>
   </form>
   {% endif %}
@@ -42,50 +43,11 @@
     </div>
 
     <h2>Settings</h2>
-    <table class="kv-table edit">
-      <thead><tr><th>Key</th><th>Value</th><th>Help</th></tr></thead>
-      <tbody>
-        {% for f in spec.args %}
-          <tr>
-            <td class="mono">{{ f.name }}{% if f.required %} <span class="danger">*</span>{% endif %}</td>
-            <td>
-              {% if f.multiline %}
-                <textarea name="arg_{{ f.name }}" class="mono wide" rows="4" spellcheck="false">{{ args.get(f.name, '') }}</textarea>
-              {% else %}
-                <input type="text" name="arg_{{ f.name }}" value="{{ args.get(f.name, '') }}"
-                       class="mono wide" {% if f.required %}required{% endif %}
-                       placeholder="{{ f.default or '' }}">
-              {% endif %}
-            </td>
-            <td class="small">{{ f.help }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    {{ fld.table(spec.args, args, "arg_", mode=mode) }}
 
     {% if spec.secrets %}
-      <h2>Credentials</h2>
-      <p class="note">
-        Saved to <code>$XDG_CONFIG_HOME/ovid2/secrets.d/llm_&lt;name&gt;.json</code> (mode 0600).
-        {% if mode == 'edit' %}Leave a field as <code>***</code> to keep the stored value.{% endif %}
-      </p>
-      <table class="kv-table edit">
-        <thead><tr><th>Key</th><th>Value</th><th>Help</th></tr></thead>
-        <tbody>
-          {% for f in spec.secrets %}
-            <tr>
-              <td class="mono">{{ f.name }}{% if f.required %} <span class="danger">*</span>{% endif %}</td>
-              <td>
-                <input type="password" name="sec_{{ f.name }}" value="{{ secrets.get(f.name, '') }}"
-                       class="mono wide" autocomplete="new-password"
-                       {% if f.required and mode == 'new' %}required{% endif %}
-                       placeholder="{{ '***' if mode == 'edit' else '' }}">
-              </td>
-              <td class="small">{{ f.help }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <h2>Credentials {{ help.tip("Saved to $XDG_CONFIG_HOME/ovid2/secrets.d/llm_<name>.json (mode 0600)." ~ (" Leave a field as *** to keep the stored value." if mode == 'edit' else "")) }}</h2>
+      {{ fld.table(spec.secrets, secrets, "sec_", secret=true, mode=mode) }}
     {% endif %}
 
     <div class="form-row">

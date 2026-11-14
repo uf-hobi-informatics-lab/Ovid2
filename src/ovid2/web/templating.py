@@ -290,6 +290,21 @@ def _register_globals() -> None:
     templates.env.globals["current_user_ctx"] = current_user_ctx
     templates.env.globals["auth_enabled"] = _auth_enabled
     templates.env.globals["user_appearance"] = user_appearance
+    templates.env.globals["kind_spec"] = kind_spec
+
+
+def kind_spec(kind: str | None) -> dict[str, Any]:
+    """Return the browser-facing run-kind flags for ``kind`` (Jinja global).
+
+    UI rule U1 on read-only pages: ``{% set ks = kind_spec(cfg.kind) %}``
+    then ``{% if ks.uses_cdm %}…`` — the same flags
+    ``static/field_visibility.js`` reads. Unknown kinds return ``{}``
+    (every gated row is then hidden only if its flag is falsy).
+    """
+    from ovid2.web.kinds import get_kind, kind_flags
+
+    spec = get_kind(kind)
+    return kind_flags(spec) if spec is not None else {}
 
 
 _register_globals()

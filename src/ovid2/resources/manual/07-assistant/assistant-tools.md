@@ -20,8 +20,10 @@ model ─ tool call ─┬─ GET tool   → executor calls /api/v1/… with a p
 ## Read tools
 
 The assistant can read jobs, job logs, runs, timelines, health reports,
-pipeline configs and packages, formatter and mapper specs, addresses,
-connections, engines and the Data Space. These run automatically with a
+pipeline configs and packages, formatter and mapper specs, field-level
+lineage (`inspect_pipeline_lineage`, the same view as the
+[navigator](../03-web-panel/navigator.md)), addresses, connections,
+engines and the Data Space. These run automatically with a
 **per-turn token**. The token:
 
 - is **GET-only** (the API refuses anything else, even with auth off);

@@ -7,7 +7,8 @@ come from ``drivers/<type>/metadata.py``. Both are hand-maintained;
 ``test_connection_catalogues_synchronised.py`` only compares key sets.
 
 This test pins everything that changes behaviour — field names, order,
-``required``, ``default``, widget kind, and which fields are secrets —
+``required``, ``default``, widget kind, ``choices`` (UI rule U2), and
+which fields are secrets —
 for every type in :data:`ovid2.drivers.registry.DRIVERS`. Help text is
 deliberately *not* compared (the native copies carry richer prose).
 """
@@ -26,6 +27,8 @@ def _catalogue_widget(entry: dict[str, Any], *, location: bool) -> str:
     if entry.get("multiline"):
         return "multiline"
     if location:
+        if entry.get("widget") and entry.get("widget") != "str":
+            return str(entry["widget"])
         return str(entry.get("type") or "str")
     return str(entry.get("widget") or "str")
 
@@ -37,6 +40,7 @@ def _norm_catalogue(entries: list[dict[str, Any]], *, location: bool) -> list[tu
             bool(e.get("required", False)),
             e.get("default"),
             _catalogue_widget(e, location=location),
+            tuple(e.get("choices") or ()),
         )
         for e in entries
     ]
@@ -52,10 +56,13 @@ def _norm_driver(entries: Any) -> list[tuple[Any, ...]]:
                     bool(f.get("required", False)),
                     f.get("default"),
                     str(f.get("widget") or f.get("type") or "str"),
+                    tuple(f.get("choices") or ()),
                 )
             )
         else:
-            out.append((f.name, bool(f.required), f.default, str(f.widget or "str")))
+            out.append(
+                (f.name, bool(f.required), f.default, str(f.widget or "str"), tuple(f.choices))
+            )
     return out
 
 

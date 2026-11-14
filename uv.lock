@@ -772,6 +772,19 @@ wheels = [
 ]
 
 [[package]]
+name = "cssselect2"
+version = "0.10.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "tinycss2" },
+    { name = "webencodings" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/06/00/2456b6b664c7a770989cbe3c352aac4eb962c938486f03a2e1255ae963c6/cssselect2-0.10.1.tar.gz", hash = "sha256:83b0d820ef589dabaf693289b647c2f5b410f76d285f56deba911ffa75a7b9d1", size = 35653, upload-time = "2026-08-31T21:57:42.59Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bd/59/6b1daa3b94de8970e2a2787ba73616c2d0675d2f948ef4cad8bef7f21bc6/cssselect2-0.10.1-py3-none-any.whl", hash = "sha256:25cc4494d55985d6a6da359be48da6ce98c28dcbafa2314c383ace3fc32ec868", size = 15489, upload-time = "2026-08-31T21:57:41.162Z" },
+]
+
+[[package]]
 name = "databricks-sql-connector"
 version = "4.8.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2101,7 +2114,10 @@ dependencies = [
     { name = "click" },
     { name = "croniter" },
     { name = "duckdb" },
+    { name = "jinja2" },
     { name = "jsonschema" },
+    { name = "markdown-it-py" },
+    { name = "mdit-py-plugins" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "openpyxl" },
@@ -2109,6 +2125,7 @@ dependencies = [
     { name = "pyarrow" },
     { name = "pycryptodome" },
     { name = "pydantic" },
+    { name = "pygments" },
     { name = "python-dateutil" },
     { name = "pyyaml" },
     { name = "rich" },
@@ -2165,6 +2182,13 @@ mssql = [
 postgres = [
     { name = "psycopg", extra = ["binary"] },
 ]
+reports = [
+    { name = "python-docx" },
+    { name = "python-pptx" },
+    { name = "reportlab" },
+    { name = "svglib" },
+    { name = "vl-convert-python" },
+]
 s3 = [
     { name = "boto3" },
 ]
@@ -2203,10 +2227,13 @@ requires-dist = [
     { name = "httpx2", marker = "extra == 'web'", specifier = ">=2.9" },
     { name = "itsdangerous", marker = "extra == 'web'", specifier = ">=2.1" },
     { name = "jaydebeapi", marker = "extra == 'access'", specifier = ">=1.2" },
+    { name = "jinja2", specifier = ">=3.1" },
     { name = "jinja2", marker = "extra == 'web'", specifier = ">=3.1" },
     { name = "jpype1", marker = "extra == 'access'", specifier = ">=1.5" },
     { name = "jsonschema", specifier = ">=4.21" },
+    { name = "markdown-it-py", specifier = ">=3.0" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2.0" },
+    { name = "mdit-py-plugins", specifier = ">=0.4" },
     { name = "mypy", marker = "extra == 'dev'", specifier = "==2.3.1" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "openpyxl", specifier = ">=3.1" },
@@ -2217,6 +2244,7 @@ requires-dist = [
     { name = "pyarrow", specifier = ">=15.0,<24" },
     { name = "pycryptodome", specifier = ">=3.20" },
     { name = "pydantic", specifier = ">=2.6" },
+    { name = "pygments", specifier = ">=2.17" },
     { name = "pymssql", marker = "extra == 'mssql'", specifier = ">=2.3" },
     { name = "pyspark", marker = "extra == 'spark'", specifier = ">=4.1,<4.2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.2" },
@@ -2224,9 +2252,12 @@ requires-dist = [
     { name = "pytest-json-report", marker = "extra == 'dev'", specifier = ">=1.5" },
     { name = "python-dateutil", specifier = ">=2.8" },
     { name = "python-docx", marker = "extra == 'export'", specifier = ">=1.1" },
+    { name = "python-docx", marker = "extra == 'reports'", specifier = ">=1.1" },
     { name = "python-multipart", marker = "extra == 'web'", specifier = ">=0.0.9" },
+    { name = "python-pptx", marker = "extra == 'reports'", specifier = ">=1.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "reportlab", marker = "extra == 'export'", specifier = ">=4.0" },
+    { name = "reportlab", marker = "extra == 'reports'", specifier = ">=4.0" },
     { name = "rich", specifier = ">=13.7" },
     { name = "ruamel-yaml", marker = "extra == 'web'", specifier = ">=0.18" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.16.1" },
@@ -2234,6 +2265,7 @@ requires-dist = [
     { name = "snowflake-snowpark-python", specifier = ">=1.15" },
     { name = "sqlalchemy", specifier = ">=2.0" },
     { name = "sqlglot", specifier = ">=27,<31" },
+    { name = "svglib", marker = "extra == 'reports'", specifier = ">=1.5" },
     { name = "textual", specifier = ">=0.60" },
     { name = "types-croniter", marker = "extra == 'dev'" },
     { name = "types-jsonschema", marker = "extra == 'dev'" },
@@ -2242,9 +2274,10 @@ requires-dist = [
     { name = "types-pyyaml", marker = "extra == 'dev'" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'mcp'", specifier = ">=0.30" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'web'", specifier = ">=0.30" },
+    { name = "vl-convert-python", marker = "extra == 'reports'", specifier = ">=1.7" },
     { name = "xlsxwriter", specifier = ">=3.2" },
 ]
-provides-extras = ["dev", "spark", "azure", "access", "s3", "postgres", "mssql", "databricks", "gcs", "export", "web", "mcp"]
+provides-extras = ["dev", "spark", "azure", "access", "s3", "postgres", "mssql", "databricks", "gcs", "export", "reports", "web", "mcp"]
 
 [[package]]
 name = "packaging"
@@ -3028,6 +3061,21 @@ wheels = [
 ]
 
 [[package]]
+name = "python-pptx"
+version = "1.0.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "lxml" },
+    { name = "pillow" },
+    { name = "typing-extensions" },
+    { name = "xlsxwriter" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/52/a9/0c0db8d37b2b8a645666f7fd8accea4c6224e013c42b1d5c17c93590cd06/python_pptx-1.0.2.tar.gz", hash = "sha256:479a8af0eaf0f0d76b6f00b0887732874ad2e3188230315290cd1f9dd9cc7095", size = 10109297, upload-time = "2024-08-07T17:33:37.772Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d9/4f/00be2196329ebbff56ce564aa94efb0fbc828d00de250b1980de1a34ab49/python_pptx-1.0.2-py3-none-any.whl", hash = "sha256:160838e0b8565a8b1f67947675886e9fea18aa5e795db7ae531606d68e785cba", size = 472788, upload-time = "2024-08-07T17:33:28.192Z" },
+]
+
+[[package]]
 name = "pytz"
 version = "2026.3.post1"
 source = { registry = "https://pypi.org/simple" }
@@ -3509,6 +3557,22 @@ wheels = [
 ]
 
 [[package]]
+name = "svglib"
+version = "2.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cssselect2" },
+    { name = "lxml" },
+    { name = "pillow" },
+    { name = "reportlab" },
+    { name = "tinycss2" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3b/28/a6ee60efe99f951231e3e07436f98508d491eb47b9bb21318bd419c02b52/svglib-2.4.0.tar.gz", hash = "sha256:90f58628ca7e6d48b40f638ad0dab472f2994f823eb33a623c8fa28e434ce574", size = 1393162, upload-time = "2026-11-04T20:25:35.936Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/17/1c/2e8b399682f171ecbe9a9bd0551c71229a43564b175ad2abfa541772dad3/svglib-2.4.0-py3-none-any.whl", hash = "sha256:0c69c9a7ce14d375f70fed2572f8db7ff4bd7e714be9e6476e392c8703bde97a", size = 55754, upload-time = "2026-11-04T20:25:34.3Z" },
+]
+
+[[package]]
 name = "textual"
 version = "8.2.8"
 source = { registry = "https://pypi.org/simple" }
@@ -3563,6 +3627,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/f7/b4/f1a89ddd900b901f25cd784f2ad696038920a0f97ab74136c78ebbd3a272/thrift-0.25.0-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:6b42e755f38a536abfb3691ecc2850cdb61fe60848dd1ef434da26ac6dc31547", size = 1555187, upload-time = "2026-09-30T21:55:47.405Z" },
     { url = "https://files.pythonhosted.org/packages/5a/b1/70e0b40452ba223500f725a7df649ecfe89c21ababfc7678791a8bbcbd5f/thrift-0.25.0-cp314-cp314-win_amd64.whl", hash = "sha256:779da544bd3ce68ebb17a21b01db638a8e6c5a65f878e54374c90278e64d98ae", size = 431093, upload-time = "2026-09-30T21:55:48.891Z" },
     { url = "https://files.pythonhosted.org/packages/a0/19/4afcc4f4bd7fd81a6dc10fb796f69709266e7db0b8bcaa64a840585486a1/thrift-0.25.0-cp314-cp314-win_arm64.whl", hash = "sha256:07aa3ccd64304f77b315e4087b7ebf8e537935c070612fc5ad12c8076085ef3a", size = 605619, upload-time = "2026-09-30T21:55:50.263Z" },
+]
+
+[[package]]
+name = "tinycss2"
+version = "1.5.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "webencodings" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a3/ae/2ca4913e5c0f09781d75482874c3a95db9105462a92ddd303c7d285d3df2/tinycss2-1.5.1.tar.gz", hash = "sha256:d339d2b616ba90ccce58da8495a78f46e55d4d25f9fd71dfd526f07e7d53f957", size = 88195, upload-time = "2025-11-23T10:29:10.082Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/60/45/c7b5c3168458db837e8ceab06dc77824e18202679d0463f0e8f002143a97/tinycss2-1.5.1-py3-none-any.whl", hash = "sha256:3415ba0f5839c062696996998176c4a3751d18b7edaaeeb658c9ce21ec150661", size = 28404, upload-time = "2025-11-23T10:29:08.676Z" },
 ]
 
 [[package]]
@@ -3822,6 +3898,19 @@ wheels = [
 ]
 
 [[package]]
+name = "vl-convert-python"
+version = "1.9.0.post1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/93/89/36722344d1758ec2106f4e8eca980f173cfe8f8d0358c1b77cc5d2e035a4/vl_convert_python-1.9.0.post1.tar.gz", hash = "sha256:a5b06b3128037519001166f5341ec7831e19fbd7f3a5f78f73d557ac2d5859ef", size = 4663469, upload-time = "2026-01-21T00:09:55.61Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9f/59/e5862245972ff467d38b0eb5ad28154685e23ecabb47e14f2b6962da7b56/vl_convert_python-1.9.0.post1-cp37-abi3-macosx_10_12_x86_64.whl", hash = "sha256:43e9515f65bbcd317d1ef328787fd7bf0344c2fde9292eb7a0e64d5d3d29fccb", size = 30512930, upload-time = "2026-01-21T00:09:43.198Z" },
+    { url = "https://files.pythonhosted.org/packages/62/e6/e7d0b538c2f0daaf120901dc113bd5d5d1fa51a9532fa5ffd90234e8c69e/vl_convert_python-1.9.0.post1-cp37-abi3-macosx_11_0_arm64.whl", hash = "sha256:b0e7a3245f32addec7e7abeb1badf72b1513ed71ba1dba7aca853901217b3f4e", size = 29738742, upload-time = "2026-01-21T00:09:46.016Z" },
+    { url = "https://files.pythonhosted.org/packages/b8/e2/5645a1bc174c53ff8cd305ed76a4a76ba36e155302db20b42b7e78daeef8/vl_convert_python-1.9.0.post1-cp37-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:e6ecfe4b7e2ea9e8c30fd6d6eaea3ef85475be1ad249407d9796dce4ecdb5b32", size = 33366278, upload-time = "2026-01-21T00:09:48.42Z" },
+    { url = "https://files.pythonhosted.org/packages/a0/18/88e02899b72fa8273ffb32bde12b0e5776ee0fd9fb29559a49c48ec4c5fa/vl_convert_python-1.9.0.post1-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:3c1558fa0055e88c465bd3d71760cde9fa2c94a95f776a0ef9178252fd820b1f", size = 33520215, upload-time = "2026-01-21T00:09:50.992Z" },
+    { url = "https://files.pythonhosted.org/packages/2f/db/6e8616587035bf0745d0f10b1791c7e945180ac5d6b28677d2f2b3ca693c/vl_convert_python-1.9.0.post1-cp37-abi3-win_amd64.whl", hash = "sha256:7e263269ac0d304640ca842b44dfe430ed863accd9edecff42e279bfc48ce940", size = 32051516, upload-time = "2026-01-21T00:09:53.47Z" },
+]
+
+[[package]]
 name = "watchfiles"
 version = "1.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3923,6 +4012,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/27/0b/a54103cfd732bb703c7a749222011a0483ef3705948dae3b203158601119/watchfiles-1.2.0-pp311-pypy311_pp73-macosx_11_0_arm64.whl", hash = "sha256:094b9b70103d4e963499bdea001ee3c2697b144cd9ae6218a62c0f89ec9e31db", size = 396629, upload-time = "2026-05-18T04:32:03.268Z" },
     { url = "https://files.pythonhosted.org/packages/5e/2c/73f31a3b893886206c3f54d73e8ad8dee58cdb2f69ad2622e0a8a9e07f4e/watchfiles-1.2.0-pp311-pypy311_pp73-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:b0ef001f8c25ad0fa9529f914c1600647ecd0f542d11c19b7894768c67b6acb7", size = 457318, upload-time = "2026-05-18T04:31:01.932Z" },
     { url = "https://files.pythonhosted.org/packages/e9/f9/45d021e4a5cc7b9dd567f7cbb06d3b75f751a690063fb6cc7ec60f4e46b7/watchfiles-1.2.0-pp311-pypy311_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a88fc94e647bc4eec523f1caa540258eb71d14278b9daf72fa1e2658a98df0f0", size = 457771, upload-time = "2026-05-18T04:30:56.331Z" },
+]
+
+[[package]]
+name = "webencodings"
+version = "0.6.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d5/a0/8fd707bcb776a7be556bad06a2ea5fb9bd519df78ef8e26f70ccf0f38bff/webencodings-0.6.1.tar.gz", hash = "sha256:565f9ad031c702dae404e27a099e3e09186a3ab1b9520f06d215502b651fd910", size = 15001, upload-time = "2026-08-15T14:22:57.549Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/77/c6/040cbc72480d789a5f40d63fb484d3106554c4dfa2d2b70ad5022057750f/webencodings-0.6.1-py3-none-any.whl", hash = "sha256:7fab6269c8bf237c657876b52058ccb182e861518d1c695c1a9aaa8c1c105d5b", size = 8745, upload-time = "2026-08-15T14:22:56.31Z" },
 ]
 
 [[package]]

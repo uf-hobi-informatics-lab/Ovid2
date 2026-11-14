@@ -36,6 +36,7 @@ Install only the extras you need:
 | `gcs`, `postgres`, `mssql`, `databricks` | the matching SDKs | you browse those stores from the panel |
 | `access` | JPype + jaydebeapi | you list Access tables on the host |
 | `export` | reportlab, python-docx | you export tables to PDF or Word |
+| `reports` | vl-convert, svglib, reportlab, python-docx, python-pptx | you export Report Studio reports (PDF, Word, PowerPoint, images) |
 | `dev` | ruff, mypy, pytest, pre-commit | you work on Ovid2 |
 
 > [!NOTE]

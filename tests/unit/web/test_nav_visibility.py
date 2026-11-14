@@ -233,5 +233,19 @@ def test_enabled_footer_drops_no_auth_line(
     assert "No auth" not in body
 
 
+@pytest.mark.unit
+def test_nav_icons_are_distinct(monkeypatch: pytest.MonkeyPatch, app_client: TestClient) -> None:
+    """Every drawer entry uses its own icon (no two items share a glyph)."""
+    import re
+
+    _enable_auth(monkeypatch, enabled=False)
+    _set_cookie(app_client, None)
+    nav = _nav_region(app_client.get("/").text)
+    svgs = re.findall(r"<svg[^>]*nav-icon[^>]*>(.*?)</svg>", nav, flags=re.S)
+    assert len(svgs) >= 10
+    dupes = {s for s in svgs if svgs.count(s) > 1}
+    assert not dupes, f"duplicate nav icons: {len(dupes)}"
+
+
 if __name__ == "__main__":
     raise SystemExit("test module; run via pytest.")

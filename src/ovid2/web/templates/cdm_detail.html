@@ -21,7 +21,7 @@
           the registry &mdash; it never imports the CDM module directly.
         {% endcall %}
       </h1>
-      <p class="pl-subtitle">
+      <p class="pl-meta">
         {% if cdm.version %}Version <span class="mono">{{ cdm.version }}</span>{% else %}Unversioned{% endif %}
         &middot; {{ 'YAML-authored' if cdm.has_yaml else 'Declared in Python' }}
       </p>
@@ -221,15 +221,10 @@
   <div class="pl-panel">
   <div class="pl-panel-head">
     <span class="pl-card-badge">{{ icons.icon("check-square", size=16) }}</span>
-    <h2>Valuesets</h2>
+    <h2>Valuesets {% call help.tip_block() %}Bounded enums registered on this CDM. Full code lists live in the <a href="/api/v1/cdms/{{ cdm.name }}">API response</a> and in the semantic layer (<code>ovid2 semantic list-vocabularies</code>).{% endcall %}</h2>
     <span class="group-count">{{ cdm.valuesets | length }}</span>
   </div>
   {% if cdm.valuesets %}
-    <p class="note small">
-      Bounded enums registered on this CDM. Full code lists live in the
-      <a href="/api/v1/cdms/{{ cdm.name }}">API response</a> and in the
-      semantic layer (<code>ovid2 semantic list-vocabularies</code>).
-    </p>
     <div class="table-wrap">
     <table class="runs-table">
       <thead>

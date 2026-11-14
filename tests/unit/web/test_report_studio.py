@@ -8,6 +8,7 @@ worker's post-run ingest hook and the HTML pages.
 
 from __future__ import annotations
 
+import io
 import json
 from collections.abc import Iterator
 from pathlib import Path
@@ -266,9 +267,52 @@ def test_html_pages(client: TestClient, source_id: str) -> None:
     assert 'data-nav="reports"' in client.get("/").text
 
 
+def test_studio_has_autosave_toggle(client: TestClient, source_id: str) -> None:
+    rid = client.post("/api/v1/reports", json={"source_id": source_id}).json()["report_id"]
+    page = client.get(f"/reports/{rid}").text
+    head = page.split('class="rs-studio-head"', 1)[1].split("</header>", 1)[0]
+    assert 'type="checkbox" role="switch" data-autosave' in head
+    assert "data-save-state" in head and "data-save" in head
+
+
+def test_autosave_versions_are_noted(client: TestClient, source_id: str) -> None:
+    rep = client.post("/api/v1/reports", json={"source_id": source_id}).json()
+    rid = rep["report_id"]
+    lay = dict(rep["layout"], title="Autosaved title")
+    r = client.put(
+        f"/api/v1/reports/{rid}",
+        json={"layout": lay, "expected_version": 1, "note": "Autosave"},
+    )
+    assert r.status_code == 200 and r.json()["version"] == 2
+    latest = client.get(f"/api/v1/reports/{rid}/versions").json()[0]
+    assert latest["version"] == 2 and latest["note"] == "Autosave"
+
+
 # ---------------------------------------------------------------------------
 # Export (real executor subprocess)
 # ---------------------------------------------------------------------------
+
+
+def test_catalogue_lists_pptx(client: TestClient) -> None:
+    fmts = {f["format"] for f in client.get("/api/v1/report-catalogue").json()["export_formats"]}
+    assert "pptx" in fmts
+
+
+def test_export_pptx(client: TestClient, source_id: str) -> None:
+    pptx = pytest.importorskip("pptx")
+    pytest.importorskip("vl_convert")
+    rid = client.post("/api/v1/reports", json={"source_id": source_id}).json()["report_id"]
+    r = client.post(f"/api/v1/reports/{rid}/exports", json={"format": "pptx"})
+    assert r.status_code == 201, r.text
+    meta = r.json()
+    assert meta["filename"].endswith(".pptx")
+    dl = client.get(meta["download_url"])
+    assert dl.status_code == 200
+    assert dl.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    )
+    prs = pptx.Presentation(io.BytesIO(dl.content))
+    assert len(prs.slides) >= 2
 
 
 def test_export_json_roundtrip(client: TestClient, source_id: str) -> None:

@@ -18,7 +18,14 @@ from __future__ import annotations
 
 from typing import Any
 
-__all__ = ["CANONICAL_KEYS", "FIXER_CATALOGUE", "list_fixers"]
+__all__ = [
+    "CANONICAL_KEYS",
+    "FIXER_CATALOGUE",
+    "FIXER_COLUMN_ROLES",
+    "LEGACY_FIX_NAMES",
+    "list_fixers",
+    "native_fix_name",
+]
 
 #: Keys every fix entry may carry regardless of aliases.
 CANONICAL_KEYS: frozenset[str] = frozenset({"fix", "src1", "src2", "table", "version"})
@@ -140,6 +147,112 @@ FIXER_CATALOGUE: dict[str, dict[str, Any]] = {
         "aliases": {"target_column": "src1"},
     },
 }
+
+
+#: Which columns each fixer touches, resolved against the *normalised*
+#: ``src1`` / ``src2`` slots (grammar: :mod:`ovid2.config.column_roles`;
+#: UPPERCASE tokens are literal columns). Derived from each fixer's
+#: ``apply`` body — the ground truth of what runs — not from
+#: :data:`FIXER_CATALOGUE` aliases. ``test_column_roles_complete.py`` pins
+#: one role per fixer.
+FIXER_COLUMN_ROLES: dict[str, dict[str, Any]] = {
+    "add_missing_hash_token_patids": {"scope": "rows", "reads": ["PATID"], "tables": ["src1"]},
+    "append_to_existing_lds_address_hx": {
+        "scope": "rows",
+        "writes": ["ADDRESS_PERIOD_START", "ADDRESS_PERIOD_END"],
+    },
+    "copy_admit_date_or_delete": {
+        "scope": "field",
+        "inplace": ["src1:csv"],
+        "reads": ["ENCOUNTERID"],
+        "tables": ["src2"],
+        "filters_rows": True,
+    },
+    "copy_when_null": {"scope": "field", "inplace": ["src1"], "reads": ["src2"]},
+    "delete_records_after_death": {
+        "scope": "field",
+        "reads": ["src1", "PATID"],
+        "tables": ["src2"],
+        "filters_rows": True,
+    },
+    "delete_records_before_birth": {
+        "scope": "field",
+        "reads": ["src1", "PATID"],
+        "tables": ["src2"],
+        "filters_rows": True,
+    },
+    "delete_when_null": {"scope": "field", "reads": ["src1"], "filters_rows": True},
+    "delete_when_null_or_fon": {"scope": "field", "reads": ["src1"], "filters_rows": True},
+    "encounterid_orphans": {"scope": "field", "inplace": ["ENCOUNTERID"], "tables": ["src1"]},
+    "future_date_to_null": {"scope": "field", "inplace": ["src1"]},
+    "illogical_admit_date": {"scope": "field", "inplace": ["src1"], "reads": ["ADMIT_DATE"]},
+    "illogical_discharge_date": {
+        "scope": "field",
+        "inplace": ["src1"],
+        "reads": ["ENCOUNTERID"],
+        "tables": ["src2"],
+    },
+    "invalid_to_null": {"scope": "field", "reads": ["src1"], "filters_rows": True},
+    "list_remover": {"scope": "field", "reads": ["src2"], "filters_rows": True},
+    "loinc_mover": {
+        "scope": "field",
+        "by_table": {
+            "lab_result_cm": "LAB_LOINC",
+            "obs_clin": "OBSCLIN_CODE",
+            "obs_gen": "OBSGEN_CODE",
+        },
+        "filters_rows": True,
+    },
+    "norm_range_normalization": {
+        "scope": "field",
+        "inplace": ["NORM_MODIFIER_LOW", "NORM_MODIFIER_HIGH", "NORM_RANGE_LOW", "NORM_RANGE_HIGH"],
+    },
+    "null_date_to_harvest_refresh": {"scope": "field", "inplace": ["src1"]},
+    "panel_loinc_remover": {"scope": "field", "reads": ["src2:csv"], "filters_rows": True},
+    "patid_orphans": {
+        "scope": "field",
+        "reads": ["src2|PATID"],
+        "tables": ["src1"],
+        "filters_rows": True,
+    },
+    "patterns_remover": {"scope": "field", "reads": ["src2"], "filters_rows": True},
+    "providerid_orphans": {"scope": "field", "inplace": ["src2"], "tables": ["src1"]},
+    "race_eth": {
+        "scope": "field",
+        "reads": ["src1|RACE", "src2|HISPANIC"],
+        "writes": [
+            "RACE_ETH_AI_AN",
+            "RACE_ETH_ASIAN",
+            "RACE_ETH_BLACK",
+            "RACE_ETH_NH_PI",
+            "RACE_ETH_WHITE",
+            "RACE_ETH_HISPANIC",
+            "RACE_ETH_MISSING",
+        ],
+    },
+    "replication": {
+        "scope": "field",
+        "reads": ["ENCOUNTERID"],
+        "writes": ["ADMIT_DATE", "ENC_TYPE"],
+        "tables": ["src1"],
+    },
+}
+
+#: Legacy (vendored) fixer names whose stem differs from the Ovid2 fixer.
+LEGACY_FIX_NAMES: dict[str, str] = {
+    "illogical_admit_date_more_than_5_days_fix": "illogical_admit_date",
+    "illogical_discharge_date_more_than_5_days_fix": "illogical_discharge_date",
+    "delete_when_null_or_flavor_of_null_fix": "delete_when_null_or_fon",
+    "inavalid_to_null_fix": "invalid_to_null",
+}
+
+
+def native_fix_name(legacy_name: str) -> str | None:
+    """Return the Ovid2 fixer a vendored legacy ``fix_name`` corresponds to."""
+    if legacy_name in LEGACY_FIX_NAMES:
+        return LEGACY_FIX_NAMES[legacy_name]
+    stem = legacy_name.removesuffix("_fix")
+    return stem if stem in FIXER_CATALOGUE else None
 
 
 def list_fixers(cdm: str | None = None) -> list[dict[str, Any]]:

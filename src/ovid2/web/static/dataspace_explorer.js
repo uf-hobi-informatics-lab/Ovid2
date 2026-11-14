@@ -524,11 +524,11 @@ class DataSpaceExplorer {
     }
     this.main.innerHTML =
       '<div class="card">' +
-      '<h2>Storage accounts <span class="tree-count">' + total + "</span></h2>" +
-      '<p class="muted small">Every storage account is a tree of folders — disc, object stores and ' +
-      "warehouses alike. Open an account to browse its folders or schemas; open a table to see " +
-      "its fields, row count, a sample of its data and to export it. A folder's full path is the " +
-      "batch id of a run that reads it.</p>" +
+      '<h2>Storage accounts <span class="tree-count">' + total + "</span> " +
+      (window.Ovid2HelpTip ? window.Ovid2HelpTip.html("Every storage account is a tree of folders — disc, object stores and " +
+        "warehouses alike. Open an account to browse its folders or schemas; open a table to see " +
+        "its fields, row count, a sample of its data and to export it. A folder's full path is the " +
+        "batch id of a run that reads it.") : "") + "</h2>" +
       '<div class="ds-type-grid">' + typeCards + "</div></div>" +
       '<div class="card">' + (accountsHtml || '<p class="muted">No storage accounts yet.</p>') + "</div>";
   }

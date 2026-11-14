@@ -814,10 +814,22 @@ def runs_page(
         "status": status,
         "pipeline": pipeline,
         "selected": selected,
+        "pipeline_names": _run_filter_pipelines(),
     }
     if selected:
         context.update(_run_detail_context(selected))
     return templates.TemplateResponse(request, "runs.html", context)
+
+
+def _run_filter_pipelines() -> list[str]:
+    """Return the names the runs-page pipeline filter offers (UI rule U2).
+
+    Every configured pipeline's package / label plus every installed
+    package — the values a run's ``pipeline`` field can take.
+    """
+    names = {c.pipeline for c in pipelines_svc.list_pipelines() if c.pipeline}
+    names.update(pipelines_meta_svc.discover_pipelines())
+    return sorted(names)
 
 
 @router.get("/partials/runs/list", response_class=HTMLResponse, include_in_schema=False)
@@ -981,6 +993,7 @@ def run_detail_page(
             "status": None,
             "pipeline": None,
             "selected": identifier,
+            "pipeline_names": _run_filter_pipelines(),
         }
     )
     return templates.TemplateResponse(request, "runs.html", context)
@@ -1227,6 +1240,7 @@ def pipeline_new_page(request: Request, error: str | None = None) -> HTMLRespons
         "pipeline_new.html",
         {
             "templates": templates_svc.list_pipeline_templates(),
+            "kind_choices": _kind_choices(),
             "error": error,
         },
     )
@@ -1258,6 +1272,7 @@ async def pipeline_new_post(request: Request) -> HTMLResponse | RedirectResponse
             "pipeline_new.html",
             {
                 "templates": templates_svc.list_pipeline_templates(),
+                "kind_choices": _kind_choices(),
                 "error": str(exc),
                 "form": form,
             },
@@ -1313,6 +1328,61 @@ def pipeline_builder_page(
     )
 
 
+@router.get(
+    "/navigator",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def navigator_page(
+    request: Request,
+    p: str | None = None,
+    t: str | None = None,
+    f: str | None = None,
+    group_by: str = "cdm",
+) -> HTMLResponse:
+    """The pipeline navigator: every package → table → field → chain of functions.
+
+    Left — a collapsible, filterable tree of packages grouped by a
+    switchable axis (target CDM, ETL profile, run kind, template).
+    Centre — an overview graph of the selected package or the per-field
+    *lanes* of a table (one row per CDM field, one column per stage).
+    Right — the shared spec editor (Form / YAML) opened at the clicked step.
+    Deep link: ``/navigator?p=<package>&t=<table>&f=<FIELD>``.
+
+    Everything after the first paint is read through the JSON API
+    (``static/navigator.js``); this handler only renders the shell and the
+    grouped package list.
+    """
+    from ovid2.web.services import pipeline_lineage_svc
+
+    if group_by not in pipeline_lineage_svc.GROUP_BY:
+        group_by = "cdm"
+    tree = pipeline_lineage_svc.navigator_tree(group_by)
+    return templates.TemplateResponse(
+        request,
+        "navigator.html",
+        {
+            "tree": tree,
+            "group_by": group_by,
+            "group_by_labels": _NAVIGATOR_GROUP_LABELS,
+            "stages": list(pipeline_lineage_svc.STAGES),
+            "initial": {"p": p or "", "t": t or "", "f": f or ""},
+            "can_write": _can_manage_config(request),
+        },
+    )
+
+
+#: Display labels for the navigator's group-by select (UI rule U2).
+_NAVIGATOR_GROUP_LABELS: dict[str, str] = {
+    "cdm": "Target CDM",
+    "profile": "ETL profile",
+    "kind": "Run kind",
+    "template": "Template",
+    "cdm_profile": "CDM · profile",
+}
+
+
 @router.get("/transforms", response_class=HTMLResponse, include_in_schema=False)
 def transforms_library_page(request: Request, name: str | None = None) -> HTMLResponse:
     """The transform library: reusable chains ("UDFs") + the op catalogue.
@@ -1327,6 +1397,10 @@ def transforms_library_page(request: Request, name: str | None = None) -> HTMLRe
         {
             "initial_name": name or "",
             "pipelines": pipelines_meta_svc.discover_pipelines(),
+            # UI rule U2: per-package CDM table rosters for the assign picker.
+            "pipeline_tables": {
+                p: _cdm_tables_for(None, p) for p in pipelines_meta_svc.discover_pipelines()
+            },
             "can_write": _can_manage_config(request),
         },
     )
@@ -1352,6 +1426,12 @@ def reports_library_page(request: Request) -> HTMLResponse:
         {
             "can_write": bool(has_cap(request, "run_reports")),
             "initial_source": request.query_params.get("source") or "",
+            # UI rule U2: the ingest picker lists finished runs (no free text).
+            "ingestable_runs": [
+                r
+                for r in runs_svc.list_runs(limit=100, offset=0).runs
+                if r.instance_id and r.status in ("PROCESSED", "ERROR")
+            ],
         },
     )
 
@@ -1389,8 +1469,17 @@ def report_studio_page(request: Request, report_id: str) -> HTMLResponse:
             "can_edit": bool(has_cap(request, "run_reports"))
             and report["permission"] in ("owner", "edit"),
             "is_owner": report["permission"] == "owner",
+            # Roles a report can be shared with (U2: a select, not text).
+            "shareable_roles": _shareable_roles(),
         },
     )
+
+
+def _shareable_roles() -> list[str]:
+    """Return the role names a report may be shared with (active roles only)."""
+    from ovid2.web.auth.roles import Role
+
+    return [r.value for r in Role if r not in (Role.GUEST, Role.PENDING)]
 
 
 def _can_manage_config(request: Request) -> bool:
@@ -1485,6 +1574,8 @@ def formatter_new_page(
             "pipeline": pipeline,
             "table": "",
             "raw_text": "adapter: source_passthrough\n",
+            # UI rule U2: the table must be one of the pipeline CDM's tables.
+            "cdm_tables": _cdm_tables_for(None, pipeline),
             "error": error,
         },
     )
@@ -1654,6 +1745,8 @@ def mapper_new_page(
             "pipeline": pipeline,
             "table": "",
             "raw_text": "ops: []\n",
+            # UI rule U2: the table must be one of the pipeline CDM's tables.
+            "cdm_tables": _cdm_tables_for(None, pipeline),
             "error": error,
         },
     )
@@ -1991,6 +2084,9 @@ def submit_form(
             "storage_accounts": storage_accounts,
             "engines": engines_svc.list_engines(),
             "engine_types": [t.type for t in engines_svc.list_engine_types()],
+            # Engine type → family so field_visibility.js can hide fields
+            # that do not apply to the chosen engine (UI rule U1).
+            "engine_families": _engine_families(),
             "pipeline_kinds": PIPELINE_KINDS,
             "kind_choices": kind_choices(),
             "generic_labels": sorted(GENERIC_CDM_LABELS.keys()),
@@ -2667,6 +2763,30 @@ async def connection_update_post(request: Request, name: str) -> RedirectRespons
 # ---------------------------------------------------------------------------
 
 
+def _resolve_field_choices(spec: dict[str, Any]) -> dict[str, Any]:
+    """Resolve dynamic ``choices_from`` sources on a catalogue field spec.
+
+    UI rule U2: a field whose value must name a saved resource renders as
+    a ``<select>``. ``choices_from: "connections:<type>"`` lists the saved
+    connections of that type (names only — never secrets).
+
+    Args:
+        spec: A ``{args, secrets}`` field spec (already a copy).
+
+    Returns:
+        The same dict with ``choices`` filled on every dynamic field.
+    """
+    for group in ("args", "secrets"):
+        for field in spec.get(group) or []:
+            source = str(field.get("choices_from") or "")
+            if source.startswith("connections:"):
+                wanted = source.split(":", 1)[1]
+                field["choices"] = sorted(
+                    c.name for c in connections_svc.list_connections() if c.type == wanted
+                )
+    return spec
+
+
 @router.get("/warehouses", response_class=HTMLResponse, include_in_schema=False)
 def warehouses_page(request: Request) -> HTMLResponse:
     """List every warehouse (backed by engine configs)."""
@@ -2695,7 +2815,7 @@ def engine_new_page(
     known_types = _engines_config.list_engine_types()
     if type not in known_types:
         type = "pyspark"
-    spec = _engines_config.engine_field_spec(type)
+    spec = _resolve_field_choices(_engines_config.engine_field_spec(type))
     return templates.TemplateResponse(
         request,
         "engine_edit.html",
@@ -2743,7 +2863,7 @@ def engine_edit_page(
         raise HTTPException(status_code=404, detail=f"Engine '{name}' not found.")
     from ovid2.config import engines as _engines_config
 
-    spec = _engines_config.engine_field_spec(detail.type)
+    spec = _resolve_field_choices(_engines_config.engine_field_spec(detail.type))
     return templates.TemplateResponse(
         request,
         "engine_edit.html",
@@ -2859,8 +2979,50 @@ def cdm_detail_page(request: Request, name: str) -> HTMLResponse:
 # ---------------------------------------------------------------------------
 
 
+def _flatten_pipeline_edit_form(raw_form: Any) -> dict[str, str]:
+    """Collapse the pipeline editor's multi-value fields into the flat shape.
+
+    UI rule U2: the editor renders stages as ``transformations`` checkboxes
+    and (for ``tables_mode=all`` kinds) tables as a mode ``<select>`` +
+    ``tables_pick`` checkboxes. :func:`_build_pipeline_write` reads
+    space-separated strings, so join the lists here:
+
+    - ``transformations`` — every ticked stage, or ``all`` when all five
+      are ticked;
+    - ``tables`` — ``all`` for ``tables_mode=all``, the ticked tables for
+      ``tables_mode=pick``; copy / move post a plain ``tables`` text field
+      (no ``tables_mode``) which passes through unchanged.
+
+    Args:
+        raw_form: The Starlette ``FormData``.
+
+    Returns:
+        A ``{name: str}`` dict.
+    """
+    from ovid2.web.services.pipeline_plan_svc import TRANSFORMATION_STAGES
+
+    form = {k: str(v) for k, v in raw_form.items()}
+    stages = [str(v) for v in raw_form.getlist("transformations") if str(v).strip()]
+    if stages:
+        form["transformations"] = (
+            "all" if set(stages) >= set(TRANSFORMATION_STAGES) else " ".join(stages)
+        )
+    mode = form.pop("tables_mode", "")
+    picked = [str(v) for v in raw_form.getlist("tables_pick") if str(v).strip()]
+    form.pop("tables_pick", None)
+    if mode == "all":
+        form["tables"] = "all"
+    elif mode == "pick":
+        if not picked:
+            form["__error__"] = "Pick at least one table, or choose 'all configured tables'."
+        form["tables"] = " ".join(picked)
+    return form
+
+
 def _build_pipeline_write(form: dict[str, str]) -> PipelineWrite:
     """Parse a pipeline form dict into a :class:`PipelineWrite`."""
+    if form.get("__error__"):
+        raise ValueError(form["__error__"])
     trigger_type = str(form.get("trigger_type", "manual")).strip() or "manual"
     trigger_kwargs: dict[str, object] = {"type": trigger_type}
     if trigger_type == "cron":
@@ -3058,6 +3220,8 @@ def pipelines_page(request: Request) -> HTMLResponse:
             "supports_all_names": supports_all_names,
             # Packages the "Customize" builder can open.
             "package_names": set(pipelines_meta_svc.discover_pipelines()),
+            # UI rule U2: the CDM filter is a select over registered CDMs.
+            "cdms": _list_registered_cdms(),
         },
     )
 
@@ -3122,6 +3286,13 @@ def _new_pipeline_context(
         "error": error,
         "form": form,
     }
+
+
+def _kind_choices() -> list[dict[str, Any]]:
+    """Return :func:`ovid2.web.kinds.kind_choices` (lazy import)."""
+    from ovid2.web.kinds import kind_choices
+
+    return kind_choices()
 
 
 def _engine_families() -> dict[str, str]:
@@ -3325,6 +3496,7 @@ def pipeline_config_edit_page(
     from ovid2.config import addresses as _addresses
     from ovid2.web.kinds import kind_choices
     from ovid2.web.models import PIPELINE_KINDS
+    from ovid2.web.services.pipeline_plan_svc import TRANSFORMATION_STAGES
 
     return templates.TemplateResponse(
         request,
@@ -3337,9 +3509,30 @@ def pipeline_config_edit_page(
             "pipeline_kinds": list(PIPELINE_KINDS),
             "kind_choices": kind_choices(),
             "cdms": _list_registered_cdms(),
+            # UI rule U2 — engine / stages / tables are pickers.
+            "engines": engines_svc.list_engines(),
+            "engine_types": [t.type for t in engines_svc.list_engine_types()],
+            "engine_families": _engine_families(),
+            "transformation_stages": list(TRANSFORMATION_STAGES),
+            "cdm_tables": _cdm_tables_for(detail.cdm, detail.pipeline),
             "error": error,
         },
     )
+
+
+def _cdm_tables_for(cdm: str | None, pipeline: str) -> list[str]:
+    """Return the table roster for ``cdm`` (or the pipeline's resolved CDM).
+
+    Read-only registry lookup for the editor's table picker; an
+    unresolvable CDM yields ``[]`` so the page still renders.
+    """
+    from ovid2.cdm.registry import get_cdm, resolve_cdm_for_pipeline
+
+    try:
+        handle = get_cdm(cdm) if cdm else resolve_cdm_for_pipeline(pipeline)
+    except (ValueError, ImportError):
+        return []
+    return list(handle.tables())
 
 
 @router.post(
@@ -3599,9 +3792,10 @@ def pipeline_config_detail_page(
 )
 async def pipeline_config_update_post(request: Request, name: str) -> RedirectResponse:
     """Save an edited pipeline."""
-    form = dict(await request.form())
+    raw_form = await request.form()
+    form = _flatten_pipeline_edit_form(raw_form)
     try:
-        payload = _build_pipeline_write({k: str(v) for k, v in form.items()})
+        payload = _build_pipeline_write(form)
         pipelines_svc.write_pipeline(name, payload, actor="web")
     except (pipelines_svc.PipelineError, ValueError) as exc:
         return RedirectResponse(url=f"/pipelines/{name}/edit?error={exc}", status_code=303)
@@ -3626,10 +3820,25 @@ def settings_page(
         {
             "settings": settings_svc.get_settings(),
             "connections": connections_svc.list_connections(),
+            # UI rule U2 — engine / secret ref / timezone are selects.
+            "engines": engines_svc.list_engines(),
+            "engine_types": [t.type for t in engines_svc.list_engine_types()],
+            # Secret *file names* only (the /secrets page lists them too);
+            # never keys or values.
+            "secret_refs": [s.name for s in secrets_svc.list_secrets()],
+            "timezones": _timezones(),
             "flash": flash,
             "error": error,
         },
     )
+
+
+def _timezones() -> list[str]:
+    """Return every IANA timezone name, ``UTC`` first (settings ``<select>``)."""
+    from zoneinfo import available_timezones
+
+    names = sorted(t for t in available_timezones() if "/" in t and not t.startswith("Etc/"))
+    return ["UTC", *names]
 
 
 @router.post("/settings", response_class=HTMLResponse, include_in_schema=False)

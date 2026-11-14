@@ -16,6 +16,7 @@
     <div class="pl-title">
       <h1>Common Data Models
         {% call help.tip_block(label="What is a CDM?") %}
+          <strong>Target data models &mdash; tables, keys and valuesets the ETL engine validates against.</strong>
           A <strong>CDM</strong> (Common Data Model) declares the table list,
           composite dedup keys, identifier columns, and bounded valuesets the
           generic ETL engine relies on. The pipeline never imports a specific
@@ -26,7 +27,6 @@
           veritas, tumor) remain declared in Python.
         {% endcall %}
       </h1>
-      <p class="pl-subtitle">Target data models &mdash; tables, keys and valuesets the ETL engine validates against.</p>
     </div>
   </div>
 
@@ -110,13 +110,8 @@
         <span class="pl-empty-node">{{ icons.icon("table", size=22) }}</span>
       </div>
       <h2>No CDMs registered</h2>
-      <p class="muted">
-        This is unusual &mdash; the bundled CDMs
-        (<code>pcornet_7_0</code>, <code>ovid2_pipeline_nursing_v1</code>,
-        <code>ovid2_pipeline_veritas_v1</code>,
-        <code>ovid2_pipeline_tumor_v1</code>) self-register at package
-        import time. Check the server log for a startup error.
-      </p>
+      <p class="flash error">The bundled CDMs did not register &mdash; check the server log for a startup error.
+        {{ help.tip("The bundled CDMs (pcornet_7_0, omop_5_3, ovid2_pipeline_nursing_v1, ovid2_pipeline_veritas_v1, ovid2_pipeline_tumor_v1) self-register at package import time.") }}</p>
     </div>
   {% endif %}
 </section>

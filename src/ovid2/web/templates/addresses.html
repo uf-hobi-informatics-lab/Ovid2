@@ -14,7 +14,7 @@
     </div>
   </div>
   {% if addresses %}
-    <div id="test-all-summary" class="flash" style="display: none;"></div>
+    <div id="test-all-summary" class="flash" hidden></div>
     <div class="table-wrap">
     <table class="runs-table">
       <thead>
@@ -142,7 +142,7 @@
     var summary = document.getElementById("test-all-summary");
     if (summary) {
       summary.className = "flash";
-      summary.style.display = "block";
+      summary.hidden = false;
       summary.textContent = "Testing " + pairs.length + " addresses…";
     }
     var idx = 0;

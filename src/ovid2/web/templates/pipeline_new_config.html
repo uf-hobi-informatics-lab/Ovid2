@@ -17,7 +17,7 @@
     2 Template     ETL template (+ what it provides: tables x stages, with
                    an optional table subset) | analysis package | EDC
                    cycles | copy/move tables
-    3 Identity     (ETL) every name the clone must match elsewhere —
+    3 Identity     (scaffolded kinds) every name the clone must match elsewhere —
                    HARVEST network/datamart, databases, Datavant key, CDM —
                    pre-filled from the template, live-checked
     4 Source       input storage (+ formatter input patterns matched
@@ -41,7 +41,7 @@
 {% set steps = [
   ("type", "Type", "layers", ""),
   ("template", "Template", "book", ""),
-  ("identity", "Identity", "sliders", "etl"),
+  ("identity", "Identity", "sliders", "create_flow=scaffold_package"),
   ("source", "Source", "folder", ""),
   ("engine", "Engine", "cpu", ""),
   ("destination", "Destination", "database", ""),
@@ -50,22 +50,23 @@
 ] %}
 {% set cur_kind = f.get('kind') or 'etl' %}
 <section class="page pl-page builder-workspace wz-workspace nw-workspace"
-         id="pipeline-builder" data-kind="{{ cur_kind }}"
+         id="pipeline-builder" data-kind="{{ cur_kind }}" data-visibility-root
          data-submit-base="/submit"
          data-identity-prefill='{{ identity_prefill | tojson }}'
          data-engine-families='{{ engine_families | tojson }}'>
   <form method="post" action="/pipelines" class="builder-form wz-form" id="new-pipeline-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="builder-form-head wz-head">
       <a class="wz-back" href="/pipelines">{{ icons.icon("chevron-left", size=15) }} All pipelines</a>
-      <h1 class="builder-heading pl-title">New pipeline</h1>
-      <p class="pl-subtitle">Pick what it does, the template it starts from, the names it must match, and where it reads, computes and writes.</p>
+      <h1 class="builder-heading pl-title">New pipeline
+        {{ help.tip("Pick what it does, the template it starts from, the names it must match, and where it reads, computes and writes.") }}
+      </h1>
     </div>
 
     {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
 
     <ol class="wz-rail" id="wz-rail" aria-label="Pipeline setup steps">
       {% for key, label, ico, only in steps %}
-        <li class="wz-rail-item" data-rail="{{ key }}" data-state="todo"{% if only %} data-only-kinds="{{ only }}"{% endif %}>
+        <li class="wz-rail-item" data-rail="{{ key }}" data-state="todo"{% if only %} data-only-flag="{{ only }}"{% endif %}>
           <button type="button" class="wz-rail-btn" data-goto="{{ key }}"
                   aria-controls="wz-step-{{ key }}">
             <span class="wz-rail-dot">
@@ -84,8 +85,7 @@
         <header class="wz-step-head">
           <span class="wz-step-icon">{{ icons.icon("layers", size=20) }}</span>
           <div>
-            <h2 id="wz-h-type">Name &amp; type</h2>
-            <p class="wz-step-sub">What is this pipeline called, and what does it do?</p>
+            <h2 id="wz-h-type">Name &amp; type {{ help.tip("What is this pipeline called, and what does it do?") }}</h2>
           </div>
         </header>
 
@@ -97,7 +97,7 @@
                  value="{{ f.get('name', '') }}"
                  data-builder="name" autocomplete="off"
                  placeholder="e.g. myhospital">
-          <p class="nw-hint small" data-name-hint hidden></p>
+          <p class="nw-name-preview small" data-name-hint data-show-kind-flag="package_required !health_selection" hidden></p>
         </div>
 
         <div class="form-row">
@@ -118,13 +118,11 @@
                       title="{{ k.description }}">
                 <span class="wz-kind-tile-icon">{{ icons.icon(kind_icons.get(k.name, "pipelines"), size=22) }}</span>
                 <span class="wz-kind-tile-label">{{ k.label }}</span>
-                <span class="wz-kind-tile-desc small">{{ k.description | truncate(64) }}</span>
               </button>
             {% endfor %}
           </div>
           <select id="kind" name="kind" class="wz-kind-select"
-                  data-builder="kind"
-                  onchange="ovid2_toggle_new_kind_fields();">
+                  data-builder="kind">
             {% for k in kind_choices %}
               <option value="{{ k.name }}" title="{{ k.description }}" {% if k.name == cur_kind %}selected{% endif %}>{{ k.label }}</option>
             {% endfor %}
@@ -137,13 +135,12 @@
         <header class="wz-step-head">
           <span class="wz-step-icon">{{ icons.icon("book", size=20) }}</span>
           <div>
-            <h2 id="wz-h-template">What it runs</h2>
-            <p class="wz-step-sub" data-template-sub>The template the pipeline is copied from &mdash; and what it provides.</p>
+            <h2 id="wz-h-template">What it runs {{ help.tip("The template the pipeline is copied from — and what it provides; or, for other types, the package, report cycles or tables it runs.") }}</h2>
           </div>
         </header>
 
         {# ---- ETL template (kind=etl) ---- #}
-        <div class="nw-block" id="template-block">
+        <div class="nw-block" id="template-block" data-show-kind-flag="create_flow=scaffold_package">
           {% if templates %}
             <div class="nw-template-cards" role="radiogroup" aria-label="ETL template">
               {% for t in templates %}
@@ -153,9 +150,8 @@
                          {% if t.id == f.get('template') or (not f.get('template') and loop.first) %}checked{% endif %}>
                   <span class="pl-card-badge">{{ icons.icon("workflow", size=16) }}</span>
                   <span class="nw-template-body">
-                    <span class="nw-template-title">{{ t.label }}</span>
+                    <span class="nw-template-title">{{ t.label }}{% if t.description %} {{ help.tip(t.description) }}{% endif %}</span>
                     <span class="nw-template-sub mono small">{{ t.source_pipeline }} &rarr; {{ t.cdm }}</span>
-                    {% if t.description %}<span class="nw-template-desc small">{{ t.description }}</span>{% endif %}
                   </span>
                   <span class="nw-template-check" aria-hidden="true">{{ icons.icon("check", size=16) }}</span>
                 </label>
@@ -165,7 +161,7 @@
             <p class="empty">No pipeline templates are registered.</p>
           {% endif %}
 
-          <div class="form-row nw-cdm-row" id="cdm-row">
+          <div class="form-row nw-cdm-row" id="cdm-row" data-show-kind-flag="create_flow=scaffold_package" data-disable-hidden>
             <label for="cdm">CDM
               {{ help.tip("The template's CDM is used unless you override it here. The clone's pipeline_settings.cdm and the pipeline config must agree.") }}
             </label>
@@ -205,17 +201,19 @@
                 <tbody><tr><td colspan="7" class="note">Pick a template to see what it provides.</td></tr></tbody>
               </table>
             </div>
-            <p class="nw-hint small nw-legend">
-              <span class="nw-dot is-yaml"></span> declarative YAML
-              <span class="nw-dot is-custom"></span> custom class
-              <span class="nw-dot is-default"></span> CDM default / legacy
-              <span class="nw-dot is-none"></span> not configured
+            <p class="nw-legend-tip">
+              {% call help.tip_block(label="Legend") %}
+                <span class="nw-dot is-yaml"></span> declarative YAML &middot;
+                <span class="nw-dot is-custom"></span> custom class &middot;
+                <span class="nw-dot is-default"></span> CDM default / legacy &middot;
+                <span class="nw-dot is-none"></span> not configured
+              {% endcall %}
             </p>
           </div>
         </div>
 
         {# ---- Pipeline package (kind=analysis) ---- #}
-        <div class="nw-block" id="package-block" style="display: none;">
+        <div class="nw-block" id="package-block" data-show-kind-flag="create_flow=pick_package" hidden>
           <h3 class="wz-sub-title">Pipeline package
             {% call help.tip_block() %}
               <strong>analysis</strong> runs over an existing package's
@@ -235,7 +233,7 @@
         </div>
 
         {# ---- EDC report cycle (kind=dq_checks) ---- #}
-        <div class="nw-block" id="cycle-block" style="display: none;">
+        <div class="nw-block" id="cycle-block" data-show-kind-flag="create_flow=cycle_packages" hidden>
           <h3 class="wz-sub-title">EDC report cycle
             {% call help.tip_block() %}
               A <strong>dq_checks</strong> pipeline runs the PCORnet EDC checks
@@ -263,8 +261,19 @@
           {% endif %}
         </div>
 
+        {# ---- CDM (non-scaffolding kinds that use one: dq_checks / health) ---- #}
+        <div class="form-row nw-cdm-row" id="cdm-row-other" data-show-kind-flag="uses_cdm create_flow!=scaffold_package" data-disable-hidden hidden>
+          <label for="cdm_other">CDM {{ help.tip("Leave on auto to resolve the CDM from the pipeline label.") }}</label>
+          <select id="cdm_other" name="cdm" data-builder="cdm" disabled>
+            <option value="">(auto)</option>
+            {% for c in cdms %}
+              <option value="{{ c }}" {% if c == f.get('cdm') %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
         {# ---- Tables (kind=copy / move) ---- #}
-        <div class="nw-block" id="tables-block" style="display: none;">
+        <div class="nw-block" id="tables-block" data-show-kind-flag="tables_mode=explicit" hidden>
           <h3 class="wz-sub-title">Tables
             {% call help.tip_block() %}
               <strong>copy</strong> / <strong>move</strong> transfer named
@@ -290,8 +299,8 @@
               <span>{{ icons.icon("clock", size=15) }} Keep open</span>
             </label>
           </div>
-          <div class="form-row" id="tables-field-row"
-               {% if tables_open %}style="display: none;"{% endif %}>
+          <div class="form-row" id="tables-field-row" data-show-when="tables_open!=1"
+               {% if tables_open %}hidden{% endif %}>
             <label for="tables">Tables (space-separated)</label>
             <input type="text" id="tables" name="tables"
                    data-builder="tables"
@@ -300,13 +309,13 @@
           </div>
         </div>
 
-        <div class="nw-block" id="plain-block" style="display: none;">
-          <p class="note">This pipeline type needs no template &mdash; continue to choose its storage.</p>
+        <div class="nw-block" id="plain-block" data-show-kind-flag="create_flow=plain tables_mode!=explicit" hidden>
+          <p class="empty">No template needed.</p>
         </div>
       </section>
 
       {# ================= 3 — Identity (ETL) ================= #}
-      <section class="wz-step builder-card" id="wz-step-identity" data-step="identity" data-only-kinds="etl" aria-labelledby="wz-h-identity">
+      <section class="wz-step builder-card" id="wz-step-identity" data-step="identity" data-only-flag="create_flow=scaffold_package" aria-labelledby="wz-h-identity">
         <header class="wz-step-head">
           <span class="wz-step-icon">{{ icons.icon("sliders", size=20) }}</span>
           <div>
@@ -320,11 +329,10 @@
                 tables and lists, class paths) is checked below.
               {% endcall %}
             </h2>
-            <p class="wz-step-sub">What the new package will be called everywhere it is referenced.</p>
           </div>
         </header>
         <div class="nw-identity" id="identity-fields" aria-live="polite">
-          <p class="note">Pick a template to see the identity fields it declares.</p>
+          <p class="empty">Pick a template first.</p>
         </div>
         <div class="nw-bindings-wrap">
           <h3 class="wz-sub-title">Cross-configuration checks
@@ -341,12 +349,11 @@
           <div>
             <h2 id="wz-h-source">Input storage
               {% call help.tip_block() %}
-                Point at the folder that <em>contains</em> the batch subfolders
+                Where the pipeline reads from. Point at the folder that <em>contains</em> the batch subfolders
                 (usually the account root) &mdash; or keep it <strong>open</strong> to
                 choose the input at run time (required on the Submit form each run).
               {% endcall %}
             </h2>
-            <p class="wz-step-sub">Where the pipeline reads from.</p>
           </div>
         </header>
         {% set input_open = (f.get('input_open') in ('1', 'true', 'on')) %}
@@ -381,7 +388,7 @@
           </select>
           <div data-role="crumbs" class="crumbs small"></div>
           <div data-role="listing" class="storage-listing">
-            <p class="note">Pick a storage account to browse its batch folders.</p>
+            <p class="empty">Pick a storage account.</p>
           </div>
           <p data-role="chosen" class="chosen-chip" hidden></p>
           <input type="hidden" name="input_connection" value="{{ f.get('input_connection', '') }}"
@@ -403,12 +410,11 @@
           <span class="wz-step-icon">{{ icons.icon("cpu", size=20) }}</span>
           <div>
             <h2 id="wz-h-engine">Warehouse (engine)
-              {{ help.tip("Where the pipeline computes. Engines whose family the template cannot run on are disabled (e.g. legacy_ovid ports and Spark-only custom formatters need a Spark engine).") }}
+              {{ help.tip("Where the pipeline computes. Engines whose family the template cannot run on are hidden (e.g. legacy_ovid ports and Spark-only custom formatters need a Spark engine).") }}
             </h2>
-            <p class="wz-step-sub">Where the pipeline computes.</p>
           </div>
         </header>
-        <p class="nw-hint small" data-engine-hint hidden></p>
+        <p class="flash" data-engine-hint hidden></p>
         {% set chosen_engine = f.get('engine') or 'pyspark' %}
         {% set engine_names = engines | map(attribute='name') | list %}
         <div class="nw-engine-tiles" role="radiogroup" aria-label="Engine">
@@ -465,11 +471,10 @@
           <div>
             <h2 id="wz-h-destination">Output storage
               {% call help.tip_block() %}
-                Where the pipeline writes &mdash; or keep it <strong>open</strong> to
+                Where the results land &mdash; or keep it <strong>open</strong> to
                 choose the destination at run time (required on the Submit form each run).
               {% endcall %}
             </h2>
-            <p class="wz-step-sub">Where the results land.</p>
           </div>
         </header>
         {% set output_open = (f.get('output_open') in ('1', 'true', 'on')) %}
@@ -504,7 +509,7 @@
           </select>
           <div data-role="crumbs" class="crumbs small"></div>
           <div data-role="listing" class="storage-listing">
-            <p class="note">Pick a storage account to browse.</p>
+            <p class="empty">Pick a storage account.</p>
           </div>
           <p data-role="chosen" class="chosen-chip" hidden></p>
           <input type="hidden" name="output_connection" value="{{ f.get('output_connection', '') }}"
@@ -521,18 +526,17 @@
           <div>
             <h2 id="wz-h-automation">Automation (trigger)
               {% call help.tip_block() %}
-                <strong>watch</strong> runs the pipeline automatically when a new
+                When the pipeline fires. <strong>watch</strong> runs the pipeline automatically when a new
                 batch folder appears in the input storage account &mdash; so it needs a
                 <em>bound</em> input. <strong>cron</strong> and <strong>interval</strong>
                 fire on a schedule; <strong>manual</strong> only runs when you press Run.
               {% endcall %}
             </h2>
-            <p class="wz-step-sub">When the pipeline fires.</p>
           </div>
         </header>
         <div class="form-row">
           <label for="trigger_type">Trigger</label>
-          <select id="trigger_type" name="trigger_type" onchange="ovid2_toggle_new_trigger_fields();">
+          <select id="trigger_type" name="trigger_type">
             {% set tt = f.get('trigger_type') or 'watch' %}
             <option value="watch" {% if tt == 'watch' %}selected{% endif %}>watch (on new batch)</option>
             <option value="manual" {% if tt == 'manual' %}selected{% endif %}>manual</option>
@@ -540,16 +544,16 @@
             <option value="interval" {% if tt == 'interval' %}selected{% endif %}>interval</option>
           </select>
         </div>
-        <div class="form-row" id="trigger-watch-row">
+        <div class="form-row" id="trigger-watch-row" data-show-when="trigger_type=watch input_open!=1">
           <label for="watch_min_wait_minutes">Re-scan debounce (min, optional)</label>
           <input type="number" id="watch_min_wait_minutes" name="watch_min_wait_minutes"
                  min="0" value="{{ f.get('watch_min_wait_minutes', '') }}" placeholder="0">
         </div>
-        <div class="form-row" id="trigger-cron-row" style="display: none;">
+        <div class="form-row" id="trigger-cron-row" data-show-when="trigger_type=cron" hidden>
           <label for="cron">Cron expression</label>
           <input type="text" id="cron" name="cron" value="{{ f.get('cron', '') }}" placeholder="0 3 * * *">
         </div>
-        <div class="form-row" id="trigger-interval-row" style="display: none;">
+        <div class="form-row" id="trigger-interval-row" data-show-when="trigger_type=interval" hidden>
           <label for="interval_minutes">Interval (minutes)</label>
           <input type="number" id="interval_minutes" name="interval_minutes" min="1"
                  value="{{ f.get('interval_minutes', '') }}">
@@ -564,13 +568,11 @@
         <header class="wz-step-head">
           <span class="wz-step-icon">{{ icons.icon("check", size=20) }}</span>
           <div>
-            <h2 id="wz-h-review">Review</h2>
-            <p class="wz-step-sub">Everything this pipeline will be created with.</p>
+            <h2 id="wz-h-review">Review {{ help.tip("Everything this pipeline will be created with. After creating it, open Customize on the pipeline to edit its formatters, mappers, transforms, fixers and settings.") }}</h2>
           </div>
         </header>
         <dl class="nw-review" id="review-list"></dl>
         <div class="nw-review-bindings" id="review-bindings"></div>
-        <p class="nw-hint small">{{ icons.icon("edit", size=14) }} After creating it, open <strong>Customize</strong> on the pipeline to edit its formatters, mappers, transforms, fixers and settings.</p>
       </section>
     </div>
 
@@ -607,56 +609,5 @@
 
 <script src="/static/browse.js" defer></script>
 <script type="module" src="/static/pipeline_builder.js"></script>
-<script>
-// Per-kind block visibility in the "What it runs" step. ETL scaffolds a
-// package from a template; analysis runs over an installed package;
-// dq_checks picks EDC cycles; copy/move list tables; health is plain.
-function ovid2_toggle_new_kind_fields() {
-  var k = (document.getElementById('kind') || {}).value || 'etl';
-  var show = function (id, on) { var n = document.getElementById(id); if (n) n.style.display = on ? '' : 'none'; };
-  show('template-block', k === 'etl');
-  show('cdm-row', k === 'etl' || k === 'analysis' || k === 'health');
-  show('package-block', k === 'analysis');
-  show('cycle-block', k === 'dq_checks');
-  show('tables-block', k === 'copy' || k === 'move');
-  show('plain-block', k === 'health');
-  // The CDM row lives in the template block; lift it for analysis/health.
-  var cdmRow = document.getElementById('cdm-row');
-  var tmpl = document.getElementById('template-block');
-  var pkg = document.getElementById('package-block');
-  if (cdmRow && tmpl && pkg) {
-    if (k === 'etl' && cdmRow.parentNode !== tmpl) tmpl.insertBefore(cdmRow, document.getElementById('template-provides'));
-    if (k !== 'etl' && cdmRow.parentNode !== pkg) pkg.appendChild(cdmRow);
-  }
-  var ws = document.getElementById('pipeline-builder');
-  if (ws) ws.setAttribute('data-kind', k);
-  ovid2_toggle_new_tables_field();
-  document.dispatchEvent(new CustomEvent('ovid2:builder-refresh'));
-}
-function ovid2_toggle_new_tables_field() {
-  var row = document.getElementById('tables-field-row');
-  if (!row) return;
-  var block = document.getElementById('tables-block');
-  var checked = document.querySelector('input[name="tables_open"]:checked');
-  var open = checked ? checked.value === '1' : false;
-  var visible = block && block.style.display !== 'none';
-  row.style.display = (visible && !open) ? '' : 'none';
-}
-function ovid2_toggle_new_trigger_fields() {
-  var t = (document.getElementById('trigger_type') || {}).value || 'watch';
-  document.getElementById('trigger-watch-row').style.display = (t === 'watch') ? '' : 'none';
-  document.getElementById('trigger-cron-row').style.display = (t === 'cron') ? '' : 'none';
-  document.getElementById('trigger-interval-row').style.display = (t === 'interval') ? '' : 'none';
-}
-window.ovid2_toggle_new_trigger_fields = ovid2_toggle_new_trigger_fields;
-document.addEventListener('change', function (evt) {
-  var t = evt.target;
-  if (t && t.name === 'tables_open') {
-    ovid2_toggle_new_tables_field();
-    document.dispatchEvent(new CustomEvent('ovid2:builder-refresh'));
-  }
-});
-ovid2_toggle_new_kind_fields();
-ovid2_toggle_new_trigger_fields();
-</script>
+<script type="application/json" id="kind-flags">{{ kind_choices | tojson }}</script>
 {% endblock %}

@@ -54,7 +54,7 @@ escalate to `system_admin`.
 | --- | --- |
 | Jobs & runs | `submit_run`, `submit_health`, `submit_move`, `list_jobs`, `get_job_log`, `run_timeline`, `cancel_job`, `rerun_job` |
 | Pipeline configs | `list_pipeline_configs`, `create_pipeline_config`, `run_pipeline_config`, `enable_pipeline_config` |
-| Packages & specs | `list_pipelines`, `scaffold_pipeline`, `get_formatter`, `save_formatter`, `validate_formatters`, `get_mapper`, `save_mapper` |
+| Packages & specs | `list_pipelines`, `scaffold_pipeline`, `get_formatter`, `save_formatter`, `validate_formatters`, `get_mapper`, `save_mapper`, `inspect_pipeline_lineage` |
 | Storage | `list_connections`, `create_connection`, `test_connection`, `list_addresses`, `storage_browse` |
 | Data Space | `ods_list`, `ods_resolve`, `ods_describe_table`, `ods_sample_table` (approval-gated) |
 | Engines | `list_engines`, `create_engine`, `test_engine` |

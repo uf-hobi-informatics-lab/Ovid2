@@ -7,6 +7,7 @@ import subprocess
 import sys
 import zipfile
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -98,6 +99,17 @@ def _pdf_text(path: Path) -> str:
     return "".join(re.findall(r"\(((?:[^()\\]|\\.)*)\)", "".join(out)))
 
 
+def _pptx_texts(prs: Any) -> list[str]:
+    out: list[str] = []
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                out.append(shape.text_frame.text)
+            if shape.has_table:
+                out.extend(c.text for row in shape.table.rows for c in row.cells)
+    return out
+
+
 def _text_of(fmt: str, path: Path) -> str:
     if fmt == "pdf":
         return _pdf_text(path)
@@ -105,6 +117,10 @@ def _text_of(fmt: str, path: Path) -> str:
         import docx
 
         return "\n".join(p.text for p in docx.Document(str(path)).paragraphs)
+    if fmt == "pptx":
+        import pptx
+
+        return "\n".join(_pptx_texts(pptx.Presentation(str(path))))
     if fmt == "xlsx":
         import openpyxl
 
@@ -123,7 +139,7 @@ def _text_of(fmt: str, path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
-@pytest.mark.parametrize("fmt", ["pdf", "html", "docx", "xlsx", "md", "svg", "png"])
+@pytest.mark.parametrize("fmt", ["pdf", "html", "docx", "pptx", "xlsx", "md", "svg", "png"])
 def test_format_renders_and_omits_hidden(bundle: Path, tmp_path: Path, fmt: str) -> None:
     res = _export(bundle, fmt, tmp_path / fmt)
     path = Path(res["path"])
@@ -135,7 +151,7 @@ def test_format_renders_and_omits_hidden(bundle: Path, tmp_path: Path, fmt: str)
     text = _text_of(fmt, path)
     for needle in ("HIDDENSECTIONTITLE", "HIDDENBODY", "HIDDENBLOCK"):
         assert needle not in text, f"{fmt} leaked {needle}"
-    if fmt in ("html", "docx", "md", "pdf"):
+    if fmt in ("html", "docx", "pptx", "md", "pdf"):
         assert "Data-characterisation summary" in text or "Data-characterisation" in text
 
 
@@ -144,6 +160,41 @@ def test_html_is_offline(bundle: Path, tmp_path: Path) -> None:
     html = Path(res["path"]).read_text(encoding="utf-8")
     assert "<script src=" not in html and "cdn." not in html.lower()
     assert "window.vegaEmbed" in html and "Ovid2ReportRender" in html
+
+
+def test_pptx_is_a_widescreen_deck(bundle: Path, tmp_path: Path) -> None:
+    pptx = pytest.importorskip("pptx")
+    res = _export(bundle, "pptx", tmp_path / "p")
+    assert res["media_type"].endswith("presentationml.presentation")
+    prs = pptx.Presentation(res["path"])
+    assert round(prs.slide_width / prs.slide_height, 2) == round(16 / 9, 2)
+    slides = list(prs.slides)
+    assert len(slides) >= 3  # title + content + provenance
+    pictures = [s for sl in slides for s in sl.shapes if s.shape_type == 13]
+    assert pictures, "charts should be embedded as pictures"
+    texts = _pptx_texts(prs)
+    assert any("Provenance" in t for t in texts)
+    for sl in slides:  # every shape stays on the slide
+        for shp in sl.shapes:
+            assert shp.left >= 0 and shp.top >= 0
+            assert shp.left + shp.width <= prs.slide_width + 10
+            assert shp.top + shp.height <= prs.slide_height + 10
+
+
+def test_pptx_row_packing() -> None:
+    from ovid2.reports.render.pptx import pack_rows
+
+    blocks = [
+        {"renderer": "kpi", "width": "third"},
+        {"renderer": "kpi", "width": "third"},
+        {"renderer": "kpi", "width": "third"},
+        {"renderer": "vega", "width": "half"},
+        {"renderer": "table", "width": "half"},
+        {"renderer": "vega", "width": "half"},
+    ]
+    rows = pack_rows(blocks)
+    assert [len(r) for r in rows] == [3, 1, 1, 1]
+    assert rows[2][0][1] == 1.0  # tables take a full row
 
 
 def test_xlsx_has_provenance_sheet(bundle: Path, tmp_path: Path) -> None:

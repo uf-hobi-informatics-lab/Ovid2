@@ -874,6 +874,34 @@ class TransformAssignRequest(BaseModel):
     tables: list[str] = Field(..., min_length=1, description="CDM tables, or ['*'] for all.")
 
 
+class UdfApplyRequest(BaseModel):
+    """Apply a declarative UDF (named chain or new steps) from the navigator."""
+
+    table: str = Field(..., description="CDM table the UDF is applied from.")
+    scope: Literal["table", "all_tables"] = Field(
+        "table", description="Assign to this table, or to every table ('*')."
+    )
+    save_to: Literal["inline", "pipeline", "library"] = Field(
+        "inline",
+        description=(
+            "inline: anonymous steps in assignments.yaml; pipeline: a private "
+            "chain <pkg>/transforms/<name>.yaml; library: the user transform library."
+        ),
+    )
+    chain: str | None = Field(None, description="Existing chain to assign (instead of steps).")
+    name: str | None = Field(None, description="Name of the new chain (pipeline / library).")
+    steps: list[dict[str, Any]] | None = Field(None, description="New transform steps.")
+    description: str = Field("", description="Optional chain description.")
+
+
+class ExprCheckRequest(BaseModel):
+    """Check a Spark-SQL column expression against the allow-list."""
+
+    expr: str = Field(..., description="The expression, e.g. upper(trim(SEX)).")
+    pipeline: str | None = Field(None, description="Package (for column checks).")
+    table: str | None = Field(None, description="CDM table (for column checks).")
+
+
 class SettingsWrite(BaseModel):
     """Literal-constant updates for ``pipeline_settings.py``."""
 
@@ -2408,7 +2436,7 @@ class ReportDuplicateRequest(BaseModel):
 class ReportExportRequest(BaseModel):
     """Body of ``POST /api/v1/reports/{id}/exports``."""
 
-    format: str = Field(..., pattern="^(pdf|html|docx|xlsx|svg|png|md|json)$")
+    format: str = Field(..., pattern="^(pdf|html|docx|pptx|xlsx|svg|png|md|json)$")
     block_id: str | None = Field(None, description="svg / png only: just this chart block.")
     layout: dict[str, Any] | None = Field(
         None, description="Export unsaved edits instead of the saved layout."

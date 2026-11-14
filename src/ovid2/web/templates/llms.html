@@ -16,6 +16,7 @@
     <div class="pl-title">
       <h1>LLMs
         {% call help.tip_block(label="How does the assistant pick a model?") %}
+          <strong>Assistant models &mdash; a fast System 1 decides first, a general LLM answers the rest.</strong>
           The assistant (the <strong>LLM</strong> button on the right rail) uses two kinds of model.
           <strong>System 1</strong> (e.g. JEV or a similar decision model) is a fast decision model
           that is asked first. When it abstains, errors, or is not confident enough, the question
@@ -24,7 +25,6 @@
           subprocess. The web server never holds them.
         {% endcall %}
       </h1>
-      <p class="pl-subtitle">Assistant models &mdash; a fast System 1 decides first, a general LLM answers the rest.</p>
     </div>
     <div class="page-actions">
       <a href="/llms/new?provider=jev&role=system1" class="button small">{{ icons.icon("plus", size=15) }} System 1 LLM</a>
@@ -144,12 +144,8 @@
       <input type="number" id="tool_result_max_chars" name="tool_result_max_chars"
              min="256" max="200000" value="{{ routing.tool_result_max_chars }}">
     </div>
-    <p class="small muted">Read-only tools (jobs, runs, logs, configs, data space) run automatically
-      with a short-lived token limited to the chatting user's permissions (at most pipeline operator).
-      Actions such as submitting or cancelling a job are shown as proposals you must click
-      <strong>Run</strong> on. No secrets, settings, users or data rows are exposed.</p>
     <div class="form-row">
-      <button type="submit" class="button primary">Save routing</button>
+      <button type="submit" class="button primary">Save routing</button> {% call help.tip_block() %}Read-only tools (jobs, runs, logs, configs, data space) run automatically with a short-lived token limited to the chatting user's permissions (at most pipeline operator). Actions such as submitting or cancelling a job are shown as proposals you must click <strong>Run</strong> on. No secrets, settings, users or data rows are exposed.{% endcall %}
     </div>
   </form>
 
@@ -213,9 +209,7 @@
         <span class="pl-empty-link"></span>
         <span class="pl-empty-node pl-empty-core">{{ icons.icon("llm", size=26) }}</span>
       </div>
-      <h2>No LLM connections yet</h2>
-      <p class="muted">You need an OpenAI-compatible base URL (ending in <code>/v1</code>), the model id
-        the endpoint serves, and an API key. Add a System 1 decision model the same way.</p>
+      <h2>No LLM connections yet {{ help.tip("You need an OpenAI-compatible base URL (ending in /v1), the model id the endpoint serves, and an API key. Add a System 1 decision model the same way.") }}</h2>
       <div class="page-actions">
         <a href="/llms/new?provider=openai_compatible&role=general" class="button primary">{{ icons.icon("plus", size=16) }} General LLM</a>
         <a href="/llms/new?provider=jev&role=system1" class="button">{{ icons.icon("plus", size=15) }} System 1 LLM</a>

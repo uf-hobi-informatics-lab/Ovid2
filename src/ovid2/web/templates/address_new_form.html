@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block title %}{{ 'New address' if mode == 'new' else 'Edit address ' + name }} &mdash; Ovid2{% endblock %}
 {% block content %}
+{% import "_help.html" as help %}
+{% import "_field.html" as fld %}
 <section class="page">
   {% if mode == 'new' %}
     <p><a href="/addresses/new">&larr; back to connection picker</a></p>
@@ -44,61 +46,12 @@
         </div>
       {% endif %}
 
-      <h2>Location</h2>
+      <h2>Location
+        {% if location_spec %}{{ help.tip("Only credentials-free fields here — account URLs, keys, passwords and tokens live on the connection.") }}
+        {% else %}{{ help.tip("This connector type has no per-address location fields. The address simply views the connection as-is.") }}{% endif %}
+      </h2>
       {% if location_spec %}
-        <p class="note">
-          Only credentials-free fields here &mdash; account URLs, keys,
-          passwords and tokens live on the
-          <a href="/connections/{{ connection.name }}">connection</a>.
-        </p>
-        <table class="kv-table edit">
-          <thead>
-            <tr><th>Field</th><th>Value</th></tr>
-          </thead>
-          <tbody>
-            {% for f in location_spec %}
-              {% set current = location.get(f.name) if location else none %}
-              {% set placeholder = f.default if f.default is defined else '' %}
-              <tr>
-                <td>
-                  <label for="loc_{{ f.name }}" class="mono">
-                    {{ f.name }}{% if f.required %} <span style="color: var(--err);">*</span>{% endif %}
-                  </label>
-                  {% if f.help %}
-                    <div class="small" style="color: var(--fg-muted);">{{ f.help }}</div>
-                  {% endif %}
-                </td>
-                <td>
-                  {% if f.type == 'bool' %}
-                    <input type="checkbox"
-                           id="loc_{{ f.name }}" name="loc_{{ f.name }}"
-                           value="on"
-                           {% if current %}checked{% endif %}>
-                  {% elif f.type == 'int' %}
-                    <input type="number"
-                           id="loc_{{ f.name }}" name="loc_{{ f.name }}"
-                           value="{{ current if current is not none else '' }}"
-                           placeholder="{{ placeholder }}"
-                           {% if f.required %}required{% endif %}
-                           class="mono wide">
-                  {% else %}
-                    <input type="text"
-                           id="loc_{{ f.name }}" name="loc_{{ f.name }}"
-                           value="{{ current if current is not none else '' }}"
-                           placeholder="{{ placeholder }}"
-                           {% if f.required %}required{% endif %}
-                           class="mono wide">
-                  {% endif %}
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% else %}
-        <p class="note">
-          This connector type has no per-address location fields. The
-          address simply views the connection as-is.
-        </p>
+        {{ fld.table(location_spec, location or {}, "loc_", mode=mode) }}
       {% endif %}
 
       <div class="form-row">

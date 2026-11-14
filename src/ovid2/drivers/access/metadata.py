@@ -20,13 +20,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from ovid2.drivers._choices import MOUNT_MODES
 from ovid2.drivers.base import ConnectionFieldSpec, FieldSpec, LocationField
 from ovid2.drivers.container import ContainerRequirement, ExtraMount
 
 #: Valid ``mount_mode`` values. An Access source is read-only by
 #: default (``ro``) — the pipeline only ever reads from the ``.accdb``
 #: file, never writes back to it.
-_VALID_MOUNT_MODES: frozenset[str] = frozenset({"rw", "ro"})
+_VALID_MOUNT_MODES: frozenset[str] = frozenset(MOUNT_MODES)
 
 #: Recognised Access database file extensions.
 ACCESS_FILE_SUFFIXES: tuple[str, ...] = (".accdb", ".mdb")
@@ -88,6 +89,8 @@ def connection_fields() -> ConnectionFieldSpec:
             FieldSpec(
                 name="mount_mode",
                 required=False,
+                widget="choices",
+                choices=MOUNT_MODES,
                 default="ro",
                 help=(
                     "Bind-mount mode. Defaults to 'ro' — an Access source "

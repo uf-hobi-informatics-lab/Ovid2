@@ -79,7 +79,7 @@ chapters:
   - slug: 03-web-panel
     title: The web control panel
     summary: A guided tour of every page in the browser UI, section by section.
-    pages: [index, dashboard, submit, pipelines, jobs, dataspace, storage-and-warehouses, configure, administration, appearance]
+    pages: [index, dashboard, submit, pipelines, navigator, jobs, dataspace, storage-and-warehouses, configure, administration, appearance]
 
   - slug: 04-running-jobs
     title: Running jobs

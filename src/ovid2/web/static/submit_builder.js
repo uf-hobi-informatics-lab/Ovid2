@@ -23,8 +23,16 @@ import { hydrateLogos, logoForType } from "/static/logos.js";
 import { StorageTree } from "/static/storage_tree.js";
 import { JobGraph } from "/static/job_graph.js";
 
-const COPY_KINDS = new Set(["copy", "move"]);
-const HEALTH_KINDS = new Set(["health", "dq_checks"]);
+/* Run-kind flags (``ovid2.web.kinds.kind_choices()``). UI rule U1:
+ * relevance comes from these, never from kind-name literals. */
+function readKindFlags() {
+  const node = document.getElementById("kind-flags");
+  const out = {};
+  try {
+    for (const k of JSON.parse(node ? node.textContent : "[]")) out[k.name] = k;
+  } catch (_e) { /* keep empty */ }
+  return out;
+}
 
 class JobBuilder {
   constructor(form) {
@@ -36,7 +44,7 @@ class JobBuilder {
     this.freeInput = document.getElementById("pipeline-free");
     this.batchField = document.getElementById("batch-field");
     this.slots = { input: null, output: null };
-    this.kindDescriptions = this.readKindDescriptions();
+    this.kindDescriptions = readKindFlags();
 
     hydrateLogos(document);
     this.graph = new JobGraph(document.getElementById("job-graph"));
@@ -52,13 +60,10 @@ class JobBuilder {
     this.render();
   }
 
-  readKindDescriptions() {
-    const node = document.getElementById("kind-descriptions");
-    const out = {};
-    try {
-      for (const k of JSON.parse(node ? node.textContent : "[]")) out[k.name] = k;
-    } catch (_e) { /* keep empty */ }
-    return out;
+  /* ``{isCopy, isHealth}`` for a kind, from its registry flags. */
+  traits(kind) {
+    const spec = this.kindDescriptions[kind] || {};
+    return { isCopy: !!spec.is_transfer, isHealth: !!spec.health_selection, spec };
   }
 
   // ------------------------------------------------------------ getters
@@ -150,23 +155,10 @@ class JobBuilder {
 
   applyKind(userInitiated) {
     const kind = this.kind();
-    const isCopy = COPY_KINDS.has(kind);
-    const isHealth = HEALTH_KINDS.has(kind);
-    const show = (id, on) => {
-      const el = document.getElementById(id);
-      if (el) el.hidden = !on;
-    };
-    show("transformations-card", !(isCopy || isHealth));
-    show("tables-card", !isHealth);
-    show("health-card", isHealth);
-    show("checks-card", isHealth);
-    for (const id of ["sf-account-row", "stderr-log-row"]) {
-      show(id, !isCopy);
-    }
-    show("extra-mounts-row", isCopy);
-    show("strict-types-row", kind === "move");
-    show("copy-hint", kind === "copy");
-    show("move-hint", kind === "move");
+    const { isCopy, isHealth } = this.traits(kind);
+    // Field rows carry data-show-* attributes; the shared module
+    // (static/field_visibility.js) applies them from the kind's flags.
+    if (window.Ovid2Visibility) window.Ovid2Visibility.refresh(this.form);
 
     // Pipeline cards relevant to the kind: a package card is listed only
     // when a saved pipeline of this kind references it (``data-kinds``,
@@ -179,7 +171,6 @@ class JobBuilder {
       card.hidden = generic ? !isHealth : !kinds.includes(kind);
       if (!card.hidden) visible++;
     }
-    if (this.freeName) this.freeName.hidden = !isCopy;
     this.form.dataset.kind = kind;
     const empty = this.form.querySelector("[data-role=no-pipelines]");
     if (empty) {
@@ -200,9 +191,6 @@ class JobBuilder {
     } else if (cur && cur.hidden) {
       this.choosePipeline("", false);
     }
-
-    const desc = this.form.querySelector("[data-role=kind-desc]");
-    if (desc) desc.textContent = (this.kindDescriptions[kind] || {}).description || "";
 
     document.dispatchEvent(new CustomEvent("ovid2:kind-change", {
       detail: { kind, isCopyOrMove: isCopy, isHealth },
@@ -236,7 +224,7 @@ class JobBuilder {
     const card = this.form.querySelector('.pipeline-card[data-pipeline="' + CSS.escape(v) + '"]');
     if (card && !card.hidden) {
       this.choosePipeline(v, false);
-    } else if (this.freeInput && COPY_KINDS.has(this.kind())) {
+    } else if (this.freeInput && this.traits(this.kind()).isCopy) {
       this.freeInput.value = v;
       this.markPipelineCards();
     }
@@ -281,8 +269,7 @@ class JobBuilder {
 
   computeState() {
     const kind = this.kind();
-    const isCopy = COPY_KINDS.has(kind);
-    const isHealth = HEALTH_KINDS.has(kind);
+    const { isCopy, isHealth } = this.traits(kind);
     const pipeline = (this.pipelineField.value || "").trim();
     const batch = (this.batchField ? this.batchField.value : "").trim();
     const src = this.slots.input;

@@ -23,6 +23,16 @@ from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING, Any
 
+from ovid2.drivers._choices import (
+    FILE_FORMATS,
+    MOUNT_MODES,
+    MSSQL_ENCRYPT,
+    MSSQL_TRUST_CERT,
+    POSTGRES_SSLMODES,
+    S3_SIGNATURE_VERSIONS,
+    SNOWFLAKE_AUTHENTICATORS,
+)
+
 if TYPE_CHECKING:
     from ovid2.connections.base import BaseConnection
 
@@ -107,6 +117,8 @@ _FIELD_SPECS: dict[str, dict[str, Any]] = {
             {
                 "name": "mount_mode",
                 "required": False,
+                "widget": "choices",
+                "choices": list(MOUNT_MODES),
                 "default": "rw",
                 "help": "Bind-mount mode applied to the auto-generated mount. "
                 "Use 'rw' for outputs and 'ro' for read-only feeds.",
@@ -129,7 +141,9 @@ _FIELD_SPECS: dict[str, dict[str, Any]] = {
             {
                 "name": "authenticator",
                 "required": False,
-                "help": "e.g. externalbrowser / SNOWFLAKE.",
+                "widget": "choices",
+                "choices": list(SNOWFLAKE_AUTHENTICATORS),
+                "help": "Snowflake authenticator (blank = connector default).",
             },
             {
                 "name": "credentials_dir",
@@ -171,7 +185,13 @@ _FIELD_SPECS: dict[str, dict[str, Any]] = {
                 "required": False,
                 "help": "Default bucket (address may override).",
             },
-            {"name": "signature_version", "required": False, "help": "e.g. s3v4."},
+            {
+                "name": "signature_version",
+                "required": False,
+                "widget": "choices",
+                "choices": list(S3_SIGNATURE_VERSIONS),
+                "help": "Request-signing algorithm (s3v4 for AWS; s3 for legacy S3-compatible stores).",
+            },
         ],
         "secrets": [
             {"name": "aws_access_key_id", "required": True, "help": "AWS access key id."},
@@ -255,6 +275,8 @@ _FIELD_SPECS: dict[str, dict[str, Any]] = {
             {
                 "name": "mount_mode",
                 "required": False,
+                "widget": "choices",
+                "choices": list(MOUNT_MODES),
                 "default": "ro",
                 "help": "Bind-mount mode. Defaults to 'ro' — an Access source is read-only.",
             },
@@ -307,7 +329,13 @@ _FIELD_SPECS: dict[str, dict[str, Any]] = {
             },
             {"name": "database", "required": True, "help": "Default database."},
             {"name": "user", "required": True, "help": "Login user."},
-            {"name": "sslmode", "required": False, "help": "e.g. require / prefer / disable."},
+            {
+                "name": "sslmode",
+                "required": False,
+                "widget": "choices",
+                "choices": list(POSTGRES_SSLMODES),
+                "help": "libpq SSL mode (blank = libpq default, prefer).",
+            },
         ],
         "secrets": [
             {"name": "password", "required": True, "help": "Password for the login user."},
@@ -324,8 +352,20 @@ _FIELD_SPECS: dict[str, dict[str, Any]] = {
             },
             {"name": "database", "required": True, "help": "Default database."},
             {"name": "user", "required": True, "help": "Login user."},
-            {"name": "encrypt", "required": False, "help": "true/false."},
-            {"name": "trust_server_certificate", "required": False, "help": "true/false."},
+            {
+                "name": "encrypt",
+                "required": False,
+                "widget": "choices",
+                "choices": list(MSSQL_ENCRYPT),
+                "help": "ODBC Encrypt= value (blank = yes).",
+            },
+            {
+                "name": "trust_server_certificate",
+                "required": False,
+                "widget": "choices",
+                "choices": list(MSSQL_TRUST_CERT),
+                "help": "ODBC TrustServerCertificate= value (blank = no).",
+            },
         ],
         "secrets": [
             {"name": "password", "required": True, "help": "Password for the login user."},
@@ -400,6 +440,8 @@ _LOCATION_SPECS: dict[str, list[dict[str, Any]]] = {
             "name": "format",
             "required": False,
             "type": "str",
+            "widget": "choices",
+            "choices": list(FILE_FORMATS),
             "default": "parquet",
             "help": "File format for reads/writes (parquet, csv, json, …).",
         },
@@ -449,6 +491,8 @@ _LOCATION_SPECS: dict[str, list[dict[str, Any]]] = {
             "name": "format",
             "required": False,
             "type": "str",
+            "widget": "choices",
+            "choices": list(FILE_FORMATS),
             "default": "parquet",
             "help": "File format (parquet, csv, json, …).",
         },
@@ -478,6 +522,8 @@ _LOCATION_SPECS: dict[str, list[dict[str, Any]]] = {
             "name": "format",
             "required": False,
             "type": "str",
+            "widget": "choices",
+            "choices": list(FILE_FORMATS),
             "default": "parquet",
             "help": "File format (parquet, csv, json, …).",
         },
@@ -534,6 +580,8 @@ _LOCATION_SPECS: dict[str, list[dict[str, Any]]] = {
             "name": "format",
             "required": False,
             "type": "str",
+            "widget": "choices",
+            "choices": list(FILE_FORMATS),
             "default": "parquet",
             "help": "File format (parquet, csv, json, …).",
         },

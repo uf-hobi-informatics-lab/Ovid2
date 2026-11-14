@@ -15,6 +15,8 @@ automatically.
 
 from __future__ import annotations
 
+from typing import Any
+
 from ovid2.run_kinds import (
     KIND_ALIASES,
     KIND_REGISTRY,
@@ -33,21 +35,54 @@ __all__ = [
     "all_kinds",
     "get_kind",
     "kind_choices",
+    "kind_flags",
     "kind_for_command",
     "normalize_kind",
     "package_free_kinds",
 ]
 
 
-def kind_choices() -> list[dict[str, str]]:
-    """Return ``[{name, label, description}, ...]`` in display order.
+def kind_choices() -> list[dict[str, Any]]:
+    """Return ``[{name, label, description, flags…}, ...]`` in display order.
 
-    Used by the New-pipeline / Submit templates to render the run-kind
-    ``<select>`` with human labels and per-option help text, driven
-    entirely by :data:`~ovid2.run_kinds.KIND_REGISTRY`.
+    Used by the New-pipeline / Submit / Edit templates to render the
+    run-kind picker and — UI rule U1 — to decide which fields are
+    relevant. Each entry carries the :class:`~ovid2.run_kinds.KindSpec`
+    flags the browser needs (``uses_cdm``, ``uses_transformations``,
+    ``tables_mode``, ``allows_extra_mounts``, ``allows_strict_types``,
+    ``health_selection``, ``create_flow``, ``uses_engine_overrides``) so
+    pages never hard-code kind names (``static/field_visibility.js``).
     """
-    return [
-        {"name": spec.name, "label": spec.label, "description": spec.description}
-        for spec in KIND_REGISTRY.values()
-        if not spec.job_only
-    ]
+    return [kind_flags(spec) for spec in KIND_REGISTRY.values() if not spec.job_only]
+
+
+def kind_flags(spec: KindSpec) -> dict[str, Any]:
+    """Return the browser-facing description of one run kind.
+
+    ``uses_engine_overrides`` is ``True`` for kinds whose worker argv
+    forwards ``--workers`` / ``--sf_account`` / ``--stderr-log`` (the
+    ``etl`` and ``health`` argv builders); copy / move drop them.
+    ``is_transfer`` marks the address-to-address kinds (copy / move) that
+    take a free job name instead of a pipeline package.
+
+    Args:
+        spec: The kind's registry entry.
+
+    Returns:
+        A JSON-serialisable dict.
+    """
+    return {
+        "name": spec.name,
+        "label": spec.label,
+        "description": spec.description,
+        "uses_cdm": spec.uses_cdm,
+        "uses_transformations": spec.uses_transformations,
+        "tables_mode": spec.tables_mode,
+        "allows_extra_mounts": spec.allows_extra_mounts,
+        "allows_strict_types": spec.allows_strict_types,
+        "health_selection": spec.health_selection,
+        "create_flow": spec.create_flow,
+        "uses_engine_overrides": spec.argv_builder in ("etl", "health"),
+        "is_transfer": spec.argv_builder in ("copy", "move"),
+        "package_required": spec.package_required,
+    }

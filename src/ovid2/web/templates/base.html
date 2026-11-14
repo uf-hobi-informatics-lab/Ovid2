@@ -89,6 +89,7 @@
   <script src="/static/cmdk.js" defer></script>
   <script src="/static/nav.js" defer></script>
   <script src="/static/help_tip.js" defer></script>
+  <script src="/static/field_visibility.js" defer></script>
   {# D3 v7 self-hosted; used by /static/live.js and the display bus.
      Loaded before live.js so window.d3 is available when the module
      bootstraps. #}
@@ -108,6 +109,7 @@
   {% elif path.startswith('/pipeline-packages') %}{% set nav_active = 'packages' %}
   {% elif path.startswith('/pipelines') %}{% set nav_active = 'pipelines' %}
   {% elif path.startswith('/transforms') %}{% set nav_active = 'transforms' %}
+  {% elif path.startswith('/navigator') %}{% set nav_active = 'navigator' %}
   {% elif path.startswith('/dataspace') %}{% set nav_active = 'dataspace' %}
   {% elif path.startswith('/reports') %}{% set nav_active = 'reports' %}
   {% elif path.startswith('/storage') or path.startswith('/connections') or path.startswith('/addresses') %}{% set nav_active = 'storage' %}
@@ -169,10 +171,13 @@
       {% endif %}
       {% if has_cap(request, 'view_pipeline_data') %}
       <a href="/pipelines" class="nav-item {% if nav_active == 'pipelines' %}active{% endif %}" data-nav="pipelines">
-        {{ icons.icon("submit", size=18, cls="nav-icon") }}<span class="nav-label">Pipelines</span>
+        {{ icons.icon("workflow", size=18, cls="nav-icon") }}<span class="nav-label">Pipelines</span>
       </a>
       <a href="/pipeline-packages" class="nav-item {% if nav_active == 'packages' %}active{% endif %}" data-nav="packages" title="Installed ovid2_pipelines.* code packages">
-        {{ icons.icon("cdms", size=18, cls="nav-icon") }}<span class="nav-label">Packages</span>
+        {{ icons.icon("package", size=18, cls="nav-icon") }}<span class="nav-label">Packages</span>
+      </a>
+      <a href="/navigator" class="nav-item {% if nav_active == 'navigator' %}active{% endif %}" data-nav="navigator" title="Every pipeline → table → field → function, with the YAML behind each step">
+        {{ icons.icon("navigator", size=18, cls="nav-icon") }}<span class="nav-label">Navigator</span>
       </a>
       <a href="/transforms" class="nav-item {% if nav_active == 'transforms' %}active{% endif %}" data-nav="transforms" title="Reusable transform chains (UDFs) you can assign to pipelines">
         {{ icons.icon("zap", size=18, cls="nav-icon") }}<span class="nav-label">Transforms</span>
@@ -189,7 +194,7 @@
       {% endif %}
       {% if has_cap(request, 'view_pipeline_data') %}
       <a href="/dataspace" class="nav-item {% if nav_active == 'dataspace' %}active{% endif %}" data-nav="dataspace">
-        {{ icons.icon("pipelines", size=18, cls="nav-icon") }}<span class="nav-label">Data Space</span>
+        {{ icons.icon("folder-open", size=18, cls="nav-icon") }}<span class="nav-label">Data Space</span>
       </a>
       {% endif %}
       {% if has_cap(request, 'view_runs') %}
@@ -201,7 +206,7 @@
       <div class="side-group">Configure</div>
       {% if has_cap(request, 'view_pipeline_data') %}
       <a href="/storage" class="nav-item {% if nav_active == 'storage' %}active{% endif %}" data-nav="storage">
-        {{ icons.icon("addresses", size=18, cls="nav-icon") }}<span class="nav-label">Storage accounts</span>
+        {{ icons.icon("bucket", size=18, cls="nav-icon") }}<span class="nav-label">Storage accounts</span>
       </a>
       <a href="/warehouses" class="nav-item {% if nav_active == 'warehouses' %}active{% endif %}" data-nav="warehouses">
         {{ icons.icon("engines", size=18, cls="nav-icon") }}<span class="nav-label">Warehouses</span>
@@ -222,17 +227,17 @@
       </a>
       {% if has_cap(request, 'admin_all') %}
       <a href="/settings" class="nav-item {% if nav_active == 'settings' %}active{% endif %}" data-nav="settings">
-        {{ icons.icon("install", size=18, cls="nav-icon") }}<span class="nav-label">Settings</span>
+        {{ icons.icon("settings", size=18, cls="nav-icon") }}<span class="nav-label">Settings</span>
       </a>
       <a href="/install" class="nav-item {% if nav_active == 'install' %}active{% endif %}" data-nav="install">
-        {{ icons.icon("install", size=18, cls="nav-icon") }}<span class="nav-label">Setup wizard</span>
+        {{ icons.icon("wand", size=18, cls="nav-icon") }}<span class="nav-label">Setup wizard</span>
       </a>
       {% endif %}
 
       {% if has_cap(request, 'manage_users') %}
       <div class="side-group">Access</div>
       <a href="/users" class="nav-item {% if nav_active == 'users' %}active{% endif %}" data-nav="users">
-        {{ icons.icon("pipelines", size=18, cls="nav-icon") }}<span class="nav-label">Users</span>
+        {{ icons.icon("users", size=18, cls="nav-icon") }}<span class="nav-label">Users</span>
       </a>
       {% endif %}
 

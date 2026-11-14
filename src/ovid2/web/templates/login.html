@@ -40,7 +40,7 @@
       {% endif %}
 
       {% if no_admin_configured %}
-        <p class="note" role="alert">
+        <p class="flash error" role="alert">
           No administrator is configured yet. Set
           <code>bootstrap_admin_emails</code> in <code>settings.auth</code>
           (then sign in with that email) or run
@@ -58,7 +58,7 @@
           {% endfor %}
         </div>
       {% else %}
-        <p class="note">
+        <p class="flash error">
           No identity providers are configured. An administrator must enable
           at least one OIDC provider in <code>settings.auth.providers</code>.
         </p>

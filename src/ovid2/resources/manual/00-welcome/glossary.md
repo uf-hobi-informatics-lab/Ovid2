@@ -38,6 +38,11 @@ CDM
 : Common Data Model — the target table shapes, keys and allowed values
   (`pcornet_7_0`, `omop_5_3`). → [Data models](../02-concepts/cdms.md)
 
+Column role
+: What an op does to columns — reads, writes, drops rows — declared beside
+  each transform, mapper op and fixer. The [navigator](#navigator) uses it
+  to draw per-field lineage. → [Extending Ovid2](../09-developers/extending.md)
+
 Composite key
 : The columns that identify a row in a CDM table, used to de-duplicate
   (e.g. `PATID` for `DEMOGRAPHIC`).
@@ -92,7 +97,7 @@ Formatter
 : A spec that builds one CDM table from raw sources.
   → [Formatter specs](../06-authoring/formatters.md)
 
-## H–M
+## H–N
 
 Health check
 : A declarative data-quality check — an EDC DC query or an Ovid2-native
@@ -119,6 +124,11 @@ MCP
 : Model Context Protocol — the standard Agent Ovid uses to expose tools to
   AI clients. → [Agent Ovid (MCP)](../07-assistant/mcp.md)
 
+Navigator
+: The web page (**Operate → Navigator**) that shows every pipeline down to
+  each field and the ordered functions applied to it, with the YAML behind
+  each step. → [Pipeline navigator](../03-web-panel/navigator.md)
+
 ## P–Z
 
 Pipeline (package)
@@ -144,6 +154,12 @@ Transform
 Trigger
 : How a pipeline config starts a job: `manual`, `cron`, `interval` or
   `watch`. → [Scheduling](../04-running-jobs/scheduling.md)
+
+UDF
+: A user-defined transform: a declarative computed column
+  (`derive_column`, a checked Spark-SQL expression) or chain of library
+  functions, run in the *transform* stage. Python UDFs are not supported.
+  → [Transforms](../06-authoring/transforms.md#applying-a-udf-from-the-navigator)
 
 Valueset
 : The bounded list of allowed values for a CDM column (e.g. PCORnet

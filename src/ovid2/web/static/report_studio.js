@@ -28,7 +28,10 @@
 
   var S = {
     report: null, layout: null, saved: null, model: null, catalogue: null, source: null,
-    undo: [], redo: [], sel: { kind: "report", id: null }, busy: false, version: 0
+    undo: [], redo: [], sel: { kind: "report", id: null }, busy: false, version: 0,
+    // True once the assistant edited the working copy: autosave then waits
+    // for a human Save (the assistant never saves on its own).
+    agentEdits: false
   };
 
   /* ---------------- helpers ---------------- */
@@ -103,6 +106,7 @@
     var d = dirty();
     $("[data-dirty]").hidden = !d;
     var save = $("[data-save]"); if (save) save.disabled = !d || S.busy;
+    if (d) scheduleAutosave();
     var u = $("[data-undo]"); if (u) u.disabled = !S.undo.length || S.busy;
     var r = $("[data-redo]"); if (r) r.disabled = !S.redo.length || S.busy;
     var t = theme(S.layout && S.layout.theme);
@@ -154,24 +158,82 @@
     if (canEdit) rerender().catch(function (e) { notice(e.message, "error"); });
   }
 
-  function save() {
+  /* ``opts.auto``: an autosave — quiet on success, noted "Autosave" in
+   * History, and a conflict pauses autosave instead of retrying. */
+  function save(opts) {
+    opts = opts || {};
+    clearTimeout(autosaveTimer); autosaveTimer = null;
     if (!dirty() || S.busy) return Promise.resolve();
     S.busy = true; refreshChrome();
     var title = $("[data-title]").value.trim() || S.layout.title;
     var lay = clone(S.layout); lay.title = title;
-    return api("PUT", "/reports/" + encodeURIComponent(RID), { layout: lay, expected_version: S.version })
+    var body = { layout: lay, expected_version: S.version };
+    if (opts.auto) body.note = "Autosave";
+    setSaveState(opts.auto ? "Saving…" : "");
+    return api("PUT", "/reports/" + encodeURIComponent(RID), body)
       .then(function (rep) {
+        // ``S.busy`` blocks edits while the PUT is in flight, so the
+        // server copy is exactly the working copy.
         S.report = rep; S.version = rep.version; S.layout = clone(rep.layout); S.saved = clone(rep.layout);
+        S.agentEdits = false;
         $("[data-meta]").textContent = "v" + rep.version + " · " + rep.permission + (rep.folder ? " · " + rep.folder : "");
         var db = $("[data-draft-badge]"); if (db) db.remove();
-        notice("Saved version " + rep.version + ".", "ok");
+        if (opts.auto) setSaveState("Autosaved v" + rep.version);
+        else { setSaveState(""); notice("Saved version " + rep.version + ".", "ok"); }
         renderOutline();
       })
       .catch(function (e) {
-        if (e.status === 409) notice("Someone saved this report since you opened it (now v" + (e.detail && e.detail.current_version) + "). Reload to see their changes — your edits are still here.", "error", true);
-        else showErrors(e.errors && e.errors.length ? e.errors : [e.message]);
+        setSaveState("");
+        // A failed autosave pauses autosave for this page (no retry loop);
+        // the remembered preference is unchanged.
+        var paused = opts.auto || autosaveOn();
+        if (paused) setAutosave(false, true);
+        if (e.status === 409) notice("Someone saved this report since you opened it (now v" + (e.detail && e.detail.current_version) + "). Reload to see their changes — your edits are still here." + (paused ? " Autosave is paused." : ""), "error", true);
+        else {
+          showErrors(e.errors && e.errors.length ? e.errors : [e.message]);
+          if (paused) notice("Save failed — autosave is paused. Fix the problem and press Save.", "error", true);
+        }
       })
       .then(function () { S.busy = false; refreshChrome(); });
+  }
+
+  /* ---------------- autosave ---------------- */
+
+  var AUTOSAVE_KEY = "ovid2.reports.autosave";
+  var AUTOSAVE_DELAY_MS = 2500;
+  var autosaveTimer = null;
+
+  function autosaveBox() { return $("[data-autosave]"); }
+  function autosaveOn() { var b = autosaveBox(); return !!(b && b.checked && canEdit); }
+  function setSaveState(text) {
+    var n = $("[data-save-state]"); if (!n) return;
+    n.textContent = text || ""; n.hidden = !text;
+  }
+  function readAutosavePref() {
+    try { return window.localStorage.getItem(AUTOSAVE_KEY) === "on"; } catch (e) { return false; }
+  }
+  /* ``transient``: pause for this page only (e.g. after a conflict) without
+   * changing the remembered preference. */
+  function setAutosave(on, transient) {
+    var b = autosaveBox(); if (!b) return;
+    b.checked = !!on;
+    if (!transient) { try { window.localStorage.setItem(AUTOSAVE_KEY, on ? "on" : "off"); } catch (e) { /* private mode */ } }
+    if (!on) { clearTimeout(autosaveTimer); autosaveTimer = null; setSaveState(""); }
+    if (S.layout) refreshChrome();
+  }
+  function scheduleAutosave() {
+    if (!autosaveOn()) return;
+    if (S.agentEdits) { setSaveState("Assistant edits — press Save"); return; }
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(function tick() {
+      autosaveTimer = null;
+      if (!autosaveOn() || !dirty() || S.agentEdits) return;
+      if (S.busy) { autosaveTimer = setTimeout(tick, AUTOSAVE_DELAY_MS); return; }
+      save({ auto: true });
+    }, AUTOSAVE_DELAY_MS);
+  }
+  function flushAutosave() {
+    if (autosaveOn() && S.layout && dirty() && !S.busy && !S.agentEdits) save({ auto: true });
   }
 
   /* ---------------- canvas ---------------- */
@@ -364,9 +426,11 @@
 
   function field(label, input, hint) {
     var w = el("label", "rs-field");
-    w.appendChild(el("span", "rs-field-label", label));
+    var lab = el("span", "rs-field-label", label);
+    // UI rule U3: the field's description hangs off a "?" tip.
+    if (hint && window.Ovid2HelpTip) { lab.appendChild(document.createTextNode(" ")); lab.appendChild(window.Ovid2HelpTip.tip(hint)); }
+    w.appendChild(lab);
     w.appendChild(input);
-    if (hint) w.appendChild(el("span", "rs-field-hint note small", hint));
     return w;
   }
   function textInput(value, onCommit, opts) {
@@ -487,8 +551,8 @@
     if (!current) {
       var basics = el("div", "rs-gallery-row");
       [["text", "Text", "Markdown paragraph"], ["callout", "Callout", "Highlighted note"]].forEach(function (k) {
-        var b = el("button", "rs-tile"); b.type = "button";
-        b.appendChild(el("span", "rs-tile-name", k[1])); b.appendChild(el("span", "rs-tile-desc", k[2]));
+        var b = el("button", "rs-tile"); b.type = "button"; b.title = k[2];
+        b.appendChild(el("span", "rs-tile-name", k[1]));
         b.addEventListener("click", function () {
           var blk = { type: k[0], text: k[0] === "callout" ? "**Note:** …" : "Write here…" };
           if (k[0] === "callout") blk.tone = "info";
@@ -511,7 +575,6 @@
         var b = el("button", "rs-tile" + (current && current.chart === c.name ? " active" : "")); b.type = "button";
         b.title = c.summary;
         b.appendChild(el("span", "rs-tile-name", c.label));
-        b.appendChild(el("span", "rs-tile-desc", c.summary));
         b.addEventListener("click", function () { pickChart(c, section, current, dsNames); });
         row.appendChild(b);
       });
@@ -879,12 +942,20 @@
     ev.preventDefault();
     var f = ev.target;
     api("PUT", "/reports/" + encodeURIComponent(RID) + "/shares",
-        { principal_kind: f.principal_kind.value, principal: f.principal.value.trim(), permission: f.permission.value })
-      .then(function (rows) { f.principal.value = ""; $("[data-share-errors]").hidden = true; renderShares(rows); })
+        { principal_kind: f.principal_kind.value, principal: activePrincipal().value.trim(), permission: f.permission.value })
+      .then(function (rows) { if (activePrincipal().tagName === "INPUT") activePrincipal().value = ""; $("[data-share-errors]").hidden = true; renderShares(rows); })
       .catch(function (e) { formErrors("[data-share-errors]", e); });
   });
+  // UI rule U2: role → <select> of roles; user → free id / e-mail.
+  function activePrincipal() {
+    var kind = $("[data-share-form]").principal_kind.value;
+    return $('[data-share-form] [data-principal="' + kind + '"]');
+  }
   $("[data-share-form]").principal_kind.addEventListener("change", function (e) {
-    $("[data-share-form]").principal.placeholder = e.target.value === "role" ? "viewer / pipeline_operator / system_admin" : "user id";
+    Array.prototype.forEach.call(root.querySelectorAll('[data-share-form] [data-principal]'), function (n) {
+      var on = n.getAttribute("data-principal") === e.target.value;
+      n.hidden = !on; n.disabled = !on;
+    });
   });
 
   $("[data-template-form]").addEventListener("submit", function (ev) {
@@ -916,6 +987,17 @@
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "z") { ev.preventDefault(); if (ev.shiftKey) redo(); else undo(); }
     else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "s") { ev.preventDefault(); save(); }
   });
+  if (autosaveBox()) {
+    autosaveBox().checked = readAutosavePref();
+    autosaveBox().addEventListener("change", function (e) {
+      setAutosave(e.target.checked);
+      if (e.target.checked) { notice("Autosave on — edits are saved a few seconds after you stop.", "ok"); scheduleAutosave(); }
+      else notice("Autosave off — press Save (Ctrl+S) to keep your edits.", "ok");
+    });
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "hidden") flushAutosave();
+  });
   window.addEventListener("beforeunload", function (ev) {
     if (S.layout && dirty()) { ev.preventDefault(); ev.returnValue = ""; }
   });
@@ -926,7 +1008,8 @@
     OPS: OPS.slice(),
     info: function () {
       return S.report ? { report_id: RID, title: S.layout.title, source_id: S.report.source_id,
-                          can_edit: canEdit, dirty: dirty(), version: S.version } : null;
+                          can_edit: canEdit, dirty: dirty(), version: S.version,
+                          autosave: autosaveOn() } : null;
     },
     outline: function () {
       if (!S.layout) return null;
@@ -942,7 +1025,9 @@
         })
       };
     },
-    applyOps: function (ops) { return applyOps(ops); },
+    applyOps: function (ops) {
+      return applyOps(ops).then(function (notes) { S.agentEdits = true; refreshChrome(); return notes; });
+    },
     undo: undo
   };
 

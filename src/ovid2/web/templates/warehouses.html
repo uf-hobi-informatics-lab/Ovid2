@@ -16,6 +16,7 @@
     <div class="pl-title">
       <h1>Warehouses
         {% call help.tip_block(label="What is a warehouse?") %}
+          <strong>Compute backends pipelines run on &mdash; pick the engine and its resource knobs.</strong>
           A <strong>warehouse</strong> selects the compute backend a pipeline
           runs on (PySpark, Databricks Connect, or Snowpark) and its resource
           knobs (executor memory, cluster id, Snowflake warehouse). Warehouses
@@ -23,7 +24,6 @@
           application logic. Pipelines reference a warehouse by name.
         {% endcall %}
       </h1>
-      <p class="pl-subtitle">Compute backends pipelines run on &mdash; pick the engine and its resource knobs.</p>
     </div>
     <div class="page-actions">
       {% if engines %}
@@ -57,7 +57,7 @@
       {% endfor %}
     </div>
 
-    <div id="test-all-summary" class="flash" style="display: none;"></div>
+    <div id="test-all-summary" class="flash" hidden></div>
     <div class="pl-grid">
       {% for e in engines %}
         <article class="pl-card" data-engine-row="{{ e.name }}" data-etype="{{ e.type }}">
@@ -120,11 +120,9 @@
       </div>
       <h2>No warehouses yet
         {% call help.tip_block(label="Where are warehouses stored?") %}
-          Files land under <code>$XDG_CONFIG_HOME/ovid2/engines/</code>.
+          The bare type name <code>pyspark</code> works everywhere as a built-in fallback with default settings; create a named warehouse only to override the defaults. Files land under <code>$XDG_CONFIG_HOME/ovid2/engines/</code>.
         {% endcall %}
       </h2>
-      <p class="muted">The bare type name <code>pyspark</code> works everywhere as a built-in
-        fallback with default settings; create a named warehouse only to override the defaults.</p>
       <a href="/engines/new" class="button primary">{{ icons.icon("plus", size=16) }} New warehouse</a>
     </div>
   {% endif %}
@@ -194,7 +192,7 @@
     var summary = document.getElementById("test-all-summary");
     if (summary) {
       summary.className = "flash";
-      summary.style.display = "block";
+      summary.hidden = false;
       summary.textContent = "Testing " + names.length + " warehouses…";
     }
     var idx = 0;

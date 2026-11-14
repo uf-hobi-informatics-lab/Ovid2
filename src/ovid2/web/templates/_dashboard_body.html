@@ -92,26 +92,26 @@
     <h2>Queue &amp; recent jobs {{ help.tip("The ten most recent jobs submitted through the web / API job queue, newest first. Click a batch to open its live run console.") }}</h2>
     {% if jobs and jobs.jobs %}
       <div class="table-wrap">
-        <table class="runs-table">
+        <table class="runs-table dash-table">
           <thead>
             <tr>
               <th>Pipeline</th>
               <th>Batch</th>
               <th>Status</th>
-              <th>Submitted</th>
+              <th class="dash-when">Submitted</th>
             </tr>
           </thead>
           <tbody>
             {% for j in jobs.jobs %}
               <tr>
                 <td>{{ j.pipeline }}</td>
-                <td>
+                <td class="dash-batch">
                   <a href="/runs/{{ j.instance_id or j.batch_id }}">
                     <span class="mono small">{{ j.batch_id }}</span>
                   </a>
                 </td>
                 <td><span class="badge status-{{ j.status }}">{{ j.status }}</span></td>
-                <td class="small">{{ j.submitted_at | localtime }}</td>
+                <td class="small dash-when">{{ j.submitted_at | localtime }}</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -134,22 +134,22 @@
     <h2>Recent runs (tracker) {{ help.tip("Batches registered with the batch tracker — every pipeline run records its received time and status here, including scheduler-triggered runs.") }}</h2>
     {% if runs.runs %}
       <div class="table-wrap">
-        <table class="runs-table">
+        <table class="runs-table dash-table">
           <thead>
             <tr>
               <th>Batch</th>
               <th>Pipeline</th>
               <th>Status</th>
-              <th>Received</th>
+              <th class="dash-when">Received</th>
             </tr>
           </thead>
           <tbody>
             {% for run in runs.runs %}
               <tr>
-                <td><a href="/runs/{{ run.batch_id }}">{{ run.batch_id }}</a></td>
+                <td class="dash-batch"><a href="/runs/{{ run.batch_id }}">{{ run.batch_id }}</a></td>
                 <td>{{ run.pipeline or "&mdash;"|safe }}</td>
                 <td><span class="badge status-{{ run.status|lower }}">{{ run.status }}</span></td>
-                <td>{{ run.received_time | localtime }}</td>
+                <td class="dash-when">{{ run.received_time | localtime }}</td>
               </tr>
             {% endfor %}
           </tbody>

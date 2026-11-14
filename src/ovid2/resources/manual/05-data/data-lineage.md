@@ -24,9 +24,16 @@ For any column of any table you can read, in the pipeline package:
 | Which corrections ran? | `fixer_configs.py` → `FIXER_CHAINS["<table>"]` |
 | What did the CDM require? | `resources/cdms/<cdm>/tables/<table>.yaml` and `valuesets/` |
 
-The web panel shows all of this. Under **Pipelines → Packages →
-<package>**, open a formatter or mapper to read its spec. Open
-**Configure → CDMs** for the model.
+The web panel shows all of this. The quickest way is the
+[pipeline navigator](../03-web-panel/navigator.md) (**Operate →
+Navigator**). Pick a package, a table and a field to see every function
+applied to it, stage by stage (format → deduplicate → transform → map →
+fix). Click any step to open the YAML that defines it. The navigator reads
+the specs only; it never runs the pipeline or reads data. Agents get the
+same answer from the read-only `inspect_pipeline_lineage` tool.
+
+You can also open a formatter or mapper under **Pipelines → Packages →
+<package>** to read its spec, and **Configure → CDMs** for the model.
 
 ## Raw values are preserved
 

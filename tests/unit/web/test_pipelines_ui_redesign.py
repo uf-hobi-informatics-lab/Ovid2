@@ -204,7 +204,8 @@ def test_new_pipeline_wizard_v2_surfaces(web_client: object) -> None:
     assert "data-provides-tables" in body  # tables the template provides
     assert 'name="etl_tables_mode"' in body
     assert 'id="identity-fields"' in body and 'id="identity-bindings"' in body
-    assert 'data-only-kinds="etl"' in body  # identity step is ETL-only
+    # identity step applies only to scaffolding kinds (registry flag, UI rule U1)
+    assert 'data-only-flag="create_flow=scaffold_package"' in body
     assert 'id="flow-graph"' in body and "flow-graph-svg" in body
     assert "data-engine-families=" in body and '"duckdb": "duckdb"' in body
     assert 'id="source-match"' in body

@@ -1,10 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Pipeline {{ pipeline.name }} &mdash; Ovid2{% endblock %}
 {% block content %}
+{% import "_help.html" as help %}
 <section class="page">
   <p><a href="/pipeline-packages">&larr; all pipelines</a></p>
   <h1>Pipeline: {{ pipeline.name }}
-    <a href="/pipeline-packages/{{ pipeline.name }}/builder" class="button primary small">Customize &rarr;</a></h1>
+    <a href="/pipeline-packages/{{ pipeline.name }}/builder" class="button primary small">Customize &rarr;</a>
+    <a href="/navigator?p={{ pipeline.name | urlencode }}" class="button small">Open in navigator</a></h1>
   <p class="mono small">{{ pipeline.path }}</p>
 
   {% if pipeline_config %}
@@ -24,7 +26,7 @@
       </table>
     </section>
   {% else %}
-    <p class="note">
+    <p class="empty">
       No runnable pipeline definition yet.
       <a href="/pipelines/new">Create one &rarr;</a>
       to wire input / output storage and a warehouse.
@@ -54,7 +56,7 @@
     </section>
 
     <section class="card">
-      <h2>Python sources</h2>
+      <h2>Python sources {% call help.tip_block() %}Fixer chains and literal settings are editable in the <a href="/pipeline-packages/{{ pipeline.name }}/builder">pipeline builder</a> (fixer chains are saved as <code>fixer_configs.yaml</code>). Other Python sources are read-only in the UI &mdash; edit on disk (git) or via pull request.{% endcall %}</h2>
       <ul class="check-list compact">
         {% for src in [pipeline.dictionaries_file, pipeline.fixer_configs_file] if src %}
           <li>
@@ -66,12 +68,6 @@
           </li>
         {% endfor %}
       </ul>
-      <p class="note">
-        Fixer chains and literal settings are editable in the
-        <a href="/pipeline-packages/{{ pipeline.name }}/builder">pipeline builder</a>
-        (fixer chains are saved as <code>fixer_configs.yaml</code>). Other Python
-        sources are read-only in the UI &mdash; edit on disk (git) or via pull request.
-      </p>
     </section>
   </div>
 

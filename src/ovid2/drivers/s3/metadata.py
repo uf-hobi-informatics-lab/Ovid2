@@ -32,6 +32,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ovid2.drivers._choices import FILE_FORMATS, S3_SIGNATURE_VERSIONS
 from ovid2.drivers.base import ConnectionFieldSpec, FieldSpec, LocationField
 
 #: Recognised on-disk formats. Extension is tracked but not enforced —
@@ -116,7 +117,11 @@ def connection_fields() -> ConnectionFieldSpec:
             FieldSpec(
                 name="signature_version",
                 required=False,
-                help="e.g. s3v4.",
+                widget="choices",
+                choices=S3_SIGNATURE_VERSIONS,
+                help=(
+                    "Request-signing algorithm (s3v4 for AWS; s3 for legacy S3-compatible stores)."
+                ),
             ),
         ),
         secrets=(
@@ -162,7 +167,8 @@ def location_fields() -> tuple[LocationField, ...]:
         LocationField(
             name="format",
             required=False,
-            widget="str",
+            widget="choices",
+            choices=FILE_FORMATS,
             default="parquet",
             help="File format (parquet, csv, json, …).",
         ),

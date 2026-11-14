@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Storage account {{ connection.name }} &mdash; Ovid2{% endblock %}
 {% block content %}
+{% import "_help.html" as help %}
 <section class="page">
   <p><a href="/storage">&larr; all storage accounts</a></p>
   <h1>Storage account: <span class="mono">{{ connection.name }}</span></h1>
@@ -32,7 +33,7 @@
     <p class="empty">No non-secret arguments defined.</p>
   {% endif %}
 
-  <h2>Secrets</h2>
+  <h2>Secrets {% call help.tip_block() %}Values are masked. Edit the storage account to change them.{% endcall %}</h2>
   {% if connection.secrets %}
     <table class="kv-table">
       <thead><tr><th>Key</th><th>Value</th></tr></thead>
@@ -42,7 +43,6 @@
         {% endfor %}
       </tbody>
     </table>
-    <p class="note">Values are masked. Edit the storage account to change them.</p>
   {% else %}
     <p class="empty">No secret fields configured.</p>
   {% endif %}

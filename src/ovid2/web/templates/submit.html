@@ -33,14 +33,13 @@
     <div class="pl-title">
       <h1>Submit a job
         {% call help.tip_block(label="How does the job builder work?") %}
-          Build the job on the left &mdash; pick a job type and a pipeline,
+          One-off run. Build the job on the left &mdash; pick a job type and a pipeline,
           then click an <strong>icon</strong> in the Source / Target trees to
           assign it (click a <strong>name</strong> to open it). The graph on
           the right turns green as each piece is in place; Submit unlocks
           once every required node is green.
         {% endcall %}
       </h1>
-      <p class="pl-subtitle">One-off run &mdash; choose a job type, a pipeline, a source and a target.</p>
     </div>
     <div class="page-actions">
       <a href="/runs" class="button small">{{ icons.icon("runs", size=15) }} Jobs</a>
@@ -52,6 +51,7 @@
   {% if error %}<p class="flash-error">{{ error }}</p>{% endif %}
 
   <form method="post" action="/submit" class="submit-form job-builder" id="submit-form"
+        data-visibility-root
         data-kind="{{ preselect_kind or 'etl' }}"
         data-plan-url="/api/v1/pipeline-packages/">
 
@@ -66,7 +66,13 @@
           <span class="builder-summary-chevron" aria-hidden="true">{{ icons.icon("chevron-down", size=16) }}</span>
         </summary>
         <div class="builder-body">
-          <p class="builder-label">Job type</p>
+          <p class="builder-label">Job type
+            {% call help.tip_block(label="Job types") %}
+              <span class="help-tip-list">
+              {% for k in kind_choices %}<span><strong>{{ k.label }}</strong> &mdash; {{ k.description }}</span>{% endfor %}
+              </span>
+            {% endcall %}
+          </p>
           <div class="kind-chips" role="radiogroup" aria-label="Job type">
             {% for k in kind_choices %}
               {% set is_sel = (k.name == (preselect_kind or "etl")) %}
@@ -78,7 +84,6 @@
               </label>
             {% endfor %}
           </div>
-          <p class="note small" data-role="kind-desc"></p>
 
           <p class="builder-label">Pipeline</p>
           <input type="hidden" name="pipeline" id="pipeline-field" value="{{ preselect_pipeline or '' }}">
@@ -125,8 +130,8 @@
             <p class="muted">No <strong data-role="no-pipelines-kind">such</strong> pipelines yet.</p>
             <a href="/pipelines/new" class="button small primary">{{ icons.icon("plus", size=14) }} Create one</a>
           </div>
-          <label class="builder-free-name" data-role="free-name" hidden>
-            <span class="small">Job name (copy / move jobs don&rsquo;t need a package)</span>
+          <label class="builder-free-name" data-role="free-name" data-show-kind-flag="is_transfer" hidden>
+            <span class="small">Job name {{ help.tip("Copy / move jobs don't need a pipeline package — give the job a name.") }}</span>
             <input type="text" id="pipeline-free" placeholder="e.g. demo_copy" autocomplete="off">
           </label>
         </div>
@@ -137,15 +142,11 @@
       <details class="builder-section" data-builder-section="{{ role }}">
         <summary class="builder-summary">
           <span class="builder-step" aria-hidden="true">{{ step }}</span>
-          <span class="builder-summary-title">{{ title }}</span>
+          <span class="builder-summary-title">{{ title }} {{ help.tip("Click an icon to choose it as the " ~ (title | lower) ~ ". Click a name to open it.") }}</span>
           <span class="builder-summary-value" data-summary="{{ role }}">not chosen</span>
           <span class="builder-summary-chevron" aria-hidden="true">{{ icons.icon("chevron-down", size=16) }}</span>
         </summary>
         <div class="builder-body">
-          <p class="note small">
-            Click an <strong>icon</strong> to choose it as the {{ title | lower }}.
-            Click a <strong>name</strong> to open it.
-          </p>
           <div class="storage-tree" data-tree-role="{{ role }}">
             <input type="hidden" name="{{ role }}_mode" value="address">
             <input type="hidden" name="{{ role }}_address" value="{{ (preselect_input_address if role == 'input' else preselect_output_address) or '' }}">
@@ -204,7 +205,7 @@
         </summary>
         <div class="builder-body">
 
-          <details class="builder-sub" id="tables-card" data-builder-sub="tables">
+          <details class="builder-sub" id="tables-card" data-builder-sub="tables" data-show-kind-flag="tables_mode!=none">
             <summary>{{ icons.icon("table", size=16) }} Tables <span class="count-badge" id="tables-count" hidden></span></summary>
             <div class="picker-toolbar" id="tables-toolbar" hidden>
               <button type="button" class="button small" data-select="all">Select all</button>
@@ -220,16 +221,15 @@
             <input type="hidden" name="tables" id="tables-field" value="all">
           </details>
 
-          <details class="builder-sub" id="transformations-card" data-builder-sub="stages">
-            <summary>{{ icons.icon("layers", size=16) }} Transformations</summary>
-            <p class="note small">The ETL stages, run in order. Untick one to skip it.</p>
+          <details class="builder-sub" id="transformations-card" data-builder-sub="stages" data-show-kind-flag="uses_transformations">
+            <summary>{{ icons.icon("layers", size=16) }} Transformations {{ help.tip("The ETL stages, run in order. Untick one to skip it.") }}</summary>
             <div id="transformations-list" class="stage-list">
               <p class="note">Choose a pipeline to see its transformation plan.</p>
             </div>
             <input type="hidden" name="transformations" id="transformations-field" value="all">
           </details>
 
-          <details class="builder-sub" id="health-card" data-builder-sub="cycle" hidden>
+          <details class="builder-sub" id="health-card" data-builder-sub="cycle" data-show-kind-flag="health_selection" hidden>
             <summary>{{ icons.icon("check", size=16) }} Report cycle</summary>
             <label class="builder-field">Report cycle (package)
               <select id="health-package-select" name="packages">
@@ -241,9 +241,8 @@
             {% if not health_packages %}<p class="note">No check packages registered.</p>{% endif %}
           </details>
 
-          <details class="builder-sub" id="checks-card" data-builder-sub="checks" hidden>
-            <summary>{{ icons.icon("check-square", size=16) }} Checks <span class="count-badge" id="checks-count" hidden></span></summary>
-            <p class="note small">Leave all ticked to run the whole report cycle.</p>
+          <details class="builder-sub" id="checks-card" data-builder-sub="checks" data-show-kind-flag="health_selection" hidden>
+            <summary>{{ icons.icon("check-square", size=16) }} Checks <span class="count-badge" id="checks-count" hidden></span> {{ help.tip("Leave all ticked to run the whole report cycle.") }}</summary>
             <div class="picker-toolbar" id="checks-toolbar" hidden>
               <button type="button" class="button small" data-select="all">Select all</button>
               <button type="button" class="button small ghost" data-select="none">Select none</button>
@@ -264,41 +263,46 @@
               {% set ns = namespace(matched=false) %}
               {% for e in engines %}
                 {% if e.name == chosen_engine %}{% set ns.matched = true %}{% endif %}
-                <label class="kind-chip"><input type="radio" name="engine" value="{{ e.name }}" data-type="{{ e.type }}"{% if e.name == chosen_engine %} checked{% endif %}>
+                <label class="kind-chip"><input type="radio" name="engine" value="{{ e.name }}" data-type="{{ e.type }}" data-family="{{ engine_families.get(e.type, '') }}"{% if e.name == chosen_engine %} checked{% endif %}>
                   <span class="kind-chip-icon" data-logo="engine" data-logo-size="18"></span>
                   <span class="kind-chip-label mono">{{ e.name }}</span></label>
               {% endfor %}
               {% for t in engine_types %}{% if t not in engine_names %}
                 {% if t == chosen_engine %}{% set ns.matched = true %}{% endif %}
-                <label class="kind-chip"><input type="radio" name="engine" value="{{ t }}" data-type="{{ t }}"{% if t == chosen_engine %} checked{% endif %}>
+                <label class="kind-chip"><input type="radio" name="engine" value="{{ t }}" data-type="{{ t }}" data-family="{{ engine_families.get(t, '') }}"{% if t == chosen_engine %} checked{% endif %}>
                   <span class="kind-chip-icon" data-logo="engine" data-logo-size="18"></span>
                   <span class="kind-chip-label mono">{{ t }}</span></label>
               {% endif %}{% endfor %}
               {% if not ns.matched %}
-                <label class="kind-chip"><input type="radio" name="engine" value="{{ chosen_engine }}" data-type="{{ chosen_engine }}" checked>
+                <label class="kind-chip"><input type="radio" name="engine" value="{{ chosen_engine }}" data-type="{{ chosen_engine }}" data-family="{{ engine_families.get(chosen_engine, '') }}" checked>
                   <span class="kind-chip-icon" data-logo="engine" data-logo-size="18"></span>
                   <span class="kind-chip-label mono">{{ chosen_engine }}</span></label>
               {% endif %}
             </div>
             <div class="field-grid">
-              <label id="workers-row" title="Spark: worker containers in the run's cluster. DuckDB: tables run concurrently in one host-sized container (75% RAM, all CPUs).">Workers
+              <label id="workers-row" data-show-kind-flag="uses_engine_overrides" data-hide-engine-family="snowpark">Workers
+                {{ help.tip("Spark: worker containers in the run's cluster. DuckDB: tables run concurrently in one host-sized container (75% RAM, all CPUs).") }}
                 <input type="number" name="workers" value="25" min="1" max="200">
-                <small class="muted">Spark: worker containers · DuckDB: concurrent tables</small>
-              </label>
-              <label id="sf-account-row">Snowflake ACCOUNT override
-                <input type="text" name="sf_account" placeholder="optional">
               </label>
             </div>
-            <label class="checkbox" id="stderr-log-row">
-              <input type="checkbox" name="stderr_log" value="true"> Mirror events to stderr
+            <label class="checkbox" id="strict-types-row" data-show-kind-flag="allows_strict_types" hidden>
+              <input type="checkbox" name="strict_types" value="true"> Strict CDM type check
+              {{ help.tip("Fail the move when a column's type does not match the CDM declaration.") }}
             </label>
-            <label id="extra-mounts-row" class="builder-field" hidden>
-              Extra bind mounts (copy / move only, one per line)
-              <textarea name="extra_mounts" rows="3" placeholder="/host/path:/container/path[:rw|ro]"></textarea>
-            </label>
-            <label class="checkbox" id="strict-types-row" hidden>
-              <input type="checkbox" name="strict_types" value="true"> Strict CDM type check (move only)
-            </label>
+            <details class="builder-sub builder-advanced" id="advanced-subcard" data-show-kind-flag="uses_engine_overrides|allows_extra_mounts">
+              <summary>{{ icons.icon("sliders", size=14) }} Advanced</summary>
+              <label id="sf-account-row" class="builder-field" data-show-kind-flag="uses_engine_overrides" data-show-engine-family="snowpark">Snowflake ACCOUNT override
+                {{ help.tip("Run against a different Snowflake account than the warehouse's connection.") }}
+                <input type="text" name="sf_account" placeholder="optional">
+              </label>
+              <label class="checkbox" id="stderr-log-row" data-show-kind-flag="uses_engine_overrides">
+                <input type="checkbox" name="stderr_log" value="true"> Mirror events to stderr
+              </label>
+              <label id="extra-mounts-row" class="builder-field" data-show-kind-flag="allows_extra_mounts" hidden>
+                Extra bind mounts {{ help.tip("One per line: /host/path:/container/path[:rw|ro].") }}
+                <textarea name="extra_mounts" rows="3" placeholder="/host/path:/container/path[:rw|ro]"></textarea>
+              </label>
+            </details>
           </details>
         </div>
       </details>
@@ -309,7 +313,7 @@
       <svg class="job-graph-svg" width="480" height="190" role="group" aria-label="Source to pipeline to target"></svg>
       <div class="graph-chips" data-role="graph-chips"></div>
       <label class="builder-batch">
-        <span class="builder-label">Batch id</span>
+        <span class="builder-label">Batch id {{ help.tip("Set by the source you choose — the complete path of the folder / schema it reads.") }}</span>
         {# The batch id is the complete Data Space path of the chosen input
            (storage account + folder / DATABASE/SCHEMA). It is derived — the
            server re-derives it — and never appended to any address: every
@@ -318,15 +322,8 @@
                placeholder="set by the source you choose"
                value="{{ preselect_batch_id or '' }}" autocomplete="off"
                title="The complete path of the source folder / schema">
-        <span class="note small">From the source &mdash; the exact folder / schema read.</span>
       </label>
       <p class="graph-status small" data-role="graph-status" aria-live="polite"></p>
-      <p id="copy-hint" class="note small" hidden>
-        <strong>Copy job.</strong> Tables are copied verbatim &mdash; no formatter, mapper, or fixer.
-      </p>
-      <p id="move-hint" class="note small" hidden>
-        <strong>Move job.</strong> Like copy, routed through the native drivers.
-      </p>
       <div class="submit-actions">
         <button type="submit" class="button primary" id="builder-submit" disabled>
           {{ icons.icon("submit", size=16) }} Submit job
@@ -336,7 +333,7 @@
   </form>
 </section>
 
-<script type="application/json" id="kind-descriptions">{{ kind_choices | tojson }}</script>
+<script type="application/json" id="kind-flags">{{ kind_choices | tojson }}</script>
 <script src="/static/submit_plan.js" defer></script>
 <script type="module" src="/static/submit_builder.js"></script>
 {% endblock %}

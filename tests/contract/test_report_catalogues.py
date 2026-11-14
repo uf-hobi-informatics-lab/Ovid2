@@ -127,6 +127,7 @@ _BANNED_IMPORTS = (
     "ovid2.connections",
     "reportlab",
     "docx",
+    "pptx",
     "xlsxwriter",
     "vl_convert",
     "svglib",

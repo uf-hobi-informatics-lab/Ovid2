@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Warehouse {{ engine.name }} &mdash; Ovid2{% endblock %}
 {% block content %}
+{% import "_help.html" as help %}
 <section class="page">
   <p><a href="/warehouses">&larr; all warehouses</a></p>
   <h1>Warehouse: <span class="mono">{{ engine.name }}</span></h1>
@@ -32,7 +33,7 @@
     </p>
   {% endif %}
 
-  <h2>Secrets</h2>
+  <h2>Secrets {% call help.tip_block() %}Values are masked. Edit the warehouse to change them.{% endcall %}</h2>
   {% if engine.secrets %}
     <table class="kv-table">
       <thead><tr><th>Key</th><th>Value</th></tr></thead>
@@ -42,7 +43,6 @@
         {% endfor %}
       </tbody>
     </table>
-    <p class="note">Values are masked. Edit the warehouse to change them.</p>
   {% else %}
     <p class="empty">No secret fields configured.</p>
   {% endif %}

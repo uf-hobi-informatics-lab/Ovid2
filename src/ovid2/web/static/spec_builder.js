@@ -30,8 +30,10 @@ import { FlowGraph } from "/static/flow_graph.js";
 
 const root = document.getElementById("spec-builder");
 const MODE = root ? root.dataset.mode || "pipeline" : "";
-const PIPELINE = root ? root.dataset.pipeline || "" : "";
-const CAN_WRITE = root ? root.dataset.canWrite === "true" : false;
+// Mutable so the navigator (/navigator) can re-target the shared editor at
+// whichever package is selected — see ``setContext`` below.
+let PIPELINE = root ? root.dataset.pipeline || "" : "";
+let CAN_WRITE = root ? root.dataset.canWrite === "true" : false;
 const API = "/api/v1";
 
 /* -------------------------------------------------------------- helpers */
@@ -102,6 +104,59 @@ async function catalogue(name) {
   return cache[name];
 }
 
+/* ---------------------------------------------------- closed-set pickers */
+
+/*
+ * UI rule U2: a parameter whose value must name something the package
+ * knows (a CDM column, a table, a reference table, a vocabulary) is a
+ * <select> / multi-select, never free text. ``pickContext.table`` is set by
+ * the editor that is rendering (the table the spec belongs to); the lists
+ * come from the package inspection (``window.__pbInspect``). With no
+ * inspection (e.g. the shared library page) the field stays free text —
+ * a library chain is CDM-agnostic, so any name is legitimate there.
+ */
+const pickContext = { table: "" };
+
+function inspectTable(name) {
+  const ins = window.__pbInspect;
+  return ins && ins.tables ? ins.tables.find((t) => t.name === name) : null;
+}
+
+function choicesFor(key, prop) {
+  const ins = window.__pbInspect;
+  if (!ins) return null;
+  const k = String(key).toLowerCase();
+  const isArr = prop && prop.type === "array";
+  if (k === "vocabulary") return ins.vocabularies || null;
+  if (k === "reference_table" || k === "ref_table") return ins.reference_tables && ins.reference_tables.length ? ins.reference_tables : null;
+  if (k === "auxiliary_tables" || k === "table" || k === "tables" || k === "target_table") {
+    return (ins.tables || []).map((t) => t.name);
+  }
+  if (k === "column" || k === "columns" || k === "target_column" || k === "source_column" ||
+      k === "key_columns" || k === "partition_by" || k === "order_by" || (isArr && /columns?$/.test(k))) {
+    const t = inspectTable(pickContext.table);
+    return t && t.columns && t.columns.length ? t.columns : null;
+  }
+  return null;
+}
+
+/* A <select> (single) or <select multiple> (array) over ``choices``; keeps
+ * an unknown current value selectable so editing never silently drops it. */
+function choiceWidget(choices, cur, multiple, required, onPick) {
+  const sel = document.createElement("select");
+  const curSet = new Set(multiple ? (Array.isArray(cur) ? cur.map(String) : []) : [cur == null ? "" : String(cur)]);
+  const extra = [...curSet].filter((v) => v && !choices.includes(v));
+  if (multiple) { sel.multiple = true; sel.size = Math.min(8, Math.max(3, choices.length + extra.length)); }
+  sel.innerHTML = (multiple || required ? "" : '<option value="">(not set)</option>') +
+    [...choices, ...extra].map((c) => '<option value="' + esc(c) + '"' + (curSet.has(String(c)) ? " selected" : "") + ">" +
+      esc(c) + (extra.includes(c) ? " (not in CDM)" : "") + "</option>").join("");
+  sel.addEventListener("change", () => {
+    if (multiple) { const v = Array.from(sel.selectedOptions).map((o) => o.value); onPick(v.length ? v : undefined); }
+    else onPick(sel.value === "" ? undefined : sel.value);
+  });
+  return sel;
+}
+
 /* ---------------------------------------------------- parameter widgets */
 
 /*
@@ -127,7 +182,11 @@ function paramsForm(schema, params, onChange, opts = {}) {
     label.appendChild(title);
     let input;
     const cur = value[key];
-    if (p.enum) {
+    const picks = !p.enum && (p.type === "string" || (p.type === "array" && (!p.items || p.items.type === "string")))
+      ? choicesFor(key, p) : null;
+    if (picks) {
+      input = choiceWidget(picks, cur, p.type === "array", required.has(key), (v) => { value[key] = v; emit(); });
+    } else if (p.enum) {
       input = document.createElement("select");
       input.innerHTML = (required.has(key) ? "" : '<option value="">(default' + (p.default != null ? ": " + esc(p.default) : "") + ")</option>") +
         p.enum.map((e) => '<option value="' + esc(e) + '"' + (cur === e ? " selected" : "") + ">" + esc(e) + "</option>").join("");
@@ -171,11 +230,8 @@ function paramsForm(schema, params, onChange, opts = {}) {
     }
     input.setAttribute("aria-label", key);
     label.appendChild(input);
-    if (p.description) {
-      const d = document.createElement("small");
-      d.textContent = p.description;
-      label.appendChild(d);
-    }
+    // UI rule U3: the parameter's description hangs off a "?" tip.
+    if (p.description && window.Ovid2HelpTip) title.appendChild(window.Ovid2HelpTip.tip(p.description));
     if (key === "expr" && opts.exprCheck) {
       const msg = document.createElement("small");
       msg.className = "pb-expr-msg";
@@ -236,6 +292,8 @@ async function checkExpr(op, column, text, msg, label) {
  * is the catalogue ``[{name, summary, params_schema, category?}]``.
  */
 function stepsEditor(steps, ops, onChange, opts = {}) {
+  // Freeze the column-picker table for every later redraw of this list.
+  const pickTable = opts.table != null ? opts.table : pickContext.table;
   const box = document.createElement("div");
   box.className = "pb-form";
   const list = document.createElement("ol");
@@ -280,6 +338,7 @@ function stepsEditor(steps, ops, onChange, opts = {}) {
       head.appendChild(tools);
       li.appendChild(head);
       const params = Object.fromEntries(Object.entries(step).filter(([k]) => k !== "op"));
+      pickContext.table = pickTable;
       li.appendChild(paramsForm(meta ? meta.params_schema : { type: "object", additionalProperties: true }, params, (p) => {
         state[i] = { op: step.op, ...p };
         emit();
@@ -386,6 +445,7 @@ const DOCS = {
         const sec = document.createElement("fieldset");
         sec.className = "nw-id-group";
         sec.innerHTML = "<legend>" + esc(t === "*" ? "* (every table)" : t) + "</legend>";
+        pickContext.table = t === "*" ? "" : t;
         const entries = data.tables[t] || [];
         const list = document.createElement("ol");
         list.className = "pb-steps";
@@ -444,7 +504,8 @@ const DOCS = {
         if (!keys.length) {
           const p = document.createElement("p");
           p.className = "note";
-          p.textContent = "No transforms assigned yet. Pick a table on the left, or add a table below.";
+          p.textContent = "No transforms assigned yet. ";
+          if (window.Ovid2HelpTip) p.appendChild(window.Ovid2HelpTip.tip("Pick a table on the left, or add a table below."));
           box.appendChild(p);
         }
         for (const t of keys) box.appendChild(drawTable(t));
@@ -511,6 +572,7 @@ const DOCS = {
         const sec = document.createElement("fieldset");
         sec.className = "nw-id-group";
         sec.innerHTML = "<legend>" + esc(t) + "</legend>";
+        pickContext.table = t;
         sec.appendChild(stepsEditor(toSteps(data.fixer_chains[t]), ops, (steps) => {
           if (steps.length) data.fixer_chains[t] = fromSteps(steps); else delete data.fixer_chains[t];
           onChange(data);
@@ -552,7 +614,8 @@ const DOCS = {
       if (data.class) {
         const p = document.createElement("p");
         p.className = "note";
-        p.innerHTML = "This mapper delegates to a custom class <code>" + esc(data.class) + "</code>. Edit in the YAML tab.";
+        p.innerHTML = "Custom class <code>" + esc(data.class) + "</code> ";
+        if (window.Ovid2HelpTip) p.appendChild(window.Ovid2HelpTip.tip("This mapper delegates to a custom class — edit it in the YAML tab."));
         return p;
       }
       return stepsEditor(data.ops || [], ops, (steps) => { data.ops = steps; onChange(data); });
@@ -591,7 +654,8 @@ const DOCS = {
         type: "object",
         required: ["adapter"],
         properties: {
-          adapter: { type: "string", enum: ["source_passthrough", "pcornet_passthrough", "omop_concept_join", "semantic_join", "union_of_specs", "custom"] },
+          // Served from formatter_spec.v1.json via the inspection (no JS copy to drift).
+          adapter: { type: "string", enum: (window.__pbInspect && window.__pbInspect.formatter_adapters) || ["source_passthrough", "custom"] },
           input_file_name: { type: "string", description: "Glob of the primary source file(s) in the input address." },
           auxiliary_tables: { type: "array", items: { type: "string" }, description: "Tables registered as views before this formatter runs." },
           class: { type: "string", description: "Dotted class path (adapter: custom)." },
@@ -614,8 +678,16 @@ const DOCS = {
         const proj = { ...(data.projections || {}) };
         const draw = () => {
           grid.innerHTML = '<span class="pb-kv-head">column</span><span class="pb-kv-head">expression</span><span></span>';
+          // UI rule U2: an output column is one of the CDM table's columns.
+          const cols = (inspectTable(ref && ref.table) || {}).columns || [];
           for (const [k, v] of Object.entries(proj)) {
-            const ki = document.createElement("input"); ki.value = k; ki.className = "mono"; ki.setAttribute("aria-label", "column");
+            let ki;
+            if (cols.length) {
+              ki = document.createElement("select");
+              ki.innerHTML = [...cols, ...(cols.includes(k) ? [] : [k])].map((c) =>
+                '<option value="' + esc(c) + '"' + (c === k ? " selected" : "") + ">" + esc(c) + (cols.includes(c) ? "" : " (not in CDM)") + "</option>").join("");
+            } else { ki = document.createElement("input"); ki.value = k; }
+            ki.className = "mono"; ki.setAttribute("aria-label", "column");
             const vi = document.createElement("input"); vi.value = v; vi.className = "mono"; vi.setAttribute("aria-label", "expression for " + k);
             const rm = document.createElement("button"); rm.type = "button"; rm.className = "icon-button"; rm.textContent = "✕";
             let key = k;
@@ -626,7 +698,12 @@ const DOCS = {
           }
           const add = document.createElement("button");
           add.type = "button"; add.className = "button small"; add.textContent = "+ column";
-          add.addEventListener("click", () => { let n = "NEW_COLUMN", i = 1; while (proj[n]) n = "NEW_COLUMN_" + i++; proj[n] = ""; draw(); });
+          add.addEventListener("click", () => {
+            const free = cols.find((c) => !(c in proj));
+            let n = free || "NEW_COLUMN", i = 1;
+            while (proj[n]) n = "NEW_COLUMN_" + i++;
+            proj[n] = ""; draw();
+          });
           grid.append(add);
         };
         draw();
@@ -635,9 +712,11 @@ const DOCS = {
       }
       const more = Object.keys(data).filter((k) => !["v", "formatter", "projections", ...Object.keys(schema.properties)].includes(k));
       if (more.length) {
+        // Status (which keys this form cannot edit) + a "?" for the why.
         const n = document.createElement("p");
-        n.className = "nw-hint small";
-        n.innerHTML = "Also defines <code>" + more.map(esc).join("</code>, <code>") + "</code> — edit those in the YAML tab.";
+        n.className = "small";
+        n.innerHTML = "More keys: <code>" + more.map(esc).join("</code>, <code>") + "</code> ";
+        if (window.Ovid2HelpTip) n.appendChild(window.Ovid2HelpTip.tip("These keys are not editable in the form — edit them in the YAML tab."));
         box.appendChild(n);
       }
       return box;
@@ -823,6 +902,8 @@ class Editor {
       this.body.innerHTML = '<p class="note">The YAML does not parse — fix it in the YAML tab.</p>';
       return;
     }
+    // Column pickers resolve against the table this spec belongs to.
+    pickContext.table = (this.ref && this.ref.table) || (this.data && (this.data.table || this.data.formatter)) || "";
     const node = await this.def.form(this.data, (d) => this.fromForm(d), this.ref, this.loaded);
     if (this.readonly) $$("input, select, textarea, button", node).forEach((n) => { n.disabled = true; });
     this.body.replaceChildren(node);
@@ -995,10 +1076,11 @@ async function bootPipeline() {
     editor.body.innerHTML = '<div class="pb-lib-grid">' + list.map((c) =>
       '<div class="pb-lib-card pl-card" data-scope="pipeline" data-open-private="' + esc(c.name) + '" tabindex="0">' +
       '<div class="pl-card-head"><span class="pl-card-badge">⚡</span><span class="pl-card-title"><span class="pl-card-name mono">' + esc(c.name) + "</span>" +
-      '<span class="pl-card-sub">' + c.steps + " steps</span></span></div><p class=\"small nw-muted\">" + esc(c.description) + '</p>' +
+      '<span class="pl-card-sub">' + c.steps + " steps</span></span></div><p class=\"pb-lib-desc small\">" + esc(c.description) + '</p>' +
       '<div class="pb-lib-ops">' + c.ops.map((o) => '<span class="nw-chip is-tx">' + esc(o) + "</span>").join("") + "</div></div>").join("") +
       "</div>" + (CAN_WRITE ? '<div class="pb-add-row" style="margin-top:.7rem"><input type="text" placeholder="new_chain_name" data-new-private aria-label="New chain name"><button type="button" class="button" data-create-private>+ New private chain</button></div>' : "") +
-      '<p class="nw-hint small">Private chains override library chains of the same name for this pipeline only. Shared chains live in the <a href="/transforms">transform library</a>.</p>';
+      '<p class="small"><a href="/transforms">Transform library</a> ' +
+      (window.Ovid2HelpTip ? window.Ovid2HelpTip.html("Private chains override library chains of the same name for this pipeline only. Shared chains live in the transform library.") : "") + "</p>";
     $$("[data-open-private]", editor.body).forEach((c) => c.addEventListener("click", () =>
       editor.open("transform", { scope: "pipeline", name: c.dataset.openPrivate, label: c.dataset.openPrivate + " (private)" })));
     const btn = $("[data-create-private]", editor.body);
@@ -1080,9 +1162,9 @@ async function bootLibrary() {
       '<div class="pb-lib-card pl-card" data-scope="' + esc(c.scope) + '" data-open-lib="' + esc(c.name) + '" tabindex="0">' +
       '<div class="pl-card-head"><span class="pl-card-badge">⚡</span><span class="pl-card-title"><span class="pl-card-name mono">' + esc(c.name) +
       '</span><span class="pl-card-sub"><span class="pl-kind-label">' + esc(c.scope) + "</span> · " + c.steps + " steps</span></span></div>" +
-      '<p class="small nw-muted">' + esc(c.description || "") + '</p><div class="pb-lib-ops">' +
+      '<p class="pb-lib-desc small">' + esc(c.description || "") + '</p><div class="pb-lib-ops">' +
       c.ops.map((o) => '<span class="nw-chip is-tx">' + esc(o) + "</span>").join("") + "</div></div>").join("")
-      : '<div class="pl-empty"><h2>No transforms yet</h2><p>Create a reusable chain and assign it to your pipelines.</p></div>') + "</div>";
+      : '<div class="pl-empty"><h2>No transforms yet ' + (window.Ovid2HelpTip ? window.Ovid2HelpTip.html("Create a reusable chain and assign it to your pipelines.") : "") + "</h2></div>") + "</div>";
     $$("[data-open-lib]", editor.body).forEach((c) => c.addEventListener("click", () => openLib(c.dataset.openLib)));
   };
 
@@ -1102,6 +1184,14 @@ async function bootLibrary() {
     $("[data-assign-status]", assign).textContent = c && c.scope === "shipped"
       ? "Shipped chains can be assigned as-is, or duplicated (save under a new name) to customise." : "";
     history.replaceState(null, "", "?name=" + enc(name));
+    const usage = $("[data-usage]", assign);
+    if (usage && c) {
+      api("GET", "/transform-library/" + enc(name) + "/usage").then((rows) => {
+        usage.innerHTML = rows.length ? "Used by: " + rows.map((r) => '<a href="/navigator?p=' + enc(r.pipeline) +
+          (r.table !== "*" ? "&t=" + enc(r.table) : "") + '">' + esc(r.pipeline) + " · " + esc(r.table) + "</a>" +
+          (r.fields.length ? " (" + r.fields.map(esc).join(", ") + ")" : "")).join(", ") : "Not assigned to any pipeline yet.";
+      }).catch(() => { usage.textContent = ""; });
+    }
     if (c && c.scope === "shipped" && CAN_WRITE) {
       editor.setStatus("Shipped chain — read-only. Duplicate it to customise.", "");
       const dup = document.createElement("button");
@@ -1144,9 +1234,19 @@ async function bootLibrary() {
       path: "(new) " + name + ".yaml", isNew: true, deletable: false,
     });
   });
+  // UI rule U2: tables are picked from the chosen package's CDM roster.
+  let pipelineTables = {};
+  try { pipelineTables = JSON.parse((document.getElementById("pipeline-tables") || {}).textContent || "{}"); } catch (_e) { /* keep empty */ }
+  const tableSel = $("[data-assign-tables]", assign);
+  $("[data-assign-pipeline]", assign).addEventListener("change", (e) => {
+    const names = pipelineTables[e.target.value] || [];
+    tableSel.innerHTML = '<option value="*">* (every table)</option>' +
+      names.map((t) => '<option value="' + esc(t) + '">' + esc(t) + "</option>").join("");
+    tableSel.disabled = !e.target.value;
+  });
   $("[data-assign-go]", assign).addEventListener("click", async () => {
     const pipeline = $("[data-assign-pipeline]", assign).value;
-    const tables = $("[data-assign-tables]", assign).value.split(/[\s,]+/).filter(Boolean);
+    const tables = Array.from(tableSel.selectedOptions).map((o) => o.value);
     const status = $("[data-assign-status]", assign);
     if (!pipeline || !tables.length) { status.textContent = "Pick a pipeline and at least one table (or *)."; return; }
     if (editor.dirty) { status.textContent = "Save the transform first."; return; }
@@ -1168,6 +1268,20 @@ async function bootLibrary() {
   const initial = root.dataset.initialName;
   if (initial) openLib(initial); else grid();
 }
+
+/* ------------------------------------------------------- embedding API */
+
+/*
+ * The pipeline navigator embeds the same editor (one Editor per page) and
+ * points it at a package / inspection before each ``open``.
+ */
+function setContext({ pipeline, canWrite, inspection }) {
+  PIPELINE = pipeline || "";
+  CAN_WRITE = !!canWrite;
+  if (inspection !== undefined) window.__pbInspect = inspection;
+}
+
+export { Editor, DOCS, api, setContext, yamlMod };
 
 if (root) {
   (MODE === "library" ? bootLibrary() : bootPipeline()).catch((err) => {

@@ -1158,6 +1158,45 @@
         "title": "EngineWrite",
         "type": "object"
       },
+      "ExprCheckRequest": {
+        "description": "Check a Spark-SQL column expression against the allow-list.",
+        "properties": {
+          "expr": {
+            "description": "The expression, e.g. upper(trim(SEX)).",
+            "title": "Expr",
+            "type": "string"
+          },
+          "pipeline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Package (for column checks).",
+            "title": "Pipeline"
+          },
+          "table": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "CDM table (for column checks).",
+            "title": "Table"
+          }
+        },
+        "required": [
+          "expr"
+        ],
+        "title": "ExprCheckRequest",
+        "type": "object"
+      },
       "FixerPlanEntry": {
         "description": "One fixer in a table's fix chain, surfaced read-only on submit.",
         "properties": {
@@ -4246,7 +4285,7 @@
             "title": "Block Id"
           },
           "format": {
-            "pattern": "^(pdf|html|docx|xlsx|svg|png|md|json)$",
+            "pattern": "^(pdf|html|docx|pptx|xlsx|svg|png|md|json)$",
             "title": "Format",
             "type": "string"
           },
@@ -5906,6 +5945,88 @@
           "spec"
         ],
         "title": "TransformValidateRequest",
+        "type": "object"
+      },
+      "UdfApplyRequest": {
+        "description": "Apply a declarative UDF (named chain or new steps) from the navigator.",
+        "properties": {
+          "chain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Existing chain to assign (instead of steps).",
+            "title": "Chain"
+          },
+          "description": {
+            "default": "",
+            "description": "Optional chain description.",
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Name of the new chain (pipeline / library).",
+            "title": "Name"
+          },
+          "save_to": {
+            "default": "inline",
+            "description": "inline: anonymous steps in assignments.yaml; pipeline: a private chain <pkg>/transforms/<name>.yaml; library: the user transform library.",
+            "enum": [
+              "inline",
+              "pipeline",
+              "library"
+            ],
+            "title": "Save To",
+            "type": "string"
+          },
+          "scope": {
+            "default": "table",
+            "description": "Assign to this table, or to every table ('*').",
+            "enum": [
+              "table",
+              "all_tables"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "New transform steps.",
+            "title": "Steps"
+          },
+          "table": {
+            "description": "CDM table the UDF is applied from.",
+            "title": "Table",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table"
+        ],
+        "title": "UdfApplyRequest",
         "type": "object"
       },
       "UserActivateRequest": {
@@ -7629,6 +7750,76 @@
         ]
       }
     },
+    "/api/v1/expressions/functions": {
+      "get": {
+        "description": "Return the sorted allow-list (for autocomplete).",
+        "operationId": "api_expression_functions_api_v1_expressions_functions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response Api Expression Functions Api V1 Expressions Functions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "The Spark-SQL functions a UDF expression may call",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/expressions:check": {
+      "post": {
+        "description": "Return ``{ok, errors, columns, functions, unknown_columns}``; never writes.",
+        "operationId": "api_check_expression_api_v1_expressions_check_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExprCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Check Expression Api V1 Expressions Check Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check a Spark-SQL column expression against the UDF allow-list",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
     "/api/v1/fixers": {
       "get": {
         "description": "Return the web-safe fixer catalogue (mirror of the fixer registry).",
@@ -9159,6 +9350,54 @@
         ]
       }
     },
+    "/api/v1/navigator": {
+      "get": {
+        "description": "Return ``{group_by, group_by_choices, groups: [{key, label, pipelines}]}``.",
+        "operationId": "api_navigator_api_v1_navigator_get",
+        "parameters": [
+          {
+            "description": "Grouping axis: cdm, profile, kind, template or cdm_profile.",
+            "in": "query",
+            "name": "group_by",
+            "required": false,
+            "schema": {
+              "default": "cdm",
+              "description": "Grouping axis: cdm, profile, kind, template or cdm_profile.",
+              "title": "Group By",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Navigator Api V1 Navigator Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pipeline packages grouped for the navigator (cdm / profile / kind / template)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
     "/api/v1/pipeline-packages": {
       "get": {
         "description": "Return every discoverable ``ovid2_pipelines.*`` package.",
@@ -9852,6 +10091,125 @@
           }
         },
         "summary": "Inspect a pipeline package (tables x stages, identity, bindings)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/pipeline-packages/{pipeline}/lineage": {
+      "get": {
+        "description": "Without ``table``: a per-table summary; with it: fields, steps, table-wide steps.",
+        "operationId": "api_package_lineage_api_v1_pipeline_packages__pipeline__lineage_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pipeline",
+            "required": true,
+            "schema": {
+              "title": "Pipeline",
+              "type": "string"
+            }
+          },
+          {
+            "description": "One table: return its full per-field chain.",
+            "in": "query",
+            "name": "table",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One table: return its full per-field chain.",
+              "title": "Table"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Package Lineage Api V1 Pipeline Packages  Pipeline  Lineage Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Field-level lineage of a pipeline package (static; never executes it)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/pipeline-packages/{pipeline}/lineage/source": {
+      "get": {
+        "description": "Return ``{path, text, readonly: true}`` for a vendored / CDM-default source.",
+        "operationId": "api_lineage_source_api_v1_pipeline_packages__pipeline__lineage_source_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pipeline",
+            "required": true,
+            "schema": {
+              "title": "Pipeline",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A lineage step's source_ref.path.",
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "description": "A lineage step's source_ref.path.",
+              "title": "Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Lineage Source Api V1 Pipeline Packages  Pipeline  Lineage Source Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read-only text of a lineage source outside the package (vendored fixer, CDM mapper)",
         "tags": [
           "v1"
         ]
@@ -10552,6 +10910,61 @@
           }
         },
         "summary": "Create or update a pipeline-private transform chain",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/pipeline-packages/{pipeline}/udfs:apply": {
+      "post": {
+        "description": "Validate, optionally save the chain, and append the assignment.\n\nSteps are checked against each op's params schema and every\n``derive_column`` / ``filter_expr`` expression against the SQL\nallow-list before anything is written. Refused on legacy ports.",
+        "operationId": "api_apply_udf_api_v1_pipeline_packages__pipeline__udfs_apply_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pipeline",
+            "required": true,
+            "schema": {
+              "title": "Pipeline",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UdfApplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Apply Udf Api V1 Pipeline Packages  Pipeline  Udfs Apply Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apply a declarative UDF (chain or new steps) to a table or every table",
         "tags": [
           "v1"
         ]
@@ -11998,7 +12411,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Export a report (pdf / html / docx / xlsx / svg / png / md / json)",
+        "summary": "Export a report (pdf / html / docx / pptx / xlsx / svg / png / md / json)",
         "tags": [
           "v1"
         ]
@@ -13663,6 +14076,54 @@
           }
         },
         "summary": "Assign a library chain to tables of a pipeline",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/transform-library/{name}/usage": {
+      "get": {
+        "description": "Return ``[{pipeline, table, fields}]`` for every assignment of ``name``.",
+        "operationId": "api_chain_usage_api_v1_transform_library__name__usage_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Api Chain Usage Api V1 Transform Library  Name  Usage Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Where a transform chain is assigned (pipeline, table, fields written)",
         "tags": [
           "v1"
         ]

@@ -217,7 +217,9 @@
     var box = $("[data-sources]");
     box.innerHTML = "";
     if (!state.sources.length) {
-      box.appendChild(el("p", "note", "No report sources yet. They appear when a run finishes (or ingest one above)."));
+      var empty = el("p", "note", "No report sources yet. ");
+      if (window.Ovid2HelpTip) empty.appendChild(window.Ovid2HelpTip.tip("Sources appear when a run finishes, or ingest a past run above."));
+      box.appendChild(empty);
       return;
     }
     var table = el("table", "data-table rs-src-table");
@@ -287,7 +289,11 @@
 
   function descTemplate() {
     var sel = $("[data-new-template]", document), o = sel.options[sel.selectedIndex];
-    $("[data-new-template-desc]", document).textContent = o ? (o.getAttribute("data-desc") || "") : "";
+    // UI rule U3: the template's description sits under a "?" next to the select.
+    var host = $("[data-new-template-desc]", document);
+    host.replaceChildren();
+    var d = o ? (o.getAttribute("data-desc") || "") : "";
+    if (d && window.Ovid2HelpTip) host.appendChild(window.Ovid2HelpTip.tip(d));
   }
 
   function openNew(sourceId) {

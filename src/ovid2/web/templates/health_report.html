@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Health report {{ instance_id }} &mdash; Ovid2{% endblock %}
 {% block content %}
+{% import "_help.html" as help %}
 <section class="page health-report">
   <p class="health-report-links"><a href="/runs/{{ instance_id }}">&larr; back to run</a>
     {% if has_cap(request, 'run_reports') %}
@@ -63,14 +64,10 @@
                id="check-{{ check.id | replace('.', '_') }}">
         <header class="health-check-head">
           <span class="check-badge check-badge-{{ check.status }}">{{ check.status }}</span>
-          <h2 class="mono">{{ check.name }}</h2>
+          <h2 class="mono">{{ check.name }}{% if check.description or check.doc_interpretation %} {% call help.tip_block(label="About this check") %}{{ check.description }}{% if check.doc_interpretation %}<br><br><strong>Interpretation.</strong> {{ check.doc_interpretation }}{% endif %}{% endcall %}{% endif %}</h2>
           <span class="small health-check-id mono">{{ check.id }}</span>
           {% if check.edc_table %}<span class="small">{{ check.edc_table }}</span>{% endif %}
         </header>
-        <p class="health-check-desc">{{ check.description }}</p>
-        {% if check.doc_interpretation %}
-        <p class="small health-check-interp">{{ check.doc_interpretation }}</p>
-        {% endif %}
         {% if check.error %}
         <p class="flash error mono small">{{ check.error }}</p>
         {% endif %}

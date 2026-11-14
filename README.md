@@ -4,7 +4,7 @@ Developed and maintained by **OneFlorida+**
 - Alexander T. Loiacono - atloiaco@ufl.edu
 - Abdelali Nouina - abdelali@ufl.edu
 
-Last Updated: 2026-11-11
+Last Updated: 2026-11-14
 
 # Ovid2
 
@@ -55,7 +55,7 @@ touching the others:
 | Formatter / mapper / fixer spec engines, transforms library | PCORnet → OMOP converter (18/18 tables) |
 | CDM registry (`CdmHandle`) and semantic layer (vocabularies + bindings) | Clinical vocabularies: LOINC, SNOMED, ICD-10/9-CM, RxNorm, NDC, OMOP CONCEPT |
 | Data-health check framework (operators, packages, reports) | PCORnet EDC check packages (`dcq_v7_03`, `20r1`) and clinical fixers |
-| Web panel, REST API, MCP server, LLM assistant, scheduler, Report Studio | `hash_id` patient-identifier hashing, PHI-aware defaults |
+| Web panel, REST API, MCP server, LLM assistant, scheduler, pipeline navigator, Report Studio | `hash_id` patient-identifier hashing, PHI-aware defaults |
 
 A new domain is a new CDM directory (`resources/cdms/<model>/`), optional
 vocabularies and bindings (`resources/semantic/`), and pipeline specs — see
@@ -64,9 +64,10 @@ vocabularies and bindings (`resources/semantic/`), and pipeline specs — see
 
 Around that engine sits an event-driven display layer, a pip/pipx-installable
 package, XDG-compliant paths, a **web control panel + JSON API**, an
-**MCP server** for AI agents, an optional **LLM assistant**, a **Report
-Studio** for designing, sharing and exporting research reports from finished
-runs, and a systemd
+**MCP server** for AI agents, an optional **LLM assistant**, a **pipeline
+navigator** that traces every field to the functions applied to it, a
+**Report Studio** for designing, sharing and exporting research reports from
+finished runs, and a systemd
 deployment story. Everything is **lazy end-to-end**: nothing materializes
 until the single terminal write at the end of a run.
 
@@ -92,6 +93,7 @@ deploying organization (see [Pipelines](#pipelines-adapters-mappers--fixes)).
 | Web control panel + JSON API + MCP server | Feature-complete, alpha |
 | Web authentication (OIDC SSO + RBAC) | Implemented, **off by default** |
 | LLM assistant (general + System 1) | Implemented, **off until you configure a model** |
+| Pipeline navigator (field-level lineage, declarative UDFs) | Implemented, alpha |
 | Report Studio (reports, charts, themes, sharing, exports) | Implemented, alpha |
 | Native drivers | `disc`, `s3`, `azure_blob`, `snowflake`, `access`; the rest run through a legacy adapter |
 | Version | `0.1.0` (pre-1.0; no stability guarantees) |
@@ -113,6 +115,7 @@ deploying organization (see [Pipelines](#pipelines-adapters-mappers--fixes)).
 - [Data health & EDC checks](#data-health--edc-checks)
 - [Web control panel & MCP](#web-control-panel--mcp)
 - [LLM assistant](#llm-assistant)
+- [Pipeline navigator](#pipeline-navigator)
 - [Report Studio](#report-studio)
 - [Scheduling & the worker](#scheduling--the-worker)
 - [Testing](#testing)
@@ -605,7 +608,12 @@ with `ovid2 tools import-vocabulary`.
 `explode`, `reduce`, …), and sampling (`random_sample`, `stratified_sample`,
 `head_by_group`, …). Ops compose into named YAML chains (shared under
 `resources/transforms/`, per-pipeline under `<pipeline>/transforms/`) and are
-wired into the map stage via the `apply_transforms` mapper op. The catalogue
+wired into the map stage via the `apply_transforms` mapper op. Chains assigned
+in `<pipeline>/transforms/assignments.yaml` run in their own **transform**
+stage (deduplicate → transform → map); user-defined transforms (UDFs) are
+declarative chains or `derive_column` computed columns whose Spark-SQL
+expression must pass `ovid2.config.sql_expr_guard` — apply them from the
+[pipeline navigator](#pipeline-navigator). The catalogue
 is browsable at `GET /api/v1/transforms` and via MCP. See
 [`docs/transforms.md`](docs/transforms.md).
 
@@ -879,7 +887,7 @@ templates.
 | `tools probe-connection` | Probe a connection's credentials/reachability |
 | `tools browse-storage` | List a storage location (host-side filesystem browser) |
 | `tools test-llm` / `tools llm-chat` | Probe an LLM connection / run one routed chat turn (executor side) |
-| `tools report-export` | Render a Report Studio report to pdf / html / docx / xlsx / svg / png / md / json (executor side; needs the `reports` extra) |
+| `tools report-export` | Render a Report Studio report to pdf / html / docx / pptx / xlsx / svg / png / md / json (executor side; needs the `reports` extra) |
 | `tools migrate-addresses` | Migrate legacy `{src_name, src_args}` addresses to the connection shape |
 
 ### To run the full ETL pipeline
@@ -1028,10 +1036,10 @@ See [`docs/pipelines.md`](docs/pipelines.md#health-checks-report-cycle-packages-
 
 `ovid2 web` serves a FastAPI + HTMX control panel (loopback
 `127.0.0.1:8090` by default; put TLS in front with a reverse proxy) with a
-JSON API at `/api/v1` (**132 paths**; interactive docs at `/docs`, schema at `/openapi.json`) and a live D3
+JSON API at `/api/v1` (**139 paths**; interactive docs at `/docs`, schema at `/openapi.json`) and a live D3
 run canvas. Submit, monitor, cancel, rerun, and schedule runs; browse
-pipelines, formatters, mappers, transforms, connections, addresses, engines,
-CDMs, health reports, research reports (Report Studio), and the Data Space; edit configs and secrets (secret
+pipelines (with a field-level **navigator**), formatters, mappers, transforms,
+connections, addresses, engines, CDMs, health reports, research reports (Report Studio), and the Data Space; edit configs and secrets (secret
 *values* are never returned by the API). Appearance is themeable (several
 built-in themes plus custom overrides).
 
@@ -1053,7 +1061,7 @@ Capabilities are cumulative:
 | View pipeline data, submit / cancel jobs | | | ✓ | ✓ |
 | Manage config / secrets / users / LLMs, settings, install | | | | ✓ |
 
-`ovid2 mcp` exposes a curated **100-tool** MCP surface over that API for AI
+`ovid2 mcp` exposes a curated **101-tool** MCP surface over that API for AI
 agents (stdio or streamable-HTTP transport). It speaks *only* HTTP to the API
 and imports no pipeline, driver, or secret module — the agent tier is the
 untrusted planner. Agents can browse metadata freely, but reading row values
@@ -1080,9 +1088,9 @@ answer text is stored.
 
 With **assistant tools** enabled, the general model can call a pinned
 allow-list of Ovid2 API routes
-(`src/ovid2/resources/agent_tools/catalogue.yaml`, 62 tools):
+(`src/ovid2/resources/agent_tools/catalogue.yaml`, 63 tools):
 
-- **Read tools** (46 GET routes) run automatically with a per-turn,
+- **Read tools** (47 GET routes) run automatically with a per-turn,
   GET-only token capped at the user's role (at most pipeline operator).
 - **Proposals and drafts** (submit / cancel / rerun / draft a job) are never
   executed by the model: they appear as cards you click **Run** on, or as a
@@ -1095,6 +1103,56 @@ allow-list of Ovid2 API routes
   `tests/contract/test_agent_tools_catalogue.py`).
 
 Full guide: [`docs/llm.md`](docs/llm.md).
+
+## Pipeline navigator
+
+The **pipeline navigator** (*Operate → Navigator*, `/navigator`) answers
+*"what happens to this column, and where is that defined?"* for every
+installed pipeline package. It reads the package's specs statically (YAML +
+`ast`); it never runs the pipeline or reads data.
+
+- **Tree.** Pipeline type (group by CDM, ETL profile, run kind, template, or
+  CDM · profile) → package → table → field → step. Each table shows five
+  stage dots (format · deduplicate · transform · map · fix); a hollow dot is
+  Python the navigator cannot see into. Fields are flagged `key`,
+  `constant`, `unmapped` or `extra`. Filter by name, by "has a UDF" /
+  editable / opaque / unmapped, or by stage; the tree works from the
+  keyboard, remembers its state, and every selection is a deep link
+  (`/navigator?p=<package>&t=<table>&f=<FIELD>`).
+- **Views.** An **overview** of the package's tables with their stage
+  strips; **lanes** — one row per field, one column per stage, one chip per
+  function (italic chips only read the field, `⊘` chips drop rows, dashed
+  chips are opaque Python), with table-wide bands for dedup / joins / row
+  filters and lines to the columns a step reads; and the lineage as **YAML**.
+- **Edit in place.** Clicking a step opens the same Form / YAML editor the
+  pipeline builder uses, scrolled to that step, with live checks. Python
+  sources (custom formatters, generated legacy formatters, vendored fixer
+  scripts) open read-only at the matching line. `legacy_ovid` parity ports
+  are generated, so every step of them is read-only.
+- **Declarative UDFs.** On an editable package, apply a *computed column*
+  (`derive_column` — a Spark-SQL row expression checked live against the
+  `sql_expr_guard` allow-list, with column / function autocomplete), a
+  *chain* of library functions, or an *existing chain* (with where-used).
+  Keep it inline in `transforms/assignments.yaml`, as a private chain in
+  the package, or in your transform library, scoped to one table or every
+  table (`*`). UDFs run in the *transform* stage; Python UDFs are not
+  supported. Applying needs the manage-config capability and is validated
+  before anything is written (`POST /api/v1/pipeline-packages/{p}/udfs:apply`).
+- **Column roles.** Which columns each op reads or writes comes from the
+  column roles declared beside the web-safe catalogues
+  (`TRANSFORM_COLUMN_ROLES`, `MAPPER_OP_COLUMN_ROLES`, `FIXER_COLUMN_ROLES`);
+  every new transform op, mapper op and fixer must declare one
+  (`test_column_roles_complete.py`).
+- **For agents.** The read-only `inspect_pipeline_lineage` MCP / assistant
+  tool returns the same lineage as JSON — the quickest way for an agent to
+  explain why a field holds the value it does.
+
+API: `GET /api/v1/navigator`, `GET /api/v1/pipeline-packages/{p}/lineage[?table=]`,
+`GET …/lineage/source`, `POST …/udfs:apply`, `POST /api/v1/expressions:check`,
+`GET /api/v1/expressions/functions`, `GET /api/v1/transform-library/{name}/usage`.
+
+Full guide: [Pipeline navigator](src/ovid2/resources/manual/03-web-panel/navigator.md)
+in the Ovid2 Manual.
 
 ## Report Studio
 
@@ -1132,7 +1190,7 @@ finished runs become shareable research reports.
   small-cell suppression threshold applies to counts; hidden blocks are
   never rendered or exported.
 - **Exports** — pdf (vector charts), single-file interactive html, docx,
-  xlsx (data + provenance), svg / png, md, and re-importable json —
+  pptx (16:9 slide deck), xlsx (data + provenance), svg / png, md, and re-importable json —
   rendered by the executor (`ovid2 tools report-export`), never by the web
   server. Install the renderers with `pip install 'ovid2[reports]'` (already
   in the Docker image).
@@ -1223,6 +1281,7 @@ uv run pre-commit run --all            # everything the commit hooks run
 | `test_agent_tier_capability_only.py` | The MCP tier speaks only the HTTP API |
 | `test_llm_tier_isolation.py` | Web / MCP never import the executor-only LLM runtime |
 | `test_agent_tools_catalogue.py` | The assistant's tool allow-list matches real routes and excludes sensitive ones |
+| `test_column_roles_complete.py` | Every transform op, mapper op and fixer declares the column role the navigator's lineage uses |
 | `test_destructive_ops_require_approval.py` | Destructive operations and agent row reads go through the human-approval gate |
 | `test_tier_import_closure.py` | The web / MCP transitive imports stay free of `ovid2.core`, engines and SDKs |
 | `test_executor_subprocess_env_scoped.py` | Every web/MCP spawn passes a scoped env, and every broker call passes a secret scope |

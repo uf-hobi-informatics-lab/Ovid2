@@ -81,4 +81,36 @@
       if (btn) btn.focus();
     }
   });
+
+  /* Client-side twin of templates/_help.html ``help.tip()`` — UI rule U3:
+   * JS that builds explanatory DOM must hang it off a "?" tip instead of
+   * rendering a visible paragraph. Returns a <span class="help-tip"> node
+   * (or its HTML with ``helpTipHtml``); the delegated handlers above make
+   * it interactive without re-binding. ``text`` is plain text. */
+  var seq = 0;
+  function helpTip(text, label) {
+    var id = "help-js-" + (++seq);
+    var wrap = document.createElement("span");
+    wrap.className = "help-tip";
+    wrap.setAttribute("data-help-tip", "");
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "help-tip-btn";
+    btn.setAttribute("aria-label", label || "More information");
+    btn.setAttribute("aria-describedby", id);
+    btn.setAttribute("aria-expanded", "false");
+    btn.textContent = "?";
+    var bubble = document.createElement("span");
+    bubble.className = "help-tip-bubble";
+    bubble.setAttribute("role", "tooltip");
+    bubble.id = id;
+    bubble.textContent = String(text == null ? "" : text);
+    wrap.appendChild(btn);
+    wrap.appendChild(bubble);
+    return wrap;
+  }
+  window.Ovid2HelpTip = {
+    tip: helpTip,
+    html: function (text, label) { return helpTip(text, label).outerHTML; },
+  };
 })();

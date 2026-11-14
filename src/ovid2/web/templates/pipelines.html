@@ -27,6 +27,7 @@
     <div class="pl-title">
       <h1>Pipelines
         {% call help.tip_block(label="What is a pipeline?") %}
+          <strong>Reusable job templates &mdash; bind storage, pick an engine, automate.</strong>
           A <strong>pipeline</strong> is a persisted, named job template: an
           input storage account, an output storage account, a warehouse to
           run on, and a pipeline type (ETL / analysis / dq_checks / copy /
@@ -34,7 +35,6 @@
           a job through the ordinary job queue.
         {% endcall %}
       </h1>
-      <p class="pl-subtitle">Reusable job templates &mdash; bind storage, pick an engine, automate.</p>
     </div>
     <div class="page-actions">
       <a href="/runs" class="button small">{{ icons.icon("runs", size=15) }} Jobs</a>
@@ -101,8 +101,10 @@
         <option value="yes">Enabled</option>
         <option value="no">Disabled</option>
       </select>
-      <input type="search" id="pf-cdm" data-filter="cdm" class="pl-chip-input"
-             placeholder="CDM&hellip;" autocomplete="off" aria-label="Filter by CDM">
+      <select id="pf-cdm" data-filter="cdm" class="pl-chip-select" aria-label="CDM">
+        <option value="">Any CDM</option>
+        {% for c in cdms %}<option value="{{ c | lower }}">{{ c }}</option>{% endfor %}
+      </select>
       <span class="pl-toolbar-count small" data-pl-count aria-live="polite"></span>
     </div>
 
@@ -182,6 +184,11 @@
                      aria-label="Customize {{ r.name }}">
                     {{ icons.icon("sliders", size=15) }}
                   </a>
+                  <a href="/navigator?p={{ r.pipeline | urlencode }}" class="icon-button"
+                     title="Open in the navigator (tables, fields and the functions applied)"
+                     aria-label="Open {{ r.name }} in the navigator">
+                    {{ icons.icon("navigator", size=15) }}
+                  </a>
                   {% endif %}
                   <form action="/pipelines/{{ r.name }}/delete" method="post"
                         class="pl-inline-form"
@@ -210,11 +217,10 @@
       </div>
       <h2>No pipelines yet
         {% call help.tip_block(label="Where are pipelines stored?") %}
-          Pipeline configs are saved as JSON files under
+          A pipeline wires storage, an engine and a trigger together. Pipeline configs are saved as JSON files under
           <code>$XDG_CONFIG_HOME/ovid2/pipelines/</code>.
         {% endcall %}
       </h2>
-      <p class="muted">Create your first pipeline to wire storage, an engine and a trigger together.</p>
       <a href="/pipelines/new" class="button primary">{{ icons.icon("plus", size=16) }} Create your first pipeline</a>
     </div>
   {% endif %}
@@ -251,7 +257,7 @@
           </label>
           <div data-role="crumbs" class="crumbs small"></div>
           <div data-role="listing" class="storage-listing">
-            <p class="note">Pick a storage account to browse.</p>
+            <p class="empty">Pick a storage account.</p>
           </div>
           <p data-role="chosen" class="chosen-chip" hidden></p>
           <p data-role="picker-error" class="flash-error picker-error" hidden></p>
@@ -277,7 +283,7 @@
           </label>
           <div data-role="crumbs" class="crumbs small"></div>
           <div data-role="listing" class="storage-listing">
-            <p class="note">Pick a storage account to browse.</p>
+            <p class="empty">Pick a storage account.</p>
           </div>
           <p data-role="chosen" class="chosen-chip" hidden></p>
           <p data-role="picker-error" class="flash-error picker-error" hidden></p>
@@ -286,7 +292,7 @@
         </div>
       </section>
 
-      <p class="pl-bound-note" data-run-side-none hidden>
+      <p class="flash" data-run-side-none hidden>
         {{ icons.icon("check", size=15) }} Fully bound &mdash; runs against its configured input and output.
       </p>
 

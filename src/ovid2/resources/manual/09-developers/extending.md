@@ -67,9 +67,13 @@ of each recipe tells you if you missed one.
    `BaseFixer` subclass. Keep it lazy and import columns from the DSL.
 2. Register it in `fixers/common/registry.py::COMMON_FIXES` **and**
    declare its scope in `FIXER_SCOPES` (`generic` or a CDM name).
-3. Add a unit test with inline DataFrame builders.
+3. Declare its column role in `config/fixers_catalogue.py::FIXER_COLUMN_ROLES`
+   (which columns it reads, writes, or whether it drops rows; grammar in
+   `config/column_roles.py`). The [navigator](../03-web-panel/navigator.md)
+   uses it to place the fixer on the right fields.
+4. Add a unit test with inline DataFrame builders.
 
-→ `test_no_pcornet_in_generic.py`, `test_fixer_configs_valid.py`
+→ `test_no_pcornet_in_generic.py`, `test_fixer_configs_valid.py`, `test_column_roles_complete.py`
 
 ## Add a mapper op
 
@@ -78,8 +82,10 @@ of each recipe tells you if you missed one.
    the manual's reference page is generated from it.
 2. Register it in `mappers/registry.py::MAP_OPS` and extend the mapper
    JSON Schema.
+3. Declare its column role in
+   `config/mapper_ops_catalogue.py::MAPPER_OP_COLUMN_ROLES`.
 
-→ `test_mapper_specs_valid.py`
+→ `test_mapper_specs_valid.py`, `test_column_roles_complete.py`
 
 ## Add a transform
 
@@ -88,8 +94,10 @@ of each recipe tells you if you missed one.
    `requires_family`.
 2. Register it in `transforms/registry.py::TRANSFORMS` **and** mirror its
    metadata in `config/transforms_catalogue.py`.
+3. Declare its column role in
+   `config/transforms_catalogue.py::TRANSFORM_COLUMN_ROLES`.
 
-→ `test_transforms_catalogue_synchronised.py`, `test_transforms_registry_complete.py`
+→ `test_transforms_catalogue_synchronised.py`, `test_transforms_registry_complete.py`, `test_column_roles_complete.py`
 
 ## Add a formatter adapter
 

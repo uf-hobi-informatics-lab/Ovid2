@@ -13,6 +13,11 @@ EXPORT_FORMATS: dict[str, tuple[str, str, str]] = {
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "Word document",
     ),
+    "pptx": (
+        "pptx",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "PowerPoint presentation (16:9 slides)",
+    ),
     "xlsx": (
         "xlsx",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

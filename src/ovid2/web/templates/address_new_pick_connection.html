@@ -1,15 +1,10 @@
 {% extends "base.html" %}
 {% block title %}New address &mdash; pick a connection{% endblock %}
 {% block content %}
+{% import "_help.html" as help %}
 <section class="page">
   <p><a href="/addresses">&larr; all addresses</a></p>
-  <h1>New address &mdash; step 1 of 2</h1>
-  <p class="note">
-    Every address is a view onto a <em>connection</em>: the credential-heavy
-    endpoint (Snowflake account, Azure storage account, S3 bucket root,
-    disc mount, …). Pick which one this new address should target, then
-    the next screen will ask for the path / database / container.
-  </p>
+  <h1>New address &mdash; step 1 of 2 {% call help.tip_block() %}Every address is a view onto a <em>connection</em>: the credential-heavy endpoint (Snowflake account, Azure storage account, S3 bucket root, disc mount, …). Pick which one this new address should target, then the next screen will ask for the path / database / container.{% endcall %}</h1>
 
   {% if error %}
     <div class="flash error">{{ error }}</div>
@@ -43,9 +38,7 @@
         </tbody>
       </table>
     </div>
-    <p class="small">
-      No suitable connection? <a href="/connections/new">Create one first</a>.
-    </p>
+    <p class="small"><a href="/connections/new">+ New connection</a></p>
   {% else %}
     <p class="empty">
       No connections configured yet. Start with

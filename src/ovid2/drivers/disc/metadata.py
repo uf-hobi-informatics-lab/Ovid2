@@ -29,13 +29,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from ovid2.drivers._choices import FILE_FORMATS, MOUNT_MODES
 from ovid2.drivers.base import ConnectionFieldSpec, FieldSpec, LocationField
 from ovid2.drivers.container import ContainerRequirement, ExtraMount
 
 #: Valid ``mount_mode`` values. ``rw`` is the default because a disc
 #: connection typically owns an output tree; feeds that must remain
 #: untouched should be pinned to ``ro`` explicitly.
-_VALID_MOUNT_MODES: frozenset[str] = frozenset({"rw", "ro"})
+_VALID_MOUNT_MODES: frozenset[str] = frozenset(MOUNT_MODES)
 
 
 def normalise_disc_args(args: dict[str, Any]) -> dict[str, Any]:
@@ -99,6 +100,8 @@ def connection_fields() -> ConnectionFieldSpec:
             FieldSpec(
                 name="mount_mode",
                 required=False,
+                widget="choices",
+                choices=MOUNT_MODES,
                 default="rw",
                 help=(
                     "Bind-mount mode applied to the auto-generated mount. "
@@ -136,7 +139,8 @@ def location_fields() -> tuple[LocationField, ...]:
         LocationField(
             name="format",
             required=False,
-            widget="str",
+            widget="choices",
+            choices=FILE_FORMATS,
             default="parquet",
             help="File format for reads/writes (parquet, csv, json, …).",
         ),

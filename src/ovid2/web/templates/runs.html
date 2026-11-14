@@ -30,8 +30,11 @@
         {% endfor %}
       </select>
       <label class="sr-only" for="run-filter-pipeline">Pipeline</label>
-      <input id="run-filter-pipeline" type="text" name="pipeline"
-             value="{{ pipeline or '' }}" placeholder="pipeline…">
+      <select id="run-filter-pipeline" name="pipeline">
+        <option value="">any pipeline</option>
+        {% for n in pipeline_names or [] %}<option value="{{ n }}" {% if pipeline == n %}selected{% endif %}>{{ n }}</option>{% endfor %}
+        {% if pipeline and pipeline not in (pipeline_names or []) %}<option value="{{ pipeline }}" selected>{{ pipeline }}</option>{% endif %}
+      </select>
       <button type="submit" class="secondary small">Filter</button>
     </form>
 

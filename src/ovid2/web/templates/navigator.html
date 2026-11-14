@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% import "_help.html" as help %}
+{% block title %}Pipeline navigator &mdash; Ovid2{% endblock %}
+{% block content %}
+{#
+  Pipeline navigator — every package → table → field → chain of functions.
+
+  Left   tree: packages grouped by a switchable axis; packages expand to
+         tables, tables to fields, fields to their steps (lazy, via
+         /api/v1/pipeline-packages/{p}/lineage). One filter narrows every
+         level; stage checkboxes hide whole stages.
+  Centre graph: the package overview (d3 tree) or a table's *lanes*
+         (one row per CDM field × one column per stage, chips per step).
+  Right  the shared spec editor (spec_builder.js Editor) opened at the
+         step's document; vendored / generated sources open read-only.
+  All state after first paint lives in static/navigator.js.
+#}
+<section class="page pl-page nv-page" id="navigator"
+         data-kind="etl"
+         data-can-write="{{ 'true' if can_write else 'false' }}"
+         data-group-by="{{ group_by }}"
+         data-initial-p="{{ initial.p }}"
+         data-initial-t="{{ initial.t }}"
+         data-initial-f="{{ initial.f }}">
+  <header class="page-header pl-header">
+    <div class="pl-title">
+      <h1>Pipeline navigator
+        {% call help.tip_block(label="Pipeline navigator") %}
+          Browse every pipeline package by <strong>type</strong>, expand a package to its
+          <strong>tables</strong>, a table to its <strong>fields</strong>, and a field to the
+          ordered chain of <strong>functions</strong> applied to it across
+          format &rarr; deduplicate &rarr; transform &rarr; map &rarr; fix.
+          Click any step to open the YAML that defines it.
+          Legacy-parity ports are generated, so they are read-only here.
+        {% endcall %}
+      </h1>
+    </div>
+    <a class="button" href="/transforms">{{ icons.icon("zap", size=15) }} Transform library</a>
+  </header>
+
+  <div class="nv-layout">
+    <nav class="pb-tree nv-tree" aria-label="Pipelines, tables and fields" id="nv-tree">
+      <div class="nv-tree-tools">
+        <input type="search" class="pb-tree-search" placeholder="Filter pipelines, tables, fields, functions…"
+               aria-label="Filter the navigator" data-nv-filter>
+        <label class="nv-tool">
+          <span class="nv-tool-label">Group by</span>
+          <select data-nv-group aria-label="Group pipelines by">
+            {% for key, label in group_by_labels.items() %}
+              <option value="{{ key }}" {{ 'selected' if key == group_by else '' }}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="nv-tool">
+          <span class="nv-tool-label">Show</span>
+          <select data-nv-only aria-label="Only show">
+            <option value="">everything</option>
+            <option value="udf">fields with a UDF</option>
+            <option value="editable">editable packages</option>
+            <option value="opaque">opaque (Python) steps</option>
+            <option value="unmapped">unmapped / constant fields</option>
+          </select>
+        </label>
+        <fieldset class="nv-stage-filter" aria-label="Stages">
+          {% for stage in stages %}
+            <label class="nv-stage-toggle" data-stage="{{ stage }}"><input type="checkbox" checked data-nv-stage="{{ stage }}"> {{ stage }}</label>
+          {% endfor %}
+          {{ help.tip("Untick a stage to hide its steps in the tree and the lanes.") }}
+        </fieldset>
+        <div class="nv-tree-actions">
+          <button type="button" class="button small" data-nv-expand>{{ icons.icon("chevrons-down", size=13) }} Expand</button>
+          <button type="button" class="button small" data-nv-collapse>Collapse</button>
+          <span class="nv-count small" data-nv-count></span>
+        </div>
+      </div>
+      <div class="nv-tree-body" role="tree" aria-label="Pipelines" data-nv-tree-body>
+        {% if not tree.groups %}<p class="empty">No pipeline packages installed.</p>{% else %}<p class="tree-msg">Loading…</p>{% endif %}
+      </div>
+    </nav>
+
+    <div class="nv-main">
+      <section class="pl-panel nv-graph-panel" id="nv-graph-panel">
+        <div class="pl-panel-head">
+          <span class="pl-card-badge">{{ icons.icon("workflow", size=16) }}</span>
+          <h2 data-nv-graph-title>Pick a pipeline</h2>
+          <span class="nw-muted small mono" data-nv-graph-sub></span>
+          <span class="pl-flex"></span>
+          <div class="pb-tabs nv-view-tabs" role="tablist" data-nv-views hidden>
+            <button type="button" class="pb-tab" role="tab" data-view="overview" aria-selected="true">{{ icons.icon("workflow", size=14) }} Overview</button>
+            <button type="button" class="pb-tab" role="tab" data-view="lanes" aria-selected="false">{{ icons.icon("table", size=14) }} Lanes</button>
+            <button type="button" class="pb-tab" role="tab" data-view="yaml" aria-selected="false">{{ icons.icon("file", size=14) }} YAML</button>
+          </div>
+          {{ help.tip("Overview: the package as a tree of tables and stages. Lanes: one row per field, one column per stage; each chip is a function applied to that field. Bands across all rows are table-wide steps (dedup, joins, row filters).") }}
+        </div>
+        <div class="nv-legend-row small" data-nv-legend hidden>
+          <span class="nv-chip-demo is-format">format</span>
+          <span class="nv-chip-demo is-deduplicate">deduplicate</span>
+          <span class="nv-chip-demo is-transform">transform</span>
+          <span class="nv-chip-demo is-map">map</span>
+          <span class="nv-chip-demo is-fix">fix</span>
+          <span class="nv-chip-demo is-opaque">opaque</span>
+          <span class="nv-chip-demo is-readonly">read-only</span>
+        </div>
+        <div class="nv-graph" data-nv-graph>
+          <p class="empty">Choose a pipeline on the left.</p>
+        </div>
+      </section>
+
+      <section class="pl-panel nv-step-panel" id="nv-step-panel" hidden>
+        <div class="pl-panel-head">
+          <span class="pl-card-badge">{{ icons.icon("zap", size=16) }}</span>
+          <h2 data-nv-step-title>Step</h2>
+          <span class="nw-muted small mono" data-nv-step-sub></span>
+        </div>
+        <div data-nv-step-body></div>
+      </section>
+
+      <section class="pl-panel" id="pb-editor-panel" hidden>
+        <div class="pl-panel-head">
+          <span class="pl-card-badge" data-editor-icon>{{ icons.icon("edit", size=16) }}</span>
+          <h2 data-editor-title>Document</h2>
+          <span class="nw-muted small mono" data-editor-path></span>
+        </div>
+        <div class="pb-tabs" role="tablist" data-editor-tabs hidden>
+          <button type="button" class="pb-tab" role="tab" data-tab="form" aria-selected="true">{{ icons.icon("sliders", size=14) }} Form</button>
+          <button type="button" class="pb-tab" role="tab" data-tab="yaml" aria-selected="false">{{ icons.icon("file", size=14) }} YAML</button>
+          <span class="pl-flex"></span>
+        </div>
+        <div data-editor-body></div>
+        <div class="pb-pane" data-pane="yaml" hidden>
+          <textarea class="mono wide" rows="20" spellcheck="false" data-yaml-source></textarea>
+        </div>
+        <ul class="pb-errors" data-editor-errors hidden></ul>
+        <div class="pb-editor-actions" data-editor-actions hidden>
+          <span class="pb-status small" data-editor-status></span>
+          <button type="button" class="button danger" data-editor-delete hidden>{{ icons.icon("trash", size=14) }} Delete</button>
+          <button type="button" class="button" data-editor-revert>Revert</button>
+          <button type="button" class="button primary" data-editor-save {% if not can_write %}disabled title="Requires the manage-config capability"{% endif %}>{{ icons.icon("check", size=14) }} Save</button>
+        </div>
+      </section>
+    </div>
+  </div>
+</section>
+<script type="application/json" id="nv-tree-data">{{ tree | tojson }}</script>
+<script type="module" src="/static/navigator.js"></script>
+{% endblock %}

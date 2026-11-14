@@ -156,11 +156,17 @@
   // *source's* own tables (copy/move).
   var currentKind = "etl";
 
+  // Kind traits come from the run-kind registry flags (UI rule U1):
+  // ``is_transfer`` (copy / move) and ``health_selection`` (health /
+  // dq_checks) — never kind-name literals.
+  function kindSpec(kind) {
+    return (window.Ovid2Visibility && window.Ovid2Visibility.kindSpec(kind)) || {};
+  }
   function isCopyOrMove(kind) {
-    return kind === "copy" || kind === "move";
+    return !!kindSpec(kind).is_transfer;
   }
   function isHealth(kind) {
-    return kind === "health" || kind === "dq_checks";
+    return !!kindSpec(kind).health_selection;
   }
 
   // Read the resolved input source from the job builder's hidden fields:
@@ -215,10 +221,9 @@
         if (!resp || !resp.supported) {
           state.tables = [];
           list.innerHTML =
-            '<p class="note">This source is not a self-describing table '
-            + 'container. Every table will be copied ('
-            + '<code>all</code>); pass an explicit list only if you need '
-            + 'a subset.</p>';
+            '<p class="note">Every table will be copied (<code>all</code>). '
+            + (window.Ovid2HelpTip ? window.Ovid2HelpTip.html("This source is not a self-describing table container, so its tables cannot be listed; pass an explicit list only if you need a subset.") : "")
+            + "</p>";
           if (toolbar) toolbar.hidden = true;
           var badge1 = document.getElementById("tables-count");
           if (badge1) badge1.hidden = true;
@@ -474,7 +479,7 @@
     if (!form) return;
     form.addEventListener("submit", function () {
       var kind = currentKindValue();
-      var isCopyOrMove = (kind === "copy" || kind === "move");
+      var transfer = isCopyOrMove(kind);
 
       var tField = document.getElementById("tables-field");
       var tBoxes = document.querySelectorAll(".table-check");
@@ -490,7 +495,7 @@
           // default, so we must send an explicit token the handler can
           // reject.
           tField.value = "__none__";
-        } else if (!isCopyOrMove && checked.length === tBoxes.length) {
+        } else if (!transfer && checked.length === tBoxes.length) {
           tField.value = "all";
         } else {
           tField.value = checked.join(" ");

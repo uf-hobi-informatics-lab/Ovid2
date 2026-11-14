@@ -14,6 +14,7 @@ NEW_TOOLS = {
     "list_transform_library",
     "save_transform",
     "assign_transform",
+    "inspect_pipeline_lineage",
 }
 
 
@@ -77,5 +78,34 @@ def test_tools_round_trip_against_api(mcp_client, tmp_path: Path, monkeypatch) -
         assert saved["action"] == "created"
         lib = await list_transform_library.run(mcp_client)
         assert any(c["name"] == "agent_udf" for c in lib)
+
+    anyio.run(_call)
+
+
+def test_inspect_pipeline_lineage_tool(mcp_client) -> None:  # type: ignore[no-untyped-def]
+    import importlib.util
+
+    import anyio
+
+    from ovid2.mcp.tools import inspect_pipeline_lineage as tool
+
+    # The legacy-parity port is a site package (absent from the public mirror).
+    has_legacy = importlib.util.find_spec("ovid2_pipelines.site") is not None
+
+    async def _call() -> None:
+        summary = await tool.run(
+            mcp_client, tool.InspectPipelineLineageArgs(pipeline="example_pcornet")
+        )
+        assert summary["profile"] == "default" and summary["tables"]
+        if has_legacy:
+            legacy = await tool.run(mcp_client, tool.InspectPipelineLineageArgs(pipeline="site"))
+            assert legacy["profile"] == "legacy_ovid" and legacy["tables"]
+        detail = await tool.run(
+            mcp_client,
+            tool.InspectPipelineLineageArgs(pipeline="example_pcornet", table="demographic"),
+        )
+        white = next(f for f in detail["fields"] if f["name"] == "RACE_ETH_WHITE")
+        ops = {s["id"]: s["op"] for s in detail["steps"]}
+        assert [ops[i] for i in white["steps"]] == ["constant", "race_eth"]
 
     anyio.run(_call)

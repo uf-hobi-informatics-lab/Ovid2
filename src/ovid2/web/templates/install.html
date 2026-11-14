@@ -1,12 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Install wizard &mdash; Ovid2{% endblock %}
 {% block content %}
+{% import "_help.html" as help %}
 <section class="page">
-  <h1>Install wizard</h1>
-  <p class="note">
-    First-time setup for Ovid2 &mdash; step-by-step. Every action here is
-    idempotent, so re-visiting a step never breaks a working install.
-  </p>
+  <h1>Install wizard {% call help.tip_block() %}First-time setup for Ovid2 &mdash; step-by-step. Every action here is idempotent, so re-visiting a step never breaks a working install.{% endcall %}</h1>
 
   {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
   {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
@@ -36,27 +33,16 @@
   </table>
 
   <!-- ------------------------------------------------------------------ -->
-  <h2 id="bootstrap">1. Bootstrap XDG tree</h2>
-  <p>
-    Creates <code>$XDG_CONFIG_HOME/ovid2/</code>, <code>secrets.d/</code>,
-    and drops sample <code>disc_input.json</code> /
-    <code>disc_output.json</code> configs plus a
-    <code>snowflake.json</code> template (mode 0600).
-  </p>
+  <h2 id="bootstrap">1. Bootstrap XDG tree {% call help.tip_block() %}Creates <code>$XDG_CONFIG_HOME/ovid2/</code>, <code>secrets.d/</code>, and drops sample <code>disc_input.json</code> / <code>disc_output.json</code> configs plus a <code>snowflake.json</code> template (mode 0600).{% endcall %}</h2>
   <form method="post" action="/install/bootstrap" class="edit-form">
     <button type="submit" class="button primary">Run bootstrap</button>
   </form>
 
   <!-- ------------------------------------------------------------------ -->
-  <h2 id="snowflake">2. Snowflake credentials</h2>
-  <p>
-    Writes to <code>secrets.d/snowflake.json</code> with
-    <code>mode 0600</code> from the moment of creation. Values are never
-    read back through the API &mdash; only key names.
-  </p>
+  <h2 id="snowflake">2. Snowflake credentials {% call help.tip_block() %}Writes to <code>secrets.d/snowflake.json</code> with <code>mode 0600</code> from the moment of creation. Values are never read back through the API &mdash; only key names.{% endcall %}</h2>
   {% if snowflake_step and snowflake_step.detail.get("keys") %}
-    <p class="note">On-disk keys: <span class="mono">{{ snowflake_step.detail["keys"] | join(", ") }}</span>.
-      Leave a value at <code>***</code> to keep the existing secret.</p>
+    <p class="note">On-disk keys: <span class="mono">{{ snowflake_step.detail["keys"] | join(", ") }}</span>
+      {{ help.tip("Leave a value at *** to keep the existing secret.") }}</p>
   {% endif %}
   <form method="post" action="/install/snowflake" class="edit-form">
     <table class="kv-table edit">
@@ -88,24 +74,12 @@
   </form>
 
   <!-- ------------------------------------------------------------------ -->
-  <h2 id="addresses">3. Storage accounts</h2>
-  <p>
-    Ovid2 needs at least one input and one output location. Use the
-    dedicated <a href="/storage">Storage accounts</a> page to create,
-    edit, test, or delete them. A pipeline picks a storage account for
-    its input and output and chooses the folder / bucket / schema at
-    run time.
-  </p>
+  <h2 id="addresses">3. Storage accounts {% call help.tip_block() %}Ovid2 needs at least one input and one output location. Use the dedicated <a href="/storage">Storage accounts</a> page to create, edit, test, or delete them. A pipeline picks a storage account for its input and output and chooses the folder / bucket / schema at run time.{% endcall %}</h2>
   <p><a class="button" href="/connections/new">New storage account</a> &nbsp;
      <a class="button" href="/storage">Manage storage accounts</a></p>
 
   <!-- ------------------------------------------------------------------ -->
-  <h2 id="image">4. Docker image</h2>
-  <p>
-    Builds <code>{{ builds.builds[0].tag if builds.total else 'the configured OVID2_DOCKER_IMAGE tag' }}</code>
-    from the repo-local <code>docker/Dockerfile</code>. The build runs
-    in a background thread; you can leave this page and come back.
-  </p>
+  <h2 id="image">4. Docker image {% call help.tip_block() %}Builds <code>{{ builds.builds[0].tag if builds.total else 'the configured OVID2_DOCKER_IMAGE tag' }}</code> from the repo-local <code>docker/Dockerfile</code>. The build runs in a background thread; you can leave this page and come back.{% endcall %}</h2>
   <form method="post" action="/install/image/build" class="edit-form">
     <div class="form-row">
       <label for="tag">Tag</label>
@@ -152,22 +126,11 @@
   {% endif %}
 
   <!-- ------------------------------------------------------------------ -->
-  <h2 id="service">5. systemd service</h2>
-  <p>
-    The scheduler daemon lives at <code>/etc/systemd/system/ovid2-scheduler.service</code>,
-    which requires root. Copy-paste the command below into a terminal to
-    finish this step. Reload this page afterwards to update the badge.
-  </p>
+  <h2 id="service">5. systemd service {% call help.tip_block() %}The scheduler daemon lives at <code>/etc/systemd/system/ovid2-scheduler.service</code>, which requires root. Copy-paste the command below into a terminal to finish this step. Reload this page afterwards to update the badge.{% endcall %}</h2>
   <pre class="mono"><code>{{ service_command.command }}</code></pre>
 
   <!-- ------------------------------------------------------------------ -->
-  <h2 id="pipeline">6. First pipeline</h2>
-  <p>
-    Ovid2 discovers pipelines under the <code>ovid2_pipelines.*</code>
-    namespace. Pick one to verify it is reachable; you can edit its
-    formatters and mappers under <a href="/pipelines">/pipelines</a>
-    once verified.
-  </p>
+  <h2 id="pipeline">6. First pipeline {% call help.tip_block() %}Ovid2 discovers pipelines under the <code>ovid2_pipelines.*</code> namespace. Pick one to verify it is reachable; you can edit its formatters and mappers under <a href="/pipelines">/pipelines</a> once verified.{% endcall %}</h2>
   {% if pipelines %}
     <form method="post" action="/install/pipeline/verify" class="edit-form">
       <div class="form-row">
@@ -183,9 +146,8 @@
       </div>
     </form>
   {% else %}
-    <p class="note">No <code>ovid2_pipelines.*</code> packages are on
-      <code>sys.path</code>. Install a pipeline wheel or set
-      <code>OVID2_PIPELINES_DIR</code>.</p>
+    <p class="empty">No <code>ovid2_pipelines.*</code> packages found.
+      {{ help.tip("Nothing is on sys.path under the ovid2_pipelines namespace. Install a pipeline wheel or set OVID2_PIPELINES_DIR.") }}</p>
   {% endif %}
 
   <!-- ------------------------------------------------------------------ -->
@@ -194,8 +156,7 @@
     <p class="flash">Every step is complete &mdash; head to
       <a href="/submit">/submit</a> to run your first ETL job.</p>
   {% else %}
-    <p class="note">Finish the pending steps above and this section will
-      unlock.</p>
+    <p class="empty">Finish the pending steps above.</p>
   {% endif %}
 </section>
 {% endblock %}

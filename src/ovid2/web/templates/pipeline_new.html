@@ -29,13 +29,12 @@
       <div>
         <h2>ETL &mdash; from a template
           {% call help.tip_block() %}
-            The scaffolder copies the template's pipeline package under the
+            Scaffold a fresh, personalisable pipeline package. The scaffolder copies the template's pipeline package under the
             new name (its identity fields &mdash; DB name, HARVEST datamart id,
             DATAVANT key &mdash; are reset to placeholders) and opens the
             pipeline editor so you can wire storage + warehouse.
           {% endcall %}
         </h2>
-        <p class="wz-step-sub">Scaffold a fresh, personalisable pipeline package.</p>
       </div>
     </header>
 
@@ -76,16 +75,17 @@
       <span class="wz-step-icon">{{ icons.icon("layers", size=20) }}</span>
       <div>
         <h2>Other pipeline types
-          {{ help.tip("Analysis and DQ checks run against existing pipeline packages; Copy and Move transfer data verbatim. None of them scaffold a new package.") }}
+          {{ help.tip("Configure these directly in the pipeline editor. Analysis and DQ checks run against existing pipeline packages; Copy and Move transfer data verbatim. None of them scaffold a new package.") }}
         </h2>
-        <p class="wz-step-sub">Configure directly in the pipeline editor.</p>
       </div>
     </header>
     <div class="sc-kinds">
-      {% for k, label, ico in [("analysis", "Analysis", "chart"), ("dq_checks", "DQ checks", "shield-check"), ("copy", "Copy", "copy"), ("move", "Move", "move")] %}
-        <a class="wz-kind-tile" data-kind="{{ k }}" href="/pipelines/new">
-          <span class="wz-kind-tile-icon">{{ icons.icon(ico, size=22) }}</span>
-          <span class="wz-kind-tile-label">{{ label }}</span>
+      {# Registry-driven: every kind that does not scaffold a package. #}
+      {% set kind_icons = {"analysis": "chart", "dq_checks": "shield-check", "health": "activity", "copy": "copy", "move": "move"} %}
+      {% for k in kind_choices if k.create_flow != "scaffold_package" %}
+        <a class="wz-kind-tile" data-kind="{{ k.name }}" href="/pipelines/new?kind={{ k.name }}">
+          <span class="wz-kind-tile-icon">{{ icons.icon(kind_icons.get(k.name, "pipelines"), size=22) }}</span>
+          <span class="wz-kind-tile-label">{{ k.label }}</span>
         </a>
       {% endfor %}
     </div>

@@ -1,21 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Users &mdash; Ovid2{% endblock %}
 {% block content %}
+{% import "_help.html" as help %}
 <section class="page">
   <div class="page-header">
-    <h1>Users</h1>
+    <h1>Users {% call help.tip_block() %}Web principals resolved from the identity provider. Newly seen users land in <code>pending</code> and gain no access until an administrator activates them with a role. The last active <code>system_admin</code> cannot be disabled or demoted.{% endcall %}</h1>
   </div>
 
   {% if error %}
     <div class="flash error">{{ error }}</div>
   {% endif %}
 
-  <p class="note">
-    Web principals resolved from the identity provider. Newly seen users land
-    in <code>pending</code> and gain no access until an administrator activates
-    them with a role. The last active <code>system_admin</code> cannot be
-    disabled or demoted.
-  </p>
 
   {% if pending %}
     <div class="table-wrap">

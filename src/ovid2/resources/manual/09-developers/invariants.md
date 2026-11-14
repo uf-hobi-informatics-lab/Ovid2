@@ -34,6 +34,7 @@ commit.
 | Every CDM YAML loads and registers | `test_cdm_yaml_loads.py`, `test_cdm_registry_complete.py` |
 | Every fixer declares its scope | `test_fixer_configs_valid.py` |
 | Formatter, mapper, transform and health specs validate | `test_formatter_specs_valid.py`, `test_mapper_specs_valid.py`, `test_transform_specs_valid.py`, `test_health_specs_valid.py` |
+| Every transform op, mapper op and fixer declares a column role (used by the navigator's lineage) | `test_column_roles_complete.py` |
 
 ## Drivers and storage
 
@@ -65,8 +66,32 @@ commit.
 | Events match the JSON Schema | `test_event_schema.py` |
 | No bare `except`, no wildcard imports, no hard-coded paths | `test_no_bare_except.py`, `test_no_wildcard_imports.py`, `test_style_and_paths.py` |
 | No third-party CDN in templates | `test_no_third_party_cdn.py` |
+| UI rules: only relevant fields shown (registry flags, no kind literals); closed sets are selects; explanations under "?" | `test_ui_rules.py` |
 | The public API changes only intentionally | `test_web_openapi_stable.py` |
 | The manual's links resolve and its reference is current | `test_manual_*.py` |
+
+## UI rules
+
+Every web form follows three hard rules. They are enforced, not advisory:
+
+1. **Only relevant fields are shown.** Mark a row
+   `data-show-kind-flag="uses_cdm"` (or `data-show-kind`,
+   `data-show-engine-family`, `data-hide-engine-family`,
+   `data-show-when="trigger_type=cron"`) inside a
+   `data-visibility-root`, emit the `#kind-flags` JSON island
+   (`kind_choices()`), and `static/field_visibility.js` hides the rest.
+   Never compare against a kind name in JS or a template. If a new kind
+   behaves differently, add a flag to `ovid2.web.kinds.kind_flags`.
+   Read-only pages use the `kind_spec(kind)` Jinja global.
+2. **A value from a known set is a select.** Catalogue fields declare
+   `widget: "choices"` with `choices` (shared tuples in
+   `drivers/_choices.py`) or `choices_from: "connections:<type>"`, and
+   render through `templates/_field.html`. `<datalist>` only with
+   `data-allow-new`.
+3. **Explanations live under "?".** Use `help.tip()` /
+   `help.tip_block()` from `templates/_help.html`, or
+   `Ovid2HelpTip.tip()` / `.html()` from JS. Status, error, empty-state
+   and confirmation text stays visible.
 
 When one of these fails, **fix the code, not the test**. If an invariant
 really has to change, that is a design decision: write an ADR and change

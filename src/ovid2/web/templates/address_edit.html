@@ -1,10 +1,11 @@
 {% extends "base.html" %}
 {% block title %}{{ 'New address' if mode == 'new' else 'Edit address ' + name }} &mdash; Ovid2{% endblock %}
 {% block content %}
+{% import "_help.html" as help %}
 <section class="page">
   <p><a href="/addresses">&larr; all addresses</a></p>
   <h1>
-    {% if mode == 'new' %}New address{% else %}Edit address: <span class="mono">{{ name }}</span>{% endif %}
+    {% if mode == 'new' %}New address{% else %}Edit address: <span class="mono">{{ name }}</span>{% endif %} {% call help.tip_block() %}Sensitive keys (<code>password</code>, <code>token</code>, <code>private_key</code>, …) are masked as <code>***</code> in the display. Leave the value at <code>***</code> to preserve the on-disk secret, or replace it to set a new value. Writes always land in <code>$XDG_CONFIG_HOME/ovid2/configs/</code>.{% endcall %}
   </h1>
 
   {% if mode == 'edit' %}
@@ -74,12 +75,6 @@
       </tbody>
     </table>
 
-    <p class="note">
-      Sensitive keys (<code>password</code>, <code>token</code>, <code>private_key</code>, …)
-      are masked as <code>***</code> in the display. Leave the value at <code>***</code>
-      to preserve the on-disk secret, or replace it to set a new value.
-      Writes always land in <code>$XDG_CONFIG_HOME/ovid2/configs/</code>.
-    </p>
 
     <div class="form-row">
       <button type="submit" class="button primary">Save</button>

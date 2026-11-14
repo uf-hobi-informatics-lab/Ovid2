@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ spec.pipeline }}/mappers/{{ spec.table }} &mdash; Ovid2{% endblock %}
 {% block content %}
+{% import "_help.html" as help %}
 <section class="page">
   <p><a href="/pipeline-packages/{{ spec.pipeline }}">&larr; back to {{ spec.pipeline }}</a></p>
   <h1>Mapper: <span class="mono">{{ spec.pipeline }}/{{ spec.table }}</span></h1>
@@ -19,12 +20,8 @@
       </form>
     </p>
   {% else %}
-    <p class="note">
-      SPEC-dict Python mappers are read-only through the panel; edit on disk
-      per <code>AGENTS.md</code>.
-    </p>
   {% endif %}
-  <h2>Source</h2>
+  <h2>Source {% call help.tip_block() %}SPEC-dict Python mappers are read-only through the panel; edit on disk per <code>AGENTS.md</code>.{% endcall %}</h2>
   <pre class="code-preview"><code>{{ spec.raw_text }}</code></pre>
 </section>
 {% endblock %}

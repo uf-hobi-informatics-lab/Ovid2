@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Address &mdash; {{ name }}{% endblock %}
 {% block content %}
+{% import "_help.html" as help %}
 <section class="page">
   <p><a href="/addresses">&larr; all addresses</a></p>
   <h1>Address: {{ name }}</h1>
@@ -40,7 +41,7 @@
       {% endif %}
     </dl>
     {% if address.connection and address.location %}
-      <h2>Location</h2>
+      <h2>Location {% call help.tip_block() %}Location fields are non-sensitive by design &mdash; every credential lives on the connection.{% endcall %}</h2>
       <table class="kv-table">
         <tbody>
           {% for key, value in address.location.items() %}
@@ -48,12 +49,8 @@
           {% endfor %}
         </tbody>
       </table>
-      <p class="note">
-        Location fields are non-sensitive by design &mdash; every
-        credential lives on the connection.
-      </p>
     {% else %}
-      <h2>Arguments</h2>
+      <h2>Arguments {% call help.tip_block() %}Sensitive keys are masked with <code>***</code>. Editing preserves masked values unless you replace them.{% endcall %}</h2>
       <table class="kv-table">
         <tbody>
           {% for key, value in address.src_args.items() %}
@@ -61,7 +58,6 @@
           {% endfor %}
         </tbody>
       </table>
-      <p class="note">Sensitive keys are masked with <code>***</code>. Editing preserves masked values unless you replace them.</p>
     {% endif %}
   {% else %}
     <p class="empty">Address config <code>{{ name }}</code> not found in any search path.</p>

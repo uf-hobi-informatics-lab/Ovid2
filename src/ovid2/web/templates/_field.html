@@ -1,0 +1,112 @@
+{#
+  Shared catalogue-field renderer — the single implementation behind the
+  connection / warehouse / LLM / address forms.
+
+  UI rules (AGENTS.md "UI rules"):
+    U2 — a field whose value must come from a known list renders as a
+         <select> (``widget: choices`` + ``choices: [...]``); booleans
+         render as a checkbox. Never free text.
+    U3 — the field's ``help`` text sits under a "?" tip next to its
+         label, never as a visible column / paragraph.
+
+  Usage
+  -----
+
+      {% import "_field.html" as fld %}
+      <table class="kv-table edit"><tbody>
+        {% for f in spec.args %}{{ fld.row(f, args.get(f.name), "arg_") }}{% endfor %}
+      </tbody></table>
+
+  ``prefix`` is the form-name prefix the route parses (``arg_`` / ``sec_``
+  / ``loc_``). ``secret=True`` renders a masked input. Location specs
+  carry the widget on ``type``; catalogue specs on ``widget`` — both are
+  honoured.
+#}
+{% import "_help.html" as help %}
+
+{%- macro widget_of(f) -%}
+{%- if f.multiline -%}multiline{%- elif f.widget and f.widget != 'str' -%}{{ f.widget }}{%- else -%}{{ f.type or 'str' }}{%- endif -%}
+{%- endmacro -%}
+
+{%- macro input(f, value, prefix, secret=false, mode="new") -%}
+{%- set w = widget_of(f) -%}
+{%- set fid = prefix ~ f.name -%}
+{%- set v = '' if value is none else value -%}
+{%- if w == 'choices' -%}
+  <select id="{{ fid }}" name="{{ fid }}" class="mono"{% if f.required %} required{% endif %}>
+    {%- if not f.required %}<option value="">{{ ('(default — ' ~ f.default ~ ')') if (f.default is defined and f.default is not none and f.default | string) else '(not set)' }}</option>{% endif -%}
+    {%- for c in f.choices or [] %}
+    <option value="{{ c }}"{% if v | string == c | string %} selected{% endif %}>{{ c }}</option>
+    {%- endfor %}
+    {%- if v and (v | string) not in ((f.choices or []) | map('string') | list) %}
+    <option value="{{ v }}" selected>{{ v }} (current)</option>
+    {%- endif %}
+  </select>
+{%- elif w == 'bool' and prefix == 'loc_' -%}
+  {#- Location booleans: a checkbox (``_parse_location_form`` reads presence). -#}
+  {%- set on = (v | string | lower) in ('true', 'on', '1', 'yes') or (v == '' and (f.default | string | lower) == 'true' and mode == 'new') -%}
+  <input type="checkbox" id="{{ fid }}" name="{{ fid }}" value="on"{% if on %} checked{% endif %}>
+{%- elif w == 'bool' -%}
+  {#- Catalogue booleans are stored as strings; a blank keeps the default. -#}
+  <select id="{{ fid }}" name="{{ fid }}" class="mono">
+    <option value="">{{ ('(default — ' ~ f.default ~ ')') if (f.default is defined and f.default is not none and f.default | string) else '(not set)' }}</option>
+    {%- for c in ('true', 'false') %}
+    <option value="{{ c }}"{% if (v | string | lower) == c %} selected{% endif %}>{{ c }}</option>
+    {%- endfor %}
+  </select>
+{%- elif w == 'int' -%}
+  <input type="number" id="{{ fid }}" name="{{ fid }}" value="{{ v }}" class="mono wide"
+         placeholder="{{ f.default if f.default is not none else '' }}"{% if f.required %} required{% endif %}>
+{%- elif w == 'multiline' -%}
+  <textarea id="{{ fid }}" name="{{ fid }}" class="mono wide" rows="{{ 8 if secret else 4 }}"
+            spellcheck="false" autocomplete="off"
+            placeholder="{{ '***' if (secret and mode == 'edit') else '' }}">{{ v }}</textarea>
+  {%- if secret %}
+  <label class="small mono field-upload">
+    <input type="file" accept=".p8,.pem,.key,.json,text/plain,application/x-pem-file"
+           onchange="(function(el){var f=el.files&&el.files[0];if(!f)return;var r=new FileReader();r.onload=function(){var ta=document.getElementById('{{ fid }}');if(ta)ta.value=r.result;};r.readAsText(f);})(this);">
+    &hellip; or upload a file
+  </label>
+  {%- endif %}
+{%- elif w == 'path_picker' -%}
+  <div class="path-picker-field">
+    <input type="text" id="{{ fid }}" name="{{ fid }}" value="{{ v }}" class="mono wide"
+           {% if f.required %}required{% endif %} placeholder="{{ f.default or '' }}">
+    <button type="button" class="button"
+            hx-get="/fs/picker?target={{ fid }}" hx-target="#fs-picker-modal" hx-swap="innerHTML"
+            onclick="document.getElementById('fs-picker-modal').style.display='block';">Browse&hellip;</button>
+  </div>
+{%- elif secret -%}
+  <input type="password" id="{{ fid }}" name="{{ fid }}" value="{{ v }}" class="mono wide"
+         autocomplete="new-password" placeholder="{{ '***' if mode == 'edit' else '' }}"
+         {% if f.required and mode == 'new' %}required{% endif %}>
+{%- else -%}
+  <input type="text" id="{{ fid }}" name="{{ fid }}" value="{{ v }}" class="mono wide"
+         {% if f.required %}required{% endif %} placeholder="{{ f.default if f.default is not none else '' }}">
+{%- endif -%}
+{%- endmacro -%}
+
+{%- macro label(f, prefix) -%}
+<label for="{{ prefix ~ f.name }}" class="mono">{{ f.name }}{% if f.required %} <span class="danger">*</span>{% endif %}</label>
+{%- if f.help %} {{ help.tip(f.help) }}{% endif -%}
+{%- endmacro -%}
+
+{%- macro row(f, value, prefix, secret=false, mode="new") -%}
+<tr>
+  <td>{{ label(f, prefix) }}</td>
+  <td>{{ input(f, value, prefix, secret=secret, mode=mode) }}</td>
+</tr>
+{%- endmacro -%}
+
+{#- A whole args/secrets table. ``title`` renders as an <h2>; ``tip`` (text)
+    hangs a "?" off it. -#}
+{%- macro table(fields, values, prefix, secret=false, mode="new") -%}
+<table class="kv-table edit">
+  <thead><tr><th>Key</th><th>Value</th></tr></thead>
+  <tbody>
+    {%- for f in fields %}
+    {{ row(f, values.get(f.name) if values else none, prefix, secret=secret, mode=mode) }}
+    {%- endfor %}
+  </tbody>
+</table>
+{%- endmacro -%}

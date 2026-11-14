@@ -653,6 +653,58 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
 #: Valid category values, for UI grouping and filter validation.
 CATEGORIES: tuple[str, ...] = ("correction", "formatting", "reshape", "sampling")
 
+_WINDOW_ROLE: dict[str, Any] = {
+    "scope": "field",
+    "reads": ["partition_by", "order_by[].col"],
+    "writes": ["output_column"],
+}
+_INPLACE_COLUMNS: dict[str, Any] = {"scope": "field", "inplace": ["columns"]}
+_INPLACE_COLUMN: dict[str, Any] = {"scope": "field", "inplace": ["column"]}
+
+#: Which columns each transform touches (grammar: :mod:`ovid2.config.column_roles`).
+#: Kept beside — not inside — :data:`TRANSFORM_CATALOGUE` so that list stays a
+#: verbatim mirror of the registry metadata. ``test_column_roles_complete.py``
+#: pins one role per transform and every token to a real param.
+TRANSFORM_COLUMN_ROLES: dict[str, dict[str, Any]] = {
+    "add_row_number": _WINDOW_ROLE,
+    "cast": {"scope": "field", "inplace": ["types:keys"]},
+    "clamp": _INPLACE_COLUMN,
+    "coalesce_columns": {"scope": "field", "reads": ["columns"], "writes": ["target"]},
+    "dedup": {"scope": "rows", "reads": ["subset"]},
+    "default_value": _INPLACE_COLUMN,
+    "dense_rank": _WINDOW_ROLE,
+    "derive_column": {"scope": "field", "writes": ["column"], "exprs": ["expr"]},
+    "distinct": {"scope": "rows"},
+    "drop_columns": {"scope": "shape", "reads": ["columns"]},
+    "explode": {"scope": "shape", "reads": ["column"], "writes": ["alias|column"]},
+    "filter_expr": {"scope": "rows", "exprs": ["expr"]},
+    "head_by_group": {"scope": "rows", "reads": ["partition_by", "order_by[].col"]},
+    "limit": {"scope": "rows"},
+    "normalize_whitespace": _INPLACE_COLUMNS,
+    "null_if": _INPLACE_COLUMN,
+    "pad": _INPLACE_COLUMN,
+    "pivot": {"scope": "shape", "reads": ["group_by", "pivot_column", "value_column"]},
+    "random_sample": {"scope": "rows"},
+    "rank": _WINDOW_ROLE,
+    "reduce": {"scope": "shape", "reads": ["group_by"], "inplace": ["aggs:keys"]},
+    "regex_replace": _INPLACE_COLUMNS,
+    "rename_columns": {"scope": "shape", "reads": ["map:keys"], "writes": ["map:values"]},
+    "select_columns": {"scope": "shape", "reads": ["columns"]},
+    "standardize_null": _INPLACE_COLUMNS,
+    "stratified_sample": {"scope": "rows", "reads": ["key"]},
+    "strip_non_alpha": _INPLACE_COLUMNS,
+    "strip_non_numeric": _INPLACE_COLUMNS,
+    "to_lower": _INPLACE_COLUMNS,
+    "to_title": _INPLACE_COLUMNS,
+    "to_upper": _INPLACE_COLUMNS,
+    "trim": _INPLACE_COLUMNS,
+    "unpivot": {
+        "scope": "shape",
+        "reads": ["id_columns", "value_columns"],
+        "writes": ["name_to", "value_to"],
+    },
+}
+
 
 def list_catalogue(category: str | None = None) -> list[dict[str, Any]]:
     """Return catalogue entries, optionally filtered by ``category``."""
@@ -669,6 +721,7 @@ def transform_names() -> list[str]:
 __all__ = [
     "CATEGORIES",
     "TRANSFORM_CATALOGUE",
+    "TRANSFORM_COLUMN_ROLES",
     "list_catalogue",
     "transform_names",
 ]

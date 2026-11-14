@@ -176,9 +176,10 @@ def test_submit_page_uses_pl_visual_language(web_client) -> None:  # type: ignor
     body = web_client.get("/submit").text
     assert 'class="page pl-page submit-page builder-page"' in body
     assert 'class="page-header pl-header"' in body
-    assert 'class="pl-subtitle"' in body
+    # UI rule U3: the intro line lives under the header "?" tip.
+    assert 'class="pl-subtitle"' not in body and "help-tip-btn" in body
     assert 'class="kind-chip pl-kind-tile" data-kind="etl"' in body
-    assert 'id="submit-form"\n        data-kind="etl"' in body
+    assert 'id="submit-form"\n        data-visibility-root\n        data-kind="etl"' in body
 
 
 @pytest.mark.unit

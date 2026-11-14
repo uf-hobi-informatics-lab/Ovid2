@@ -488,12 +488,12 @@ Export a table / data file to csv / xlsx / pdf / docx, print JSON.
 
 ### `ovid2 tools report-export`
 
-Render a Report Studio bundle (layout + source) to pdf/html/docx/xlsx/svg/png/md/json.
+Render a Report Studio bundle (layout + source) to pdf/html/docx/pptx/xlsx/svg/png/md/json.
 
 | Argument | Description | Choices | Default |
 | --- | --- | --- | --- |
 | `--bundle` `BUNDLE` | Path to the JSON bundle {layout, source, meta}. |  |  |
-| `--format` `FMT` |  | `docx`, `html`, `json`, `md`, `pdf`, `png`, `svg`, `xlsx` |  |
+| `--format` `FMT` |  | `docx`, `html`, `json`, `md`, `pdf`, `png`, `pptx`, `svg`, `xlsx` |  |
 | `--out-dir` `OUT_DIR` | Existing directory for the output file. |  |  |
 | `--block` `BLOCK` | svg/png only: export just this chart block id. |  |  |
 

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
-__all__ = ["MAPPER_OP_CATALOGUE", "list_mapper_ops"]
+__all__ = ["MAPPER_OP_CATALOGUE", "MAPPER_OP_COLUMN_ROLES", "list_mapper_ops"]
 
 _STR = {"type": "string"}
 
@@ -130,6 +130,26 @@ MAPPER_OP_CATALOGUE: dict[str, dict[str, Any]] = {
         "summary": "Legacy-port column projection (generated; edit via YAML).",
         "params_schema": {"type": "object", "additionalProperties": True},
     },
+}
+
+
+#: Which columns each mapper op touches (grammar: :mod:`ovid2.config.column_roles`).
+#: ``apply_transforms`` and ``legacy_select`` are expanded by the lineage
+#: service (nested steps / per-column projection), so they are table-scoped here.
+MAPPER_OP_COLUMN_ROLES: dict[str, dict[str, Any]] = {
+    "translate_by_dict": {"scope": "field", "inplace": ["column"]},
+    "translate_by_concept": {
+        "scope": "field",
+        "reads": ["column"],
+        "writes": ["target_column|column"],
+    },
+    "hash_id": {"scope": "field", "inplace": ["column"]},
+    "case_map": {"scope": "field", "inplace": ["column"]},
+    "regex_replace": {"scope": "field", "inplace": ["column"]},
+    "literal": {"scope": "field", "writes": ["column"]},
+    "passthrough": {"scope": "table"},
+    "apply_transforms": {"scope": "table"},
+    "legacy_select": {"scope": "shape"},
 }
 
 

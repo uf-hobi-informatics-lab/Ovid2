@@ -37,8 +37,9 @@
           fixer chains, settings) are at the top of the tree.
         {% endcall %}
       </h1>
-      <p class="pl-subtitle">{{ inspection.cdm }}{% if inspection.profile == 'legacy_ovid' %} &middot; legacy_ovid port (generated formatters are read-only){% endif %}{% if inspection.requires_family %} &middot; requires a {{ inspection.requires_family }} engine{% endif %}</p>
+      <p class="pl-meta">{{ inspection.cdm }}{% if inspection.profile == 'legacy_ovid' %} &middot; legacy_ovid port (generated formatters are read-only){% endif %}{% if inspection.requires_family %} &middot; requires a {{ inspection.requires_family }} engine{% endif %}</p>
     </div>
+    <a class="button" href="/navigator?p={{ pipeline | urlencode }}">{{ icons.icon("navigator", size=15) }} Open in navigator</a>
     <a class="button" href="/transforms">{{ icons.icon("zap", size=15) }} Transform library</a>
   </header>
 
@@ -95,7 +96,7 @@
           <span class="pl-flex"></span>
         </div>
         <div data-editor-body>
-          <p class="note">Choose a table or a package document on the left. Tables show how the data flows through format &rarr; transform &rarr; map &rarr; fix; click a stage to edit it.</p>
+          <p class="empty">Choose a table or a package document on the left. {{ help.tip("Tables show how the data flows through format → transform → map → fix; click a stage to edit it.") }}</p>
         </div>
         <div class="pb-pane" data-pane="yaml" hidden>
           <textarea class="mono wide" rows="20" spellcheck="false" data-yaml-source></textarea>
