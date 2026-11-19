@@ -1286,6 +1286,35 @@ async def pipeline_new_post(request: Request) -> HTMLResponse | RedirectResponse
     )
 
 
+@router.post(
+    "/pipeline-packages/{name}/delete",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    dependencies=[Depends(require_csrf), Depends(require_capability(Capability.MANAGE_CONFIG))],
+)
+async def pipeline_package_delete_post(request: Request, name: str) -> RedirectResponse:
+    """Move a pipeline package to the trash (optionally with its run configs).
+
+    Human browser action (CSRF + manage-config + a confirm dialog), like
+    ``/pipelines/{name}/delete``; the JSON ``DELETE`` used by agents is
+    approval-gated. ``next`` (form field) picks the redirect target.
+    """
+    from ovid2.web.services import pipeline_packages_svc
+
+    form = await request.form()
+    with_configs = str(form.get("with_configs", "")).lower() in {"1", "true", "on", "yes"}
+    nxt = str(form.get("next", "") or "/pipeline-packages")
+    if not nxt.startswith("/") or nxt.startswith("//"):
+        nxt = "/pipeline-packages"
+    try:
+        pipeline_packages_svc.delete_package(name, with_configs=with_configs, actor="web")
+    except pipeline_packages_svc.PackageInUse as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except pipeline_packages_svc.PackageDeleteError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return RedirectResponse(url=nxt, status_code=303)
+
+
 @router.get(
     "/pipeline-packages/{name}/builder",
     response_class=HTMLResponse,
@@ -1340,6 +1369,7 @@ def navigator_page(
     t: str | None = None,
     f: str | None = None,
     group_by: str = "cdm",
+    include_unused: bool = False,
 ) -> HTMLResponse:
     """The pipeline navigator: every package → table → field → chain of functions.
 
@@ -1358,19 +1388,24 @@ def navigator_page(
 
     if group_by not in pipeline_lineage_svc.GROUP_BY:
         group_by = "cdm"
-    tree = pipeline_lineage_svc.navigator_tree(group_by)
-    return templates.TemplateResponse(
+    tree = pipeline_lineage_svc.navigator_tree(group_by, include_unused=include_unused)
+    response = templates.TemplateResponse(
         request,
         "navigator.html",
         {
             "tree": tree,
             "group_by": group_by,
+            "include_unused": include_unused,
             "group_by_labels": _NAVIGATOR_GROUP_LABELS,
             "stages": list(pipeline_lineage_svc.STAGES),
             "initial": {"p": p or "", "t": t or "", "f": f or ""},
             "can_write": _can_manage_config(request),
         },
     )
+    # The package list is embedded in the page: never let the browser (or
+    # its back/forward cache) replay a stale one.
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 #: Display labels for the navigator's group-by select (UI rule U2).
@@ -1507,14 +1542,24 @@ def pipeline_detail_page(request: Request, name: str) -> HTMLResponse:
     if detail is None:
         raise HTTPException(status_code=404, detail=f"Pipeline '{pipeline}' not found.")
     pipeline_config = None
+    package_configs: list[str] = []
     for summary in pipelines_svc.list_pipelines():
         if summary.pipeline == pipeline:
-            pipeline_config = summary
-            break
+            if pipeline_config is None:
+                pipeline_config = summary
+            package_configs.append(summary.name)
+    from ovid2.tools.templates import TEMPLATES
+
     return templates.TemplateResponse(
         request,
         "pipeline_detail.html",
-        {"pipeline": detail, "pipeline_config": pipeline_config},
+        {
+            "pipeline": detail,
+            "pipeline_config": pipeline_config,
+            "package_configs": sorted(package_configs),
+            "is_template_source": any(t.source_pipeline == pipeline for t in TEMPLATES.values()),
+            "can_write": _can_manage_config(request),
+        },
     )
 
 

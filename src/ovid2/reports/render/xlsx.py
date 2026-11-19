@@ -90,6 +90,37 @@ def write_xlsx(model: Mapping[str, Any], path: Path) -> Path:
     index.set_column(0, 1, 32)
     index.set_column(2, 5, 16)
 
+    notes = [
+        (s, b)
+        for s in model["sections"]
+        for b in s["blocks"]
+        if b.get("renderer") in ("note", "info", "checklist", "text", "callout")
+    ]
+    if notes:
+        ws = wb.add_worksheet(_sheet_name("Notes", taken))
+        ws.write_row(0, 0, ["Section", "Block", "Type", "Field", "Value"], head)
+        n = 1
+        for s, b in notes:
+            label = b.get("title") or b["id"]
+            r_ = b["renderer"]
+            entries: list[tuple[str, str]] = []
+            if r_ == "info":
+                entries = [(row["key"], row["value"]) for row in b.get("rows") or []]
+            elif r_ == "checklist":
+                entries = [
+                    ("done" if i["done"] else "open", i["text"]) for i in b.get("items") or []
+                ]
+            else:
+                entries = [(str(b.get("author") or ""), str(b.get("markdown") or ""))]
+            for field, value in entries:
+                ws.write_row(
+                    n, 0, [_cell(s["title"]), _cell(label), r_, _cell(field), _cell(value)]
+                )
+                n += 1
+        ws.set_column(0, 1, 28)
+        ws.set_column(2, 3, 14)
+        ws.set_column(4, 4, 80)
+
     prov = wb.add_worksheet(_sheet_name("Provenance", taken))
     prov.write_row(0, 0, ["Field", "Value"], head)
     for i, (k, v) in enumerate(model["provenance"].items(), start=1):

@@ -13,12 +13,37 @@ the MCP server and scripts use, so nothing is possible only in the browser.
 | Region | Contents |
 | --- | --- |
 | **Top bar** | the Ovid2 wordmark (home), the page title on narrow screens, the light/dark toggle |
-| **Left drawer** | navigation in five groups, collapsible to an icon rail |
+| **Left drawer** | navigation in five groups (*Operate*, *Explore*, *Configure*, *Access*, *System*), collapsible to an icon rail |
 | **Main area** | the current page |
 | **Right rail** | the command palette, the *Appearance* panel, and the *Agent Ovid* assistant |
 
 The drawer adapts to the screen: it shows full labels on wide screens, an
 icon rail on medium ones, and a hamburger menu on phones.
+
+### The left menu
+
+The menu is compact, so the whole list fits on a typical laptop screen.
+The *Navigation* size in the [Appearance](appearance.md) panel still
+overrides the default text size.
+
+When the menu is taller than the window, the list scrolls on its own and
+fades at the top or bottom edge. A **▾ N more** button at the bottom
+counts the items hidden below the fold; click it to scroll them into
+view. On load, the menu scrolls so the current page's item is visible.
+
+### Assistant panel
+
+The **Agent Ovid** button on the right rail opens the assistant. Its
+header has these controls:
+
+- **Session history** opens the list of saved conversations;
+- **Search sessions** searches their titles and messages;
+- the **context meter** shows how much of the model's context the last
+  turn used;
+- **New session** starts a fresh conversation.
+
+Every conversation is saved on the server as a session. See
+[Sessions, history & context](../07-assistant/sessions.md).
 
 ## Navigation map
 
@@ -28,8 +53,10 @@ Which links you see depends on your [role](../08-operations/auth.md).
 | --- | --- | --- | --- |
 | Operate | Dashboard | queue, recent runs, environment checks | [Dashboard](dashboard.md) |
 | | Submit | the graphical job builder | [Submit](submit.md) |
-| | Pipelines | saved configs, packages, formatters, mappers | [Pipelines](pipelines.md) |
+| | Pipelines | saved pipeline configs: run, edit, schedule | [Pipelines](pipelines.md) |
+| | Packages | installed pipeline packages, the pipeline builder, **Delete package** | [Pipeline packages](pipelines.md#pipeline-packages) |
 | | Navigator | every pipeline → table → field → function, and UDFs | [Pipeline navigator](navigator.md) |
+| | Transforms | the reusable transform library (UDFs) | [Transform library](pipelines.md#transform-library) |
 | | Jobs | history, live run pages, reports | [Jobs & runs](jobs.md) |
 | Explore | Data Space | browse, inspect and export any table | [Data Space](dataspace.md) |
 | | Reports | design, organise, share and export research reports | [Report Studio](../05-data/report-studio.md) |
@@ -70,6 +97,7 @@ role or secret file), it is a drop-down list rather than a text box.
   <a class="card" href="dashboard.md"><strong>Dashboard</strong><span>The at-a-glance view.</span></a>
   <a class="card" href="submit.md"><strong>Submit</strong><span>Build and launch a job visually.</span></a>
   <a class="card" href="pipelines.md"><strong>Pipelines</strong><span>Saved configs and pipeline packages.</span></a>
+  <a class="card" href="navigator.md"><strong>Navigator</strong><span>Field-level lineage and UDFs.</span></a>
   <a class="card" href="jobs.md"><strong>Jobs & runs</strong><span>History, live canvas, reports.</span></a>
   <a class="card" href="dataspace.md"><strong>Data Space</strong><span>Browse, inspect and export tables.</span></a>
   <a class="card" href="storage-and-warehouses.md"><strong>Storage & warehouses</strong><span>Connections, addresses, engines.</span></a>

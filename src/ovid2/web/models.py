@@ -774,6 +774,17 @@ class WriteResult(BaseModel):
     action: str = Field(..., description="One of ``created`` | ``updated`` | ``deleted``.")
 
 
+class PipelinePackageDeleteResult(BaseModel):
+    """Result of deleting a pipeline package (moved to the XDG trash)."""
+
+    name: str = Field(..., description="Package name.")
+    path: str = Field(..., description="Directory the package lived in.")
+    trash: str = Field(..., description="Where it was moved (restore with ``mv``).")
+    deleted_configs: list[str] = Field(
+        default_factory=list, description="Run configs deleted with the package."
+    )
+
+
 class ApprovalSummary(BaseModel):
     """One approval-gate row (destructive-op gate, Phase 3)."""
 
@@ -1920,6 +1931,9 @@ class LlmChatMessage(BaseModel):
 
     role: Literal["user", "assistant"]
     content: str = Field(..., max_length=32000)
+    kind: Literal["action"] | None = Field(
+        None, description="'action' marks an automatic follow-up (a proposal outcome)."
+    )
 
 
 class SavedAppearance(BaseModel):
@@ -1969,12 +1983,63 @@ class LlmUiContext(BaseModel):
 class LlmChatRequest(BaseModel):
     """Body of ``POST /api/v1/llm/chat/stream``.
 
-    The browser owns the conversation history (nothing is stored
-    server-side); every turn re-sends the trailing window.
+    Conversations are saved server-side as *sessions*
+    (:mod:`ovid2.web.services.llm_sessions_svc`). ``messages`` are the
+    **new** messages of this turn (normally one user message); the server
+    prepends the session's saved history. Without ``session_id`` a new
+    session is created and ``messages`` become its first messages.
     """
 
     messages: list[LlmChatMessage] = Field(..., min_length=1, max_length=40)
+    session_id: str | None = Field(None, pattern=r"^[a-f0-9]{16,32}$")
     ui_context: LlmUiContext | None = None
+
+
+class LlmSessionSummary(BaseModel):
+    """One saved assistant session (history list row)."""
+
+    session_id: str
+    title: str
+    title_source: str = Field(..., description="pending / fallback / llm / user.")
+    created_at: str
+    updated_at: str
+    message_count: int = 0
+    last_prompt_tokens: int = Field(0, description="Context size of the latest turn (tokens).")
+    total_prompt_tokens: int = 0
+    total_completion_tokens: int = 0
+    model: str | None = None
+    snippet: str | None = Field(None, description="Text around the first search match.")
+
+
+class LlmSessionMessage(BaseModel):
+    """One saved message of a session."""
+
+    seq: int = Field(..., description="Position in the session (1-based).")
+    role: Literal["user", "assistant"]
+    content: str
+    meta: dict[str, Any] | None = None
+
+
+class LlmSessionDetail(LlmSessionSummary):
+    """A saved session with its messages."""
+
+    messages: list[LlmSessionMessage] = Field(default_factory=list)
+
+
+class LlmSessionWrite(BaseModel):
+    """Body of ``POST`` / ``PATCH /api/v1/llm/sessions``."""
+
+    title: str = Field("", max_length=80)
+
+
+class LlmMessageMetaWrite(BaseModel):
+    """Body of ``PUT /api/v1/llm/sessions/{id}/messages/{seq}/meta``.
+
+    The browser's final view of an assistant message (tool chips, proposal
+    and UI-action states) so a reopened session renders as it was left.
+    """
+
+    meta: dict[str, Any] = Field(default_factory=dict)
 
 
 class LlmStatus(BaseModel):
@@ -1988,6 +2053,9 @@ class LlmStatus(BaseModel):
     confidence_threshold: float = 0.7
     fallback_to_general: bool = True
     tools_enabled: bool = False
+    context_window: int | None = Field(
+        None, description="Context window (tokens) of the general connection, for the meter."
+    )
 
 
 class LlmToolInfo(BaseModel):
@@ -2405,12 +2473,43 @@ class ReportOpsRequest(BaseModel):
         description="save=false only: apply to this unsaved working copy instead of the saved layout.",
     )
     render: bool = Field(False, description="save=false only: also return the render model.")
+    mode: str = Field(
+        "view",
+        pattern="^(view|edit)$",
+        description="Render mode: edit keeps hidden items (flagged) so the Studio can show them.",
+    )
+    private_notes: bool = Field(
+        False, description="Merge the caller's private notes into the returned model."
+    )
 
 
 class ReportPreviewRequest(BaseModel):
     """Body of ``POST /api/v1/reports/{id}/preview`` (render an unsaved layout)."""
 
     layout: dict[str, Any]
+    mode: str = Field("view", pattern="^(view|edit)$")
+    private_notes: bool = False
+
+
+class ReportPrivateNoteCreate(BaseModel):
+    """Body of ``POST /api/v1/reports/{id}/notes`` — a note only you can see."""
+
+    section_id: str = Field(..., max_length=40, description="Section the note sits in.")
+    after_block_id: str | None = Field(
+        None, max_length=40, description="Place after this block (omit = first in section)."
+    )
+    block: dict[str, Any] = Field(
+        ..., description="A note / info / checklist / text / callout block (report_layout.v1)."
+    )
+
+
+class ReportPrivateNoteUpdate(BaseModel):
+    """Body of ``PUT /api/v1/reports/{id}/notes/{note_id}``."""
+
+    block: dict[str, Any] | None = Field(None, description="Fields to change (merged).")
+    move: bool = Field(False, description="Re-anchor to section_id / after_block_id.")
+    section_id: str | None = Field(None, max_length=40)
+    after_block_id: str | None = Field(None, max_length=40)
 
 
 class ReportShareRequest(BaseModel):
@@ -2440,6 +2539,10 @@ class ReportExportRequest(BaseModel):
     block_id: str | None = Field(None, description="svg / png only: just this chart block.")
     layout: dict[str, Any] | None = Field(
         None, description="Export unsaved edits instead of the saved layout."
+    )
+    include_private_notes: bool = Field(
+        False,
+        description="Also export *your own* private notes marked 'include in export'.",
     )
 
 

@@ -1,6 +1,6 @@
 ---
 title: Agent Ovid (MCP)
-summary: Run the MCP server, connect a client, authenticate it, and understand its 100 tools.
+summary: Run the MCP server, connect a client, authenticate it, and understand its 101 tools.
 audience: [developer, admin, user]
 ---
 
@@ -55,11 +55,12 @@ escalate to `system_admin`.
 | Jobs & runs | `submit_run`, `submit_health`, `submit_move`, `list_jobs`, `get_job_log`, `run_timeline`, `cancel_job`, `rerun_job` |
 | Pipeline configs | `list_pipeline_configs`, `create_pipeline_config`, `run_pipeline_config`, `enable_pipeline_config` |
 | Packages & specs | `list_pipelines`, `scaffold_pipeline`, `get_formatter`, `save_formatter`, `validate_formatters`, `get_mapper`, `save_mapper`, `inspect_pipeline_lineage` |
+| Templates & bindings | `list_pipeline_templates`, `inspect_pipeline_template` (tables, engines, file patterns a template expects), `check_pipeline_bindings` (does a source match a template before you create the pipeline) |
 | Storage | `list_connections`, `create_connection`, `test_connection`, `list_addresses`, `storage_browse` |
 | Data Space | `ods_list`, `ods_resolve`, `ods_describe_table`, `ods_sample_table` (approval-gated) |
 | Engines | `list_engines`, `create_engine`, `test_engine` |
 | CDMs & health | `list_cdms`, `get_cdm`, `list_health_checks`, `list_health_packages`, `get_health_report` |
-| Transforms | `list_transforms`, `validate_transform` |
+| Transforms | `list_transforms`, `validate_transform`, plus the transform library: `list_transform_library`, `save_transform` (a reusable named chain / UDF), `assign_transform` (attach it to a package table) |
 | Admin | `list_secrets`, `write_secret`, `get_settings`, `install_status`, `list_approvals` |
 
 The full generated list, with arguments: [MCP tool reference](../10-reference/mcp-tools.md).
@@ -72,6 +73,9 @@ The full generated list, with arguments: [MCP tool reference](../10-reference/mc
   `202 awaiting_approval` until a human approves. Each approval is
   single-use and covers one table.
 - **Overwrites** become a `run.overwrite` approval.
-- **Destructive** operations go through the approval gate.
+- **Destructive** operations go through the approval gate. This
+  includes deleting a pipeline package (`pipeline_package.delete`).
+- MCP has **no** access to the in-panel assistant's [saved
+  sessions](sessions.md). The service token is refused.
 
 See [Approvals](approvals.md).

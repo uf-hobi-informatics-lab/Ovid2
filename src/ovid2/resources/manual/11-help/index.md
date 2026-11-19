@@ -53,6 +53,22 @@ click **Run**, drafts wait for ▶, and reading rows needs your approval
 for each table. It never sees secrets. See
 [Assistant & agents](../07-assistant/index.md).
 
+### Where are my assistant chats saved? Can I find an old one?
+
+On the Ovid2 server, in the web database, not in your browser. Every chat
+is a saved **session** that survives reloads, other browsers and server
+restarts. Open **History** in the assistant panel to reopen one, or
+**Search** to find it by any word in its title or messages. Sessions are
+kept until you delete them. See
+[Sessions, history & context](../07-assistant/sessions.md).
+
+### Why does everyone see the same assistant history?
+
+Sign-in is off, so every visitor is the same `anonymous` user and shares
+one history. [Enable sign-in](../08-operations/auth.md) and each person
+gets their own. See
+[Who can see my sessions](../07-assistant/sessions.md#who-can-see-my-sessions).
+
 ### Is the panel secure out of the box?
 
 No. Auth is **off** by default and the panel binds to loopback. Before

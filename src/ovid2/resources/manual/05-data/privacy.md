@@ -35,9 +35,26 @@ Every export and every agent row access is written to the audit log.
 - **Full-table exports** run in a container. They never pass through the
   web process.
 - **The assistant** receives tool results such as logs, configs and
-  metadata. Row-level endpoints are excluded from its tools. Its
-  conversation stays in your browser, and only metadata is audited. Don't
-  paste PHI into the chat.
+  metadata. Row-level endpoints are excluded from its tools. Don't paste
+  PHI into the chat.
+
+## Assistant conversations
+
+Conversations with the assistant are saved **on the server** as
+*sessions*, not in the browser. See
+[Sessions, history & context](../07-assistant/sessions.md).
+
+| Question | Answer |
+| --- | --- |
+| Where are they stored? | in the web database (`scheduler.db` under `$XDG_STATE_HOME/ovid2/`), with each session's title and token counts. Protect that file like the rest of the state directory. |
+| Who can see them? | only the user who had the conversation; the assistant and MCP tokens cannot read them. With sign-in off, everyone is the same `anonymous` user and shares **one** history. |
+| What is audited? | metadata only: actor, session id, model, token counts, latency and tool names. Message text never goes into the audit log. |
+| How long are they kept? | until the user deletes them. Nothing expires automatically. |
+
+> [!CAUTION]
+> With sign-in off, anyone who can reach the panel can open every saved
+> conversation. Turn on [sign-in](../08-operations/auth.md) before people
+> discuss sensitive work with the assistant.
 
 ## Retention
 

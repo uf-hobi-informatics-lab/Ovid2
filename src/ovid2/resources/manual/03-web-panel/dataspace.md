@@ -37,6 +37,32 @@ Tabs:
   Databricks `SHOW CREATE TABLE`, or a reconstruction for Postgres, SQL
   Server and Access.
 
+## What each store supports
+
+Every storage type can be browsed, described, counted, sampled and
+exported. Some types need an optional extra installed on the host that
+runs the web panel. Without it, the page shows *not available* instead of
+an error.
+
+| Storage type | Browse | Fields / rows | Count rows | Sample data | Export | Definition tab | Install |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `disc` | ✓ | ✓ csv / tsv / txt (+ `.gz`), Parquet, JSON lines, part directories | ✓ | ✓ | ✓ | — | base |
+| `s3` | ✓ | ✓ as disc (ranged reads) | ✓ | ✓ | ✓ | — | `ovid2[s3]` |
+| `azure_blob` | ✓ | ✓ as disc (ranged reads) | ✓ | ✓ | ✓ | — | `ovid2[azure]` |
+| `gcs` | ✓ | ✓ as disc (ranged reads) | ✓ | ✓ | ✓ | — | `ovid2[gcs]` |
+| `snowflake` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ `GET_DDL` | base |
+| `postgres` | ✓ | ✓ (row estimate from statistics) | ✓ | ✓ | ✓ | ✓ reconstructed | `ovid2[postgres]` |
+| `mssql` | ✓ | ✓ (partition-statistics counts) | ✓ | ✓ | ✓ | ✓ reconstructed | `ovid2[mssql]` |
+| `databricks` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ `SHOW CREATE TABLE` | `ovid2[databricks]` |
+| `access` | ✓ | ✓ (no Spark needed) | ✓ | ✓ | ✓ | ✓ reconstructed | `ovid2[access]` plus the UCanAccess jars |
+
+Export to CSV and Excel works with the base install. PDF and Word export
+also need `ovid2[export]`. For example:
+
+```bash
+pip install 'ovid2[s3,export]'
+```
+
 ## Export
 
 **Export…** opens a dialog:

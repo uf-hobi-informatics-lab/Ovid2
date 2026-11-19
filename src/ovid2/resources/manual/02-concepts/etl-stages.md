@@ -1,25 +1,34 @@
 ---
-title: The five ETL stages
-summary: Format, deduplicate, map, fix and write — what each stage does, guarantees and is configured by.
+title: The ETL stages
+summary: Format, deduplicate, transform, map, fix and write — what each stage does, guarantees and is configured by.
 audience: [user, researcher, developer]
 ---
 
-![The five-stage ETL](../assets/05-five-stage.svg)
+![The ETL stages](../assets/05-five-stage.svg)
 
-An `etl` job runs these stages **per table**, in this order. Together they
-form **one lazy plan**: nothing is computed until the final write, and
-nothing is written to intermediate files.
+An `etl` job runs five transformation stages **per table**, in this
+order, and then writes the result. Together they form **one lazy plan**:
+nothing is computed until the final write, and nothing is written to
+intermediate files.
 
 | # | Stage | Configured by | Guarantee |
 | --- | --- | --- | --- |
 | 1 | **Format** | `formatters/<table>.yaml` | output has exactly the CDM table's columns |
 | 2 | **Deduplicate** | the CDM's composite key | no two rows share a key |
-| 3 | **Map** | `mappers/<table>.yaml` + `dictionaries.py` | source codes translated to standard values |
-| 4 | **Fix** | `fixer_configs.py` | documented corrections applied, each one logged |
-| 5 | **Write** | the output address | one write per table, at the exact location |
+| 3 | **Transform** | `transforms/assignments.yaml` | the assigned transform chains applied; skipped when nothing is assigned |
+| 4 | **Map** | `mappers/<table>.yaml` + `dictionaries.py` | source codes translated to standard values |
+| 5 | **Fix** | `fixer_configs.yaml` or `fixer_configs.py` | documented corrections applied, each one logged |
+| — | **Write** | the output address | one write per table, at the exact location |
+
+> [!NOTE]
+> The diagram above shows the stages that every pipeline uses. The
+> transform stage sits between deduplicate and map and does nothing in a
+> pipeline that has no assignments.
 
 Pick stages with `--transformations` (CLI) or *Options → Stages*
-(web). `all` runs every stage; `format deduplicate` stops before mapping.
+(web). `all` runs every stage. Stages always run in the order above,
+whatever order you list them in. `format deduplicate` stops before
+transform and map. Write always runs; it isn't a stage you select.
 
 ## 1 · Format
 
@@ -47,14 +56,37 @@ skewed data fast without changing the result:
 - **Salted two-stage dedup.** A hot key is spread across
   `OVID2_DEDUP_SALT_BUCKETS` (default 32) partitions on Spark.
 
-## 3 · Map
+## 3 · Transform
+
+Applies the general-purpose **transform chains** assigned to the table in
+the pipeline's `transforms/assignments.yaml`. These are your user-defined
+transforms: trimming, null standardisation, computed columns with
+`derive_column`, and so on. Chains assigned to `"*"` run on every table,
+before the table's own chains:
+
+```yaml
+v: 1
+tables:
+  "*":
+    - spec: clean_whitespace_and_nulls
+  demographic:
+    - spec: normalise_sex
+```
+
+A chain is looked up pipeline-private first, then in your user library
+(`$XDG_CONFIG_HOME/ovid2/transforms/`), then among the shipped chains. A
+pipeline with no assignments skips the stage, so `all` is always safe.
+Every op is a lazy column expression and runs on every engine.
+→ [Transforms](../06-authoring/transforms.md)
+
+## 4 · Map
 
 Mapper ops translate column values: dictionary lookups, vocabulary lookups,
 deterministic hashing of identifiers with a per-pipeline salt, case
 normalisation, regex replacement, literals, and chains from the transforms
 library. → [Mapper specs](../06-authoring/mappers.md)
 
-## 4 · Fix
+## 5 · Fix
 
 Each table runs its **fixer chain** in order. Fixers enforce referential
 and clinical logic, for example:
@@ -68,7 +100,7 @@ a fixer fails, the table keeps its pre-fix data instead of losing rows
 silently. → [Fixer chains](../06-authoring/fixers.md) ·
 [Fixer catalogue](../10-reference/fixers.md)
 
-## 5 · Write
+## Write
 
 The output driver writes each table **once** to the exact output address:
 

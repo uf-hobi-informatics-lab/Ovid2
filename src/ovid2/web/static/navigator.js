@@ -39,6 +39,7 @@ const tip = (text) => (window.Ovid2HelpTip ? window.Ovid2HelpTip.html(text) : ""
 const saved = (() => { try { return JSON.parse(localStorage.getItem(STORE) || "{}"); } catch (_e) { return {}; } })();
 const state = {
   groupBy: root ? root.dataset.groupBy || saved.groupBy || "cdm" : "cdm",
+  includeUnused: root ? root.dataset.includeUnused === "true" || !!saved.includeUnused : false,
   open: new Set(saved.open || []),
   stages: new Set(saved.stages || STAGES),
   only: "",
@@ -49,7 +50,7 @@ const state = {
 const persist = () => {
   try {
     localStorage.setItem(STORE, JSON.stringify({
-      groupBy: state.groupBy, open: [...state.open].slice(-400), stages: [...state.stages], view: state.view,
+      groupBy: state.groupBy, includeUnused: state.includeUnused, open: [...state.open].slice(-400), stages: [...state.stages], view: state.view,
     }));
   } catch (_e) { /* storage full / disabled */ }
 };
@@ -109,7 +110,8 @@ function renderTree() {
       rowHtml({ caret: true, icon: "", name: g.label, badge: g.pipelines.length, cls: "is-group" }) +
       '<div class="nv-children" role="group"' + (open ? "" : " hidden") + ">" + g.pipelines.map((pkg) => {
         const pk = "p:" + pkg.pipeline;
-        const flags = (pkg.editable ? "" : '<span class="nv-flag" title="Generated legacy-parity port — read-only">ro</span>') +
+        const flags = (pkg.unused ? '<span class="nv-flag is-info" title="No run config uses this package">unused</span>' : "") +
+          (pkg.editable ? "" : '<span class="nv-flag" title="Generated legacy-parity port — read-only">ro</span>') +
           (pkg.has_transforms ? '<span class="nv-flag is-udf" title="Has transform assignments">ƒ</span>' : "");
         return '<div class="nv-node nv-pkg" role="treeitem" aria-expanded="false" data-node="pipeline" data-key="' + esc(pk) +
           '" data-pipeline="' + esc(pkg.pipeline) + '" data-editable="' + pkg.editable + '" data-search="' +
@@ -279,6 +281,7 @@ function setUrl(push) {
   const s = state.sel;
   const qs = new URLSearchParams();
   if (state.groupBy !== "cdm") qs.set("group_by", state.groupBy);
+  if (state.includeUnused) qs.set("include_unused", "true");
   if (s.p) qs.set("p", s.p);
   if (s.t) qs.set("t", s.t);
   if (s.f) qs.set("f", s.f);
@@ -532,7 +535,28 @@ function drawPackagePanel(summary, facts) {
     "<dt>pipelines</dt><dd>" + (cfgs || '<span class="nw-muted">none use it yet</span>') + "</dd>" +
     (summary.multi_table_fixes.length ? "<dt>multi-table fixes</dt><dd>" + summary.multi_table_fixes.map((x) => '<span class="nv-chip is-fix">' + esc(x) + "</span>").join(" ") + "</dd>" : "") +
     "<dt>editing</dt><dd>" + (summary.editable ? (CAN_WRITE ? "editable" : "read-only (needs manage-config)") : "generated port — read-only") + "</dd></dl>" +
-    '<p class="nv-links small"><a href="/pipeline-packages/' + enc(summary.pipeline) + '">package hub</a> · <a href="/pipeline-packages/' + enc(summary.pipeline) + '/builder">builder</a></p>');
+    '<p class="nv-links small"><a href="/pipeline-packages/' + enc(summary.pipeline) + '">package hub</a> · <a href="/pipeline-packages/' + enc(summary.pipeline) + '/builder">builder</a></p>' +
+    (CAN_WRITE && !facts.protected ? '<p><button type="button" class="button small danger" data-nv-delete-pkg="' + esc(summary.pipeline) + '">Delete package</button> ' +
+      tip("Moves the package folder to the trash ($XDG_STATE_HOME/ovid2/trash/pipelines/, restore with mv) together with the run configs that use it.") + "</p>" : ""));
+}
+
+async function deletePackage(p) {
+  const facts = pkgFacts(p) || {};
+  const cfgs = (facts.configs || []).map((c) => c.name);
+  const msg = "Delete pipeline package " + p + (cfgs.length ? " and its run config(s) " + cfgs.join(", ") : "") + "?\nIt is moved to the trash folder.";
+  if (!window.confirm(msg)) return;
+  const fd = new FormData();
+  const tok = (() => { try { return JSON.parse(document.body.getAttribute("hx-headers") || "{}")["X-CSRF-Token"]; } catch (_e) { return ""; } })();
+  if (tok) fd.append("csrf_token", tok);
+  if (cfgs.length) fd.append("with_configs", "1");
+  fd.append("next", "/navigator");
+  const r = await fetch("/pipeline-packages/" + enc(p) + "/delete", { method: "POST", body: fd, credentials: "same-origin", redirect: "manual", headers: tok ? { "X-CSRF-Token": tok } : {} });
+  if (r.type !== "opaqueredirect" && !r.ok) {
+    let d = ""; try { d = (await r.json()).detail; } catch (_e) { d = r.statusText; }
+    window.alert("Delete failed: " + (typeof d === "string" ? d : JSON.stringify(d)));
+    return;
+  }
+  document.dispatchEvent(new CustomEvent("ovid2:pipelines-changed", { detail: { deleted: p } }));
 }
 
 function drawTablePanel(L) {
@@ -709,8 +733,25 @@ async function showStep(L, id) {
 /* --------------------------------------------------------------- boot */
 
 async function loadTree() {
-  cache.tree = await api("GET", "/navigator?group_by=" + enc(state.groupBy));
+  cache.tree = await api("GET", "/navigator?group_by=" + enc(state.groupBy) + (state.includeUnused ? "&include_unused=true" : ""));
+  const n = $("[data-nv-unused-count]");
+  if (n) n.textContent = String(cache.tree.unused_count || 0);
   renderTree();
+}
+
+/* Re-read the package list (packages / run configs created or deleted
+ * elsewhere — another tab, the CLI, git). Keeps the selection when the
+ * package still exists, clears it otherwise. Throttled. */
+let lastRefresh = Date.now();
+async function refreshTree({ force = false } = {}) {
+  if (!force && Date.now() - lastRefresh < 2000) return;
+  lastRefresh = Date.now();
+  const before = JSON.stringify(cache.tree && cache.tree.groups);
+  try { await loadTree(); } catch (_e) { return; }
+  if (!force && JSON.stringify(cache.tree.groups) === before) return;
+  for (const k of Object.keys(cache.pkg)) if (!pkgFacts(k)) invalidate(k);
+  if (state.sel.p && !pkgFacts(state.sel.p)) { await select({}, { push: false, reveal: false }); return; }
+  if (state.sel.p) { await revealPath(state.sel); markSelection(); }
 }
 
 function rowsVisible() {
@@ -719,8 +760,24 @@ function rowsVisible() {
 
 async function boot() {
   try { cache.tree = JSON.parse($("#nv-tree-data").textContent); } catch (_e) { cache.tree = null; }
-  if (!cache.tree || cache.tree.group_by !== state.groupBy) await loadTree(); else renderTree();
+  if (!cache.tree || cache.tree.group_by !== state.groupBy || !!cache.tree.include_unused !== state.includeUnused) await loadTree(); else renderTree();
   $("[data-nv-group]").value = state.groupBy;
+  const unusedCb = $("[data-nv-unused]");
+  if (unusedCb) {
+    unusedCb.checked = state.includeUnused;
+    unusedCb.addEventListener("change", async () => {
+      state.includeUnused = unusedCb.checked;
+      persist();
+      setUrl(false);
+      await refreshTree({ force: true });
+    });
+  }
+  // Pick up packages / configs created or deleted elsewhere as soon as the
+  // operator comes back to this tab.
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshTree(); });
+  window.addEventListener("focus", () => refreshTree());
+  window.addEventListener("pageshow", (e) => { if (e.persisted) refreshTree({ force: true }); });
+  document.addEventListener("ovid2:pipelines-changed", () => refreshTree({ force: true }));
   for (const cb of $$("[data-nv-stage]")) cb.checked = state.stages.has(cb.dataset.nvStage);
 
   const tree = $("#nv-tree");
@@ -797,6 +854,8 @@ async function boot() {
   // Chips / field links anywhere in the main column.
   const main = $(".nv-main");
   main.addEventListener("click", async (e) => {
+    const del = e.target.closest("[data-nv-delete-pkg]");
+    if (del) { await deletePackage(del.dataset.nvDeletePkg); return; }
     const udfF = e.target.closest("[data-udf-field]");
     const udfT = e.target.closest("[data-udf-table]");
     if (udfF || udfT) {

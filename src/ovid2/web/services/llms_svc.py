@@ -338,7 +338,35 @@ def status() -> LlmStatus:
         confidence_threshold=llm.confidence_threshold,
         fallback_to_general=llm.fallback_to_general,
         tools_enabled=llm.tools_enabled,
+        context_window=context_window(llm.general),
     )
+
+
+def context_window(conn: str | None) -> int | None:
+    """Return the ``context_window`` arg of connection ``conn`` (tokens).
+
+    Falls back to the catalogue default (128000) when the connection does
+    not set it; ``None`` when no connection is routed.
+    """
+    if not conn:
+        return None
+    detail = get_llm(conn)
+    if detail is None:
+        return None
+    raw = detail.args.get("context_window")
+    if raw in (None, ""):
+        try:
+            specs = _llms.llm_field_spec(detail.provider).get("args", [])
+        except KeyError:
+            specs = []
+        for spec in specs:
+            if spec.get("name") == "context_window":
+                raw = spec.get("default")
+    try:
+        value = int(str(raw))
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
 
 
 __all__ = [

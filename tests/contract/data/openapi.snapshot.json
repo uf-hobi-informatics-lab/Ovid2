@@ -2294,6 +2294,18 @@
         "title": "LlmFieldSpec",
         "type": "object"
       },
+      "LlmMessageMetaWrite": {
+        "description": "Body of ``PUT /api/v1/llm/sessions/{id}/messages/{seq}/meta``.\n\nThe browser's final view of an assistant message (tool chips, proposal\nand UI-action states) so a reopened session renders as it was left.",
+        "properties": {
+          "meta": {
+            "additionalProperties": true,
+            "title": "Meta",
+            "type": "object"
+          }
+        },
+        "title": "LlmMessageMetaWrite",
+        "type": "object"
+      },
       "LlmProviderSpec": {
         "description": "Field-spec catalogue entry for one LLM provider.",
         "properties": {
@@ -2336,6 +2348,225 @@
         "title": "LlmProviderSpec",
         "type": "object"
       },
+      "LlmSessionDetail": {
+        "description": "A saved session with its messages.",
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "last_prompt_tokens": {
+            "default": 0,
+            "description": "Context size of the latest turn (tokens).",
+            "title": "Last Prompt Tokens",
+            "type": "integer"
+          },
+          "message_count": {
+            "default": 0,
+            "title": "Message Count",
+            "type": "integer"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/LlmSessionMessage"
+            },
+            "title": "Messages",
+            "type": "array"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "snippet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Text around the first search match.",
+            "title": "Snippet"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "title_source": {
+            "description": "pending / fallback / llm / user.",
+            "title": "Title Source",
+            "type": "string"
+          },
+          "total_completion_tokens": {
+            "default": 0,
+            "title": "Total Completion Tokens",
+            "type": "integer"
+          },
+          "total_prompt_tokens": {
+            "default": 0,
+            "title": "Total Prompt Tokens",
+            "type": "integer"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "title",
+          "title_source",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "LlmSessionDetail",
+        "type": "object"
+      },
+      "LlmSessionMessage": {
+        "description": "One saved message of a session.",
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "seq": {
+            "description": "Position in the session (1-based).",
+            "title": "Seq",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "seq",
+          "role",
+          "content"
+        ],
+        "title": "LlmSessionMessage",
+        "type": "object"
+      },
+      "LlmSessionSummary": {
+        "description": "One saved assistant session (history list row).",
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "last_prompt_tokens": {
+            "default": 0,
+            "description": "Context size of the latest turn (tokens).",
+            "title": "Last Prompt Tokens",
+            "type": "integer"
+          },
+          "message_count": {
+            "default": 0,
+            "title": "Message Count",
+            "type": "integer"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "snippet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Text around the first search match.",
+            "title": "Snippet"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "title_source": {
+            "description": "pending / fallback / llm / user.",
+            "title": "Title Source",
+            "type": "string"
+          },
+          "total_completion_tokens": {
+            "default": 0,
+            "title": "Total Completion Tokens",
+            "type": "integer"
+          },
+          "total_prompt_tokens": {
+            "default": 0,
+            "title": "Total Prompt Tokens",
+            "type": "integer"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "title",
+          "title_source",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "LlmSessionSummary",
+        "type": "object"
+      },
+      "LlmSessionWrite": {
+        "description": "Body of ``POST`` / ``PATCH /api/v1/llm/sessions``.",
+        "properties": {
+          "title": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "title": "LlmSessionWrite",
+        "type": "object"
+      },
       "LlmStatus": {
         "description": "Assistant availability, consumed by the right-panel widget.",
         "properties": {
@@ -2343,6 +2574,18 @@
             "default": 0.7,
             "title": "Confidence Threshold",
             "type": "number"
+          },
+          "context_window": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Context window (tokens) of the general connection, for the meter.",
+            "title": "Context Window"
           },
           "enabled": {
             "title": "Enabled",
@@ -3760,6 +4003,41 @@
         "title": "PipelineFilePreview",
         "type": "object"
       },
+      "PipelinePackageDeleteResult": {
+        "description": "Result of deleting a pipeline package (moved to the XDG trash).",
+        "properties": {
+          "deleted_configs": {
+            "description": "Run configs deleted with the package.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Deleted Configs",
+            "type": "array"
+          },
+          "name": {
+            "description": "Package name.",
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "description": "Directory the package lived in.",
+            "title": "Path",
+            "type": "string"
+          },
+          "trash": {
+            "description": "Where it was moved (restore with ``mv``).",
+            "title": "Trash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "trash"
+        ],
+        "title": "PipelinePackageDeleteResult",
+        "type": "object"
+      },
       "PipelinePlanResponse": {
         "description": "What a pipeline would run: tables, transformation stages, fixers.\n\nBacks ``GET /api/v1/pipelines/{pipeline}/plan`` \u2014 the submit-page\ntable/transformation picker. Reproduces the ``--tables all`` /\n``--transformations all`` expansion the pipeline performs at run\ntime, without importing the (forbidden) ``ovid2.core`` tier.",
         "properties": {
@@ -4289,6 +4567,12 @@
             "title": "Format",
             "type": "string"
           },
+          "include_private_notes": {
+            "default": false,
+            "description": "Also export *your own* private notes marked 'include in export'.",
+            "title": "Include Private Notes",
+            "type": "boolean"
+          },
           "layout": {
             "anyOf": [
               {
@@ -4382,6 +4666,13 @@
             "description": "save=false only: apply to this unsaved working copy instead of the saved layout.",
             "title": "Layout"
           },
+          "mode": {
+            "default": "view",
+            "description": "Render mode: edit keeps hidden items (flagged) so the Studio can show them.",
+            "pattern": "^(view|edit)$",
+            "title": "Mode",
+            "type": "string"
+          },
           "ops": {
             "items": {
               "additionalProperties": true,
@@ -4391,6 +4682,12 @@
             "minItems": 1,
             "title": "Ops",
             "type": "array"
+          },
+          "private_notes": {
+            "default": false,
+            "description": "Merge the caller's private notes into the returned model.",
+            "title": "Private Notes",
+            "type": "boolean"
           },
           "render": {
             "default": false,
@@ -4418,12 +4715,109 @@
             "additionalProperties": true,
             "title": "Layout",
             "type": "object"
+          },
+          "mode": {
+            "default": "view",
+            "pattern": "^(view|edit)$",
+            "title": "Mode",
+            "type": "string"
+          },
+          "private_notes": {
+            "default": false,
+            "title": "Private Notes",
+            "type": "boolean"
           }
         },
         "required": [
           "layout"
         ],
         "title": "ReportPreviewRequest",
+        "type": "object"
+      },
+      "ReportPrivateNoteCreate": {
+        "description": "Body of ``POST /api/v1/reports/{id}/notes`` \u2014 a note only you can see.",
+        "properties": {
+          "after_block_id": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Place after this block (omit = first in section).",
+            "title": "After Block Id"
+          },
+          "block": {
+            "additionalProperties": true,
+            "description": "A note / info / checklist / text / callout block (report_layout.v1).",
+            "title": "Block",
+            "type": "object"
+          },
+          "section_id": {
+            "description": "Section the note sits in.",
+            "maxLength": 40,
+            "title": "Section Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "section_id",
+          "block"
+        ],
+        "title": "ReportPrivateNoteCreate",
+        "type": "object"
+      },
+      "ReportPrivateNoteUpdate": {
+        "description": "Body of ``PUT /api/v1/reports/{id}/notes/{note_id}``.",
+        "properties": {
+          "after_block_id": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After Block Id"
+          },
+          "block": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Fields to change (merged).",
+            "title": "Block"
+          },
+          "move": {
+            "default": false,
+            "description": "Re-anchor to section_id / after_block_id.",
+            "title": "Move",
+            "type": "boolean"
+          },
+          "section_id": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Id"
+          }
+        },
+        "title": "ReportPrivateNoteUpdate",
         "type": "object"
       },
       "ReportShareRequest": {
@@ -8932,6 +9326,309 @@
         ]
       }
     },
+    "/api/v1/llm/sessions": {
+      "get": {
+        "description": "Newest first. With ``q`` every keyword must match the title or a message.",
+        "operationId": "api_list_llm_sessions_api_v1_llm_sessions_get",
+        "parameters": [
+          {
+            "description": "Keywords (title + messages).",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Keywords (title + messages).",
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LlmSessionSummary"
+                  },
+                  "title": "Response Api List Llm Sessions Api V1 Llm Sessions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List (or keyword-search) the current user's assistant sessions",
+        "tags": [
+          "v1"
+        ]
+      },
+      "post": {
+        "description": "Create a session; its title is generated after the first prompt unless given.",
+        "operationId": "api_create_llm_session_api_v1_llm_sessions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LlmSessionWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmSessionSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start a new, empty assistant session",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/llm/sessions/{session_id}": {
+      "delete": {
+        "description": "Delete the caller's own conversation (user data, not a gated resource).",
+        "operationId": "api_delete_llm_session_api_v1_llm_sessions__session_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete one of the current user's assistant sessions",
+        "tags": [
+          "v1"
+        ]
+      },
+      "get": {
+        "description": "Return the session and its messages (404 when it is not the caller's).",
+        "operationId": "api_get_llm_session_api_v1_llm_sessions__session_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmSessionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get one of the current user's assistant sessions with its messages",
+        "tags": [
+          "v1"
+        ]
+      },
+      "patch": {
+        "description": "Set a user-chosen title (the generated title never overwrites it).",
+        "operationId": "api_rename_llm_session_api_v1_llm_sessions__session_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LlmSessionWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmSessionSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rename one of the current user's assistant sessions",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/llm/sessions/{session_id}/messages/{seq}/meta": {
+      "put": {
+        "description": "Keep proposal / UI-action states (ran, dismissed, undone) for reopening.",
+        "operationId": "api_put_llm_message_meta_api_v1_llm_sessions__session_id__messages__seq__meta_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "seq",
+            "required": true,
+            "schema": {
+              "title": "Seq",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LlmMessageMetaWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Store the final display state of an assistant message",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
     "/api/v1/llm/status": {
       "get": {
         "description": "Return whether the assistant is enabled and which models it routes to.",
@@ -9352,7 +10049,7 @@
     },
     "/api/v1/navigator": {
       "get": {
-        "description": "Return ``{group_by, group_by_choices, groups: [{key, label, pipelines}]}``.",
+        "description": "Return ``{group_by, group_by_choices, include_unused, unused_count, groups}``.\n\nRead fresh from disk on every call and marked ``no-store`` so a created\nor deleted package / run config shows up on the next request.",
         "operationId": "api_navigator_api_v1_navigator_get",
         "parameters": [
           {
@@ -9365,6 +10062,18 @@
               "description": "Grouping axis: cdm, profile, kind, template or cdm_profile.",
               "title": "Group By",
               "type": "string"
+            }
+          },
+          {
+            "description": "Also list packages that no run config uses (template sources always show).",
+            "in": "query",
+            "name": "include_unused",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also list packages that no run config uses (template sources always show).",
+              "title": "Include Unused",
+              "type": "boolean"
             }
           }
         ],
@@ -9461,6 +10170,61 @@
           }
         },
         "summary": "Scaffold a new pipeline package from a template",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/pipeline-packages/{name}": {
+      "delete": {
+        "description": "Move ``ovid2_pipelines/<name>/`` to the XDG trash.\n\nGated (``pipeline_package.delete``): returns 202 with an\n``approval_id`` until a human approves. 409 when run configs still use\nthe package and ``with_configs`` is false; 400 for a protected\n(template-source) package; 404 when unknown.",
+        "operationId": "api_delete_pipeline_package_api_v1_pipeline_packages__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Also delete every run config that uses the package.",
+            "in": "query",
+            "name": "with_configs",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also delete every run config that uses the package.",
+              "title": "With Configs",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelinePackageDeleteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete a pipeline package (moved to the trash)",
         "tags": [
           "v1"
         ]
@@ -12472,6 +13236,220 @@
         ]
       }
     },
+    "/api/v1/reports/{report_id}/notes": {
+      "get": {
+        "description": "Return the caller's own private notes; agents get 403.",
+        "operationId": "api_list_report_notes_api_v1_reports__report_id__notes_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {},
+                  "title": "Response Api List Report Notes Api V1 Reports  Report Id  Notes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Your private notes on a report (visible to you only)",
+        "tags": [
+          "v1"
+        ]
+      },
+      "post": {
+        "description": "Viewers may annotate too: the note never enters the shared layout.",
+        "operationId": "api_create_report_note_api_v1_reports__report_id__notes_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportPrivateNoteCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Create Report Note Api V1 Reports  Report Id  Notes Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add a private note to a report (only you will see it)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/reports/{report_id}/notes/{note_id}": {
+      "delete": {
+        "description": "Personal annotation, owner-only; audited (no approval gate: not shared data).",
+        "operationId": "api_delete_report_note_api_v1_reports__report_id__notes__note_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "note_id",
+            "required": true,
+            "schema": {
+              "title": "Note Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Delete Report Note Api V1 Reports  Report Id  Notes  Note Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete one of your private notes",
+        "tags": [
+          "v1"
+        ]
+      },
+      "put": {
+        "description": "Merge ``block`` fields; with ``move`` re-anchor the note.",
+        "operationId": "api_update_report_note_api_v1_reports__report_id__notes__note_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "note_id",
+            "required": true,
+            "schema": {
+              "title": "Note Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportPrivateNoteUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Update Report Note Api V1 Reports  Report Id  Notes  Note Id  Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit or move one of your private notes",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
     "/api/v1/reports/{report_id}/ops": {
       "post": {
         "description": "Apply ops atomically; ``save=false`` only validates and returns the layout.",
@@ -12594,6 +13572,29 @@
             "schema": {
               "title": "Report Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "default": "view",
+              "pattern": "^(view|edit)$",
+              "title": "Mode",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Merge your own private notes.",
+            "in": "query",
+            "name": "private_notes",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Merge your own private notes.",
+              "title": "Private Notes",
+              "type": "boolean"
             }
           }
         ],

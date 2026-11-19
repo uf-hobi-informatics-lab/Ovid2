@@ -51,6 +51,20 @@ Connection
 : *How* to reach a storage system: type, endpoint, and a reference to its
   secret. Reused by many addresses. → [Storage](../02-concepts/storage.md)
 
+Context rot
+: An assistant's answers getting worse in a long chat as the
+  conversation nears the model's [context window](#context-window):
+  earlier details are lost, or it contradicts or repeats itself. Fix it
+  with a new [session](#session-assistant).
+  → [Sessions, history & context](../07-assistant/sessions.md#the-context-meter)
+
+Context window
+: The most tokens a language model reads per request: system prompt,
+  tool catalogue, saved conversation and new message. It is set by the
+  LLM connection's `context_window` (default `128000`), and shown by the
+  assistant's context meter.
+  → [Sessions, history & context](../07-assistant/sessions.md#the-context-meter)
+
 Contract test
 : A test under `tests/contract/` that enforces a repository-wide
   invariant. → [Invariants](../09-developers/invariants.md)
@@ -77,6 +91,12 @@ Draft job
 Driver
 : The code that talks to one storage type (`disc`, `s3`, `snowflake`, …).
   → [Drivers & engines](../10-reference/drivers-engines.md)
+
+DuckFrame
+: The lazy, PySpark-shaped DataFrame of the `duckdb` engine
+  (`core/engines/_duck_frame.py`). Shared code written against the engine
+  DSL runs on it unchanged, and nothing executes until the final write.
+  → [Engines](../02-concepts/engines.md)
 
 Engine
 : The compute backend: `pyspark`, `databricks_spark`, `snowpark` or
@@ -131,6 +151,12 @@ Navigator
 
 ## P–Z
 
+Package trash
+: Where a deleted pipeline package goes:
+  `$XDG_STATE_HOME/ovid2/trash/pipelines/<name>-<timestamp>/`, with the
+  run configs deleted alongside it. Restore it with `mv`.
+  → [Pipeline navigator](../03-web-panel/navigator.md)
+
 Pipeline (package)
 : A Python package under `ovid2_pipelines.<name>` holding one source's
   formatters, mappers, dictionaries and fixer chains.
@@ -143,6 +169,12 @@ Pipeline config
 Report cycle (package)
 : A named set of EDC checks for one quarterly release (e.g. `20r1`).
 
+Session (assistant)
+: One saved conversation with the in-panel assistant: its messages, a
+  generated title and token counters. Sessions are stored on the server,
+  reopened from the history menu and found by keyword search.
+  → [Sessions, history & context](../07-assistant/sessions.md)
+
 Stager
 : The bridge that moves data between an engine and a driver (e.g. Snowpark
   ↔ S3).
@@ -150,6 +182,12 @@ Stager
 Transform
 : A CDM-agnostic DataFrame op (`trim`, `dedup`, `unpivot`, …) from the
   public library. → [Transforms](../06-authoring/transforms.md)
+
+Transform stage
+: The optional ETL stage between *deduplicate* and *map* that applies the
+  transform chains assigned in `<pipeline>/transforms/assignments.yaml`.
+  A pipeline without assignments skips it.
+  → [Transforms](../06-authoring/transforms.md#assign-it-to-a-pipeline-recommended)
 
 Trigger
 : How a pipeline config starts a job: `manual`, `cron`, `interval` or

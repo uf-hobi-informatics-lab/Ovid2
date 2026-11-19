@@ -26,16 +26,22 @@ from jsonschema import Draft202012Validator
 from ovid2.reports.catalogue import get_chart, get_theme, list_themes, load_schema
 
 __all__ = [
+    "FREE_BLOCK_TYPES",
     "MAX_OPS",
     "OPS",
+    "PRIVATE_NOTE_TYPES",
+    "STYLE_KEYS",
     "LayoutError",
     "apply_ops",
+    "as_template",
     "block_index",
     "empty_layout",
     "iter_blocks",
+    "merge_blocks",
     "new_id",
     "normalise",
     "outline",
+    "validate_free_block",
     "validate_layout",
 ]
 
@@ -60,7 +66,7 @@ _ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
 _SLUG_STRIP = re.compile(r"[^a-z0-9]+")
 
 _REPORT_KEYS = {"title", "subtitle", "description", "theme", "page", "options"}
-_SECTION_KEYS = {"title", "description", "visible", "page_break_before"}
+_SECTION_KEYS = {"title", "description", "visible", "page_break_before", "kind", "style"}
 _BLOCK_KEYS = {
     "type",
     "title",
@@ -75,7 +81,40 @@ _BLOCK_KEYS = {
     "text",
     "text_ref",
     "tone",
+    "style",
+    "export",
+    "rows",
+    "items",
+    "size",
+    "author",
+    "updated_at",
 }
+
+#: Free-form block types (no dataset): user content, notes and layout aids.
+FREE_BLOCK_TYPES: tuple[str, ...] = (
+    "text",
+    "callout",
+    "note",
+    "info",
+    "checklist",
+    "divider",
+    "spacer",
+)
+
+#: Fields the server stamps on ``note`` blocks (ignored when sent by a client).
+_SERVER_KEYS = ("author", "updated_at")
+
+#: Keys of a component ``style`` object (``report_layout.v1.json#/$defs/style``).
+STYLE_KEYS: tuple[str, ...] = (
+    "accent",
+    "background",
+    "text_color",
+    "align",
+    "emphasis",
+    "font_scale",
+    "border",
+    "padding",
+)
 
 
 class LayoutError(ValueError):
@@ -280,6 +319,20 @@ def validate_layout(
                 ref = block.get("text_ref")
                 if ref and source is not None and strict_source and ref not in texts:
                     errs.append(f"{where}: source has no text {ref!r}")
+            errs.extend(_check_free_fields(block, btype, where))
+    return errs
+
+
+def _check_free_fields(block: Mapping[str, Any], btype: str, where: str) -> list[str]:
+    """Reject fields that belong to a different block type."""
+    errs: list[str] = []
+    if btype != "chart":
+        stray = sorted(k for k in ("dataset", "chart", "params", "filters", "top_n") if k in block)
+        if stray:
+            errs.append(f"{where}: a {btype} block cannot have {stray}")
+    for key, owner in (("rows", "info"), ("items", "checklist"), ("size", "spacer")):
+        if key in block and btype != owner:
+            errs.append(f"{where}: only {owner} blocks have {key}")
     return errs
 
 
@@ -328,7 +381,57 @@ def _update(node: dict[str, Any], changes: Mapping[str, Any]) -> None:
             node[key] = value
 
 
-def _apply_one(layout: dict[str, Any], op: Mapping[str, Any]) -> str:
+def _merge_style(node: dict[str, Any], changes: dict[str, Any], merge: bool) -> None:
+    """Fold ``changes['style']`` into the node's style when ``merge`` is set.
+
+    With ``merge_style`` a ``None`` value resets that one key to the theme
+    default and an emptied style is removed. Without it ``style`` replaces
+    the whole object (``None`` removes it).
+    """
+    if not merge or not isinstance(changes.get("style"), Mapping):
+        return
+    merged = dict(node.get("style") or {})
+    for key, value in changes.pop("style").items():
+        if value is None:
+            merged.pop(key, None)
+        else:
+            merged[key] = value
+    if merged:
+        node["style"] = merged
+    else:
+        node.pop("style", None)
+
+
+def _defaults_for(block: dict[str, Any]) -> None:
+    """Give a new free-form block sensible starting content."""
+    btype = block.get("type")
+    if btype == "info":
+        block.setdefault("rows", [{"key": "Item", "value": ""}])
+    elif btype == "checklist":
+        block.setdefault("items", [{"text": "First item", "done": False}])
+    elif btype == "spacer":
+        block.setdefault("size", "md")
+    elif btype == "note":
+        block.setdefault("text", "")
+        block.setdefault("tone", "note")
+
+
+def _stamp(block: dict[str, Any], actor: str | None, now: str | None) -> None:
+    """Record who last edited a ``note`` block (server-owned fields)."""
+    if block.get("type") != "note":
+        return
+    if actor:
+        block["author"] = actor[:200]
+    if now:
+        block["updated_at"] = now[:40]
+
+
+def _apply_one(
+    layout: dict[str, Any],
+    op: Mapping[str, Any],
+    actor: str | None = None,
+    now: str | None = None,
+) -> str:
     name = op.get("op")
     if name not in OPS:
         raise LayoutError(f"unknown op {name!r}")
@@ -352,11 +455,15 @@ def _apply_one(layout: dict[str, Any], op: Mapping[str, Any]) -> str:
         section: dict[str, Any] = {"id": sid, "title": title, "visible": True, "blocks": []}
         if op.get("description"):
             section["description"] = str(op["description"])
+        if op.get("kind") in ("content", "notes"):
+            section["kind"] = op["kind"]
         layout["sections"].insert(_clamp_index(op.get("index"), len(layout["sections"])), section)
         return f"added section {title!r}"
     if name == "update_section":
         _i, section = _find_section(layout, op.get("section_id"))
-        _update(section, _pick(op.get("set") or {}, _SECTION_KEYS, "update_section"))
+        sec_changes = _pick(op.get("set") or {}, _SECTION_KEYS, "update_section")
+        _merge_style(section, sec_changes, bool(op.get("merge_style")))
+        _update(section, sec_changes)
         return f"updated section {section['title']!r}"
     if name == "move_section":
         i, section = _find_section(layout, op.get("section_id"))
@@ -373,7 +480,10 @@ def _apply_one(layout: dict[str, Any], op: Mapping[str, Any]) -> str:
         if not isinstance(raw, Mapping):
             raise LayoutError("add_block needs a block object")
         block = _pick({k: v for k, v in raw.items() if k != "id"}, _BLOCK_KEYS, "add_block")
+        block = {k: v for k, v in block.items() if v is not None and k not in _SERVER_KEYS}
         block.setdefault("type", "chart")
+        _defaults_for(block)
+        _stamp(block, actor, now)
         block.setdefault("visible", True)
         seed = str(block.get("title") or block.get("chart") or block["type"])
         bid = raw.get("id") or new_id(seed, _all_ids(layout))
@@ -385,11 +495,15 @@ def _apply_one(layout: dict[str, Any], op: Mapping[str, Any]) -> str:
     if name == "update_block":
         _s, _i, block = _find_block(layout, op.get("block_id"))
         changes = _pick(op.get("set") or {}, _BLOCK_KEYS, "update_block")
+        for key in _SERVER_KEYS:
+            changes.pop(key, None)
         if op.get("merge_params") and isinstance(changes.get("params"), Mapping):
             merged = dict(block.get("params") or {})
             merged.update(changes.pop("params"))
             block["params"] = {k: v for k, v in merged.items() if v is not None}
+        _merge_style(block, changes, bool(op.get("merge_style")))
         _update(block, changes)
+        _stamp(block, actor, now)
         return f"updated block {block.get('title') or block['id']!r}"
     if name == "move_block":
         section, i, block = _find_block(layout, op.get("block_id"))
@@ -420,12 +534,22 @@ def apply_ops(
     layout: Mapping[str, Any],
     ops: Sequence[Mapping[str, Any]],
     source: Mapping[str, Any] | None = None,
+    *,
+    actor: str | None = None,
+    now: str | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     """Apply ``ops`` atomically and return ``(new_layout, change_notes)``.
 
     The input is never mutated. After all ops run, the result must pass
     :func:`validate_layout` (against ``source`` when given) or nothing is
     applied.
+
+    Args:
+        layout: The layout to edit.
+        ops: Edit ops from :data:`OPS`.
+        source: Report source to validate datasets / columns against.
+        actor: Stamped as ``author`` on note blocks the ops add or change.
+        now: ISO timestamp stamped as ``updated_at`` on those notes.
 
     Raises:
         LayoutError: When an op is malformed, refers to an unknown id, or
@@ -441,13 +565,102 @@ def apply_ops(
         if not isinstance(op, Mapping):
             raise LayoutError(f"op {n}: must be an object")
         try:
-            notes.append(_apply_one(work, op))
+            notes.append(_apply_one(work, op, actor, now))
         except LayoutError as exc:
             raise LayoutError([f"op {n} ({op.get('op')}): {e}" for e in exc.errors]) from exc
     errs = validate_layout(work, source)
     if errs:
         raise LayoutError(errs)
     return work, notes
+
+
+def as_template(layout: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a reusable copy of ``layout`` for "Save as template".
+
+    Shared free-form blocks are kept as scaffolding: ``info`` values are
+    cleared (labels kept), checklist ticks are reset (items kept) and note
+    authorship is dropped, so a "Sign-off" or "Action items" section starts
+    empty in every report made from the template.
+    """
+    out = copy.deepcopy(dict(layout))
+    for _s, block in iter_blocks(out):
+        for key in _SERVER_KEYS:
+            block.pop(key, None)
+        if block.get("type") == "info":
+            block["rows"] = [
+                {"key": r.get("key", ""), "value": ""} for r in block.get("rows") or []
+            ]
+        elif block.get("type") == "checklist":
+            block["items"] = [
+                {"text": i.get("text", ""), "done": False} for i in block.get("items") or []
+            ]
+    return out
+
+
+#: Block types a private note may be.
+PRIVATE_NOTE_TYPES: tuple[str, ...] = ("note", "info", "checklist", "text", "callout")
+
+
+def validate_free_block(block: Any) -> list[str]:
+    """Validate one stand-alone free-form block (a private note).
+
+    The block is checked with the same schema + rules as a layout block by
+    wrapping it in a throw-away one-section layout.
+    """
+    if not isinstance(block, Mapping):
+        return ["block must be an object"]
+    if block.get("type") not in PRIVATE_NOTE_TYPES:
+        return [f"a private note must be one of {list(PRIVATE_NOTE_TYPES)}"]
+    probe = {
+        "v": 1,
+        "title": "probe",
+        "sections": [{"id": "probe", "title": "probe", "blocks": [dict(block)]}],
+    }
+    return [e.replace("sections/0/blocks/0", "block") for e in validate_layout(probe, None)]
+
+
+def merge_blocks(
+    layout: Mapping[str, Any],
+    extra: Sequence[tuple[str | None, str | None, Mapping[str, Any]]],
+    *,
+    orphan_title: str = "My notes",
+) -> dict[str, Any]:
+    """Return ``layout`` with extra blocks inserted at their anchors.
+
+    Args:
+        layout: The base layout (not mutated).
+        extra: ``(section_id, after_block_id, block)`` triples. A ``None``
+            ``after_block_id`` places the block first in its section; an
+            unknown section or block anchor sends it to a trailing
+            ``orphan_title`` notes section.
+        orphan_title: Title of the section collecting unplaced blocks.
+    """
+    out = copy.deepcopy(dict(layout))
+    out.setdefault("sections", [])
+    taken = _all_ids(out)
+    orphans: list[dict[str, Any]] = []
+    for section_id, after, raw in extra:
+        block = dict(raw)
+        if block.get("id") in taken:
+            block["id"] = new_id(str(block.get("id")), taken)
+        taken.add(str(block["id"]))
+        target = next((s for s in out["sections"] if s.get("id") == section_id), None)
+        if target is None:
+            orphans.append(block)
+            continue
+        ids = [b.get("id") for b in target["blocks"]]
+        if after is None:
+            target["blocks"].insert(0, block)
+        elif after in ids:
+            target["blocks"].insert(ids.index(after) + 1, block)
+        else:
+            orphans.append(block)
+    if orphans:
+        sid = new_id("my_notes", taken)
+        out["sections"].append(
+            {"id": sid, "title": orphan_title, "kind": "notes", "visible": True, "blocks": orphans}
+        )
+    return out
 
 
 def outline(layout: Mapping[str, Any]) -> dict[str, Any]:
@@ -460,6 +673,7 @@ def outline(layout: Mapping[str, Any]) -> dict[str, Any]:
                 "id": s.get("id"),
                 "title": s.get("title"),
                 "visible": s.get("visible", True),
+                "kind": s.get("kind", "content"),
                 "blocks": [
                     {
                         "id": b.get("id"),
@@ -468,6 +682,7 @@ def outline(layout: Mapping[str, Any]) -> dict[str, Any]:
                         "dataset": b.get("dataset"),
                         "title": b.get("title"),
                         "visible": b.get("visible", True),
+                        "export": b.get("export", True),
                     }
                     for b in s.get("blocks") or []
                 ],

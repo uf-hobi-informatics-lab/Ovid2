@@ -535,3 +535,250 @@ def test_row_values_redacted_for_viewers(
     assert "AV" not in cells(bob) and reports_svc.REDACTED in cells(bob)
     desc = _as(client, bob).get(f"/api/v1/report-sources/{sid}").json()
     assert desc["row_values_redacted"] is True
+
+
+# ---------------------------------------------------------------------------
+# Interactive studio: free blocks, styles, render modes, private notes
+# ---------------------------------------------------------------------------
+
+
+def test_studio_page_has_interactive_chrome(client: TestClient, source_id: str) -> None:
+    rid = client.post("/api/v1/reports", json={"source_id": source_id}).json()["report_id"]
+    page = client.get(f"/reports/{rid}").text
+    for marker in (
+        'data-view="continuous"',
+        'data-view="pages"',
+        "data-zoom",
+        "data-toggle-hidden",
+        "data-toggle-private",
+        "data-inspector-tabs",
+        "data-add-notes-section",
+        "data-export-dialog",
+    ):
+        assert marker in page, marker
+
+
+def test_ops_style_and_free_blocks_render_modes(client: TestClient, source_id: str) -> None:
+    rep = client.post("/api/v1/reports", json={"source_id": source_id}).json()
+    rid = rep["report_id"]
+    first = rep["layout"]["sections"][0]["blocks"][0]["id"]
+    ops = [
+        {
+            "op": "update_block",
+            "block_id": first,
+            "set": {"style": {"accent": "palette:1"}},
+            "merge_style": True,
+        },
+        {"op": "add_section", "title": "Notes", "kind": "notes", "section_id": "nts"},
+        {"op": "add_block", "section_id": "nts", "block": {"type": "note", "text": "hello"}},
+        {"op": "set_visibility", "target_id": first, "visible": False},
+    ]
+    r = client.post(
+        f"/api/v1/reports/{rid}/ops",
+        json={"ops": ops, "save": False, "render": True, "layout": rep["layout"], "mode": "edit"},
+    )
+    assert r.status_code == 200, r.text
+    model = r.json()["model"]
+    blocks = {b["id"]: b for s in model["sections"] for b in s["blocks"]}
+    assert blocks[first]["visible"] is False and blocks[first]["style_resolved"]["accent"]
+    note = next(b for b in blocks.values() if b["renderer"] == "note")
+    assert note["author"] == "anonymous"
+    view = client.post(
+        f"/api/v1/reports/{rid}/preview", json={"layout": r.json()["layout"], "mode": "view"}
+    ).json()
+    assert first not in {b["id"] for s in view["sections"] for b in s["blocks"]}
+    assert (
+        client.post(
+            f"/api/v1/reports/{rid}/preview", json={"layout": r.json()["layout"], "mode": "export"}
+        ).status_code
+        == 422
+    )
+
+
+def test_private_notes_crud_and_render_merge(client: TestClient, source_id: str) -> None:
+    rep = client.post("/api/v1/reports", json={"source_id": source_id}).json()
+    rid = rep["report_id"]
+    sid = rep["layout"]["sections"][0]["id"]
+    after = rep["layout"]["sections"][0]["blocks"][0]["id"]
+    r = client.post(
+        f"/api/v1/reports/{rid}/notes",
+        json={
+            "section_id": sid,
+            "after_block_id": after,
+            "block": {"type": "note", "text": "MINE", "author": "x"},
+        },
+    )
+    assert r.status_code == 201, r.text
+    note = r.json()
+    nid = note["note_id"]
+    assert note["block"]["author"] == "anonymous" and note["block"]["export"] is False
+    assert [n["note_id"] for n in client.get(f"/api/v1/reports/{rid}/notes").json()] == [nid]
+    # Never part of the layout / versions; merged into the model only on request.
+    assert "MINE" not in json.dumps(client.get(f"/api/v1/reports/{rid}").json())
+    plain = client.get(f"/api/v1/reports/{rid}/render").json()
+    assert "MINE" not in json.dumps(plain)
+    merged = client.get(f"/api/v1/reports/{rid}/render?private_notes=true").json()
+    ids = [b["id"] for b in merged["sections"][0]["blocks"]]
+    assert ids[ids.index(after) + 1] == nid
+    blk = merged["sections"][0]["blocks"][ids.index(nid)]
+    assert blk["private"] is True and blk["markdown"] == "MINE"
+    # Update (merge), move, invalid content, delete.
+    up = client.put(
+        f"/api/v1/reports/{rid}/notes/{nid}", json={"block": {"text": "EDITED", "export": True}}
+    )
+    assert up.status_code == 200 and up.json()["block"]["text"] == "EDITED"
+    mv = client.put(
+        f"/api/v1/reports/{rid}/notes/{nid}",
+        json={"move": True, "section_id": sid, "after_block_id": None},
+    )
+    assert mv.json()["after_block_id"] is None
+    bad = client.put(f"/api/v1/reports/{rid}/notes/{nid}", json={"block": {"type": "chart"}})
+    assert bad.status_code == 400
+    assert (
+        client.post(
+            f"/api/v1/reports/{rid}/notes", json={"section_id": sid, "block": {"type": "divider"}}
+        ).status_code
+        == 400
+    )
+    assert client.delete(f"/api/v1/reports/{rid}/notes/{nid}").status_code == 200
+    assert client.get(f"/api/v1/reports/{rid}/notes").json() == []
+    assert client.delete(f"/api/v1/reports/{rid}/notes/{nid}").status_code == 404
+    with web_db.connect() as conn:
+        actions = [
+            r[0]
+            for r in conn.execute(
+                "SELECT action FROM web_audit WHERE target = ? ORDER BY ts", (rid,)
+            )
+        ]
+        details = " ".join(
+            r[0] or ""
+            for r in conn.execute("SELECT detail_json FROM web_audit WHERE target = ?", (rid,))
+        )
+    assert "report.note_create" in actions and "report.note_delete" in actions
+    assert "EDITED" not in details and "MINE" not in details  # note text is never audited
+
+
+def test_private_notes_are_per_user_and_hidden_from_agents(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_health()
+    report_sources_svc.ingest_for_instance(IID)
+    sid = f"health-{IID}"
+    _enable_auth(monkeypatch)
+    _alice_id, alice = _cookie(Role.PIPELINE_OPERATOR, "alice")
+    bob_id, bob = _cookie(Role.VIEWER, "bob")
+    rep = _as(client, alice).post("/api/v1/reports", json={"source_id": sid}).json()
+    rid = rep["report_id"]
+    sec = rep["layout"]["sections"][0]["id"]
+    nid = (
+        _as(client, alice)
+        .post(
+            f"/api/v1/reports/{rid}/notes",
+            json={"section_id": sec, "block": {"type": "note", "text": "ALICE-ONLY"}},
+        )
+        .json()["note_id"]
+    )
+    # Bob cannot see the report yet → 404 on notes too.
+    assert _as(client, bob).get(f"/api/v1/reports/{rid}/notes").status_code == 404
+    _as(client, alice).put(
+        f"/api/v1/reports/{rid}/shares",
+        json={"principal_kind": "user", "principal": bob_id, "permission": "view"},
+    )
+    # A viewer may annotate privately, but never sees alice's note.
+    assert _as(client, bob).get(f"/api/v1/reports/{rid}/notes").json() == []
+    r = _as(client, bob).post(
+        f"/api/v1/reports/{rid}/notes",
+        json={"section_id": sec, "block": {"type": "checklist", "items": [{"text": "BOB"}]}},
+    )
+    assert r.status_code == 201, r.text
+    bob_model = json.dumps(
+        _as(client, bob).get(f"/api/v1/reports/{rid}/render?private_notes=true").json()
+    )
+    assert "ALICE-ONLY" not in bob_model and "BOB" in bob_model
+    assert (
+        _as(client, bob)
+        .put(f"/api/v1/reports/{rid}/notes/{nid}", json={"block": {"text": "x"}})
+        .status_code
+        == 404
+    )
+    assert _as(client, bob).delete(f"/api/v1/reports/{rid}/notes/{nid}").status_code == 404
+    # The assistant acting as alice gets 403 and never receives the notes.
+    who = reports_svc.Principal.of("llm:" + rep["owner"], "pipeline_operator")
+    with pytest.raises(reports_svc.ReportForbidden):
+        reports_svc.list_private_notes(rid, who)
+    model = reports_svc.render_report(rid, who, private_notes=True)
+    assert "ALICE-ONLY" not in json.dumps(model)
+
+
+def test_template_save_scrubs_info_and_checklist(client: TestClient, source_id: str) -> None:
+    rep = client.post("/api/v1/reports", json={"source_id": source_id}).json()
+    rid = rep["report_id"]
+    ops = [
+        {"op": "add_section", "title": "Sign-off", "kind": "notes", "section_id": "signoff"},
+        {
+            "op": "add_block",
+            "section_id": "signoff",
+            "block": {"type": "info", "rows": [{"key": "Reviewer", "value": "Jane"}]},
+        },
+        {
+            "op": "add_block",
+            "section_id": "signoff",
+            "block": {"type": "checklist", "items": [{"text": "Send", "done": True}]},
+        },
+    ]
+    assert client.post(f"/api/v1/reports/{rid}/ops", json={"ops": ops}).status_code == 200
+    t = client.post(f"/api/v1/reports/{rid}/save-as-template", json={"name": "Signoff"}).json()
+    sec = next(s for s in t["layout"]["sections"] if s["id"] == "signoff")
+    assert sec["blocks"][0]["rows"] == [{"key": "Reviewer", "value": ""}]
+    assert sec["blocks"][1]["items"] == [{"text": "Send", "done": False}]
+
+
+@pytest.mark.parametrize("fmt", ["html", "md"])
+def test_export_includes_only_own_exportable_private_notes(
+    client: TestClient, source_id: str, fmt: str
+) -> None:
+    import zipfile
+
+    # HTML / Markdown exports embed rendered charts (the ``reports`` extra).
+    pytest.importorskip("vl_convert")
+    rep = client.post("/api/v1/reports", json={"source_id": source_id}).json()
+    rid = rep["report_id"]
+    sec = rep["layout"]["sections"][0]["id"]
+    for text, export in (("PRIV-IN", True), ("PRIV-OUT", False)):
+        client.post(
+            f"/api/v1/reports/{rid}/notes",
+            json={"section_id": sec, "block": {"type": "note", "text": text, "export": export}},
+        )
+    ops = [
+        {
+            "op": "add_block",
+            "section_id": sec,
+            "block": {"type": "text", "text": "SCREEN-ONLY", "export": False},
+        },
+        {
+            "op": "add_block",
+            "section_id": sec,
+            "block": {"type": "checklist", "items": [{"text": "SHARED-ITEM"}]},
+        },
+    ]
+    lay = client.post(
+        f"/api/v1/reports/{rid}/ops", json={"ops": ops, "save": False, "layout": rep["layout"]}
+    ).json()["layout"]
+
+    def body(include: bool) -> str:
+        r = client.post(
+            f"/api/v1/reports/{rid}/exports",
+            json={"format": fmt, "layout": lay, "include_private_notes": include},
+        )
+        assert r.status_code == 201, r.text
+        raw = client.get(r.json()["download_url"]).content
+        if fmt == "md":
+            return zipfile.ZipFile(io.BytesIO(raw)).read("report.md").decode()
+        return raw.decode()
+
+    without = body(False)
+    assert "SHARED-ITEM" in without and "SCREEN-ONLY" not in without and "PRIV-IN" not in without
+    with_notes = body(True)
+    assert (
+        "PRIV-IN" in with_notes and "PRIV-OUT" not in with_notes and "SCREEN-ONLY" not in with_notes
+    )

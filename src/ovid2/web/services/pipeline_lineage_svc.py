@@ -1255,14 +1255,24 @@ def _package_facts(pipeline: str) -> dict[str, Any]:
     }
 
 
-def navigator_tree(group_by: str = "cdm") -> dict[str, Any]:
-    """Return every installed package grouped by ``group_by``.
+def navigator_tree(group_by: str = "cdm", *, include_unused: bool = False) -> dict[str, Any]:
+    """Return installed packages grouped by ``group_by``.
+
+    By default only packages that at least one run config uses — plus the
+    sources of the curated pipeline templates, so they can still be
+    cloned — are listed; deleting a pipeline's last run config therefore
+    drops it from the navigator on the next request. ``include_unused``
+    lists every package on disk.
 
     Args:
         group_by: One of :data:`GROUP_BY`. ``kind`` groups by the run
             kinds of the pipeline *configs* that use the package
             (``unused`` when none); ``template`` by the template id the
             package is, or was cloned from.
+        include_unused: Also list packages no run config references.
+
+    Returns:
+        ``{group_by, group_by_choices, include_unused, unused_count, groups}``.
 
     Raises:
         ValueError: Unknown ``group_by``.
@@ -1283,11 +1293,19 @@ def navigator_tree(group_by: str = "cdm") -> dict[str, Any]:
         logger.warning("navigator: cannot list pipeline configs: %s", exc)
 
     packages: list[dict[str, Any]] = []
+    unused_count = 0
     for name in pipelines_meta_svc.discover_pipelines():
+        used = name in configs or name in by_source
+        if not used:
+            unused_count += 1
+            if not include_unused:
+                continue
         facts = _package_facts(name)
         if not facts:
             continue
         facts["configs"] = configs.get(name, [])
+        facts["unused"] = not used
+        facts["protected"] = name in by_source
         facts["template"] = (
             by_source.get(name)
             or by_source.get(facts["template"], "")
@@ -1317,7 +1335,13 @@ def navigator_tree(group_by: str = "cdm") -> dict[str, Any]:
                 "pipelines": sorted(groups[key], key=lambda p: p["pipeline"]),
             }
         )
-    return {"group_by": group_by, "group_by_choices": list(GROUP_BY), "groups": out_groups}
+    return {
+        "group_by": group_by,
+        "group_by_choices": list(GROUP_BY),
+        "include_unused": include_unused,
+        "unused_count": unused_count,
+        "groups": out_groups,
+    }
 
 
 if __name__ == "__main__":  # pragma: no cover

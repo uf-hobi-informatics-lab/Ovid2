@@ -198,9 +198,13 @@ def test_chat_stream_end_to_end(client: TestClient, gateway: str) -> None:
     # JEV stub is not implemented → silent fallback (no notice) → general streams.
     assert "notice" not in kinds
     assert "System 1 unavailable" not in body
-    assert "meta" in kinds and kinds[-1] == "done"
+    assert "meta" in kinds and kinds[-2] == "done" and kinds[-1] == "session"
     assert "".join(str(e.get("text", "")) for e in events if e["type"] == "delta") == "Hello world"
-    assert events[-1]["ok"] is True and events[-1]["route"] == "general"
+    assert events[-2]["ok"] is True and events[-2]["route"] == "general"
+    assert events[0]["type"] == "session_open"
+    sess = events[-1]
+    assert sess["session_id"] == events[0]["session_id"]
+    assert sess["last_prompt_tokens"] == 8 and sess["context_window"] == 128000
     assert "sk-test" not in body
 
     with web_db.connect() as conn:
@@ -225,6 +229,7 @@ def test_chat_stream_end_to_end(client: TestClient, gateway: str) -> None:
         "tool_calls",
         "proposals",
         "ui_actions",
+        "session_id",
     }  # metadata only
     assert "Hello" not in row[0]
 

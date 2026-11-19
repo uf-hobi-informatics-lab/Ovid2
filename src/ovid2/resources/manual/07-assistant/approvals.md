@@ -14,7 +14,13 @@ person has to agree first. Ovid2 records each such request as an
 | --- | --- | --- |
 | `dataspace.agent_row_access` | an **agent** (MCP or assistant) samples or exports rows, or downloads an artifact | `rows:<path>` (one table) |
 | `run.overwrite` | an **agent** confirms writing over an occupied output | the output address |
-| destructive operations | deleting configs, connections, LLM connections and similar | the resource |
+| `secret.delete`, `connection.delete`, `engine.delete`, `address.delete`, `llm.delete` | deleting that resource | the resource name |
+| `pipeline.delete` | deleting a saved pipeline (run config) | the config name |
+| `pipeline_package.delete` | deleting a pipeline **package** (the code folder, which is moved to the trash) | the package name |
+| `transform.delete` | deleting a transform-library chain that pipelines may have assigned | the chain name |
+
+Deleting your own [assistant session](sessions.md) does **not** need
+approval. It is your own conversation, not a shared resource.
 
 People with the right role are **not** gated on reading rows they may
 see. They confirm overwrites interactively instead. See

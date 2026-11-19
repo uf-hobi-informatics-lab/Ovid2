@@ -4,7 +4,7 @@ Developed and maintained by **OneFlorida+**
 - Alexander T. Loiacono - atloiaco@ufl.edu
 - Abdelali Nouina - abdelali@ufl.edu
 
-Last Updated: 2026-11-14
+Last Updated: 2026-11-18
 
 # Ovid2
 
@@ -40,7 +40,7 @@ touching the others:
 
 - **Storage** — a pluggable *driver* layer (disc, S3, Azure Blob, Snowflake,
   Microsoft Access, GCS, Databricks, Postgres, MSSQL).
-- **Compute** — a pluggable *engine* layer (PySpark, Databricks, Snowpark),
+- **Compute** — a pluggable *engine* layer (PySpark, Databricks, Snowpark, DuckDB),
   decoupled from storage by an `EngineStager` (**engine/storage
   orthogonality**), so any engine can read/write any driver.
 - **Algorithms** — declarative formatters, mappers, fixer chains, and a
@@ -176,7 +176,7 @@ once and the rest of the doc reads cleanly.
 | **Health check** | A declarative data-quality check (PCORnet EDC `DC x.yy` or an Ovid2-native panel) grouped into report-cycle packages. |
 | **Connection** | *How* to reach a system (credential-heavy, reusable) — e.g. a Snowflake account, an S3 bucket. |
 | **Address** | *Where* in a connection — the **exact** folder / bucket prefix / `DATABASE/SCHEMA` the data is read from or written to (nothing is appended to it). |
-| **Engine** | The *compute* backend: `pyspark`, `databricks_spark`, or `snowpark`. |
+| **Engine** | The *compute* backend: `pyspark`, `databricks_spark`, `snowpark`, or `duckdb` (in-process, single container). |
 | **Driver** | The *storage* backend: `disc`, `s3`, `azure_blob`, `snowflake`, `access`, `gcs`, `databricks`, `postgres`, `mssql`. |
 | **Stager** | The seam that moves data between an engine and a driver (Spark = pass-through; Snowpark = per-backend staging strategy). |
 | **Instance id** | `YYYYMMDD-HHMMSS-<6hex>` — minted once per run and threaded end-to-end; the single correlation key across every tier and the event log. |
@@ -470,10 +470,10 @@ absolute path inside and outside the container, so host renderers and the web
 tier read exactly what the pipeline wrote. A daemon sampler thread emits cheap
 `engine.metrics` heartbeats that drive the "cooking" live view.
 
-## The ETL workflow (five stages)
+## The ETL workflow
 
-The core pipeline is five stages, one Spark plan per table, one write per
-pipeline:
+The core pipeline is five transforming stages plus the write: one lazy plan per
+table, one write per pipeline:
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌───────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
@@ -486,16 +486,18 @@ pipeline:
    joins + projection) to produce a CDM-shaped DataFrame.
 2. **Deduplicate** — remove exact-duplicate rows lazily via a salted
    `dropDuplicates` (skew-relief; see `DEDUP_SALT_BUCKETS`).
-3. **Map** — apply the pipeline's mapper ops (`translate_by_dict`,
+3. **Transform** — run the declarative transform chains / UDFs assigned in
+   `<pkg>/transforms/assignments.yaml` (no-op when nothing is assigned).
+4. **Map** — apply the pipeline's mapper ops (`translate_by_dict`,
    `translate_by_concept`, `hash_id`, `case_map`, `regex_replace`, `literal`,
    `passthrough`, `apply_transforms`) to translate source values to standard
    vocabularies.
-4. **Fix** — apply the pipeline's chain of common fixes plus any
+5. **Fix** — apply the pipeline's chain of common fixes plus any
    pipeline-specific fixes.
-5. **Upload** — write to the output address (any of the nine drivers; disc
+6. **Upload** — write to the output address (any of the nine drivers; disc
    for tests and local runs).
 
-Beyond the five-stage ETL, Ovid2 also ships these run kinds / surfaces:
+Beyond the ETL, Ovid2 also ships these run kinds / surfaces:
 
 | Kind / surface | What it does |
 |---|---|
@@ -536,7 +538,7 @@ them enforced by a contract test.
 Engines live in `src/ovid2/core/engines/` (concrete classes, the only place
 allowed to `import pyspark` / `import snowflake.snowpark`) with a web-safe
 config mirror at `src/ovid2/config/engines.py`. Registered types:
-`pyspark`, `databricks_spark`, `snowpark`. The pipeline talks to
+`pyspark`, `databricks_spark`, `snowpark`, `duckdb`. The pipeline talks to
 `EngineSession` / `EngineFunctions` protocols and routes storage through an
 `EngineStager`, so the choice of engine is orthogonal to the choice of
 storage backend. A plan-time compatibility gate refuses incompatible pairings
@@ -546,6 +548,13 @@ up. Enforced by `tests/contract/test_no_pyspark_outside_engine.py` and
 
 Snowpark staging strategies (Snowflake ↔ disc / s3 / azure_blob / databricks /
 gcs) live under `src/ovid2/drivers/snowflake/staging/`.
+
+**DuckDB** (`--engine duckdb`) runs the same pipeline in-process on a lazy,
+PySpark-shaped `DuckFrame`, so no Spark cluster is needed. A run is one driver
+container sized from the host (75% RAM, all CPUs). The job's *Workers* is the
+number of tables processed at once: reference tables first, then the largest first.
+Shared code imports column functions from `ovid2.core.engines.dsl`, so fixers,
+mapper ops and transforms run unchanged. Guide: [Engines](src/ovid2/resources/manual/02-concepts/engines.md).
 
 ### Drivers & connections
 
@@ -677,7 +686,7 @@ forbidden; adapters are framework-level. Spec schema:
 |----------|------------|
 | Language | Python — runs on 3.11+ (packaging floor); runtime image + dev target 3.14 (CI tests 3.11–3.14) |
 | Big Data | Apache Spark 4.1 (PySpark, Scala 2.13) on `python:3.14-slim` + OpenJDK 21 (image); host-dev extra pins `pyspark>=4.1,<4.2` |
-| Compute engines | PySpark, Databricks Connect, Snowpark |
+| Compute engines | PySpark, Databricks Connect, Snowpark, DuckDB |
 | Containers | Docker + Docker Compose |
 | Storage drivers | disc, s3, azure_blob, snowflake, access, gcs, databricks, postgres, mssql |
 | Warehouse | Snowflake (RSA key-pair auth) is the most-exercised output path |
@@ -740,7 +749,8 @@ ovid2/
   pipelines/
     ovid2_pipelines/        PEP 420 namespace package
       <pipeline>/           pipeline_settings.py, dictionaries.py,
-                            fixer_configs.py, formatters/*.yaml,
+                            fixer_configs.{yaml,py}, transforms/assignments.yaml,
+                            formatters/*.yaml,
                             formatters_custom/*.py (only when needed),
                             mappers/*.yaml (optional)
   tests/                    unit/, contract/, integration/, helpers/, fixtures/
@@ -855,10 +865,10 @@ subcommand accepts `--verbose` (repeatable) and `--version`.
 | `ovid2 doctor` | Read-only environment diagnostics | Stable |
 | `ovid2 image` | Build / push the Ovid2 Docker image | Stable |
 | `ovid2 service` | Install / manage the systemd units | Stable |
-| `ovid2 pipeline` | List / validate / expand pipeline packages | Stable |
+| `ovid2 pipeline` | List / validate / expand / delete pipeline packages (`delete` moves a package to the trash) | Stable |
 | `ovid2 semantic` | Inspect the semantic layer (vocabularies, bindings) | Stable |
 | `ovid2 migrate` | Port legacy formatters to specs; golden-file diff | Stable |
-| `ovid2 etl` | Run format → deduplicate → map → fix → write (`--local` for in-process) | Preview |
+| `ovid2 etl` | Run format → deduplicate → transform → map → fix → write (`--local` for in-process; `--engine duckdb` for no cluster) | Preview |
 | `ovid2 analysis` | Same pipeline with the analysis transformer chain | Preview |
 | `ovid2 dq_checks` | EDC / DC data-quality checks by report cycle | Preview |
 | `ovid2 health` | Data-health / PCORnet EDC checks + report | Preview |
@@ -867,6 +877,8 @@ subcommand accepts `--verbose` (repeatable) and `--version`.
 | `ovid2 web-worker` | Poll the job queue; dispatch cron/interval/watch runs | Stable |
 | `ovid2 mcp` | MCP server over the REST API (for AI agents) | Stable |
 | `ovid2 watch` | Attach a TUI viewer (`ovid2-watch` is a synonym) | Stable |
+| `ovid2 dev` | Private dev instances (own ports, state tree, image tag) | Stable |
+| `ovid2 manual` | Check / build / serve the Ovid2 Manual, regenerate its reference, export the wiki | Stable |
 
 Only `ovid2` and `ovid2-watch` are console scripts; `web`, `web-worker`,
 `mcp`, and `scheduler` are subcommands with matching systemd `.service.in`
@@ -889,6 +901,9 @@ templates.
 | `tools test-llm` / `tools llm-chat` | Probe an LLM connection / run one routed chat turn (executor side) |
 | `tools report-export` | Render a Report Studio report to pdf / html / docx / pptx / xlsx / svg / png / md / json (executor side; needs the `reports` extra) |
 | `tools migrate-addresses` | Migrate legacy `{src_name, src_args}` addresses to the connection shape |
+| `tools describe-table` / `sample-table` / `count-rows` / `list-source-tables` | Executor-side table metadata, sample rows, row counts and listings (used by the web tier) |
+| `tools probe-output` | Check whether an output location is occupied (overwrite gate) |
+| `tools migrate-fixers` | Convert a package's `fixer_configs.py` to `fixer_configs.yaml` |
 
 ### To run the full ETL pipeline
 
@@ -1082,9 +1097,18 @@ right rail) that routes each question through two configurable model slots:
 Nothing is pre-configured: **you bring your own endpoint, model id, and API
 key** under *Configure → LLMs*. Keys live in `secrets.d/llm_<name>.json`
 (mode 0600) and are only read by a short-lived executor subprocess
-(`python -m ovid2.llm`); the web server never holds them. Only metadata
-(actor, model, token counts, latency, tool names) is audited — no prompt or
-answer text is stored.
+(`python -m ovid2.llm`); the web server never holds them. Audit rows carry
+metadata only (actor, session, model, token counts, latency, tool names).
+
+- **Saved sessions.** Every conversation is saved server-side per user
+  (shared `anonymous` history while sign-in is off) and kept until deleted.
+- **History & search.** Header icons next to *Agent Ovid* toggle the session
+  list (open / rename / delete) and keyword-search titles and messages.
+- **Context meter.** `11.4k / 128k`, the latest turn's context against the
+  model's window. It turns amber, then red, as context rot sets in. **New session**
+  starts fresh.
+- **Titles.** The general model names each session after its first prompt.
+  Guide: [Sessions, history & context](src/ovid2/resources/manual/07-assistant/sessions.md).
 
 With **assistant tools** enabled, the general model can call a pinned
 allow-list of Ovid2 API routes
@@ -1143,6 +1167,11 @@ installed pipeline package. It reads the package's specs statically (YAML +
   (`TRANSFORM_COLUMN_ROLES`, `MAPPER_OP_COLUMN_ROLES`, `FIXER_COLUMN_ROLES`);
   every new transform op, mapper op and fixer must declare one
   (`test_column_roles_complete.py`).
+- **Packages.** Unused packages are hidden; there's an **Unused packages** toggle to show them. The tree
+  refreshes when you return to the tab, and every builder / pipeline page has
+  **Open in navigator**. **Delete package** moves a package to
+  `$XDG_STATE_HOME/ovid2/trash/pipelines/` (also `ovid2 pipeline delete`; the
+  API route is approval-gated).
 - **For agents.** The read-only `inspect_pipeline_lineage` MCP / assistant
   tool returns the same lineage as JSON — the quickest way for an agent to
   explain why a field holds the value it does.
@@ -1177,7 +1206,11 @@ finished runs become shareable research reports.
   inspector with a **28-kind chart gallery** (bars, lines, areas,
   distributions, heatmaps, part-to-whole, KPI tiles, tables), filters,
   top-N and captions. Undo / redo, versioned saves with history and
-  restore, duplicate, save-as-template.
+  restore, duplicate, save-as-template, autosave. The canvas is editable
+  in place (floating toolbar, "+" insertion, keyboard shortcuts),
+  Content / Format / Data inspector tabs set per-block styles, there are
+  *Continuous* and *Pages* views, free blocks (note, info, checklist,
+  divider, spacer) and author-only **private notes**.
 - **Report themes** — publication, grayscale print, colour-blind safe,
   presentation dark, high contrast, journal serif — independent of the page
   theme. Charts render fully offline (vendored Vega / Vega-Lite).

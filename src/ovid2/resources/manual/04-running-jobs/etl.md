@@ -1,12 +1,12 @@
 ---
 title: ETL runs
-summary: Run the five-stage pipeline — choose tables, stages, engine and workers, and understand what you get back.
+summary: Run the ETL pipeline (format → deduplicate → transform → map → fix) — choose tables, stages, engine and workers, and understand what you get back.
 audience: [user]
 ---
 
 An `etl` job runs a pipeline package's formatters, mappers and fixers to
 produce CDM tables. The stages are explained in
-[The five ETL stages](../02-concepts/etl-stages.md).
+[The ETL stages](../02-concepts/etl-stages.md).
 
 ## Required inputs
 

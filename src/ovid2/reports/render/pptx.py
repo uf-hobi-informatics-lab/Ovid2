@@ -24,7 +24,14 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from ovid2.reports.render._common import chart_png, md_blocks, status_color
+from ovid2.reports.render._common import (
+    boxed,
+    chart_png,
+    md_blocks,
+    note_byline,
+    note_tone_color,
+    status_color,
+)
 
 __all__ = ["write_pptx"]
 
@@ -88,12 +95,15 @@ def fit_spec(spec: Mapping[str, Any], w_in: float, h_in: float) -> dict[str, Any
 def pack_rows(blocks: Sequence[Mapping[str, Any]]) -> list[list[tuple[Mapping[str, Any], float]]]:
     """Pack blocks into rows of ``(block, width_fraction)`` summing to ≤ 1.
 
-    Tables always occupy a full row of their own.
+    Tables always occupy a full row of their own. Dividers and spacers are
+    page-layout aids with no meaning on a slide, so they are skipped.
     """
     rows: list[list[tuple[Mapping[str, Any], float]]] = []
     row: list[tuple[Mapping[str, Any], float]] = []
     used = 0.0
     for b in blocks:
+        if b.get("renderer") in ("divider", "spacer"):
+            continue
         frac = _WIDTH_FRAC.get(str(b.get("width")), 1.0)
         if b.get("renderer") == "table":
             frac = 1.0
@@ -177,7 +187,7 @@ def write_pptx(model: Mapping[str, Any], path: Path) -> Path:
         )
         return para
 
-    def md_into(tf: Any, text: str, size: float) -> None:
+    def md_into(tf: Any, text: str, size: float, colour: str | None = None) -> None:
         for blk in md_blocks(text):
             para = tf.paragraphs[0] if not tf.paragraphs[0].runs else tf.add_paragraph()
             heading = blk.kind.startswith("h")
@@ -186,7 +196,7 @@ def write_pptx(model: Mapping[str, Any], path: Path) -> Path:
                 style_run(
                     run,
                     size=size + (4 if heading else 0),
-                    colour=c["text"],
+                    colour=colour or c["text"],
                     bold=r.bold or heading,
                     italic=r.italic,
                     font="Courier New" if r.code else (head_font if heading else None),
@@ -236,16 +246,59 @@ def write_pptx(model: Mapping[str, Any], path: Path) -> Path:
         note: str = "",
     ) -> None:
         r = b["renderer"]
+        sr = b.get("style_resolved") or {}
+        txt = sr.get("text_color") or c["text"]
         notes = note_lines(b) + ([note] if note else [])
-        title_h = 0.4 if (b.get("title") and r != "kpi") else 0.0
+        title_h = 0.4 if (b.get("title") and r not in ("kpi", "divider", "spacer")) else 0.0
         note_h = 0.3 * len(notes)
         if title_h:
             tf = textbox(slide, x, y, w, title_h)
-            put_text(
-                tf, str(b["title"]), size=base + 3, colour=c["text"], bold=True, font=head_font
-            )
+            put_text(tf, str(b["title"]), size=base + 3, colour=txt, bold=True, font=head_font)
         by, bh = y + title_h, max(h - title_h - note_h, 0.5)
-        if r == "vega":
+        if boxed(b) and r not in ("callout",):
+            panel = slide.shapes.add_shape(1, Inches(x), Inches(by), Inches(w), Inches(bh))
+            panel.fill.solid()
+            panel.fill.fore_color.rgb = _rgb(sr.get("background") or c.get("surface", "#ffffff"))
+            if r == "note" or sr.get("emphasis") == "filled":
+                panel.line.fill.background()
+            else:
+                panel.line.color.rgb = _rgb(sr.get("accent") or c.get("border", c["muted"]))
+            if r == "note":
+                edge = slide.shapes.add_shape(1, Inches(x), Inches(by), Inches(0.06), Inches(bh))
+                edge.fill.solid()
+                edge.fill.fore_color.rgb = _rgb(note_tone_color(theme, b))
+                edge.line.fill.background()
+            x, w, by, bh = x + 0.12, w - 0.2, by + 0.08, bh - 0.16
+        if r == "divider":
+            line = slide.shapes.add_shape(1, Inches(x), Inches(by + 0.1), Inches(w), Inches(0.03))
+            line.fill.solid()
+            line.fill.fore_color.rgb = _rgb(sr.get("accent") or c.get("border", c["muted"]))
+            line.line.fill.background()
+        elif r == "spacer":
+            pass
+        elif r == "note":
+            tf = textbox(slide, x, by, w, bh)
+            put_text(tf, note_byline(b), size=max(base - 1, 8), colour=c["muted"], italic=True)
+            md_into(tf, str(b.get("markdown") or ""), base + 2, colour=txt)
+        elif r == "info":
+            tf = textbox(slide, x, by, w, bh)
+            for i, row in enumerate(b.get("rows") or []):
+                para = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+                style_run(
+                    _add_run(para, row["key"] + ":  "), size=base + 1, colour=c["muted"], bold=True
+                )
+                style_run(_add_run(para, row["value"]), size=base + 1, colour=txt)
+                para.space_after = Pt(4)
+        elif r == "checklist":
+            tf = textbox(slide, x, by, w, bh)
+            for i, item in enumerate(b.get("items") or []):
+                para = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+                mark = "\u2611  " if item["done"] else "\u2610  "
+                style_run(_add_run(para, mark), size=base + 2, colour=c.get("accent", txt))
+                run = _add_run(para, item["text"])
+                style_run(run, size=base + 2, colour=c["muted"] if item["done"] else txt)
+                para.space_after = Pt(4)
+        elif r == "vega":
             png = chart_png(fit_spec(b["spec"], w, bh), scale=2.0)
             pw, ph = _png_size(png)
             scale = min(w / pw, bh / ph)
@@ -327,11 +380,11 @@ def write_pptx(model: Mapping[str, Any], path: Path) -> Path:
             if r == "callout":
                 edge = slide.shapes.add_shape(1, Inches(x), Inches(by), Inches(0.06), Inches(bh))
                 edge.fill.solid()
-                edge.fill.fore_color.rgb = _rgb(c.get("accent", c["text"]))
+                edge.fill.fore_color.rgb = _rgb(note_tone_color(theme, b))
                 edge.line.fill.background()
                 x, w = x + 0.15, w - 0.15
             tf = textbox(slide, x, by, w, bh)
-            md_into(tf, str(b.get("markdown") or ""), base + 2)
+            md_into(tf, str(b.get("markdown") or ""), base + 2, colour=txt)
         else:
             tf = textbox(slide, x, by, w, bh)
             put_text(

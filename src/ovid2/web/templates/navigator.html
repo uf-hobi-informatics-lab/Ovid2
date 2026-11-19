@@ -20,6 +20,7 @@
          data-kind="etl"
          data-can-write="{{ 'true' if can_write else 'false' }}"
          data-group-by="{{ group_by }}"
+         data-include-unused="{{ 'true' if include_unused else 'false' }}"
          data-initial-p="{{ initial.p }}"
          data-initial-t="{{ initial.t }}"
          data-initial-f="{{ initial.f }}">
@@ -61,6 +62,11 @@
             <option value="opaque">opaque (Python) steps</option>
             <option value="unmapped">unmapped / constant fields</option>
           </select>
+        </label>
+        <label class="nv-tool nv-unused-toggle">
+          <input type="checkbox" data-nv-unused {{ 'checked' if include_unused else '' }}>
+          <span class="nv-tool-label">Unused packages <span class="nv-badge" data-nv-unused-count>{{ tree.unused_count }}</span></span>
+          {{ help.tip("Packages no run config uses are hidden by default, so deleting a pipeline's last run config removes it here. Tick to list every package on disk. Template sources always show. The list refreshes whenever you come back to this tab.") }}
         </label>
         <fieldset class="nv-stage-filter" aria-label="Stages">
           {% for stage in stages %}

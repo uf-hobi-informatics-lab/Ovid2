@@ -97,6 +97,16 @@ Print the canonical table list for a pipeline.
 | --- | --- | --- | --- |
 | `pipeline` | Pipeline name. |  |  |
 
+### `ovid2 pipeline delete`
+
+Move a pipeline package to the trash ($XDG_STATE_HOME/ovid2/trash/pipelines/).
+
+| Argument | Description | Choices | Default |
+| --- | --- | --- | --- |
+| `pipeline` | Pipeline package name. |  |  |
+| `--with-configs` | Also delete every run config that uses the package. |  |  |
+| `--yes`, `-y` | Do not ask for confirmation. |  |  |
+
 ## `ovid2 semantic`
 
 Inspect the semantic layer.

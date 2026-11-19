@@ -9,11 +9,21 @@
  * copy (new version; 409 on a stale version).
  *
  * The canvas is drawn by report_render.js in the report theme; this file
- * never reads the page theme for the canvas.
+ * never reads the page theme for the canvas. It is interactive: every text
+ * (report title / subtitle / intro, section titles / descriptions, block
+ * titles / captions / bodies, info rows, checklist items) is edited in
+ * place and committed as one op; a floating toolbar moves / hides /
+ * duplicates / removes the selected block; "+" points insert blocks.
+ * Two views: continuous and pages (sheets at the report's page size).
+ *
+ * Private notes (only their author sees them) are NOT layout blocks: they
+ * live in web_report_notes and are edited through /reports/{id}/notes;
+ * the server merges them into the render model flagged ``private``.
  *
  * window.Ovid2ReportStudio.{outline, applyOps, info} is the hook the
  * assistant's edit_report_layout UI action uses (llm_panel.js): the ops are
- * re-validated by the same server endpoint and are undoable here.
+ * re-validated by the same server endpoint and are undoable here. The
+ * assistant never sees private notes.
  */
 (function () {
   "use strict";
@@ -25,13 +35,18 @@
   var isOwner = root.getAttribute("data-is-owner") === "true";
   var OPS = ["set_report", "add_section", "update_section", "move_section", "remove_section",
              "add_block", "update_block", "move_block", "remove_block", "set_visibility"];
+  var FREE_TYPES = ["text", "callout", "note", "info", "checklist", "divider", "spacer"];
+  var VIEW_KEY = "ovid2.reports.view";
+  var ZOOM_KEY = "ovid2.reports.zoom";
 
   var S = {
     report: null, layout: null, saved: null, model: null, catalogue: null, source: null,
     undo: [], redo: [], sel: { kind: "report", id: null }, busy: false, version: 0,
     // True once the assistant edited the working copy: autosave then waits
     // for a human Save (the assistant never saves on its own).
-    agentEdits: false
+    agentEdits: false,
+    view: "continuous", zoom: "1", showHidden: false, showPrivate: true,
+    notes: [], tab: "content", editing: false
   };
 
   /* ---------------- helpers ---------------- */
@@ -122,15 +137,16 @@
     if (S.busy) return Promise.reject(new Error("Busy — try again in a moment."));
     S.busy = true; refreshChrome();
     return api("POST", "/reports/" + encodeURIComponent(RID) + "/ops",
-               { ops: ops, save: false, render: true, layout: S.layout })
+               { ops: ops, save: false, render: true, layout: S.layout,
+                 mode: renderMode(), private_notes: S.showPrivate })
       .then(function (r) {
         S.undo.push(clone(S.layout));
         if (S.undo.length > 100) S.undo.shift();
         S.redo = [];
         S.layout = r.layout; S.model = r.model;
+        if (opts.select) S.sel = opts.select;
         showErrors([]);
         renderAll();
-        if (opts.select) S.sel = opts.select;
         return r.notes || [];
       })
       .catch(function (e) { showErrors(e.errors && e.errors.length ? e.errors : [e.message]); throw e; })
@@ -138,8 +154,11 @@
             function (e) { S.busy = false; refreshChrome(); throw e; });
   }
 
+  function renderMode() { return canEdit && S.showHidden ? "edit" : "view"; }
+
   function rerender() {
-    return api("POST", "/reports/" + encodeURIComponent(RID) + "/preview", { layout: S.layout })
+    return api("POST", "/reports/" + encodeURIComponent(RID) + "/preview",
+               { layout: S.layout, mode: renderMode(), private_notes: S.showPrivate })
       .then(function (m) { S.model = m; renderCanvas(); });
   }
 
@@ -238,47 +257,610 @@
 
   /* ---------------- canvas ---------------- */
 
+  function isPrivateId(id) { return /^pn_[0-9a-f]{12}$/.test(String(id || "")); }
+  function privateNote(id) { return S.notes.filter(function (n) { return n.note_id === id; })[0] || null; }
+
+  function applyZoom() {
+    var box = $("[data-canvas]");
+    var rep = box.querySelector(".ovr-report");
+    if (!rep) return;
+    var z = S.zoom;
+    if (z === "fit") {
+      var w = S.view === "pages" ? window.Ovid2ReportRender.pageBox(S.model.page).width : rep.scrollWidth;
+      z = Math.min(1, Math.max(0.4, (box.clientWidth - 56) / Math.max(w, 1)));
+    } else z = parseFloat(z) || 1;
+    rep.style.zoom = String(z);
+  }
+
   function renderCanvas() {
     var box = $("[data-canvas]");
     if (!S.model) { box.textContent = "Loading…"; return; }
     if (!window.Ovid2ReportRender) { box.textContent = "Renderer failed to load."; return; }
+    box.setAttribute("data-view", S.view);
+    var scroll = box.scrollTop;
+    hideToolbar();
     window.Ovid2ReportRender.render(box, S.model, {
       actions: true,
-      onBlock: function (card, b) {
-        card.classList.add("rs-pickable");
-        if (S.sel.kind === "block" && S.sel.id === b.id) card.classList.add("rs-selected");
-        card.addEventListener("click", function (ev) {
-          if (ev.target.closest(".vega-embed details, a")) return;
-          select("block", b.id);
-        });
-      },
-      onSection: function (sec, s) {
-        var h = sec.querySelector(".ovr-section-title");
-        if (h) {
-          h.classList.add("rs-pickable");
-          h.addEventListener("click", function () { select("section", s.id); });
-        }
-        if (S.sel.kind === "section" && S.sel.id === s.id) sec.classList.add("rs-selected");
+      editable: canEdit,
+      pages: S.view === "pages",
+      onHead: wireHead,
+      onBlock: wireBlock,
+      onSection: wireSection,
+      onGrid: wireGrid,
+      onPaged: function () { applyZoom(); markSelection(); box.scrollTop = scroll; }
+    });
+    applyZoom();
+    markSelection();
+    box.scrollTop = scroll;
+  }
+
+  /* Contenteditable inline editing. ``opts.multiline`` keeps newlines
+   * (markdown bodies); Enter commits otherwise. ``commit`` receives the new
+   * plain text; Esc / unchanged text restores the rendered node. */
+  function inline(node, value, commit, opts) {
+    opts = opts || {};
+    if (!canEdit && !opts.always) return;
+    node.classList.add("rs-editable");
+    if (opts.placeholder) node.setAttribute("data-placeholder", opts.placeholder);
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("click", function (ev) {
+      if (node.isContentEditable) { ev.stopPropagation(); return; }
+      if (opts.selectFirst) opts.selectFirst();
+      ev.stopPropagation();
+      start();
+    });
+    node.addEventListener("keydown", function (ev) {
+      if (!node.isContentEditable && (ev.key === "Enter" || ev.key === "F2")) { ev.preventDefault(); start(); }
+    });
+    function start() {
+      var original = node.innerHTML;
+      S.editing = true;
+      node.classList.remove("ovr-placeholder");
+      node.classList.add("rs-editing");
+      node.textContent = value == null ? "" : value;
+      node.contentEditable = "plaintext-only";
+      if (node.contentEditable !== "plaintext-only") node.contentEditable = "true";
+      node.focus();
+      var sel = window.getSelection(), rng = document.createRange();
+      rng.selectNodeContents(node); rng.collapse(false); sel.removeAllRanges(); sel.addRange(rng);
+      if (opts.multiline) showMdBar(node);
+      var done = false;
+      function finish(save) {
+        if (done) return; done = true;
+        S.editing = false;
+        hideMdBar();
+        var text = node.innerText.replace(/\u00a0/g, " ");
+        if (!opts.multiline) text = text.replace(/\s*\n\s*/g, " ").trim();
+        else text = text.replace(/\n{3,}/g, "\n\n").replace(/\s+$/, "");
+        node.contentEditable = "false";
+        node.classList.remove("rs-editing");
+        node.removeEventListener("keydown", onKey);
+        node.removeEventListener("blur", onBlur);
+        if (!save || text === (value == null ? "" : String(value))) { node.innerHTML = original; return; }
+        if (opts.required && !text) { node.innerHTML = original; notice(opts.required, "error"); return; }
+        Promise.resolve(commit(text)).catch(function () { node.innerHTML = original; });
+      }
+      function onKey(ev) {
+        ev.stopPropagation();
+        if (ev.key === "Escape") { ev.preventDefault(); finish(false); node.blur(); }
+        else if (ev.key === "Enter" && (!opts.multiline || ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); finish(true); }
+        else if (opts.onKey) opts.onKey(ev, node, finish);
+      }
+      function onBlur() { setTimeout(function () { if (!mdBarHasFocus()) finish(true); }, 120); }
+      node.addEventListener("keydown", onKey);
+      node.addEventListener("blur", onBlur);
+    }
+  }
+
+  /* Markdown helper bar for multi-line inline edits: inserts markdown
+   * syntax around the selection (the server renders it, raw HTML off). */
+  var mdBar = null, mdTarget = null;
+  function mdBarHasFocus() { return mdBar && mdBar.contains(document.activeElement); }
+  function showMdBar(node) {
+    if (!mdBar) {
+      mdBar = el("div", "rs-mdbar"); mdBar.setAttribute("role", "toolbar"); mdBar.setAttribute("aria-label", "Formatting");
+      [["B", "**", "**", "Bold (Ctrl+B)"], ["I", "_", "_", "Italic (Ctrl+I)"], ["H", "### ", "", "Heading"],
+       ["\u2022", "- ", "", "Bulleted list"], ["1.", "1. ", "", "Numbered list"], ["\u201C", "> ", "", "Quote"],
+       ["</>", "`", "`", "Code"], ["\u{1F517}", "[", "](https://)", "Link"]].forEach(function (d) {
+        var b = el("button", "rs-mdbtn", d[0]); b.type = "button"; b.title = d[3]; b.setAttribute("aria-label", d[3]);
+        b.addEventListener("mousedown", function (ev) { ev.preventDefault(); wrapSel(d[1], d[2], !d[2]); });
+        mdBar.appendChild(b);
+      });
+      var hint = el("span", "rs-mdhint", "Ctrl+Enter to save · Esc to cancel");
+      mdBar.appendChild(hint);
+      document.body.appendChild(mdBar);
+    }
+    mdTarget = node;
+    var r = node.getBoundingClientRect();
+    mdBar.style.top = Math.max(8, r.top + window.scrollY - 40) + "px";
+    mdBar.style.left = Math.max(8, r.left + window.scrollX) + "px";
+    mdBar.hidden = false;
+    node.addEventListener("keydown", mdKeys);
+  }
+  function mdKeys(ev) {
+    if (!(ev.ctrlKey || ev.metaKey)) return;
+    var k = ev.key.toLowerCase();
+    if (k === "b") { ev.preventDefault(); wrapSel("**", "**"); }
+    else if (k === "i") { ev.preventDefault(); wrapSel("_", "_"); }
+  }
+  function hideMdBar() {
+    if (mdBar) mdBar.hidden = true;
+    if (mdTarget) mdTarget.removeEventListener("keydown", mdKeys);
+    mdTarget = null;
+  }
+  function wrapSel(pre, post, linePrefix) {
+    if (!mdTarget) return;
+    mdTarget.focus();
+    var sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    var rng = sel.getRangeAt(0);
+    var text = rng.toString();
+    if (linePrefix) {
+      text = (text || "").split("\n").map(function (l) { return pre + l; }).join("\n") || pre;
+      document.execCommand("insertText", false, text);
+    } else {
+      document.execCommand("insertText", false, pre + (text || "text") + post);
+    }
+  }
+
+  function upd(id, set, extra) {
+    var op = { op: "update_block", block_id: id, set: set };
+    if (extra) Object.keys(extra).forEach(function (k) { op[k] = extra[k]; });
+    return applyOps([op]);
+  }
+
+  function wireHead(head) {
+    var L = S.layout;
+    head.classList.add("rs-pickable");
+    head.addEventListener("click", function () { select("report", null); });
+    inline(head.querySelector(".ovr-title"), L.title, function (v) {
+      $("[data-title]").value = v;
+      return applyOps([{ op: "set_report", set: { title: v } }]);
+    }, { required: "A report needs a title.", placeholder: "Report title" });
+    var sub = head.querySelector(".ovr-subtitle");
+    if (sub) inline(sub, L.subtitle || "", function (v) { return applyOps([{ op: "set_report", set: { subtitle: v || null } }]); },
+                    { placeholder: "Add a subtitle" });
+    var intro = head.querySelector(".ovr-intro");
+    if (intro) inline(intro, L.description || "", function (v) { return applyOps([{ op: "set_report", set: { description: v || null } }]); },
+                      { multiline: true, placeholder: "Add an introduction…" });
+  }
+
+  function wireSection(sec, s) {
+    if (s.private) { sec.classList.add("rs-private-section"); return; }
+    var head = sec.querySelector(".ovr-section-head");
+    if (head) {
+      head.classList.add("rs-pickable");
+      head.addEventListener("click", function () { select("section", s.id); });
+      inline(head.querySelector(".ovr-section-title"), s.title, function (v) {
+        return applyOps([{ op: "update_section", section_id: s.id, set: { title: v } }]);
+      }, { required: "A section needs a title.", selectFirst: function () { select("section", s.id); } });
+    }
+    var desc = sec.querySelector(".ovr-section-desc");
+    if (desc) inline(desc, s.description || "", function (v) {
+      return applyOps([{ op: "update_section", section_id: s.id, set: { description: v || null } }]);
+    }, { multiline: true, placeholder: "Add a section description…", selectFirst: function () { select("section", s.id); } });
+    if (s.visible === false) sec.appendChild(el("span", "rs-badge rs-badge-hidden", "Hidden"));
+  }
+
+  /* "+" insertion points between blocks (and at the end of a section). */
+  function wireGrid(grid, s) {
+    if (s.private || !canEdit && !s.blocks.length) return;
+    var cards = Array.prototype.slice.call(grid.children);
+    cards.forEach(function (card, i) {
+      grid.insertBefore(addPoint(s, i), card);
+    });
+    var tail = addPoint(s, cards.length);
+    tail.classList.add("rs-addpoint-tail");
+    grid.appendChild(tail);
+  }
+
+  function addPoint(s, index) {
+    var w = el("div", "rs-addpoint");
+    var b = el("button", "rs-addpoint-btn"); b.type = "button";
+    b.setAttribute("aria-label", "Add a block here");
+    b.title = "Add a block here";
+    b.textContent = "+";
+    b.addEventListener("click", function (ev) { ev.stopPropagation(); openAddMenu(b, s, index); });
+    w.appendChild(b);
+    return w;
+  }
+
+  function wireBlock(card, b) {
+    card.classList.add("rs-pickable");
+    var priv = !!b.private;
+    if (priv) card.setAttribute("data-private", "true");
+    card.addEventListener("click", function (ev) {
+      if (ev.target.closest(".vega-embed details, a, .rs-editing")) return;
+      select(priv ? "note" : "block", b.id);
+    });
+    if (b.visible === false) card.appendChild(el("span", "rs-badge rs-badge-hidden", "Hidden"));
+    else if (b.export === false && !priv) card.appendChild(el("span", "rs-badge", "Not exported"));
+    if (priv) card.appendChild(el("span", "rs-badge rs-badge-private", "\uD83D\uDD12 Only you"));
+    var editable = priv || canEdit;
+    if (!editable) return;
+    var commit = priv
+      ? function (set) { return saveNote(b.id, set); }
+      : function (set) { return upd(b.id, set); };
+    var opts0 = { always: priv, selectFirst: function () { select(priv ? "note" : "block", b.id); } };
+    var t = card.querySelector(".ovr-block-title");
+    if (t) inline(t, b.title || "", function (v) { return commit({ title: v || null }); },
+                  Object.assign({ placeholder: "Add a title" }, opts0));
+    var cap = card.querySelector(".ovr-caption");
+    if (cap) inline(cap, b.caption || "", function (v) { return commit({ caption: v || null }); },
+                    Object.assign({ placeholder: "Add a caption" }, opts0));
+    if (b.renderer === "text" || b.renderer === "callout" || b.renderer === "note") {
+      var body = card.querySelector(b.renderer === "note" ? ".ovr-note-body" : ".ovr-body");
+      inline(body, b.markdown || "", function (v) {
+        if (!v && b.renderer !== "note") { notice("Text can't be empty — remove the block instead.", "error"); return Promise.reject(); }
+        var set = { text: v };
+        if (b.renderer !== "note" && !priv) set.text_ref = null;
+        return commit(set);
+      }, Object.assign({ multiline: true, placeholder: "Write here…" }, opts0));
+    } else if (b.renderer === "info") wireInfo(card, b, commit, opts0);
+    else if (b.renderer === "checklist") wireChecklist(card, b, commit, opts0);
+  }
+
+  function wireInfo(card, b, commit, opts0) {
+    var rows = clone(b.rows || []);
+    var dl = card.querySelector(".ovr-info");
+    function save() { return commit({ rows: rows }); }
+    Array.prototype.forEach.call(dl.querySelectorAll("dt, dd"), function (cell) {
+      var i = parseInt(cell.getAttribute("data-row"), 10), key = cell.tagName === "DT" ? "key" : "value";
+      inline(cell, rows[i][key], function (v) { rows[i][key] = v; return save(); },
+             Object.assign({ placeholder: key === "key" ? "Label" : "Value",
+                             onKey: function (ev, node, finish) {
+                               if (ev.key === "Tab") { ev.preventDefault(); finish(true); }
+                             } }, opts0));
+      if (key === "value") {
+        var x = el("button", "rs-row-x", "\u00D7"); x.type = "button"; x.title = "Remove row"; x.setAttribute("aria-label", "Remove row");
+        x.addEventListener("click", function (ev) { ev.stopPropagation(); rows.splice(i, 1); save(); });
+        cell.appendChild(x);
       }
     });
-    var hidden = 0;
-    (S.layout.sections || []).forEach(function (s) {
-      if (s.visible === false) hidden += 1;
-      (s.blocks || []).forEach(function (b) { if (b.visible === false) hidden += 1; });
+    var add = el("button", "rs-inline-add", "+ Row"); add.type = "button";
+    add.addEventListener("click", function (ev) { ev.stopPropagation(); rows.push({ key: "Label", value: "" }); save(); });
+    card.appendChild(add);
+  }
+
+  function wireChecklist(card, b, commit, opts0) {
+    var items = clone(b.items || []);
+    function save() { return commit({ items: items }); }
+    Array.prototype.forEach.call(card.querySelectorAll(".ovr-checklist li"), function (li) {
+      var i = parseInt(li.getAttribute("data-item"), 10);
+      var box = li.querySelector(".ovr-check");
+      box.setAttribute("role", "checkbox"); box.setAttribute("aria-checked", String(!!items[i].done)); box.tabIndex = 0;
+      box.classList.add("rs-editable");
+      function toggle(ev) { ev.stopPropagation(); items[i].done = !items[i].done; save(); }
+      box.addEventListener("click", toggle);
+      box.addEventListener("keydown", function (ev) { if (ev.key === " " || ev.key === "Enter") { ev.preventDefault(); toggle(ev); } });
+      inline(li.querySelector(".ovr-check-text"), items[i].text, function (v) {
+        if (!v) items.splice(i, 1); else items[i].text = v;
+        return save();
+      }, Object.assign({ placeholder: "Item", onKey: function (ev, node, finish) {
+        if (ev.key === "Enter") { ev.preventDefault(); items.splice(i + 1, 0, { text: "New item", done: false }); items[i].text = node.innerText.trim() || items[i].text; finish(false); save(); }
+      } }, opts0));
     });
-    if (hidden) {
-      var n = el("p", "rs-hidden-note note small", hidden + " hidden item(s) — not shown and not exported.");
-      box.insertBefore(n, box.firstChild);
+    var add = el("button", "rs-inline-add", "+ Item"); add.type = "button";
+    add.addEventListener("click", function (ev) { ev.stopPropagation(); items.push({ text: "New item", done: false }); save(); });
+    card.appendChild(add);
+  }
+
+  /* ---------------- floating block toolbar ---------------- */
+
+  var toolbar = null;
+  function hideToolbar() { if (toolbar) toolbar.hidden = true; }
+
+  function tbButton(label, title, fn, cls) {
+    var b = el("button", "rs-tb-btn" + (cls ? " " + cls : ""), label); b.type = "button";
+    b.title = title; b.setAttribute("aria-label", title);
+    b.addEventListener("click", function (ev) { ev.stopPropagation(); fn(); });
+    return b;
+  }
+
+  function showToolbar() {
+    var card = selectedNode();
+    if (!card || S.editing || (S.sel.kind !== "block" && S.sel.kind !== "section" && S.sel.kind !== "note")) { hideToolbar(); return; }
+    if (!toolbar) {
+      toolbar = el("div", "rs-toolbar-float"); toolbar.setAttribute("role", "toolbar"); toolbar.setAttribute("aria-label", "Block actions");
+      $("[data-canvas]").appendChild(toolbar);
     }
+    if (toolbar.parentNode !== $("[data-canvas]")) $("[data-canvas]").appendChild(toolbar);
+    toolbar.innerHTML = "";
+    var kind = S.sel.kind, id = S.sel.id;
+    if (kind === "note") {
+      toolbar.appendChild(el("span", "rs-tb-label", "Private note"));
+      toolbar.appendChild(tbButton("\u2191", "Move up", function () { moveNote(id, -1); }));
+      toolbar.appendChild(tbButton("\u2193", "Move down", function () { moveNote(id, 1); }));
+      var n = privateNote(id);
+      toolbar.appendChild(tbButton(n && n.block.export ? "\u2399" : "\u2399\u0338", n && n.block.export ? "Included in your exports — click to exclude" : "Not exported — click to include in your exports",
+        function () { saveNote(id, { export: !(n && n.block.export) }); }, n && n.block.export ? "on" : ""));
+      if (canEdit) toolbar.appendChild(tbButton("Share", "Make shared — everyone with access will see it", function () { shareNote(id); }));
+      toolbar.appendChild(tbButton("\u2715", "Delete note", function () { deleteNote(id); }, "danger"));
+    } else if (canEdit && kind === "block") {
+      var f = findBlock(id); if (!f) { hideToolbar(); return; }
+      var idx = f.section.blocks.map(function (x) { return x.id; }).indexOf(id);
+      toolbar.appendChild(el("span", "rs-tb-label", blockLabel(f.block)));
+      var up = tbButton("\u2191", "Move up (Alt+\u2191)", function () { moveSel(-1); }); up.disabled = idx === 0 && sectionIndex(f.section.id) === 0;
+      var dn = tbButton("\u2193", "Move down (Alt+\u2193)", function () { moveSel(1); });
+      dn.disabled = idx === f.section.blocks.length - 1 && sectionIndex(f.section.id) === S.layout.sections.length - 1;
+      toolbar.appendChild(up); toolbar.appendChild(dn);
+      var widths = [["full", "Full"], ["two_thirds", "\u2154"], ["half", "\u00BD"], ["third", "\u2153"]];
+      var ws = el("select", "rs-tb-select"); ws.setAttribute("aria-label", "Width"); ws.title = "Width";
+      widths.forEach(function (w) { var o = el("option", null, w[1]); o.value = w[0]; ws.appendChild(o); });
+      ws.value = f.block.width || "full";
+      ws.addEventListener("click", function (ev) { ev.stopPropagation(); });
+      ws.addEventListener("change", function () { upd(id, { width: ws.value }).catch(function () {}); });
+      toolbar.appendChild(ws);
+      toolbar.appendChild(tbButton(f.block.visible === false ? "\u25CC" : "\u25C9", f.block.visible === false ? "Show (H)" : "Hide (H)", function () { toggleHidden(); }));
+      if (FREE_TYPES.indexOf(f.block.type) !== -1) {
+        var ex = f.block.export !== false;
+        toolbar.appendChild(tbButton(ex ? "\u2399" : "\u2399\u0338", ex ? "In exports — click to keep it on screen only" : "Screen only — click to include in exports",
+          function () { upd(id, { export: ex ? false : null }).catch(function () {}); }, ex ? "on" : ""));
+      }
+      toolbar.appendChild(tbButton("\u29C9", "Duplicate (Ctrl+D)", duplicateSel));
+      if (f.block.type === "note") toolbar.appendChild(tbButton("\uD83D\uDD12", "Make private — only you will see it", function () { privatiseBlock(id); }));
+      toolbar.appendChild(tbButton("\u2715", "Remove (Delete)", removeSel, "danger"));
+    } else if (canEdit && kind === "section") {
+      var s = findSection(id); if (!s) { hideToolbar(); return; }
+      var si = sectionIndex(id);
+      toolbar.appendChild(el("span", "rs-tb-label", s.kind === "notes" ? "Notes section" : "Section"));
+      var su = tbButton("\u2191", "Move section up", function () { moveSel(-1); }); su.disabled = si === 0;
+      var sd = tbButton("\u2193", "Move section down", function () { moveSel(1); }); sd.disabled = si === S.layout.sections.length - 1;
+      toolbar.appendChild(su); toolbar.appendChild(sd);
+      toolbar.appendChild(tbButton(s.visible === false ? "\u25CC" : "\u25C9", s.visible === false ? "Show section" : "Hide section", toggleHidden));
+      toolbar.appendChild(tbButton("+", "Add a block at the end", function () { openAddMenu(toolbar, s, (s.blocks || []).length); }));
+      toolbar.appendChild(tbButton("\u2715", "Remove section", removeSel, "danger"));
+    } else { hideToolbar(); return; }
+    toolbar.hidden = false;
+    positionToolbar();
+  }
+
+  function positionToolbar() {
+    var card = selectedNode();
+    if (!toolbar || toolbar.hidden || !card) return;
+    var canvas = $("[data-canvas]");
+    var cr = canvas.getBoundingClientRect(), r = card.getBoundingClientRect();
+    var top = r.top - cr.top + canvas.scrollTop - toolbar.offsetHeight - 8;
+    if (top < canvas.scrollTop + 4) top = r.bottom - cr.top + canvas.scrollTop + 8;
+    var left = Math.min(Math.max(8, r.left - cr.left + canvas.scrollLeft), canvas.scrollWidth - toolbar.offsetWidth - 8);
+    toolbar.style.top = top + "px"; toolbar.style.left = left + "px";
+  }
+
+  function sectionIndex(id) { return (S.layout.sections || []).map(function (s) { return s.id; }).indexOf(id); }
+
+  function selectedNode() {
+    var id = S.sel.id;
+    if (S.sel.kind === "block" || S.sel.kind === "note") return root.querySelector('.ovr-block[data-block-id="' + id + '"]');
+    if (S.sel.kind === "section") return root.querySelector('.ovr-section[data-section-id="' + id + '"]:not(.ovr-section-cont)');
+    return null;
+  }
+
+  function markSelection() {
+    Array.prototype.forEach.call(root.querySelectorAll(".rs-selected"), function (n) { n.classList.remove("rs-selected"); });
+    var t = selectedNode();
+    if (t) t.classList.add("rs-selected");
+    showToolbar();
   }
 
   function select(kind, id) {
     S.sel = { kind: kind, id: id };
-    renderOutline(); renderInspector();
-    Array.prototype.forEach.call(root.querySelectorAll(".rs-selected"), function (n) { n.classList.remove("rs-selected"); });
-    var target = kind === "block" ? root.querySelector('.ovr-block[data-block-id="' + id + '"]')
-               : kind === "section" ? root.querySelector('.ovr-section[data-section-id="' + id + '"]') : null;
-    if (target) { target.classList.add("rs-selected"); target.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
+    if (kind !== S.lastKind) S.tab = "content";
+    S.lastKind = kind;
+    renderOutline(); renderInspector(); markSelection();
+    var t = selectedNode();
+    if (t && !S.editing) {
+      var cr = $("[data-canvas]").getBoundingClientRect(), r = t.getBoundingClientRect();
+      if (r.top < cr.top || r.bottom > cr.bottom) t.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }
+
+  /* ---------------- block actions ---------------- */
+
+  function moveSel(dir) {
+    if (!canEdit) return;
+    if (S.sel.kind === "note") { moveNote(S.sel.id, dir); return; }
+    if (S.sel.kind === "section") {
+      var si = sectionIndex(S.sel.id), to = si + dir;
+      if (to < 0 || to >= S.layout.sections.length) return;
+      applyOps([{ op: "move_section", section_id: S.sel.id, index: to }]).catch(function () {});
+      return;
+    }
+    if (S.sel.kind !== "block") return;
+    var f = findBlock(S.sel.id); if (!f) return;
+    var ids = f.section.blocks.map(function (x) { return x.id; });
+    var i = ids.indexOf(S.sel.id) + dir;
+    var op;
+    if (i >= 0 && i < ids.length) op = { op: "move_block", block_id: S.sel.id, index: i };
+    else {
+      // Cross into the neighbouring section (end of the previous / start of the next).
+      var ns = S.layout.sections[sectionIndex(f.section.id) + dir];
+      if (!ns) return;
+      op = { op: "move_block", block_id: S.sel.id, section_id: ns.id, index: dir < 0 ? -1 : 0 };
+    }
+    applyOps([op]).catch(function () {});
+  }
+
+  function toggleHidden() {
+    if (!canEdit) return;
+    var node = S.sel.kind === "block" ? (findBlock(S.sel.id) || {}).block : S.sel.kind === "section" ? findSection(S.sel.id) : null;
+    if (!node) return;
+    var hide = node.visible !== false;
+    applyOps([{ op: "set_visibility", target_id: node.id, visible: !hide }]).then(function () {
+      if (hide && !S.showHidden) notice("Hidden — turn on “Hidden” in the canvas bar to see hidden items.", "ok");
+    }).catch(function () {});
+  }
+
+  function duplicateSel() {
+    if (!canEdit || S.sel.kind !== "block") return;
+    var f = findBlock(S.sel.id); if (!f) return;
+    var b = f.block, s = f.section;
+    var copy = clone(b); delete copy.id; delete copy.author; delete copy.updated_at;
+    if (copy.title) copy.title = copy.title + " (copy)";
+    var idx = s.blocks.map(function (x) { return x.id; }).indexOf(b.id) + 1;
+    applyOps([{ op: "add_block", section_id: s.id, index: idx, block: copy }]).then(function () { select("block", findSection(s.id).blocks[idx].id); }).catch(function () {});
+  }
+
+  function removeSel() {
+    if (S.sel.kind === "note") { deleteNote(S.sel.id); return; }
+    if (!canEdit) return;
+    if (S.sel.kind === "section") {
+      var s = findSection(S.sel.id); if (!s) return;
+      if (!window.confirm("Remove the section “" + s.title + "” and its " + (s.blocks || []).length + " block(s)? (Undo restores it.)")) return;
+      applyOps([{ op: "remove_section", section_id: s.id }]).then(function () { select("report", null); }).catch(function () {});
+    } else if (S.sel.kind === "block") {
+      var f = findBlock(S.sel.id); if (!f) return;
+      applyOps([{ op: "remove_block", block_id: f.block.id }]).then(function () { select("section", f.section.id); }).catch(function () {});
+    }
+  }
+
+  /* Add-block menu (popover) anchored at ``anchor``; inserts at ``index``. */
+  var addMenu = null;
+  function closeAddMenu() { if (addMenu) { addMenu.remove(); addMenu = null; } }
+
+  var FREE_PRESETS = [
+    ["text", "Text", "Paragraph (markdown)", function () { return { type: "text", text: "Write here…" }; }],
+    ["callout", "Callout", "Highlighted message", function () { return { type: "callout", tone: "info", text: "**Note:** …" }; }],
+    ["note", "Note", "Shared note with author and date", function () { return { type: "note", text: "", tone: "note" }; }],
+    ["info", "Info", "Labels and values (e.g. Reviewer, Date)", function () { return { type: "info", title: "Details", rows: [{ key: "Reviewer", value: "" }, { key: "Date", value: "" }] }; }],
+    ["checklist", "Checklist", "Tick-box action items", function () { return { type: "checklist", title: "Action items", items: [{ text: "First item", done: false }] }; }],
+    ["divider", "Divider", "Horizontal rule", function () { return { type: "divider" }; }],
+    ["spacer", "Spacer", "Vertical space", function () { return { type: "spacer", size: "md" }; }]
+  ];
+
+  function openAddMenu(anchor, s, index) {
+    closeAddMenu();
+    addMenu = el("div", "rs-addmenu"); addMenu.setAttribute("role", "menu");
+    addMenu.addEventListener("click", function (ev) { ev.stopPropagation(); });
+    if (canEdit) {
+      addMenu.appendChild(el("h4", null, "Free content"));
+      var g = el("div", "rs-addmenu-grid");
+      FREE_PRESETS.forEach(function (p) {
+        var b = el("button", "rs-addmenu-item"); b.type = "button"; b.setAttribute("role", "menuitem");
+        b.appendChild(el("span", "rs-addmenu-ico rs-ico-" + p[0]));
+        var t = el("span", "rs-addmenu-text"); t.appendChild(el("strong", null, p[1])); t.appendChild(el("span", null, p[2]));
+        b.appendChild(t);
+        b.addEventListener("click", function () { closeAddMenu(); insertBlock(s, index, p[3]()); });
+        g.appendChild(b);
+      });
+      addMenu.appendChild(g);
+    }
+    addMenu.appendChild(el("h4", null, "Only you"));
+    var pn = el("button", "rs-addmenu-item rs-addmenu-wide"); pn.type = "button"; pn.setAttribute("role", "menuitem");
+    pn.appendChild(el("span", "rs-addmenu-ico rs-ico-private"));
+    var pt = el("span", "rs-addmenu-text"); pt.appendChild(el("strong", null, "Private note")); pt.appendChild(el("span", null, "Visible to you only, never shared"));
+    pn.appendChild(pt);
+    pn.addEventListener("click", function () {
+      closeAddMenu();
+      var after = index > 0 && s.blocks[index - 1] ? s.blocks[index - 1].id : null;
+      createNote(s.id, after);
+    });
+    addMenu.appendChild(pn);
+    if (canEdit) {
+      var more = el("button", "rs-addmenu-more", "Chart, table or KPI…"); more.type = "button";
+      more.addEventListener("click", function () { closeAddMenu(); S.sel = { kind: "new-block", id: s.id, index: index }; renderOutline(); renderInspector(); markSelection(); });
+      addMenu.appendChild(more);
+    }
+    document.body.appendChild(addMenu);
+    var r = anchor.getBoundingClientRect();
+    var top = r.bottom + window.scrollY + 6, left = r.left + window.scrollX - 8;
+    left = Math.min(left, window.scrollX + window.innerWidth - addMenu.offsetWidth - 12);
+    if (r.bottom + addMenu.offsetHeight + 12 > window.innerHeight) top = r.top + window.scrollY - addMenu.offsetHeight - 6;
+    addMenu.style.top = Math.max(8, top) + "px"; addMenu.style.left = Math.max(8, left) + "px";
+    var first = addMenu.querySelector("button"); if (first) first.focus();
+  }
+
+  function insertBlock(s, index, block) {
+    // ``s`` may be a render-model section; resolve its id against the layout.
+    var sec = findSection(s.id); if (!sec) return;
+    // Model indices skip hidden blocks in view mode — map to layout order.
+    var msec = (S.model.sections.filter(function (x) { return x.id === s.id; })[0] || { blocks: [] });
+    var shown = msec.blocks.filter(function (b) { return !b.private; });
+    var priorPrivate = msec.blocks.slice(0, Math.min(index, msec.blocks.length)).filter(function (b) { return b.private; }).length;
+    var mi = index - priorPrivate;
+    var at = mi >= shown.length ? sec.blocks.length
+           : sec.blocks.map(function (b) { return b.id; }).indexOf(shown[mi].id);
+    if (at < 0) at = sec.blocks.length;
+    applyOps([{ op: "add_block", section_id: sec.id, index: at, block: block }]).then(function () {
+      var nb = findSection(sec.id).blocks[at];
+      if (nb) select("block", nb.id);
+    }).catch(function () {});
+  }
+
+  /* ---------------- private notes ---------------- */
+
+  function notesPath(id) { return "/reports/" + encodeURIComponent(RID) + "/notes" + (id ? "/" + encodeURIComponent(id) : ""); }
+  function loadNotes() {
+    return api("GET", notesPath()).then(function (rows) { S.notes = rows || []; }).catch(function () { S.notes = []; });
+  }
+  function refreshNotes(selectId) {
+    return loadNotes().then(function () { return rerender(); }).then(function () {
+      renderOutline();
+      if (selectId) select("note", selectId); else renderInspector();
+    });
+  }
+  function createNote(sectionId, afterId) {
+    if (!S.showPrivate) { S.showPrivate = true; var t = $("[data-toggle-private]"); if (t) t.checked = true; }
+    return api("POST", notesPath(), { section_id: sectionId, after_block_id: afterId,
+                                      block: { type: "note", text: "", tone: "note", export: false } })
+      .then(function (n) { notice("Private note added — only you can see it.", "ok"); return refreshNotes(n.note_id); })
+      .catch(function (e) { notice(e.message, "error"); });
+  }
+  function saveNote(id, set) {
+    return api("PUT", notesPath(id), { block: set })
+      .then(function () { return refreshNotes(id); })
+      .catch(function (e) { notice(e.message, "error"); throw e; });
+  }
+  function deleteNote(id) {
+    if (!window.confirm("Delete this private note? This cannot be undone.")) return;
+    api("DELETE", notesPath(id)).then(function () { S.sel = { kind: "report", id: null }; return refreshNotes(null); })
+      .catch(function (e) { notice(e.message, "error"); });
+  }
+  /* Move a private note one slot up / down among the *visible* blocks of its
+   * section (anchors are "after block X"). */
+  function moveNote(id, dir) {
+    var n = privateNote(id); if (!n) return;
+    var sec = S.model.sections.filter(function (s) { return s.blocks.some(function (b) { return b.id === id; }); })[0];
+    if (!sec) return;
+    var ids = sec.blocks.map(function (b) { return b.id; });
+    var i = ids.indexOf(id);
+    var others = ids.filter(function (x) { return x !== id; });
+    var to = Math.max(0, Math.min(others.length, i + dir));
+    var after = to === 0 ? null : others[to - 1];
+    var sid = findSection(sec.id) ? sec.id : n.section_id;
+    if (after && isPrivateId(after)) {
+      // Anchor to the shared block that the private neighbour follows.
+      var nb = privateNote(after); after = nb ? nb.after_block_id : null;
+    }
+    api("PUT", notesPath(id), { move: true, section_id: sid, after_block_id: after })
+      .then(function () { return refreshNotes(id); }).catch(function (e) { notice(e.message, "error"); });
+  }
+  function shareNote(id) {
+    var n = privateNote(id); if (!n || !canEdit) return;
+    if (!window.confirm("Make this note shared? Everyone with access to the report will see it. (It moves into the report; Undo removes it again.)")) return;
+    var sec = findSection(n.section_id);
+    var block = clone(n.block); delete block.id; delete block.author; delete block.updated_at; block.export = true;
+    var at = 0;
+    if (sec && n.after_block_id) at = sec.blocks.map(function (b) { return b.id; }).indexOf(n.after_block_id) + 1;
+    var ops = sec ? [{ op: "add_block", section_id: sec.id, index: at, block: block }]
+                  : [{ op: "add_section", title: "Notes", kind: "notes", section_id: "notes_" + id.slice(3, 9) },
+                     { op: "add_block", section_id: "notes_" + id.slice(3, 9), block: block }];
+    applyOps(ops).then(function () { return api("DELETE", notesPath(id)); })
+      .then(function () { return refreshNotes(null); })
+      .then(function () { notice("Note is now shared — press Save to keep it.", "ok"); })
+      .catch(function (e) { if (e && e.message) notice(e.message, "error"); });
+  }
+  function privatiseBlock(id) {
+    var f = findBlock(id); if (!f) return;
+    if (!window.confirm("Make this note private? It is removed from the shared report (older versions in History still contain it).")) return;
+    var idx = f.section.blocks.map(function (b) { return b.id; }).indexOf(id);
+    var after = idx > 0 ? f.section.blocks[idx - 1].id : null;
+    var block = clone(f.block); delete block.id; delete block.author; delete block.updated_at;
+    api("POST", notesPath(), { section_id: f.section.id, after_block_id: after, block: block })
+      .then(function (n) {
+        return applyOps([{ op: "remove_block", block_id: id }]).then(function () { return refreshNotes(n.note_id); });
+      })
+      .then(function () { notice("Note is now private — press Save to remove it from the shared report.", "ok"); })
+      .catch(function (e) { if (e && e.message) notice(e.message, "error"); });
   }
 
   /* ---------------- outline ---------------- */
@@ -317,10 +899,29 @@
     return wrap;
   }
 
+  var TYPE_LABEL = { text: "Text", callout: "Callout", note: "Note", info: "Info", checklist: "Checklist",
+                     divider: "Divider", spacer: "Spacer" };
   function blockLabel(b) {
     if (b.title) return b.title;
     if (b.type === "chart") { var c = chart(b.chart); return (c ? c.label : b.chart) + (b.dataset ? " · " + b.dataset : ""); }
-    return b.type === "callout" ? "Callout" : "Text";
+    if ((b.type === "note" || b.type === "text") && b.text) return String(b.text).replace(/[#*_`>\-]/g, "").trim().slice(0, 40) || TYPE_LABEL[b.type];
+    return TYPE_LABEL[b.type] || b.type;
+  }
+
+  function privateIn(sectionId) {
+    var sec = (S.model && S.model.sections || []).filter(function (s) { return s.id === sectionId; })[0];
+    return sec ? sec.blocks.filter(function (b) { return b.private; }) : [];
+  }
+
+  function noteRow(b) {
+    var li = el("li", "rs-node rs-node-block rs-node-private");
+    var row = el("div", "rs-row" + (S.sel.kind === "note" && S.sel.id === b.id ? " active" : ""));
+    row.appendChild(el("span", "rs-lock", "\uD83D\uDD12"));
+    row.appendChild(el("span", "rs-kind", "private"));
+    row.appendChild(el("span", "rs-label", b.title || (b.markdown || "").slice(0, 40) || "Private note"));
+    row.addEventListener("click", function () { select("note", b.id); });
+    li.appendChild(row);
+    return li;
   }
 
   function renderOutline() {
@@ -331,11 +932,12 @@
     var sections = S.layout.sections || [];
     if (!sections.length) ol.appendChild(el("li", "note small", "No sections yet."));
     sections.forEach(function (s, si) {
-      var li = el("li", "rs-node rs-node-section" + (s.visible === false ? " rs-off" : ""));
+      var li = el("li", "rs-node rs-node-section" + (s.visible === false ? " rs-off" : "") + (s.kind === "notes" ? " rs-node-notes" : ""));
       li.setAttribute("data-kind", "section"); li.setAttribute("data-id", s.id);
       var row = el("div", "rs-row" + (S.sel.kind === "section" && S.sel.id === s.id ? " active" : ""));
       row.draggable = canEdit;
       row.appendChild(el("span", "rs-grip", "\u2807"));
+      if (s.kind === "notes") row.appendChild(el("span", "rs-kind", "notes"));
       row.appendChild(el("span", "rs-label", s.title));
       row.appendChild(moveButtons("section", s.id, si, sections.length));
       row.appendChild(eyeButton(s, true));
@@ -343,8 +945,11 @@
       wireDrag(row, "section", s.id, null);
       li.appendChild(row);
       var bl = el("ol", "rs-tree-blocks");
+      var priv = S.showPrivate ? privateIn(s.id) : [];
       (s.blocks || []).forEach(function (b, bi) {
-        var bli = el("li", "rs-node rs-node-block" + (b.visible === false ? " rs-off" : ""));
+        priv.filter(function (p) { var n = privateNote(p.id); return n && (n.after_block_id || null) === (bi === 0 ? null : s.blocks[bi - 1].id); })
+          .forEach(function (p) { bl.appendChild(noteRow(p)); });
+        var bli = el("li", "rs-node rs-node-block" + (b.visible === false ? " rs-off" : "") + (b.export === false ? " rs-noexport" : ""));
         var brow = el("div", "rs-row" + (S.sel.kind === "block" && S.sel.id === b.id ? " active" : ""));
         brow.draggable = canEdit;
         brow.appendChild(el("span", "rs-grip", "\u2807"));
@@ -357,14 +962,27 @@
         bli.appendChild(brow);
         bl.appendChild(bli);
       });
-      if (canEdit) {
-        var add = el("li", "rs-add-block");
-        var ab = el("button", "rs-add-btn", "+ Block"); ab.type = "button";
-        ab.addEventListener("click", function () { S.sel = { kind: "new-block", id: s.id }; renderOutline(); renderInspector(); });
-        add.appendChild(ab); bl.appendChild(add);
-      }
+      var last = (s.blocks || []).length ? s.blocks[s.blocks.length - 1].id : null;
+      priv.filter(function (p) { var n = privateNote(p.id); return n && (n.after_block_id || null) === last && (last !== null || !(s.blocks || []).length); })
+        .forEach(function (p) { bl.appendChild(noteRow(p)); });
+      var add = el("li", "rs-add-block");
+      var ab = el("button", "rs-add-btn", "+ Add"); ab.type = "button";
+      ab.addEventListener("click", function (ev) { ev.stopPropagation(); openAddMenu(ab, s, (s.blocks || []).length); });
+      add.appendChild(ab); bl.appendChild(add);
       li.appendChild(bl);
       ol.appendChild(li);
+    });
+    // Private notes whose section no longer exists ("My notes" tray).
+    var trays = (S.model && S.model.sections || []).filter(function (s) { return s.private; });
+    trays.forEach(function (s) {
+      var li = el("li", "rs-node rs-node-section rs-node-notes");
+      var row = el("div", "rs-row");
+      row.appendChild(el("span", "rs-lock", "\uD83D\uDD12"));
+      row.appendChild(el("span", "rs-label", "Unplaced notes"));
+      li.appendChild(row);
+      var bl = el("ol", "rs-tree-blocks");
+      s.blocks.forEach(function (b) { bl.appendChild(noteRow(b)); });
+      li.appendChild(bl); ol.appendChild(li);
     });
   }
 
@@ -463,15 +1081,223 @@
     return c;
   }
 
+  /* Tabs: Content / Format (/ Data for charts). */
+  function renderTabs(tabs) {
+    var bar = $("[data-inspector-tabs]");
+    bar.innerHTML = "";
+    bar.hidden = !tabs || tabs.length < 2;
+    if (bar.hidden) return;
+    if (tabs.indexOf(S.tab) === -1) S.tab = tabs[0];
+    tabs.forEach(function (t) {
+      var b = el("button", "rs-tab", t.charAt(0).toUpperCase() + t.slice(1)); b.type = "button";
+      b.setAttribute("role", "tab"); b.setAttribute("aria-selected", String(S.tab === t));
+      b.addEventListener("click", function () { S.tab = t; renderInspector(); });
+      bar.appendChild(b);
+    });
+  }
+
   function renderInspector() {
     var box = $("[data-inspector]");
     box.innerHTML = "";
     var t = $("[data-inspector-title]");
-    if (S.sel.kind === "section" && findSection(S.sel.id)) { t.textContent = "Section"; inspectSection(box, findSection(S.sel.id)); }
-    else if (S.sel.kind === "block" && findBlock(S.sel.id)) { t.textContent = "Block"; inspectBlock(box, findBlock(S.sel.id)); }
-    else if (S.sel.kind === "new-block" && findSection(S.sel.id)) { t.textContent = "Add a block"; gallery(box, findSection(S.sel.id), null); }
-    else { S.sel = { kind: "report", id: null }; t.textContent = "Report"; inspectReport(box); }
+    if (S.sel.kind === "section" && findSection(S.sel.id)) {
+      var s = findSection(S.sel.id);
+      t.textContent = s.kind === "notes" ? "Notes section" : "Section";
+      renderTabs(["content", "format"]);
+      if (S.tab === "format") formatPanel(box, s, "section"); else inspectSection(box, s);
+    } else if (S.sel.kind === "block" && findBlock(S.sel.id)) {
+      var f = findBlock(S.sel.id);
+      t.textContent = f.block.type === "chart" ? "Chart" : (TYPE_LABEL[f.block.type] || "Block");
+      renderTabs(f.block.type === "chart" ? ["content", "format", "data"] : ["content", "format"]);
+      if (S.tab === "format") formatPanel(box, f.block, "block");
+      else if (S.tab === "data") inspectData(box, f);
+      else inspectBlock(box, f);
+    } else if (S.sel.kind === "note" && privateNote(S.sel.id)) {
+      t.textContent = "Private note"; renderTabs(null); inspectNote(box, privateNote(S.sel.id));
+    } else if (S.sel.kind === "new-block" && findSection(S.sel.id)) {
+      t.textContent = "Add a block"; renderTabs(null); gallery(box, findSection(S.sel.id), null);
+    } else { S.sel = { kind: "report", id: null }; t.textContent = "Report"; renderTabs(null); inspectReport(box); }
   }
+
+  /* ---------------- format panel ---------------- */
+
+  var COLOR_ROLES = [["accent", "Accent"], ["text", "Text"], ["muted", "Muted"], ["surface", "Surface"],
+                     ["background", "Paper"], ["border", "Border"]];
+
+  function currentTheme() { return theme(S.layout.theme || S.catalogue.default_theme) || (S.catalogue.themes || [])[0] || { colors: {}, palette: [], status: {} }; }
+
+  function resolveRef(ref) {
+    var th = currentTheme();
+    if (!ref) return null;
+    if (ref.charAt(0) === "#") return ref;
+    if (ref.indexOf("palette:") === 0) { var p = th.palette || []; return p.length ? p[parseInt(ref.slice(8), 10) % p.length] : null; }
+    if (ref.indexOf("status:") === 0) return (th.status || {})[ref.slice(7)] || null;
+    return (th.colors || {})[ref] || null;
+  }
+
+  function refLabel(ref) {
+    if (!ref) return "";
+    if (ref.charAt(0) === "#") return ref + " (fixed)";
+    if (ref.indexOf("palette:") === 0) return "Palette " + (parseInt(ref.slice(8), 10) + 1);
+    if (ref.indexOf("status:") === 0) return "Status · " + ref.slice(7).replace(/_/g, " ");
+    var hit = COLOR_ROLES.filter(function (r) { return r[0] === ref; })[0];
+    return hit ? "Theme " + hit[1].toLowerCase() : ref;
+  }
+
+  /* One colour row: current swatch + token, a picker of theme swatches
+   * (palette / roles / status) or a custom hex, and a reset. */
+  function colorField(label, key, style, inherit, onSet, hint) {
+    var row = el("div", "rs-color-row");
+    var head = el("div", "rs-color-head");
+    var lab = el("span", "rs-field-label", label);
+    if (hint && window.Ovid2HelpTip) { lab.appendChild(document.createTextNode(" ")); lab.appendChild(window.Ovid2HelpTip.tip(hint)); }
+    head.appendChild(lab);
+    var ref = style[key];
+    var cur = el("span", "rs-color-cur");
+    var sw = el("span", "rs-swatch-dot"); sw.style.background = resolveRef(ref) || inherit.hex || "transparent";
+    cur.appendChild(sw);
+    cur.appendChild(el("span", "rs-color-token", ref ? refLabel(ref) : "Theme default" + (inherit.label ? " · " + inherit.label : "")));
+    head.appendChild(cur);
+    if (ref && canEdit) {
+      var rs = el("button", "rs-reset", "\u21BA"); rs.type = "button"; rs.title = "Reset to theme default"; rs.setAttribute("aria-label", "Reset " + label);
+      rs.addEventListener("click", function () { var o = {}; o[key] = null; onSet(o); });
+      head.appendChild(rs);
+    }
+    row.appendChild(head);
+    if (!canEdit) return row;
+    var th = currentTheme();
+    var grid = el("div", "rs-swatch-grid"); grid.setAttribute("role", "radiogroup"); grid.setAttribute("aria-label", label);
+    function opt(value, hex, title) {
+      var b = el("button", "rs-swatch-pick" + (ref === value ? " active" : "")); b.type = "button";
+      b.style.background = hex; b.title = title; b.setAttribute("aria-label", title);
+      b.setAttribute("role", "radio"); b.setAttribute("aria-checked", String(ref === value));
+      b.addEventListener("click", function () { var o = {}; o[key] = value; onSet(o); });
+      grid.appendChild(b);
+    }
+    COLOR_ROLES.forEach(function (r) { if ((th.colors || {})[r[0]]) opt(r[0], th.colors[r[0]], "Theme " + r[1].toLowerCase()); });
+    (th.palette || []).slice(0, 10).forEach(function (hex, i) { opt("palette:" + i, hex, "Palette " + (i + 1)); });
+    ["passed", "warning", "exception"].forEach(function (k) { if ((th.status || {})[k]) opt("status:" + k, th.status[k], "Status · " + k); });
+    var custom = el("label", "rs-swatch-custom"); custom.title = "Custom colour (fixed — does not follow theme changes)";
+    var inp = el("input"); inp.type = "color"; inp.value = (ref && ref.charAt(0) === "#") ? ref : (resolveRef(ref) || inherit.hex || "#1f6feb");
+    inp.setAttribute("aria-label", label + " custom colour");
+    inp.addEventListener("change", function () { var o = {}; o[key] = inp.value.toLowerCase(); onSet(o); });
+    custom.appendChild(inp);
+    grid.appendChild(custom);
+    row.appendChild(grid);
+    return row;
+  }
+
+  function segmented(label, key, options, style, onSet, dflt) {
+    var w = el("div", "rs-field");
+    var head = el("div", "rs-color-head");
+    head.appendChild(el("span", "rs-field-label", label));
+    if (style[key] && canEdit) {
+      var rs = el("button", "rs-reset", "\u21BA"); rs.type = "button"; rs.title = "Reset to theme default"; rs.setAttribute("aria-label", "Reset " + label);
+      rs.addEventListener("click", function () { var o = {}; o[key] = null; onSet(o); });
+      head.appendChild(rs);
+    }
+    w.appendChild(head);
+    var seg = el("div", "rs-seg rs-seg-sm"); seg.setAttribute("role", "radiogroup"); seg.setAttribute("aria-label", label);
+    var cur = style[key] || dflt;
+    options.forEach(function (o) {
+      var b = el("button", null, o[1]); b.type = "button"; b.setAttribute("role", "radio");
+      b.setAttribute("aria-checked", String(cur === o[0])); b.disabled = !canEdit;
+      if (o[2]) b.title = o[2];
+      b.addEventListener("click", function () { var x = {}; x[key] = o[0] === dflt && !style[key] ? null : o[0]; onSet(x); });
+      seg.appendChild(b);
+    });
+    w.appendChild(seg);
+    return w;
+  }
+
+  function formatPanel(box, node, kind) {
+    var th = currentTheme();
+    var style = node.style || {};
+    var c = th.colors || {};
+    function onSet(o) {
+      var op = kind === "section" ? { op: "update_section", section_id: node.id, set: { style: o }, merge_style: true }
+                                  : { op: "update_block", block_id: node.id, set: { style: o }, merge_style: true };
+      return applyOps([op]).then(function () { renderInspector(); }).catch(function () {});
+    }
+    // Effective formatting summary (what the selection looks like now).
+    var eff = el("div", "rs-effective");
+    eff.appendChild(el("h3", "rs-group-title", "Effective formatting"));
+    var fonts = th.fonts || {}, sizes = th.sizes || {};
+    var scale = { sm: 0.88, md: 1, lg: 1.18 }[style.font_scale || "md"];
+    var dl = el("dl", "rs-eff-list");
+    function row(k, v, hex) {
+      dl.appendChild(el("dt", null, k));
+      var dd = el("dd");
+      if (hex) { var d = el("span", "rs-swatch-dot"); d.style.background = hex; dd.appendChild(d); }
+      dd.appendChild(document.createTextNode(v));
+      dl.appendChild(dd);
+    }
+    row("Theme", th.label || th.name || "");
+    row("Font", String(fonts[kind === "section" ? "heading" : "body"] || "").split(",")[0].replace(/['"]/g, ""));
+    row("Size", Math.round((kind === "section" ? sizes.heading || 15 : sizes.base || 11) * scale * 10) / 10 + " pt");
+    row("Text", resolveRef(style.text_color) || c.text || "", resolveRef(style.text_color) || c.text);
+    row("Accent", resolveRef(style.accent) || c.accent || "", resolveRef(style.accent) || c.accent);
+    row("Fill", resolveRef(style.background) || (style.emphasis === "filled" ? c.surface : "none"), resolveRef(style.background) || (style.emphasis === "filled" ? c.surface : null));
+    eff.appendChild(dl);
+    box.appendChild(eff);
+
+    box.appendChild(el("h3", "rs-group-title", "Colour"));
+    box.appendChild(colorField("Text colour", "text_color", style, { hex: c.text, label: "text" }, onSet,
+      "Theme colours follow the report theme when you switch it; a custom colour stays fixed."));
+    box.appendChild(colorField("Accent", "accent", style, { hex: c.accent, label: "accent" }, onSet,
+      "Used for chart marks, the callout / note edge, outlines, dividers and ticked boxes."));
+    box.appendChild(colorField("Background", "background", style, { hex: null, label: "none" }, onSet));
+
+    box.appendChild(el("h3", "rs-group-title", "Text"));
+    box.appendChild(segmented("Alignment", "align", [["left", "Left"], ["center", "Centre"], ["right", "Right"]], style, onSet, "left"));
+    box.appendChild(segmented("Size", "font_scale", [["sm", "Small"], ["md", "Normal"], ["lg", "Large"]], style, onSet, "md"));
+
+    if (kind === "block") {
+      box.appendChild(el("h3", "rs-group-title", "Box"));
+      box.appendChild(segmented("Emphasis", "emphasis", [["plain", "Plain"], ["card", "Card"], ["outlined", "Outline"], ["filled", "Filled"]], style, onSet, "plain"));
+      box.appendChild(segmented("Border", "border", [["none", "None"], ["subtle", "Subtle"], ["strong", "Strong"]], style, onSet, ""));
+      box.appendChild(segmented("Padding", "padding", [["compact", "Compact"], ["normal", "Normal"], ["roomy", "Roomy"]], style, onSet, "normal"));
+    }
+    if (Object.keys(style).length && canEdit) {
+      var acts = el("div", "rs-actions");
+      var clr = el("button", "button small", "Reset all formatting"); clr.type = "button";
+      clr.addEventListener("click", function () {
+        var op = kind === "section" ? { op: "update_section", section_id: node.id, set: { style: null } }
+                                    : { op: "update_block", block_id: node.id, set: { style: null } };
+        applyOps([op]).then(function () { renderInspector(); }).catch(function () {});
+      });
+      acts.appendChild(clr); box.appendChild(acts);
+    }
+  }
+
+  function inspectNote(box, n) {
+    var b = n.block;
+    var badge = el("p", "rs-private-banner", "\uD83D\uDD12 Only you can see this note.");
+    box.appendChild(badge);
+    function set(o) { return saveNote(n.note_id, o).catch(function () {}); }
+    box.appendChild(field("Title", textInputAny(b.title, function (v) { set({ title: v || null }); }, { max: 200 })));
+    box.appendChild(field("Colour", selectAny(["note", "info", "success", "warning", "danger"].map(function (x) { return { value: x, label: x.charAt(0).toUpperCase() + x.slice(1) }; }),
+      b.tone || "note", function (v) { set({ tone: v }); })));
+    box.appendChild(field("Text (markdown)", textInputAny(b.text, function (v) { set({ text: v }); }, { multiline: true, rows: 8, max: 20000 })));
+    var ex = el("label", "rs-check"); ex.appendChild(checkAny(!!b.export, function (v) { set({ export: v }); }));
+    ex.appendChild(document.createTextNode(" Include in my exports"));
+    box.appendChild(ex);
+    var acts = el("div", "rs-actions");
+    if (canEdit) {
+      var sh = el("button", "button small", "Make shared…"); sh.type = "button";
+      sh.addEventListener("click", function () { shareNote(n.note_id); });
+      acts.appendChild(sh);
+    }
+    var del = el("button", "button small danger", "Delete"); del.type = "button";
+    del.addEventListener("click", function () { deleteNote(n.note_id); });
+    acts.appendChild(del);
+    box.appendChild(acts);
+  }
+
+  /* Inputs that stay enabled for viewers (private notes are theirs). */
+  function textInputAny(value, onCommit, opts) { var i = textInput(value, onCommit, opts); i.disabled = false; return i; }
+  function selectAny(options, value, onChange) { var s = selectInput(options, value, onChange); s.disabled = false; return s; }
+  function checkAny(value, onChange) { var c = checkInput(value, onChange); c.disabled = false; return c; }
 
   function inspectReport(box) {
     var L = S.layout;
@@ -529,7 +1355,9 @@
     var row = el("div", "rs-checks");
     var vis = el("label", "rs-check"); vis.appendChild(checkInput(s.visible !== false, function (v) { upd({ visible: v }); })); vis.appendChild(document.createTextNode(" Visible"));
     var pb = el("label", "rs-check"); pb.appendChild(checkInput(s.page_break_before, function (v) { upd({ page_break_before: v }); })); pb.appendChild(document.createTextNode(" Start on a new page"));
-    row.appendChild(vis); row.appendChild(pb); box.appendChild(row);
+    var nk = el("label", "rs-check"); nk.appendChild(checkInput(s.kind === "notes", function (v) { upd({ kind: v ? "notes" : null }); }));
+    nk.appendChild(document.createTextNode(" Additional-information section"));
+    row.appendChild(vis); row.appendChild(pb); row.appendChild(nk); box.appendChild(row);
     if (canEdit) {
       var acts = el("div", "rs-actions");
       var add = el("button", "button small", "+ Block"); add.type = "button";
@@ -550,19 +1378,13 @@
     var wrap = el("div", "rs-gallery");
     if (!current) {
       var basics = el("div", "rs-gallery-row");
-      [["text", "Text", "Markdown paragraph"], ["callout", "Callout", "Highlighted note"]].forEach(function (k) {
-        var b = el("button", "rs-tile"); b.type = "button"; b.title = k[2];
-        b.appendChild(el("span", "rs-tile-name", k[1]));
-        b.addEventListener("click", function () {
-          var blk = { type: k[0], text: k[0] === "callout" ? "**Note:** …" : "Write here…" };
-          if (k[0] === "callout") blk.tone = "info";
-          applyOps([{ op: "add_block", section_id: section.id, block: blk }]).then(function () {
-            var s = findSection(section.id); var nb = s.blocks[s.blocks.length - 1]; select("block", nb.id);
-          }).catch(function () {});
-        });
+      FREE_PRESETS.forEach(function (p) {
+        var b = el("button", "rs-tile"); b.type = "button"; b.title = p[2];
+        b.appendChild(el("span", "rs-tile-name", p[1]));
+        b.addEventListener("click", function () { insertAt(section, p[3]()); });
         basics.appendChild(b);
       });
-      wrap.appendChild(el("h3", "rs-gallery-cat", "Text"));
+      wrap.appendChild(el("h3", "rs-gallery-cat", "Free content"));
       wrap.appendChild(basics);
     }
     var dsNames = Object.keys((S.source && S.source.datasets) || {});
@@ -619,10 +1441,15 @@
       applyOps([{ op: "update_block", block_id: current.id, set: { type: "chart", chart: c.name, dataset: dsName, params: params } }])
         .then(function () { renderInspector(); }).catch(function () {});
     } else {
-      applyOps([{ op: "add_block", section_id: section.id, block: { type: "chart", chart: c.name, dataset: dsName, params: params, title: c.label } }])
-        .then(function () { var s = findSection(section.id); select("block", s.blocks[s.blocks.length - 1].id); })
-        .catch(function () {});
+      insertAt(section, { type: "chart", chart: c.name, dataset: dsName, params: params, title: c.label });
     }
+  }
+
+  /* Insert at the "+" point that opened the gallery (S.sel.index, a
+   * render-model index) or at the end of the section. */
+  function insertAt(section, block) {
+    var idx = S.sel.kind === "new-block" && typeof S.sel.index === "number" ? S.sel.index : Infinity;
+    insertBlock(section, idx, block);
   }
 
   function inspectBlock(box, found) {
@@ -632,62 +1459,149 @@
       if (merge) op.merge_params = true;
       return applyOps([op]).then(function () { renderInspector(); }).catch(function () {});
     }
-    box.appendChild(field("Title", textInput(b.title, function (v) { upd({ title: v }); }, { max: 200 })));
+    var layoutAid = b.type === "divider" || b.type === "spacer";
+    if (!layoutAid) box.appendChild(field("Title", textInput(b.title, function (v) { upd({ title: v || null }); }, { max: 200 })));
     box.appendChild(field("Width", selectInput([{ value: "full", label: "Full" }, { value: "two_thirds", label: "Two thirds" }, { value: "half", label: "Half" }, { value: "third", label: "Third" }],
       b.width || "full", function (v) { upd({ width: v }); })));
+    var checks = el("div", "rs-checks");
     var vis = el("label", "rs-check"); vis.appendChild(checkInput(b.visible !== false, function (v) { upd({ visible: v }); })); vis.appendChild(document.createTextNode(" Visible"));
-    box.appendChild(vis);
+    checks.appendChild(vis);
+    if (FREE_TYPES.indexOf(b.type) !== -1) {
+      var ex = el("label", "rs-check"); ex.appendChild(checkInput(b.export !== false, function (v) { upd({ export: v ? null : false }); }));
+      ex.appendChild(document.createTextNode(" Include in exports"));
+      ex.appendChild(document.createTextNode(" "));
+      if (window.Ovid2HelpTip) ex.appendChild(window.Ovid2HelpTip.tip("Off = a working note: shown in the Studio to everyone with access, but left out of PDF / Word / PowerPoint / HTML exports."));
+      checks.appendChild(ex);
+    }
+    box.appendChild(checks);
 
-    if (b.type === "text" || b.type === "callout") {
-      if (b.type === "callout") box.appendChild(field("Tone", selectInput(["info", "success", "warning", "danger", "note"].map(function (x) { return { value: x }; }), b.tone || "info", function (v) { upd({ tone: v }); })));
-      if (b.text_ref) box.appendChild(el("p", "note small", "Showing generated text “" + b.text_ref + "” from the source. Type below to replace it."));
-      box.appendChild(field("Text (markdown)", textInput(b.text, function (v) { upd(v ? { text: v, text_ref: null } : { text: null }); }, { multiline: true, rows: 8, max: 20000 })));
-    } else {
+    var TONES = ["info", "success", "warning", "danger", "note"].map(function (x) { return { value: x, label: x.charAt(0).toUpperCase() + x.slice(1) }; });
+    if (b.type === "text" || b.type === "callout" || b.type === "note") {
+      if (b.type !== "text") box.appendChild(field(b.type === "note" ? "Colour" : "Tone", selectInput(TONES, b.tone || (b.type === "note" ? "note" : "info"), function (v) { upd({ tone: v }); })));
+      if (b.text_ref) box.appendChild(el("p", "note small", "Generated text “" + b.text_ref + "”."));
+      box.appendChild(field("Text (markdown)", textInput(b.text, function (v) {
+        if (b.type === "note") upd({ text: v });
+        else upd(v ? { text: v, text_ref: null } : { text: null });
+      }, { multiline: true, rows: 8, max: 20000 }), "You can also click the text on the canvas and type in place."));
+      if (b.type === "note" && (b.author || b.updated_at)) {
+        box.appendChild(el("p", "note small", "Last edited by " + (b.author || "?") + (b.updated_at ? " · " + new Date(b.updated_at).toLocaleString() : "")));
+      }
+    } else if (b.type === "info") {
+      box.appendChild(rowsEditor(b.rows || [], ["key", "value"], ["Label", "Value"], function (rows) { upd({ rows: rows }); }));
+    } else if (b.type === "checklist") {
+      box.appendChild(itemsEditor(b.items || [], function (items) { upd({ items: items }); }));
+    } else if (b.type === "spacer") {
+      box.appendChild(field("Height", selectInput([{ value: "sm", label: "Small" }, { value: "md", label: "Medium" }, { value: "lg", label: "Large" }], b.size || "md", function (v) { upd({ size: v }); })));
+    } else if (b.type === "chart") {
+      box.appendChild(field("Caption", textInput(b.caption, function (v) { upd({ caption: v || null }); }, { multiline: true, rows: 2, max: 2000 })));
       var c = chart(b.chart);
-      var names = Object.keys((S.source && S.source.datasets) || {});
-      box.appendChild(field("Dataset", selectInput(names.map(function (n) { var d = dataset(n); return { value: n, label: n + (d ? " — " + d.title : "") }; }), b.dataset, function (v) {
-        upd({ dataset: v, params: guessParams(c, dataset(v), b.params), filters: [] });
-      })));
-      var kindRow = el("div", "rs-kind-row");
-      kindRow.appendChild(el("span", "rs-field-label", "Chart"));
-      kindRow.appendChild(el("strong", null, c ? c.label : b.chart));
-      if (canEdit) {
-        var sw = el("button", "button small", "Change…"); sw.type = "button";
-        var gbox = el("div");
-        sw.addEventListener("click", function () { gbox.innerHTML = ""; gallery(gbox, s, b); sw.hidden = true; });
-        kindRow.appendChild(sw);
-        box.appendChild(kindRow); box.appendChild(gbox);
-      } else box.appendChild(kindRow);
-      if (c) box.appendChild(paramsForm(c, b, upd));
-      box.appendChild(filtersForm(b, upd));
-      box.appendChild(field("Caption", textInput(b.caption, function (v) { upd({ caption: v }); }, { multiline: true, rows: 2, max: 2000 })));
+      var kind = el("p", "rs-kind-row");
+      kind.appendChild(el("span", "rs-field-label", "Chart"));
+      kind.appendChild(el("strong", null, c ? c.label : b.chart));
+      var go = el("button", "button small", "Data & options…"); go.type = "button";
+      go.addEventListener("click", function () { S.tab = "data"; renderInspector(); });
+      kind.appendChild(go);
+      box.appendChild(kind);
       if (c && c.renderer === "vega") {
-        var ex = el("div", "rs-actions");
+        var dl = el("div", "rs-actions");
         ["svg", "png"].forEach(function (f) {
           var eb = el("button", "button small", "Download " + f.toUpperCase()); eb.type = "button";
           eb.addEventListener("click", function () { exportAs(f, b.id); });
-          ex.appendChild(eb);
+          dl.appendChild(eb);
         });
-        box.appendChild(ex);
+        box.appendChild(dl);
       }
     }
     if (canEdit) {
       var acts = el("div", "rs-actions");
       var dup = el("button", "button small", "Duplicate"); dup.type = "button";
-      dup.addEventListener("click", function () {
-        var copy = clone(b); delete copy.id; copy.title = (b.title || blockLabel(b)) + " (copy)";
-        var idx = s.blocks.map(function (x) { return x.id; }).indexOf(b.id) + 1;
-        applyOps([{ op: "add_block", section_id: s.id, index: idx, block: copy }]).then(function () { select("block", findSection(s.id).blocks[idx].id); }).catch(function () {});
-      });
+      dup.addEventListener("click", duplicateSel);
       var mv = selectInput((S.layout.sections || []).map(function (x) { return { value: x.id, label: "Move to: " + x.title }; }), s.id, function (v) {
         if (v !== s.id) applyOps([{ op: "move_block", block_id: b.id, section_id: v, index: -1 }]).catch(function () {});
       });
       var del = el("button", "button small danger", "Remove"); del.type = "button";
-      del.addEventListener("click", function () {
-        applyOps([{ op: "remove_block", block_id: b.id }]).then(function () { select("section", s.id); }).catch(function () {});
-      });
+      del.addEventListener("click", removeSel);
       acts.appendChild(dup); acts.appendChild(mv); acts.appendChild(del); box.appendChild(acts);
     }
+  }
+
+  function inspectData(box, found) {
+    var b = found.block, s = found.section;
+    function upd(o, merge) {
+      var op = { op: "update_block", block_id: b.id, set: o };
+      if (merge) op.merge_params = true;
+      return applyOps([op]).then(function () { renderInspector(); }).catch(function () {});
+    }
+    var c = chart(b.chart);
+    var names = Object.keys((S.source && S.source.datasets) || {});
+    box.appendChild(field("Dataset", selectInput(names.map(function (n) { var d = dataset(n); return { value: n, label: n + (d ? " — " + d.title : "") }; }), b.dataset, function (v) {
+      upd({ dataset: v, params: guessParams(c, dataset(v), b.params), filters: [] });
+    })));
+    var kindRow = el("div", "rs-kind-row");
+    kindRow.appendChild(el("span", "rs-field-label", "Chart"));
+    kindRow.appendChild(el("strong", null, c ? c.label : b.chart));
+    if (canEdit) {
+      var sw = el("button", "button small", "Change…"); sw.type = "button";
+      var gbox = el("div");
+      sw.addEventListener("click", function () { gbox.innerHTML = ""; gallery(gbox, s, b); sw.hidden = true; });
+      kindRow.appendChild(sw);
+      box.appendChild(kindRow); box.appendChild(gbox);
+    } else box.appendChild(kindRow);
+    if (c) box.appendChild(paramsForm(c, b, upd));
+    box.appendChild(filtersForm(b, upd));
+  }
+
+  /* Small list editors for info rows / checklist items (inspector side). */
+  function rowsEditor(rows, keys, labels, onSave) {
+    var wrap = el("fieldset", "rs-params");
+    wrap.appendChild(el("legend", null, "Rows"));
+    var list = clone(rows);
+    list.forEach(function (r, i) {
+      var line = el("div", "rs-kv-row");
+      keys.forEach(function (k, j) {
+        var inp = textInput(r[k], function (v) { list[i][k] = v; onSave(list); }, { max: k === "key" ? 200 : 500, placeholder: labels[j] });
+        inp.setAttribute("aria-label", labels[j] + " " + (i + 1));
+        line.appendChild(inp);
+      });
+      if (canEdit) {
+        var x = el("button", "rs-move-btn", "\u00D7"); x.type = "button"; x.title = "Remove row"; x.setAttribute("aria-label", "Remove row " + (i + 1));
+        x.addEventListener("click", function () { list.splice(i, 1); onSave(list); });
+        line.appendChild(x);
+      }
+      wrap.appendChild(line);
+    });
+    if (canEdit && list.length < 50) {
+      var add = el("button", "button small", "+ Row"); add.type = "button";
+      add.addEventListener("click", function () { list.push({ key: "Label", value: "" }); onSave(list); });
+      wrap.appendChild(add);
+    }
+    return wrap;
+  }
+
+  function itemsEditor(items, onSave) {
+    var wrap = el("fieldset", "rs-params");
+    wrap.appendChild(el("legend", null, "Items"));
+    var list = clone(items);
+    list.forEach(function (it, i) {
+      var line = el("div", "rs-kv-row");
+      var cb = checkInput(it.done, function (v) { list[i].done = v; onSave(list); }); cb.setAttribute("aria-label", "Done " + (i + 1));
+      line.appendChild(cb);
+      var inp = textInput(it.text, function (v) { list[i].text = v; onSave(list); }, { max: 500 });
+      inp.setAttribute("aria-label", "Item " + (i + 1));
+      line.appendChild(inp);
+      if (canEdit) {
+        var x = el("button", "rs-move-btn", "\u00D7"); x.type = "button"; x.title = "Remove item"; x.setAttribute("aria-label", "Remove item " + (i + 1));
+        x.addEventListener("click", function () { list.splice(i, 1); onSave(list); });
+        line.appendChild(x);
+      }
+      wrap.appendChild(line);
+    });
+    if (canEdit && list.length < 100) {
+      var add = el("button", "button small", "+ Item"); add.type = "button";
+      add.addEventListener("click", function () { list.push({ text: "New item", done: false }); onSave(list); });
+      wrap.appendChild(add);
+    }
+    return wrap;
   }
 
   function paramsForm(c, b, upd) {
@@ -809,10 +1723,11 @@
 
   /* ---------------- export ---------------- */
 
-  function exportAs(fmt, blockId) {
+  function exportAs(fmt, blockId, withNotes) {
     var body = { format: fmt };
     if (blockId) body.block_id = blockId;
     if (dirty()) body.layout = S.layout;
+    if (withNotes) body.include_private_notes = true;
     notice("Rendering " + fmt.toUpperCase() + "…", null, true);
     return api("POST", "/reports/" + encodeURIComponent(RID) + "/exports", body).then(function (r) {
       notice("Exported " + r.filename + " (" + Math.max(1, Math.round(r.size / 1024)) + " KB)" + (dirty() ? " — includes unsaved edits." : "."), "ok");
@@ -828,7 +1743,17 @@
       var b = el("button", null); b.type = "button"; b.setAttribute("role", "menuitem");
       b.appendChild(el("strong", null, f.format.toUpperCase()));
       b.appendChild(el("span", "note small", " " + f.label));
-      b.addEventListener("click", function () { m.hidden = true; exportAs(f.format); });
+      b.addEventListener("click", function () {
+        m.hidden = true;
+        var exportable = S.notes.filter(function (n) { return n.block.export; }).length;
+        if (!exportable || f.format === "json" || f.format === "svg" || f.format === "png") { exportAs(f.format); return; }
+        // Ask whether to add the caller's own "in export" private notes.
+        var dlg = $("[data-export-dialog]");
+        $("[data-export-format]").textContent = f.format.toUpperCase();
+        $("[data-export-private]").checked = true;
+        $("[data-export-go]").onclick = function () { dlg.close(); exportAs(f.format, null, $("[data-export-private]").checked); };
+        dlg.showModal();
+      });
       m.appendChild(b);
     });
   }
@@ -902,7 +1827,14 @@
 
   root.addEventListener("click", function (ev) {
     var t = ev.target.closest("button");
-    if (!t || !root.contains(t)) { closeMenus(null); return; }
+    if (!t || !root.contains(t)) {
+      closeMenus(null);
+      // A click on empty canvas (the desk) deselects.
+      if (ev.target.closest("[data-canvas]") && !ev.target.closest(".ovr-block, .ovr-section-head, .ovr-head, .rs-toolbar-float")) {
+        if (S.sel.kind !== "report") select("report", null);
+      }
+      return;
+    }
     if (t.hasAttribute("data-export-toggle")) { var m = $("[data-export-menu]"); closeMenus(m); m.hidden = !m.hidden; t.setAttribute("aria-expanded", String(!m.hidden)); return; }
     if (t.hasAttribute("data-more-toggle")) { var mm = $("[data-more-menu]"); closeMenus(mm); mm.hidden = !mm.hidden; t.setAttribute("aria-expanded", String(!mm.hidden)); return; }
     closeMenus(null);
@@ -910,9 +1842,17 @@
     else if (t.hasAttribute("data-undo")) undo();
     else if (t.hasAttribute("data-redo")) redo();
     else if (t.hasAttribute("data-select-report")) select("report", null);
+    else if (t.hasAttribute("data-view")) setView(t.getAttribute("data-view"));
     else if (t.hasAttribute("data-add-section")) {
       applyOps([{ op: "add_section", title: "New section" }]).then(function () {
         var s = S.layout.sections[S.layout.sections.length - 1]; select("section", s.id);
+      }).catch(function () {});
+    }
+    else if (t.hasAttribute("data-add-notes-section")) {
+      var sid = "notes_" + Math.random().toString(16).slice(2, 8);
+      applyOps([{ op: "add_section", title: "Notes", kind: "notes", section_id: sid },
+                { op: "add_block", section_id: sid, block: { type: "note", text: "", tone: "note" } }]).then(function () {
+        select("section", sid);
       }).catch(function () {});
     }
     else if (t.hasAttribute("data-versions")) openVersions();
@@ -983,9 +1923,51 @@
 
   document.addEventListener("keydown", function (ev) {
     var tag = (ev.target && ev.target.tagName) || "";
-    if (/INPUT|TEXTAREA|SELECT/.test(tag)) return;
-    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "z") { ev.preventDefault(); if (ev.shiftKey) redo(); else undo(); }
-    else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "s") { ev.preventDefault(); save(); }
+    if (/INPUT|TEXTAREA|SELECT/.test(tag) || (ev.target && ev.target.isContentEditable)) return;
+    if (document.querySelector("dialog[open]")) return;
+    var k = ev.key, mod = ev.ctrlKey || ev.metaKey;
+    if (mod && k.toLowerCase() === "z") { ev.preventDefault(); if (ev.shiftKey) redo(); else undo(); }
+    else if (mod && k.toLowerCase() === "s") { ev.preventDefault(); save(); }
+    else if (mod && k.toLowerCase() === "d" && S.sel.kind === "block") { ev.preventDefault(); duplicateSel(); }
+    else if (ev.altKey && (k === "ArrowUp" || k === "ArrowDown")) { ev.preventDefault(); moveSel(k === "ArrowUp" ? -1 : 1); }
+    else if (!mod && !ev.altKey && (k === "h" || k === "H") && (S.sel.kind === "block" || S.sel.kind === "section")) { ev.preventDefault(); toggleHidden(); }
+    else if ((k === "Delete" || k === "Backspace") && (S.sel.kind === "block" || S.sel.kind === "note")) {
+      ev.preventDefault();
+      if (S.sel.kind === "note" || window.confirm("Remove this block? (Undo restores it.)")) removeSel();
+    }
+    else if (k === "Escape") { closeAddMenu(); if (S.sel.kind !== "report") select("report", null); }
+  });
+  document.addEventListener("click", function (ev) {
+    if (addMenu && !addMenu.contains(ev.target)) closeAddMenu();
+  });
+  $("[data-canvas]").addEventListener("scroll", positionToolbar, { passive: true });
+  window.addEventListener("resize", function () {
+    clearTimeout(S.resizeTimer);
+    S.resizeTimer = setTimeout(function () { if (S.view === "pages") renderCanvas(); else { applyZoom(); positionToolbar(); } }, 200);
+  });
+
+  /* ---------------- view / zoom / toggles ---------------- */
+
+  function setView(v) {
+    S.view = v === "pages" ? "pages" : "continuous";
+    try { window.localStorage.setItem(VIEW_KEY, S.view); } catch (e) { /* private mode */ }
+    Array.prototype.forEach.call(root.querySelectorAll("[data-view-switch] [data-view]"), function (b) {
+      b.setAttribute("aria-checked", String(b.getAttribute("data-view") === S.view));
+    });
+    renderCanvas();
+  }
+  var zoomSel = $("[data-zoom]");
+  zoomSel.addEventListener("change", function () {
+    S.zoom = zoomSel.value;
+    try { window.localStorage.setItem(ZOOM_KEY, S.zoom); } catch (e) { /* private mode */ }
+    applyZoom(); positionToolbar();
+  });
+  var hidT = $("[data-toggle-hidden]");
+  if (hidT) hidT.addEventListener("change", function () { S.showHidden = hidT.checked; rerender().catch(function (e) { notice(e.message, "error"); }); });
+  var privT = $("[data-toggle-private]");
+  privT.addEventListener("change", function () {
+    S.showPrivate = privT.checked;
+    rerender().then(renderOutline).catch(function (e) { notice(e.message, "error"); });
   });
   if (autosaveBox()) {
     autosaveBox().checked = readAutosavePref();
@@ -1020,8 +2002,8 @@
           return { id: s.id, title: s.title, visible: s.visible !== false,
                    blocks: (s.blocks || []).map(function (b) {
                      return { id: b.id, type: b.type, chart: b.chart || null, dataset: b.dataset || null,
-                              title: b.title || null, visible: b.visible !== false };
-                   }) };
+                              title: b.title || null, visible: b.visible !== false, export: b.export !== false };
+                   }), kind: s.kind || "content" };
         })
       };
     },
@@ -1033,10 +2015,20 @@
 
   /* ---------------- boot ---------------- */
 
+  try {
+    S.view = window.localStorage.getItem(VIEW_KEY) === "pages" ? "pages" : "continuous";
+    S.zoom = window.localStorage.getItem(ZOOM_KEY) || "1";
+  } catch (e) { /* private mode */ }
+  zoomSel.value = S.zoom;
+  Array.prototype.forEach.call(root.querySelectorAll("[data-view-switch] [data-view]"), function (b) {
+    b.setAttribute("aria-checked", String(b.getAttribute("data-view") === S.view));
+  });
+
   Promise.all([
     api("GET", "/reports/" + encodeURIComponent(RID)),
     api("GET", "/report-catalogue"),
-    api("GET", "/reports/" + encodeURIComponent(RID) + "/render")
+    api("GET", "/reports/" + encodeURIComponent(RID) + "/render?mode=view&private_notes=true"),
+    loadNotes()
   ]).then(function (r) {
     S.report = r[0]; S.catalogue = r[1]; S.model = r[2];
     S.layout = clone(r[0].layout); S.saved = clone(r[0].layout); S.version = r[0].version;

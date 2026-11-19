@@ -7,7 +7,15 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from ovid2.reports.render._common import chart_png, md_blocks, status_color
+from ovid2.reports.render._common import (
+    FONT_SCALE,
+    SPACER_PT,
+    chart_png,
+    md_blocks,
+    note_byline,
+    note_tone_color,
+    status_color,
+)
 
 __all__ = ["write_docx"]
 
@@ -27,6 +35,7 @@ def write_docx(model: Mapping[str, Any], path: Path) -> Path:
     """Write the render model as a Word document."""
     from docx import Document
     from docx.enum.section import WD_ORIENT
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
     from docx.shared import Inches, Pt
@@ -72,22 +81,108 @@ def write_docx(model: Mapping[str, Any], path: Path) -> Path:
         shd.set(qn("w:fill"), hex_.lstrip("#"))
         tc_pr.append(shd)
 
-    def md(text: str) -> None:
-        for b in md_blocks(text):
-            if b.kind.startswith("h"):
+    def md(text: str, b: Mapping[str, Any] | None = None) -> None:
+        for blk in md_blocks(text):
+            if blk.kind.startswith("h"):
                 para = doc.add_heading(level=2)
-            elif b.kind == "li":
+            elif blk.kind == "li":
                 para = doc.add_paragraph(style="List Bullet")
             else:
                 para = doc.add_paragraph()
-            for r in b.runs:
-                if b.kind == "li" and r.text in ("• ",):
+            for r in blk.runs:
+                if blk.kind == "li" and r.text in ("• ",):
                     continue
                 run = para.add_run(r.text)
                 run.bold = r.bold
                 run.italic = r.italic
                 if r.code:
                     run.font.name = "Courier New"
+            if b is not None:
+                apply_style(para, b)
+
+    def apply_style(para: Any, b: Mapping[str, Any]) -> None:
+        """Apply a block's text colour / alignment / font scale / fill."""
+        sr = b.get("style_resolved") or {}
+        if not sr:
+            return
+        align = {
+            "left": WD_ALIGN_PARAGRAPH.LEFT,
+            "center": WD_ALIGN_PARAGRAPH.CENTER,
+            "right": WD_ALIGN_PARAGRAPH.RIGHT,
+        }.get(str(sr.get("align")))
+        if align is not None:
+            para.alignment = align
+        scale = FONT_SCALE.get(str(sr.get("font_scale")), 1.0)
+        for run in para.runs:
+            if sr.get("text_color"):
+                run.font.color.rgb = _rgb(sr["text_color"])
+            if scale != 1.0:
+                run.font.size = Pt(round(int(sizes.get("base", 11)) * scale, 1))
+        if sr.get("background"):
+            para_shade(para, sr["background"])
+
+    def para_shade(para: Any, hex_: str) -> None:
+        p_pr = para._p.get_or_add_pPr()
+        shd = OxmlElement("w:shd")
+        shd.set(qn("w:val"), "clear")
+        shd.set(qn("w:color"), "auto")
+        shd.set(qn("w:fill"), hex_.lstrip("#"))
+        p_pr.append(shd)
+
+    def para_rule(para: Any, hex_: str, size: int) -> None:
+        p_pr = para._p.get_or_add_pPr()
+        bdr = OxmlElement("w:pBdr")
+        bottom = OxmlElement("w:bottom")
+        bottom.set(qn("w:val"), "single")
+        bottom.set(qn("w:sz"), str(size))
+        bottom.set(qn("w:space"), "1")
+        bottom.set(qn("w:color"), hex_.lstrip("#"))
+        bdr.append(bottom)
+        p_pr.append(bdr)
+
+    def free_block(b: Mapping[str, Any]) -> None:
+        r = b["renderer"]
+        sr = b.get("style_resolved") or {}
+        if r == "divider":
+            para = doc.add_paragraph()
+            size = {"none": 2, "subtle": 4, "strong": 12}.get(str(sr.get("border")), 6)
+            para_rule(para, sr.get("accent") or c["border"], size)
+        elif r == "spacer":
+            para = doc.add_paragraph()
+            para.paragraph_format.space_after = Pt(SPACER_PT.get(str(b.get("size")), 18))
+        elif r == "info":
+            rows = b.get("rows") or []
+            tbl = doc.add_table(rows=0, cols=2)
+            for row in rows:
+                cells = tbl.add_row().cells
+                cells[0].text = row["key"]
+                cells[1].text = row["value"]
+                if cells[0].paragraphs[0].runs:
+                    k = cells[0].paragraphs[0].runs[0]
+                    k.bold = True
+                    k.font.color.rgb = _rgb(c["muted"])
+                for p in cells[1].paragraphs:
+                    apply_style(p, b)
+        elif r == "checklist":
+            for item in b.get("items") or []:
+                para = doc.add_paragraph()
+                mark = para.add_run("\u2611 " if item["done"] else "\u2610 ")
+                mark.font.name = "Segoe UI Symbol"
+                text = para.add_run(item["text"])
+                text.font.strike = bool(item["done"])
+                apply_style(para, b)
+        else:  # note
+            head = doc.add_paragraph()
+            run = head.add_run(note_byline(b))
+            run.italic = True
+            run.font.size = Pt(int(sizes.get("base", 11)) - 2)
+            run.font.color.rgb = _rgb(note_tone_color(theme, b))
+            para_shade(head, sr.get("background") or c["surface"])
+            start = len(doc.paragraphs)
+            md(b.get("markdown") or "", b)
+            for para in doc.paragraphs[start:]:
+                if not sr.get("background"):
+                    para_shade(para, c["surface"])
 
     def muted(text: str) -> None:
         para = doc.add_paragraph()
@@ -107,9 +202,21 @@ def write_docx(model: Mapping[str, Any], path: Path) -> Path:
         md(s.get("description") or "")
         for b in s["blocks"]:
             r = b["renderer"]
-            if b.get("title") and r != "kpi":
-                doc.add_heading(b["title"], level=2)
-            if r == "vega":
+            if b.get("title") and r not in ("kpi", "divider", "spacer"):
+                h = doc.add_heading(b["title"], level=2)
+                apply_style(
+                    h,
+                    {
+                        "style_resolved": {
+                            k: v
+                            for k, v in (b.get("style_resolved") or {}).items()
+                            if k != "background"
+                        }
+                    },
+                )
+            if r in ("note", "info", "checklist", "divider", "spacer"):
+                free_block(b)
+            elif r == "vega":
                 png = chart_png(b["spec"], scale=2.0)
                 frac = {"half": 0.5, "third": 0.4, "two_thirds": 0.7}.get(str(b.get("width")), 1.0)
                 doc.add_picture(io.BytesIO(png), width=int(body_w * frac))
@@ -156,7 +263,7 @@ def write_docx(model: Mapping[str, Any], path: Path) -> Path:
                 if t.get("truncated"):
                     muted(f"Showing {len(t['rows'])} of {t['total_rows']} rows.")
             elif r in ("text", "callout"):
-                md(b.get("markdown") or "")
+                md(b.get("markdown") or "", b)
             else:
                 muted(str(b.get("error") or "unavailable"))
             if b.get("caption"):

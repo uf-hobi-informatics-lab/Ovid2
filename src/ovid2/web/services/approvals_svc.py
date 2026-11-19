@@ -53,6 +53,9 @@ DESTRUCTIVE_ACTIONS: frozenset[str] = frozenset(
         "connection.delete",
         "engine.delete",
         "pipeline.delete",
+        # Deleting a pipeline *package* (the code folder; moved to the
+        # XDG trash). Also removes it from the navigator / submit pages.
+        "pipeline_package.delete",
         "address.delete",
         "llm.delete",
         # Deleting a user transform-library chain: pipelines may have it

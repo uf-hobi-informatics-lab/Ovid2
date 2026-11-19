@@ -253,6 +253,14 @@
       </a>
     </nav>
 
+    {# Overflow cue: nav.js un-hides it and fills in the count whenever
+       some menu items are scrolled out of view below; click scrolls
+       them into view. #}
+    <button id="nav-more" class="nav-more" type="button" hidden
+            aria-controls="site-nav" aria-label="More menu items below">
+      <span class="nav-more-chev" aria-hidden="true">&#9662;</span><span class="nav-more-label"></span>
+    </button>
+
     <button id="drawer-collapse" class="drawer-collapse icon-button" type="button"
             aria-label="Collapse navigation rail" title="Collapse / expand">
       {{ icons.icon("chevron-right", size=16) }}
@@ -312,17 +320,43 @@
   {% if has_cap(request, 'use_llm') %}
   {# Assistant panel: canvas (answer blocks / System 1 decision cards) on
      top, chat box below. Driven by /static/llm_panel.js; talks to
-     /api/v1/llm/status + /api/v1/llm/chat/stream. Conversation lives in
-     sessionStorage only — nothing is stored server-side. #}
+     /api/v1/llm/status, /api/v1/llm/chat/stream and /api/v1/llm/sessions.
+     Conversations are saved server-side as sessions (per user; shared
+     "anonymous" history while auth is off); the browser keeps only the
+     open session id in sessionStorage. #}
+  {% import "_help.html" as help %}
   <aside id="llm-panel" class="llm-panel" role="region"
          aria-label="Agent Ovid" aria-hidden="true"
          data-manage="{{ 'true' if has_cap(request, 'manage_config') else 'false' }}">
     <div class="llm-panel-inner">
       <header class="llm-head">
         <span class="llm-head-title">{{ icons.icon("llm", size=18) }} Agent Ovid</span>
+        <button type="button" id="llm-history-toggle" class="llm-icon-btn"
+                aria-label="Session history" title="Session history"
+                aria-expanded="false" aria-controls="llm-history">{{ icons.icon("history", size=17) }}</button>
+        <button type="button" id="llm-search-toggle" class="llm-icon-btn"
+                aria-label="Search sessions" title="Search sessions"
+                aria-controls="llm-history">{{ icons.icon("search", size=16) }}</button>
         <span class="llm-head-spacer"></span>
-        <button type="button" id="llm-clear" class="link-button small" title="Clear conversation">clear</button>
+        <span id="llm-meter" class="llm-meter" hidden role="meter" aria-label="Context used"
+              aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <span class="llm-meter-bar"><span class="llm-meter-fill"></span></span>
+          <span class="llm-meter-text"></span>
+        </span>
+        <button type="button" id="llm-new" class="llm-icon-btn"
+                aria-label="New session" title="New session (fresh context)">{{ icons.icon("message-plus", size=17) }}</button>
       </header>
+      <div id="llm-title-row" class="llm-title-row" hidden>
+        <span id="llm-session-title" class="llm-session-title"></span>
+      </div>
+      <div id="llm-history" class="llm-history" hidden>
+        <div class="llm-history-head">
+          <input type="search" id="llm-history-q" class="llm-history-q"
+                 placeholder="Search sessions…" aria-label="Search sessions" maxlength="200">
+          {{ help.tip("Every conversation is saved as a session. Search matches session titles and message text (all words must appear). Start a new session when answers drift — a long session fills the model's context window.", align="right") }}
+        </div>
+        <ul id="llm-history-list" class="llm-history-list" role="listbox" aria-label="Sessions"></ul>
+      </div>
       <div id="llm-canvas" class="llm-canvas" aria-live="polite"></div>
       <form id="llm-form" class="llm-form" autocomplete="off">
         <textarea id="llm-input" class="llm-input" rows="3"

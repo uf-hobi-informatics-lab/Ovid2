@@ -57,9 +57,20 @@ is reclaimed automatically.
 | `OVID2_DEV_REGISTRY` | `/var/tmp/ovid2-dev` | shared lease registry |
 | `OVID2_DEV_BASE_IMAGE` | `ovid2:latest` | image the per-developer tag is seeded from |
 
-> [!CAUTION]
-> A dev instance listens on the LAN with auth off, so teammates can reach
-> it and use **your** connections. Before adding credentials you care
-> about, either bind it with `--host 127.0.0.1` and use an SSH tunnel, or
-> turn on auth for the instance (`eval "$(ovid2 dev env)"; ovid2 web
-> reset-break-glass`, then set `auth.enabled` in its `settings.json`).
+## Security note
+
+Auth is **off** on a dev instance, and by default it binds to the host's
+LAN address so teammates can reach it. Anyone on the network can then use
+the panel, and with it **your** connections. `ovid2 dev up` prints a
+reminder whenever it binds to anything other than `127.*`.
+
+Before adding credentials you care about, do one of these:
+
+- bind to loopback and use an SSH tunnel:
+  `ovid2 dev up --host 127.0.0.1` (or set `OVID2_DEV_HOST=127.0.0.1`);
+- turn on auth for the instance: `eval "$(ovid2 dev env)"; ovid2 web
+  reset-break-glass`, then set `auth.enabled` in its `settings.json`. See
+  [Authentication & roles](../08-operations/auth.md).
+
+While auth is off, everyone using the instance also shares one
+[assistant history](../07-assistant/sessions.md#who-can-see-my-sessions).

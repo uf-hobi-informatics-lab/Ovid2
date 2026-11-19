@@ -50,7 +50,50 @@
                 "description": {"type": "string", "maxLength": 4000},
                 "visible": {"type": "boolean"},
                 "page_break_before": {"type": "boolean"},
+                "kind": {
+                    "enum": ["content", "notes"],
+                    "description": "notes = a free 'additional information' section (notes, methods, appendix, sign-off)."
+                },
+                "style": {"$ref": "#/$defs/style"},
                 "blocks": {"type": "array", "maxItems": 80, "items": {"$ref": "#/$defs/block"}}
+            }
+        },
+        "color_ref": {
+            "type": "string",
+            "description": "A report-theme role (accent, text, muted, surface, background, border, palette:N, status:<name>) that follows theme changes, or a fixed #rrggbb.",
+            "pattern": "^(#[0-9a-fA-F]{6}|accent|text|muted|surface|background|border|grid|palette:[0-9]|status:[a-z_]{1,24})$"
+        },
+        "style": {
+            "type": "object",
+            "description": "Per-component formatting overrides on top of the report theme; every key is optional (absent = theme default).",
+            "additionalProperties": false,
+            "properties": {
+                "accent": {"$ref": "#/$defs/color_ref"},
+                "background": {"$ref": "#/$defs/color_ref"},
+                "text_color": {"$ref": "#/$defs/color_ref"},
+                "align": {"enum": ["left", "center", "right"]},
+                "emphasis": {"enum": ["plain", "card", "outlined", "filled"]},
+                "font_scale": {"enum": ["sm", "md", "lg"]},
+                "border": {"enum": ["none", "subtle", "strong"]},
+                "padding": {"enum": ["compact", "normal", "roomy"]}
+            }
+        },
+        "info_row": {
+            "type": "object",
+            "required": ["key"],
+            "additionalProperties": false,
+            "properties": {
+                "key": {"type": "string", "maxLength": 200},
+                "value": {"type": "string", "maxLength": 500}
+            }
+        },
+        "check_item": {
+            "type": "object",
+            "required": ["text"],
+            "additionalProperties": false,
+            "properties": {
+                "text": {"type": "string", "maxLength": 500},
+                "done": {"type": "boolean"}
             }
         },
         "filter": {
@@ -69,7 +112,7 @@
             "additionalProperties": false,
             "properties": {
                 "id": {"$ref": "#/$defs/id"},
-                "type": {"enum": ["chart", "text", "callout"]},
+                "type": {"enum": ["chart", "text", "callout", "note", "info", "checklist", "divider", "spacer"]},
                 "title": {"type": "string", "maxLength": 200},
                 "caption": {"type": "string", "maxLength": 2000},
                 "visible": {"type": "boolean"},
@@ -90,7 +133,17 @@
                 },
                 "text": {"type": "string", "maxLength": 20000},
                 "text_ref": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
-                "tone": {"enum": ["info", "success", "warning", "danger", "note"]}
+                "tone": {"enum": ["info", "success", "warning", "danger", "note"]},
+                "style": {"$ref": "#/$defs/style"},
+                "export": {
+                    "type": "boolean",
+                    "description": "false = shown in the Studio but left out of every export (default true)."
+                },
+                "rows": {"type": "array", "maxItems": 50, "items": {"$ref": "#/$defs/info_row"}},
+                "items": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/check_item"}},
+                "size": {"enum": ["sm", "md", "lg"]},
+                "author": {"type": "string", "maxLength": 200, "description": "Set by the server on note blocks."},
+                "updated_at": {"type": "string", "maxLength": 40, "description": "Set by the server on note blocks."}
             }
         }
     }

@@ -9,9 +9,15 @@
   Left: outline. Drag (or ↑/↓) to change the stacking order of sections and
   blocks; the eye hides a section / block from the report and every export.
   Centre: the canvas, drawn by report_render.js in the *report* theme
-  (independent of this page's theme). Right: inspector for the report, the
-  selected section or block (chart gallery + params form generated from the
-  chart library's JSON Schemas).
+  (independent of this page's theme), as one continuous sheet or as pages
+  at the report's page size. Every text on it is edited in place; a
+  floating toolbar moves / hides / duplicates / removes the selected block
+  and "+" points add blocks between blocks. Right: inspector tabs —
+  Content, Format (the component's effective formatting and colours, with
+  per-component overrides) and Data (charts).
+
+  Private notes live outside the layout (web_report_notes): only their
+  author sees them, and they are exported only when asked.
 
   Edits stay local (undo / redo) until Save, which stores a new version.
   The assistant edits the same working copy through the edit_report_layout
@@ -71,37 +77,81 @@
 
   <div class="rs-notice" data-notice hidden></div>
 
-  <div class="rs-studio-grid">
+  <div class="rs-studio-grid" data-studio-grid>
     <aside class="rs-outline" aria-label="Report outline">
       <div class="rs-pane-head">
         <h2>Outline</h2>
         {% call help.tip_block(label="Outline") %}
           The order here is the order in the report. Drag a row (or use the
           arrows) to move it, and the eye to hide it — hidden items are kept
-          in the layout but left out of the canvas and every export.
+          in the layout but left out of every export. Private notes (lock)
+          are visible to you only.
         {% endcall %}
       </div>
       <button type="button" class="rs-outline-report" data-select-report>{{ icons.icon("report", size=15) }} Report settings</button>
       <ol class="rs-tree" data-outline></ol>
       {% if can_edit %}
-      <button type="button" class="button small rs-add-section" data-add-section>{{ icons.icon("plus", size=14) }} Section</button>
+      <div class="rs-outline-add">
+        <button type="button" class="button small" data-add-section>{{ icons.icon("plus", size=14) }} Section</button>
+        <button type="button" class="button small" data-add-notes-section>{{ icons.icon("edit", size=14) }} Notes section</button>
+      </div>
       {% endif %}
     </aside>
 
     <div class="rs-canvas-wrap">
-      <div class="rs-canvas-bar note small">
-        <span data-theme-label></span>
-        {{ help.tip("The canvas uses the report theme, not the page theme.") }}
+      <div class="rs-canvas-bar" role="toolbar" aria-label="Canvas">
+        <div class="rs-seg" role="radiogroup" aria-label="View" data-view-switch>
+          <button type="button" role="radio" aria-checked="true" data-view="continuous">{{ icons.icon("file", size=14) }} Continuous</button>
+          <button type="button" role="radio" aria-checked="false" data-view="pages">{{ icons.icon("layers", size=14) }} Pages</button>
+        </div>
+        <label class="rs-zoom" title="Zoom">
+          <span class="sr-only">Zoom</span>
+          <select data-zoom aria-label="Zoom">
+            <option value="fit">Fit</option>
+            <option value="0.75">75%</option>
+            <option value="1" selected>100%</option>
+            <option value="1.25">125%</option>
+          </select>
+        </label>
+        <span class="rs-canvas-spacer"></span>
+        {% if can_edit %}
+        <label class="rs-toggle" title="Show hidden sections and blocks (dimmed)">
+          <input type="checkbox" role="switch" data-toggle-hidden> <span>Hidden</span>
+        </label>
+        {% endif %}
+        <label class="rs-toggle" title="Show your private notes">
+          <input type="checkbox" role="switch" data-toggle-private checked> <span>My notes</span>
+        </label>
+        <span class="rs-theme-chip" data-theme-label></span>
+        {% call help.tip_block(label="Canvas") %}
+          Click any text on the canvas to edit it in place; select a block to
+          see its formatting in the inspector. The canvas uses the report
+          theme, not the page theme. Pages shows the report on sheets at its
+          page size, close to the PDF export. Keys: Alt+↑/↓ move, H hide,
+          Ctrl+D duplicate, Delete remove, Esc deselect.
+        {% endcall %}
       </div>
-      <div class="rs-canvas" data-canvas><p class="note">Loading…</p></div>
+      <div class="rs-canvas" data-canvas data-view="continuous"><p class="note">Loading…</p></div>
     </div>
 
     <aside class="rs-inspector" aria-label="Inspector">
       <div class="rs-pane-head"><h2 data-inspector-title>Report</h2></div>
+      <div class="rs-tabs" role="tablist" data-inspector-tabs hidden></div>
       <div data-inspector></div>
       <ul class="pb-errors" data-errors hidden></ul>
     </aside>
   </div>
+
+  <dialog class="rs-dialog" data-export-dialog>
+    <div class="rs-dialog-body">
+      <h2>Export <span data-export-format></span></h2>
+      <label class="rs-check"><input type="checkbox" data-export-private> Include my private notes marked “in export”</label>
+      <div class="rs-dialog-actions">
+        <button type="button" class="button" data-close>Cancel</button>
+        <button type="button" class="button primary" data-export-go>Export</button>
+      </div>
+    </div>
+  </dialog>
 
   <dialog class="rs-dialog" data-versions-dialog>
     <div class="rs-dialog-body">

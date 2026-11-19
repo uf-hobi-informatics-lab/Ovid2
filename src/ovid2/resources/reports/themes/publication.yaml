@@ -1,21 +1,21 @@
 # Report themes style the *report output* only (Studio canvas, HTML/PDF/
 # DOCX/PNG/SVG exports). They never read the web page's theme tokens —
-# pinned by tests/contract/test_report_theme_independence.py.
+# pinned by tests/contract/test_report_catalogues.py.
 name: publication
 label: Publication
-description: Clean white paper, Tableau-10 palette, sans-serif. A safe default for papers and slides.
+description: Clean white paper, refined ink-blue accent, Tableau-10 palette, modern sans-serif. A safe default for papers and slides.
 mode: light
-fonts: {body: "Helvetica, Arial, sans-serif", heading: "Helvetica, Arial, sans-serif", mono: "Menlo, Consolas, monospace"}
+fonts: {body: "Inter, 'Segoe UI', Helvetica, Arial, sans-serif", heading: "Inter, 'Segoe UI', Helvetica, Arial, sans-serif", mono: "'JetBrains Mono', Menlo, Consolas, monospace"}
 colors:
   background: "#ffffff"
-  surface: "#f6f7f9"
-  text: "#1f2328"
-  muted: "#59636e"
-  border: "#d0d7de"
-  accent: "#1f6feb"
-  grid: "#e6e8eb"
+  surface: "#f5f7fa"
+  text: "#18202b"
+  muted: "#5b6675"
+  border: "#d7dde5"
+  accent: "#2557d6"
+  grid: "#e8ecf1"
 palette: ["#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f", "#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#bab0ac"]
 sequential: blues
 diverging: redblue
-status: {passed: "#2da44e", exception: "#d1242f", error: "#8250df", skipped: "#8c959f", not_applicable: "#afb8c1", warning: "#bf8700"}
-sizes: {base: 11, title: 20, heading: 15, axis: 10}
+status: {passed: "#1a7f37", exception: "#cf222e", error: "#8250df", skipped: "#8c959f", not_applicable: "#afb8c1", warning: "#b58100"}
+sizes: {base: 11, title: 22, heading: 15, axis: 10}

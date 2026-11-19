@@ -281,6 +281,58 @@ _REPORT_STUDIO_DDL: tuple[str, ...] = (
         created_at    TEXT NOT NULL
     )
     """,
+    # Private notes: per-user annotations on a report, deliberately *outside*
+    # the shared layout (and its version history) so collaborators, shared
+    # viewers and the assistant never receive them.
+    """
+    CREATE TABLE IF NOT EXISTS web_report_notes (
+        note_id         TEXT PRIMARY KEY,
+        report_id       TEXT NOT NULL,
+        owner           TEXT NOT NULL,
+        section_id      TEXT NOT NULL,
+        after_block_id  TEXT,
+        block_json      TEXT NOT NULL,
+        created_at      TEXT NOT NULL,
+        updated_at      TEXT NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_web_report_notes_owner ON web_report_notes(report_id, owner)",
+)
+
+
+# Agent Ovid chat sessions (adr-llm-dual-system.md, "Saved sessions").
+# One row per conversation plus its ordered messages. Owned by the
+# principal id (``anonymous`` while auth is off). Message text may contain
+# PHI: it lives only here (mode-0600 DB), never in ``web_audit``.
+_WEB_LLM_SESSIONS_DDL: tuple[str, ...] = (
+    """
+    CREATE TABLE IF NOT EXISTS web_llm_sessions (
+        session_id              TEXT PRIMARY KEY,
+        user_id                 TEXT NOT NULL,
+        title                   TEXT NOT NULL DEFAULT '',
+        title_source            TEXT NOT NULL DEFAULT 'pending',
+        created_at              TEXT NOT NULL,
+        updated_at              TEXT NOT NULL,
+        last_prompt_tokens      INTEGER NOT NULL DEFAULT 0,
+        total_prompt_tokens     INTEGER NOT NULL DEFAULT 0,
+        total_completion_tokens INTEGER NOT NULL DEFAULT 0,
+        connection              TEXT,
+        model                   TEXT
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_web_llm_sessions_user ON web_llm_sessions(user_id, updated_at DESC)",
+    """
+    CREATE TABLE IF NOT EXISTS web_llm_messages (
+        message_id  INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id  TEXT NOT NULL,
+        seq         INTEGER NOT NULL,
+        role        TEXT NOT NULL,
+        content     TEXT NOT NULL,
+        meta_json   TEXT,
+        created_at  TEXT NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_web_llm_messages_session ON web_llm_messages(session_id, seq)",
 )
 
 
@@ -315,6 +367,8 @@ def ensure_schema() -> None:
         for stmt in _WEB_SESSIONS_INDEXES:
             conn.execute(stmt)
         conn.execute(_WEB_USER_PREFS_DDL)
+        for stmt in _WEB_LLM_SESSIONS_DDL:
+            conn.execute(stmt)
     finally:
         conn.close()
     logger.info("Ovid2 web-tier schema ensured at %s", path)

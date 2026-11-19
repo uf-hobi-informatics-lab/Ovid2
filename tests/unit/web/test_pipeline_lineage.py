@@ -193,18 +193,18 @@ def test_unknown_table_and_package() -> None:
 
 
 def test_navigator_tree_groupings() -> None:
-    tree = lineage.navigator_tree("cdm")
+    tree = lineage.navigator_tree("cdm", include_unused=True)
     labels = {g["label"]: g for g in tree["groups"]}
     assert "pcornet_7_0" in labels
     names = {p["pipeline"] for p in labels["pcornet_7_0"]["pipelines"]}
     assert "example_pcornet" in names
     by_template = {
         p["pipeline"]: p["template"]
-        for g in lineage.navigator_tree("template")["groups"]
+        for g in lineage.navigator_tree("template", include_unused=True)["groups"]
         for p in g["pipelines"]
     }
     assert by_template["example_pcornet"] == "pcornet_etl"
-    profile = lineage.navigator_tree("cdm_profile")
+    profile = lineage.navigator_tree("cdm_profile", include_unused=True)
     assert any(g["key"] == ["pcornet_7_0", "default"] for g in profile["groups"])
     if HAS_LEGACY:
         assert "site" in names

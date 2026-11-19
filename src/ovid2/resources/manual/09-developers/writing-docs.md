@@ -35,10 +35,7 @@ The manual ships inside the wheel, so the panel can serve it at
 
 2. List `<slug>` under its chapter in `manual.yaml`. A page that isn't
    listed is an *orphan*, and `ovid2 manual check` fails.
-3. Preview it with either:
-   - `OVID2_MANUAL_RELOAD=1 ovid2 web`, then open `/manual/<chapter>/<slug>`
-     (the page re-reads on every request); or
-   - `ovid2 manual serve`.
+3. Preview it. See [Previewing while you write](#previewing-while-you-write).
 
 ## Syntax
 
@@ -74,28 +71,57 @@ code, then regenerate.
 ## Checks
 
 ```bash
-ovid2 manual check            # every page loads; links, anchors and assets resolve; no orphans; reference fresh
-ovid2 manual build --out site # strict build; fails on any broken link
+ovid2 manual check                 # pages load; links, anchors and assets resolve; no orphans; reference fresh
+ovid2 manual gen-reference --check # report stale generated pages without writing (exit 1)
+ovid2 manual build --out site      # strict build; fails on any broken link
 ```
+
+`tests/contract/test_manual.py` runs the same checks on every commit:
+
+| Test | Fails when |
+| --- | --- |
+| `test_manual_loads` | `manual.yaml` or a page doesn't load, there are fewer than 10 chapters, a page has no title, or a page body is empty or `TODO` |
+| `test_manual_links_and_anchors_resolve` | an internal link, section anchor or asset doesn't resolve |
+| `test_manual_has_no_orphan_pages` | a page exists that `manual.yaml` doesn't list |
+| `test_manual_reference_is_fresh` | `10-reference/*` differs from what `ovid2 manual gen-reference` would write |
+| `test_manual_is_site_neutral` | a `.md`, `.yaml` or `.svg` line matches the public mirror's `[leak_gate].deny` patterns or names a denied site pipeline (`scripts/public/manifest.toml`) |
+
+## Previewing while you write
+
+| Command | What it does |
+| --- | --- |
+| `OVID2_MANUAL_RELOAD=1 ovid2 web` | The panel re-reads the manual sources (and its search index) on every request, so an edit shows on reload. Without it, the manual is loaded once per process. |
+| `ovid2 manual serve [--port 8765] [--host 127.0.0.1]` | Builds the static site into a temporary directory and serves it. |
 
 ## The GitHub wiki
 
-`ovid2 manual wiki --out <dir>` exports the manual as a GitHub wiki: one
-page per manual page, named from its title, plus `Home`, `_Sidebar` and
-`_Footer`. Links, card grids, definition lists and callouts are converted
-to plain GitHub Markdown, and images are copied to `assets/`.
+```bash
+ovid2 manual wiki --out <dir>      # default --out wiki; --no-strict exports despite broken links
+```
+
+The command exports the manual as a GitHub wiki tree:
+
+- one `<Page-Name>.md` per page, named from its title
+  (*Connections & addresses* → `Connections-addresses`), in reading order,
+  each starting with its summary and ending with Previous / Next links;
+- `Home.md` (the landing page), `_Sidebar.md` (chapter → page tree) and
+  `_Footer.md` (a generated-from-source notice);
+- images copied to `assets/` and linked relatively.
+
+Manual-only syntax becomes plain GitHub Markdown: `.md` links become wiki
+page links, card grids become bullet lists, definition lists become
+bold-term bullets, and callouts become GitHub alerts. Code fences and
+inline code are never rewritten.
+
+Existing `*.md` files and `assets/` in `<dir>` are replaced. Anything else,
+such as `.git`, is left alone, so `<dir>` can be a wiki clone. By default
+the export fails on a broken link or image, or when two page titles map to
+the same wiki name.
 
 The public-mirror publish runs this export on the sanitised tree after
 every push of `main`, then pushes the result to the GitHub wiki. Never
 edit the wiki directly, because the next publish overwrites it. Edit the
 source here instead.
-
-Contract tests run the same checks on every commit:
-
-- `test_manual_links.py`;
-- `test_manual_reference_fresh.py`;
-- `test_manual_site_neutral.py`, which applies the public leak-gate
-  patterns to the manual.
 
 ## Writing style
 

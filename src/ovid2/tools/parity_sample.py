@@ -66,8 +66,17 @@ def _is_text(path: Path) -> bool:
     return b"\x00" not in chunk and path.suffix.lower() not in (".parquet", ".gz", ".zip", ".xlsx")
 
 
+def _readable(path: Path) -> bool:
+    """Whether ``path`` is a regular file the current user may read.
+
+    Inbox batch folders can hold stray files owned by another user (e.g. a
+    ``mktemp`` leftover with mode 0600); they are never partner input.
+    """
+    return path.is_file() and os.access(path, os.R_OK)
+
+
 def _pick_patients(src: Path, n: int, seed: int) -> set[str]:
-    candidates = [p for p in sorted(src.iterdir()) if p.is_file() and _is_text(p)]
+    candidates = [p for p in sorted(src.iterdir()) if _readable(p) and _is_text(p)]
     preferred = [p for p in candidates if any(h in p.name.lower() for h in PATIENT_FILE_HINTS)]
     for path in preferred + candidates:
         with path.open("r", encoding="utf-8", errors="surrogateescape", newline="") as fh:
@@ -111,7 +120,7 @@ def sample(
     dst.mkdir(parents=True, exist_ok=True)
     kept: dict[str, int] = {}
     for path in sorted(src.iterdir()):
-        if not path.is_file() or path.name.lower().endswith(skip_suffixes):
+        if not _readable(path) or path.name.lower().endswith(skip_suffixes):
             continue
         target = dst / path.name
         if not _is_text(path):

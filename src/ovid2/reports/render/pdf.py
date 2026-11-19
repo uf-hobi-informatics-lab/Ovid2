@@ -8,7 +8,20 @@ from pathlib import Path
 from typing import Any
 from xml.sax.saxutils import escape
 
-from ovid2.reports.render._common import MdBlock, chart_svg, md_blocks, status_color
+from ovid2.reports.render._common import (
+    CHECK_OFF,
+    CHECK_ON,
+    FONT_SCALE,
+    PADDING_PT,
+    SPACER_PT,
+    MdBlock,
+    boxed,
+    chart_svg,
+    md_blocks,
+    note_byline,
+    note_tone_color,
+    status_color,
+)
 
 __all__ = ["write_pdf"]
 
@@ -45,12 +58,13 @@ def _runs_markup(block: MdBlock) -> str:
 def write_pdf(model: Mapping[str, Any], path: Path) -> Path:
     """Write the render model as a paginated, themed PDF."""
     from reportlab.lib import colors
-    from reportlab.lib.enums import TA_LEFT
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
     from reportlab.lib.pagesizes import A4, LEGAL, LETTER, landscape, portrait
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import inch
     from reportlab.platypus import (
         CondPageBreak,
+        HRFlowable,
         KeepTogether,
         LongTable,
         PageBreak,
@@ -159,18 +173,17 @@ def write_pdf(model: Mapping[str, Any], path: Path) -> Path:
         ),
     }
 
-    def md(text: str) -> list[Any]:
+    def md(text: str, blk: Mapping[str, Any] | None = None) -> list[Any]:
         out: list[Any] = []
         for b in md_blocks(text):
-            style = (
-                st["h2"] if b.kind.startswith("h") else st["code"] if b.kind == "code" else st["p"]
-            )
+            name = "h2" if b.kind.startswith("h") else "code" if b.kind == "code" else "p"
+            style = styled(name, blk) if blk else st[name]
             bullet = None
             if b.kind == "li":
                 indent = 12 * max(b.level, 1)
                 style = ParagraphStyle(
                     "li",
-                    parent=st["p"],
+                    parent=styled("p", blk) if blk else st["p"],
                     leftIndent=indent + 8,
                     bulletIndent=indent - 4,
                     spaceAfter=1,
@@ -251,51 +264,154 @@ def write_pdf(model: Mapping[str, Any], path: Path) -> Path:
         )
         return box
 
+    def styled(name: str, b: Mapping[str, Any] | None) -> Any:
+        """Return ``st[name]`` adjusted for the block's style overrides."""
+        kw = _style_kw(b, st[name])
+        if not kw:
+            return st[name]
+        return ParagraphStyle(f"{name}_{(b or {}).get('id')}", parent=st[name], **kw)
+
+    def md_styled(text: str, b: Mapping[str, Any]) -> list[Any]:
+        return md(text, b if b.get("style_resolved") else None)
+
+    def _style_kw(b: Mapping[str, Any] | None, parent: Any) -> dict[str, Any]:
+        sr = (b or {}).get("style_resolved") or {}
+        kw: dict[str, Any] = {}
+        if sr.get("text_color"):
+            kw["textColor"] = hx(sr["text_color"])
+        align = {"center": TA_CENTER, "right": TA_RIGHT}.get(str(sr.get("align")))
+        if align is not None:
+            kw["alignment"] = align
+        scale = FONT_SCALE.get(str(sr.get("font_scale")), 1.0)
+        if scale != 1.0:
+            kw["fontSize"] = parent.fontSize * scale
+            kw["leading"] = parent.leading * scale
+        return kw
+
+    def box(items: list[Any], b: Mapping[str, Any], width: float, edge: str | None = None) -> Any:
+        """Wrap ``items`` in the block's card / outline / fill."""
+        sr = b.get("style_resolved") or {}
+        pad = PADDING_PT.get(str(sr.get("padding")), 8)
+        emphasis = sr.get("emphasis") or ("filled" if b.get("renderer") == "note" else "card")
+        bg = sr.get("background") or (c["surface"] if emphasis in ("card", "filled") else None)
+        border_w = {"none": 0, "subtle": 0.5, "strong": 1.4}.get(str(sr.get("border")))
+        if border_w is None:
+            border_w = 0.6 if emphasis in ("card", "outlined") else 0
+        cmds: list[Any] = [
+            ("LEFTPADDING", (0, 0), (-1, -1), pad + (4 if edge else 0)),
+            ("RIGHTPADDING", (0, 0), (-1, -1), pad),
+            ("TOPPADDING", (0, 0), (-1, -1), pad * 0.75),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), pad),
+        ]
+        if bg:
+            cmds.append(("BACKGROUND", (0, 0), (-1, -1), hx(bg)))
+        if border_w:
+            cmds.append(("BOX", (0, 0), (-1, -1), border_w, hx(sr.get("accent") or c["border"])))
+        if edge:
+            cmds.append(("LINEBEFORE", (0, 0), (0, -1), 3, hx(edge)))
+        tbl = RLTable([[items or [Paragraph("", st["p"])]]], colWidths=[width - 4])
+        tbl.setStyle(TableStyle(cmds))
+        return tbl
+
+    def free_flowables(b: Mapping[str, Any], width: float) -> list[Any]:
+        r = b["renderer"]
+        if r == "divider":
+            sr = b.get("style_resolved") or {}
+            weight = {"none": 0.3, "subtle": 0.5, "strong": 1.6}.get(str(sr.get("border")), 0.8)
+            return [
+                HRFlowable(
+                    width="100%",
+                    thickness=weight,
+                    color=hx(sr.get("accent") or c["border"]),
+                    spaceBefore=6,
+                    spaceAfter=6,
+                )
+            ]
+        if r == "spacer":
+            return [Spacer(1, SPACER_PT.get(str(b.get("size")), 18))]
+        if r == "info":
+            rows = b.get("rows") or []
+            if not rows:
+                return []
+            key_style = ParagraphStyle(
+                f"ik_{b['id']}", parent=styled("cellh", b), textColor=hx(c["muted"])
+            )
+            data = [
+                [
+                    Paragraph(escape(row["key"]), key_style),
+                    Paragraph(escape(row["value"]) or "&nbsp;", styled("p", b)),
+                ]
+                for row in rows
+            ]
+            tbl = RLTable(data, colWidths=[width * 0.34, width * 0.66 - 4])
+            tbl.setStyle(
+                TableStyle(
+                    [
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LINEBELOW", (0, 0), (-1, -2), 0.3, hx(c["grid"])),
+                        ("TOPPADDING", (0, 0), (-1, -1), 3),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ]
+                )
+            )
+            return [tbl]
+        if r == "checklist":
+            out: list[Any] = []
+            for item in b.get("items") or []:
+                mark = CHECK_ON if item["done"] else CHECK_OFF
+                text = escape(item["text"])
+                if item["done"]:
+                    text = f"<strike>{text}</strike>"
+                out.append(
+                    Paragraph(
+                        f'<font face="Courier">{mark}</font>&nbsp;&nbsp;{text}', styled("p", b)
+                    )
+                )
+            return out
+        # note
+        items = [Paragraph(escape(note_byline(b)), st["small"])]
+        items.extend(md_styled(b.get("markdown") or "", b))
+        return [box(items, b, width, edge=note_tone_color(theme, b))]
+
     def block_flowables(b: Mapping[str, Any], width: float) -> list[Any]:
         out: list[Any] = []
-        if b.get("title") and b["renderer"] != "kpi":
-            out.append(Paragraph(escape(b["title"]), st["h2"]))
         r = b["renderer"]
-        if r == "vega":
-            out.append(chart_flowable(b["spec"], width))
+        if b.get("title") and r not in ("kpi", "divider", "spacer"):
+            out.append(Paragraph(escape(b["title"]), styled("h2", b)))
+        content: list[Any] = []
+        if r in ("note", "info", "checklist", "divider", "spacer"):
+            content.extend(free_flowables(b, width))
+        elif r == "vega":
+            content.append(chart_flowable(b["spec"], width))
         elif r == "kpi":
-            out.append(kpi_flowable(b, width))
+            content.append(kpi_flowable(b, width))
         elif r == "table":
-            out.append(table_flowable(b["table"], width))
+            content.append(table_flowable(b["table"], width))
             if b["table"].get("truncated"):
-                out.append(
+                content.append(
                     Paragraph(
                         f"Showing {len(b['table']['rows'])} of {b['table']['total_rows']} rows.",
                         st["small"],
                     )
                 )
         elif r in ("text", "callout"):
-            items = md(b.get("markdown") or "")
+            items = md_styled(b.get("markdown") or "", b)
             if r == "callout":
-                tone = {"success": "passed", "warning": "warning", "danger": "exception"}.get(
-                    str(b.get("tone")), ""
-                )
-                edge = theme["status"].get(tone) or c["accent"]
-                box = RLTable([[items or [Paragraph("", st["p"])]]], colWidths=[width - 4])
-                box.setStyle(
-                    TableStyle(
-                        [
-                            ("LINEBEFORE", (0, 0), (0, -1), 3, hx(edge)),
-                            ("BACKGROUND", (0, 0), (-1, -1), hx(c["surface"])),
-                            ("LEFTPADDING", (0, 0), (-1, -1), 10),
-                        ]
-                    )
-                )
-                out.append(box)
+                content.append(box(items, b, width, edge=note_tone_color(theme, b)))
             else:
-                out.extend(items)
+                content.extend(items)
         else:
-            out.append(Paragraph(escape(str(b.get("error") or "unavailable")), st["small"]))
+            content.append(Paragraph(escape(str(b.get("error") or "unavailable")), st["small"]))
+        if r not in ("note", "callout") and boxed(b):
+            content = [box(content, b, width)]
+        out.extend(content)
         if b.get("caption"):
             out.append(Paragraph(escape(b["caption"]), st["small"]))
         if b.get("suppressed_cells"):
             out.append(Paragraph(f"{b['suppressed_cells']} small cell(s) suppressed.", st["small"]))
-        out.append(Spacer(1, 8))
+        if r != "spacer":
+            out.append(Spacer(1, 8))
         return out
 
     width_frac = {"full": 1.0, "half": 0.5, "third": 1 / 3, "two_thirds": 2 / 3}
@@ -314,6 +430,12 @@ def write_pdf(model: Mapping[str, Any], path: Path) -> Path:
         else:
             story.append(CondPageBreak(1.6 * inch))
         story.append(Paragraph(escape(s["title"]), st["h1"]))
+        if s.get("kind") == "notes":
+            story.append(
+                HRFlowable(
+                    width="18%", thickness=1.6, color=hx(c["accent"]), hAlign="LEFT", spaceAfter=6
+                )
+            )
         story.extend(md(s.get("description") or ""))
         row: list[list[Any]] = []
         used = 0.0

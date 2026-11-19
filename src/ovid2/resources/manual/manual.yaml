@@ -99,7 +99,7 @@ chapters:
   - slug: 07-assistant
     title: Assistant & agents
     summary: The in-panel LLM assistant, Agent Ovid over MCP, and the human-approval gates that keep them safe.
-    pages: [index, assistant-tools, mcp, approvals]
+    pages: [index, sessions, assistant-tools, mcp, approvals]
 
   - slug: 08-operations
     title: Operations & security

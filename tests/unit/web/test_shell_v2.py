@@ -214,3 +214,40 @@ def test_theme_controls_are_announced(web_client: object) -> None:
     assert "aria-expanded" in js
     theme = web_client.get("/static/theme.js").text  # type: ignore[attr-defined]
     assert "OVID2_APPEARANCE" in theme
+
+
+@pytest.mark.unit
+def test_shell_has_nav_overflow_cue(web_client: object) -> None:
+    """The drawer ships a ``#nav-more`` overflow cue, hidden by default.
+
+    ``nav.js`` un-hides it (with a "N more" count) only while some menu
+    items are scrolled out of view, so a too-tall menu never silently
+    hides its last entries.
+    """
+    body = web_client.get("/").text  # type: ignore[attr-defined]
+    assert 'id="nav-more"' in body
+    start = body.index('id="nav-more"')
+    tag = body[body.rindex("<button", 0, start) : body.index(">", start)]
+    assert " hidden" in tag, "nav-more must start hidden"
+    assert 'class="nav-more-label"' in body
+
+
+@pytest.mark.unit
+def test_nav_js_drives_overflow_cue(web_client: object) -> None:
+    """``nav.js`` toggles the edge fades and wires the "more" button."""
+    body = web_client.get("/static/nav.js").text  # type: ignore[attr-defined]
+    assert "has-more-below" in body
+    assert "has-more-above" in body
+    assert '.closest("#nav-more")' in body
+
+
+@pytest.mark.unit
+def test_drawer_nav_is_scroll_container(web_client: object) -> None:
+    """The nav list (not the whole drawer) scrolls, with compact rows."""
+    css = web_client.get("/static/ovid2.css").text  # type: ignore[attr-defined]
+    block = css[css.index(".drawer-nav {") :]
+    block = block[: block.index("}")]
+    assert "overflow-y: auto" in block
+    assert "min-height: 0" in block
+    assert "--nav-item-py:" in css
+    assert ".nav-more" in css

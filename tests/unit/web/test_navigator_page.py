@@ -12,7 +12,9 @@ pytestmark = pytest.mark.unit
 
 
 def test_navigator_page_renders(web_client) -> None:  # type: ignore[no-untyped-def]
-    r = web_client.get("/navigator?p=example_pcornet&t=demographic&f=SEX&group_by=profile")
+    r = web_client.get(
+        "/navigator?p=example_pcornet&t=demographic&f=SEX&group_by=profile&include_unused=true"
+    )
     assert r.status_code == 200, r.text
     body = r.text
     assert 'id="navigator"' in body

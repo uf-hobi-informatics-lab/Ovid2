@@ -29,7 +29,7 @@ from ovid2.config.executor_env import build_minimal_env, prepare_scoped_secrets
 from ovid2.config.secret_refs import SecretScope
 from ovid2.web.settings import WORKER_ENV_ALLOWLIST
 
-__all__ = ["ExecError", "chat_stream", "child_env", "run_probe"]
+__all__ = ["ExecError", "chat_stream", "child_env", "run_probe", "run_title"]
 
 
 class ExecError(RuntimeError):
@@ -112,6 +112,40 @@ def run_probe(name: str, *, timeout: float) -> dict[str, Any]:
         f"LLM executor returned no JSON (exit={completed.returncode}). "
         f"stderr tail: {(completed.stderr or '')[-400:]}"
     )
+
+
+def run_title(request: dict[str, Any], *, timeout: float) -> dict[str, Any]:
+    """Run ``python -m ovid2.llm title`` with ``request`` on stdin.
+
+    Returns:
+        The executor's JSON result (``{"ok", "title", ...}``).
+
+    Raises:
+        ExecError: When the child times out, cannot start, or prints no JSON.
+    """
+    try:
+        with _scoped_child_env() as env:
+            completed = subprocess.run(
+                _argv("title"),
+                input=json.dumps(request),
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+                env=env,
+            )
+    except subprocess.TimeoutExpired as exc:
+        raise ExecError(f"LLM title timed out after {timeout:.0f}s.") from exc
+    except OSError as exc:
+        raise ExecError(f"Could not launch LLM executor: {exc}") from exc
+    for line in reversed((completed.stdout or "").strip().splitlines()):
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    raise ExecError(f"LLM title returned no JSON (exit={completed.returncode}).")
 
 
 def _acquire(limit: int) -> bool:

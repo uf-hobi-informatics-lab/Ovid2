@@ -14,6 +14,11 @@
  *      the class before first paint to avoid a flash of the wrong
  *      width.
  *
+ *   3. Overflow cue. When the menu is taller than the viewport, the
+ *      list (``.drawer-nav``) scrolls; edge fades (``has-more-above`` /
+ *      ``has-more-below`` on the drawer) and the ``#nav-more`` "▾ N more"
+ *      button make the hidden items obvious. Clicking it scrolls them in.
+ *
  * No dependencies. Guards every optional API in try/catch so the page
  * stays usable in environments where localStorage or matchMedia are
  * unavailable.
@@ -86,6 +91,78 @@
     else collapseRail();
   }
 
+  /* ---------- Overflow cue ("▾ N more") ---------- */
+
+  // Items whose bottom edge sits below the visible part of the scroll
+  // area (with a few px of slack so a 1px clip does not count).
+  function hiddenBelow(nav) {
+    var limit = nav.getBoundingClientRect().bottom - 4;
+    var out = [];
+    nav.querySelectorAll(".nav-item").forEach(function (item) {
+      if (item.getBoundingClientRect().bottom > limit) out.push(item);
+    });
+    return out;
+  }
+
+  function updateNavOverflow() {
+    var drawer = document.getElementById("site-nav");
+    var nav = drawer && drawer.querySelector(".drawer-nav");
+    var more = document.getElementById("nav-more");
+    if (!nav) return;
+    var above = nav.scrollTop > 2;
+    var below = nav.scrollTop + nav.clientHeight < nav.scrollHeight - 2;
+    drawer.classList.toggle("has-more-above", above);
+    drawer.classList.toggle("has-more-below", below);
+    if (!more) return;
+    var n = below ? hiddenBelow(nav).length : 0;
+    if (n > 0) {
+      var label = more.querySelector(".nav-more-label");
+      if (label) label.textContent = n + " more";
+      more.setAttribute("aria-label", n + " more menu item" + (n === 1 ? "" : "s") + " below");
+      more.title = n + " more menu item" + (n === 1 ? "" : "s") + " — click to show";
+      more.hidden = false;
+    } else {
+      more.hidden = true;
+    }
+  }
+
+  function revealMore() {
+    var nav = document.querySelector("#site-nav .drawer-nav");
+    if (!nav) return;
+    var items = hiddenBelow(nav);
+    if (!items.length) return;
+    // Scroll so the last hidden item lands at the bottom — reveals all of
+    // them when they fit, otherwise as many as the viewport allows.
+    var last = items[items.length - 1];
+    var delta = last.getBoundingClientRect().bottom - nav.getBoundingClientRect().bottom + 8;
+    try { nav.scrollBy({ top: delta, behavior: "smooth" }); }
+    catch (e) { nav.scrollTop += delta; }
+  }
+
+  function initNavOverflow() {
+    var nav = document.querySelector("#site-nav .drawer-nav");
+    if (!nav) return;
+    var pending = false;
+    var schedule = function () {
+      if (pending) return;
+      pending = true;
+      window.requestAnimationFrame(function () { pending = false; updateNavOverflow(); });
+    };
+    nav.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    if (typeof ResizeObserver === "function") {
+      try { new ResizeObserver(schedule).observe(nav); } catch (e) { /* ignore */ }
+    }
+    // Keep the active page's item in view on load.
+    var active = nav.querySelector(".nav-item.active");
+    if (active && active.getBoundingClientRect().bottom > nav.getBoundingClientRect().bottom) {
+      nav.scrollTop += active.getBoundingClientRect().bottom - nav.getBoundingClientRect().bottom + 24;
+    }
+    updateNavOverflow();
+    // Web fonts / theme swaps can change row heights after first paint.
+    window.addEventListener("load", schedule);
+  }
+
   /* ---------- Wiring ---------- */
 
   function init() {
@@ -115,6 +192,11 @@
       if (target.closest("#drawer-collapse")) {
         event.preventDefault();
         toggleRail();
+        return;
+      }
+      if (target.closest("#nav-more")) {
+        event.preventDefault();
+        revealMore();
         return;
       }
       if (target.closest("[data-drawer-close]") ||
@@ -158,6 +240,8 @@
         if (isMobile()) closeDrawer();
       });
     });
+
+    initNavOverflow();
   }
 
   if (document.readyState === "loading") {

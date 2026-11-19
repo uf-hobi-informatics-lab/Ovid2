@@ -70,7 +70,9 @@ def export_report(
 
         path = write_json(layout, source, meta, out_dir / f"{stem}.json")
         return _result(path, media)
-    model = render_model(layout, source, width=_PAGE_CHART_WIDTH.get(fmt, 640), meta=meta)
+    model = render_model(
+        layout, source, width=_PAGE_CHART_WIDTH.get(fmt, 640), meta=meta, mode="export"
+    )
     writers: dict[str, Callable[..., Path]] = {}
     if fmt == "pdf":
         from ovid2.reports.render.pdf import write_pdf

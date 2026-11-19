@@ -6,7 +6,15 @@
   <p><a href="/pipeline-packages">&larr; all pipelines</a></p>
   <h1>Pipeline: {{ pipeline.name }}
     <a href="/pipeline-packages/{{ pipeline.name }}/builder" class="button primary small">Customize &rarr;</a>
-    <a href="/navigator?p={{ pipeline.name | urlencode }}" class="button small">Open in navigator</a></h1>
+    <a href="/navigator?p={{ pipeline.name | urlencode }}" class="button small">Open in navigator</a>
+    {% if can_write and not is_template_source %}
+      <form action="/pipeline-packages/{{ pipeline.name }}/delete" method="post" class="pl-inline-form"
+            onsubmit="return confirm('Delete pipeline package {{ pipeline.name }}{% if package_configs %} and its run config(s) {{ package_configs | join(', ') }}{% endif %}? It is moved to the trash folder.')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if package_configs %}<input type="hidden" name="with_configs" value="1">{% endif %}
+        <button type="submit" class="button small danger">Delete package</button>
+      </form>
+      {{ help.tip("Moves this package folder to $XDG_STATE_HOME/ovid2/trash/pipelines/ (restore with mv) and deletes the run configs that use it. It disappears from the navigator immediately.") }}
+    {% endif %}</h1>
   <p class="mono small">{{ pipeline.path }}</p>
 
   {% if pipeline_config %}

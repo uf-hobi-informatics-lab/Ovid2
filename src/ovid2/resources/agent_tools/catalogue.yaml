@@ -920,15 +920,18 @@ tools:
   # exports. Amendment to adr-llm-dual-system.md (adr-report-studio.md).
   - name: edit_report_layout
     description: >-
-      UI: edit the report open in the Report Studio (its outline with section / block
-      ids is in the system prompt). Applies the ops to the user's working copy at once
-      with Undo; the user saves. Ops: set_report {set: {title, subtitle, description,
-      theme, page, options}}; add_section {title, index?}; update_section {section_id,
-      set}; move_section {section_id, index}; remove_section {section_id}; add_block
-      {section_id, index?, block: {type, chart, dataset, params, title, width, text}};
-      update_block {block_id, set, merge_params?}; move_block {block_id, section_id?,
-      index}; remove_block {block_id}; set_visibility {target_id, visible}. Chart params
-      must use columns of the block's dataset (get_report_source).
+      UI: edit the report open in the Report Studio (outline with ids is in the system
+      prompt). Applies ops to the user's working copy with Undo; the user saves. Ops:
+      set_report {set}; add_section {title, index?, kind? content|notes}; update_section
+      {section_id, set, merge_style?}; move_section {section_id, index}; remove_section
+      {section_id}; add_block {section_id, index?, block}; update_block {block_id, set,
+      merge_params?, merge_style?}; move_block {block_id, section_id?, index};
+      remove_block {block_id}; set_visibility {target_id, visible}. Block types: chart
+      (chart, dataset, params), text / callout (text, tone), note (text), info (rows
+      [{key, value}]), checklist (items [{text, done}]), divider, spacer (size). Any block:
+      title, width, export (false = not exported), style {accent, background, text_color
+      (theme role, palette:N, status:x or #rrggbb), align, emphasis, font_scale, border,
+      padding}; merge_style + null resets a key. Chart params use the dataset's columns.
     ui_action: true
     capability: use_llm
     params:

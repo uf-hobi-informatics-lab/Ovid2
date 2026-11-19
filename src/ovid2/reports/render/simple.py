@@ -50,6 +50,11 @@ def write_images(
     return path, "application/zip"
 
 
+def _cell(text: str) -> str:
+    """Escape a value for a markdown table cell."""
+    return str(text).replace("|", "\\|").replace("\n", " ")
+
+
 def write_markdown_zip(model: Mapping[str, Any], path: Path) -> Path:
     """Write ``report.md`` + ``figures/*.svg`` + ``data/*.csv`` in a zip."""
     import csv
@@ -67,9 +72,31 @@ def write_markdown_zip(model: Mapping[str, Any], path: Path) -> Path:
             lines += [s["description"], ""]
         for b in s["blocks"]:
             r = b["renderer"]
-            if b.get("title") and r != "kpi":
+            if b.get("title") and r not in ("kpi", "divider", "spacer"):
                 lines += [f"### {b['title']}", ""]
-            if r in ("text", "callout"):
+            if r == "note":
+                body = b.get("markdown") or ""
+                byline = " · ".join(
+                    x for x in ("Note", b.get("author"), (b.get("updated_at") or "")[:10]) if x
+                )
+                lines += [f"> _{byline}_", ">"] + [("> " + ln) for ln in body.splitlines()] + [""]
+            elif r == "info":
+                rows = b.get("rows") or []
+                if rows:
+                    lines += ["| | |", "|---|---|"]
+                    lines += [
+                        f"| **{_cell(row['key'])}** | {_cell(row['value'])} |" for row in rows
+                    ]
+                    lines.append("")
+            elif r == "checklist":
+                lines += [
+                    f"- [{'x' if i['done'] else ' '}] {i['text']}" for i in b.get("items") or []
+                ] + [""]
+            elif r == "divider":
+                lines += ["---", ""]
+            elif r == "spacer":
+                lines += [""]
+            elif r in ("text", "callout"):
                 body = b.get("markdown") or ""
                 lines += (
                     [("> " + ln) for ln in body.splitlines()] if r == "callout" else [body]

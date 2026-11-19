@@ -247,3 +247,90 @@ def test_invalid_layout_is_refused(tmp_path: Path) -> None:
     )
     assert p.returncode == 1
     assert "layout invalid" in json.loads(p.stdout.strip().splitlines()[-1])["message"]
+
+
+@pytest.fixture(scope="module")
+def free_bundle(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    for mod in ("vl_convert", "svglib", "reportlab", "docx", "pptx", "xlsxwriter"):
+        pytest.importorskip(mod)
+    src = sample_sources()["health"]
+    tmpl = catalogue.get_template("health.edc_summary")
+    assert tmpl is not None
+    base = layout.normalise(tmpl.layout)
+    first = base["sections"][0]["blocks"][0]["id"]
+    lay, _ = layout.apply_ops(
+        base,
+        [
+            {
+                "op": "update_block",
+                "block_id": first,
+                "set": {
+                    "style": {
+                        "accent": "palette:2",
+                        "background": "#fff8c5",
+                        "emphasis": "card",
+                        "align": "center",
+                        "font_scale": "lg",
+                        "text_color": "#222222",
+                    }
+                },
+                "merge_style": True,
+            },
+            {"op": "add_section", "title": "FREESECTION", "kind": "notes", "section_id": "free"},
+            {
+                "op": "add_block",
+                "section_id": "free",
+                "block": {"type": "note", "text": "NOTEBODY"},
+            },
+            {
+                "op": "add_block",
+                "section_id": "free",
+                "block": {
+                    "type": "info",
+                    "title": "SIGNOFF",
+                    "rows": [{"key": "Reviewer", "value": "INFOVALUE"}],
+                },
+            },
+            {
+                "op": "add_block",
+                "section_id": "free",
+                "block": {"type": "checklist", "items": [{"text": "CHECKITEM", "done": True}]},
+            },
+            {
+                "op": "add_block",
+                "section_id": "free",
+                "block": {"type": "divider", "style": {"border": "strong"}},
+            },
+            {"op": "add_block", "section_id": "free", "block": {"type": "spacer", "size": "lg"}},
+            {
+                "op": "add_block",
+                "section_id": "free",
+                "block": {"type": "text", "text": "SCREENONLY", "export": False},
+            },
+        ],
+        src,
+        actor="alice",
+        now="2026-11-17T10:00:00+00:00",
+    )
+    path = tmp_path_factory.mktemp("free") / "bundle.json"
+    path.write_text(json.dumps({"layout": lay, "source": src, "meta": {"report_id": "rpt_free"}}))
+    return path
+
+
+@pytest.mark.parametrize("fmt", ["pdf", "docx", "pptx", "xlsx", "html", "md"])
+def test_free_blocks_export_and_screen_only_is_left_out(
+    free_bundle: Path, tmp_path: Path, fmt: str
+) -> None:
+    res = _export(free_bundle, fmt, tmp_path / fmt)
+    path = Path(res["path"])
+    text = _text_of(fmt, path)
+    if fmt == "docx":
+        import docx
+
+        doc = docx.Document(str(path))
+        text += " ".join(c.text for t in doc.tables for r in t.rows for c in r.cells)
+    assert "SCREENONLY" not in text
+    for needle in ("NOTEBODY", "INFOVALUE", "CHECKITEM"):
+        assert needle in text, (fmt, needle)
+    if fmt not in ("xlsx", "pptx"):
+        assert "FREESECTION" in text

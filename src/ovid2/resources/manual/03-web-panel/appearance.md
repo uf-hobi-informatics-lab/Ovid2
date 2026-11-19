@@ -38,6 +38,11 @@ Appearance is stored **per user, on the server**
 any browser or computer, and it is painted before the page renders, so
 there is no flash of the wrong theme.
 
+When sign-in is turned off (the default on a fresh install), every
+visitor is the same `anonymous` user. The whole deployment then shares
+**one** appearance profile: a change anyone makes applies to everyone.
+Turn on [sign-in](../08-operations/auth.md) to give each user their own.
+
 > [!TIP]
 > If the assistant is enabled, you can just ask it: *"switch to the dark
 > theme with a teal accent and save it as night shift"*. It applies the

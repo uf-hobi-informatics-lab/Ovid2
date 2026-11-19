@@ -76,7 +76,7 @@ The run keeps going.
 1. Ovid2 minted an **instance id** and created a compose file, a Docker
    network, temp directories and an event log, all tagged with it.
 2. It mounted only the folders and secrets this run needs.
-3. The driver container ran the five stages per table as one lazy plan and
+3. The driver container ran the ETL stages per table as one lazy plan and
    wrote each table once.
 4. Events streamed to `$XDG_RUNTIME_DIR/ovid2/events-<id>.jsonl`. That is
    what `watch` and the web panel display.

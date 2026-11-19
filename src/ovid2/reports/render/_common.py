@@ -9,7 +9,22 @@ from typing import Any
 
 from markdown_it import MarkdownIt
 
-__all__ = ["MdBlock", "Run", "chart_png", "chart_svg", "md_blocks", "status_color"]
+__all__ = [
+    "CHECK_OFF",
+    "CHECK_ON",
+    "FONT_SCALE",
+    "PADDING_PT",
+    "SPACER_PT",
+    "MdBlock",
+    "Run",
+    "boxed",
+    "chart_png",
+    "chart_svg",
+    "md_blocks",
+    "note_byline",
+    "note_tone_color",
+    "status_color",
+]
 
 
 @dataclass
@@ -93,6 +108,51 @@ def status_color(theme: Mapping[str, Any], value: Any) -> str | None:
     """Return the theme's semantic colour for a status value, if any."""
     status = theme.get("status") or {}
     return status.get(str(value)) if value is not None else None
+
+
+#: ``font_scale`` → multiplier of the theme's base size.
+FONT_SCALE = {"sm": 0.88, "md": 1.0, "lg": 1.18}
+
+#: ``padding`` → points of inner padding for boxed components.
+PADDING_PT = {"compact": 4, "normal": 8, "roomy": 14}
+
+#: ``spacer.size`` → vertical gap in points.
+SPACER_PT = {"sm": 8, "md": 18, "lg": 36}
+
+#: Checklist markers (ASCII, so every base-14 PDF font can draw them).
+CHECK_ON = "[x]"
+CHECK_OFF = "[ ]"
+
+
+def boxed(block: Mapping[str, Any]) -> bool:
+    """Return ``True`` when a block draws a box (card / outlined / filled / note)."""
+    st = block.get("style_resolved") or {}
+    if block.get("renderer") == "note" or st.get("background"):
+        return True
+    return st.get("emphasis") in ("card", "outlined", "filled")
+
+
+def note_tone_color(theme: Mapping[str, Any], block: Mapping[str, Any]) -> str:
+    """Return the edge colour of a callout / note from its tone + style."""
+    st = block.get("style_resolved") or {}
+    if st.get("accent"):
+        return str(st["accent"])
+    tone = {"success": "passed", "warning": "warning", "danger": "exception"}.get(
+        str(block.get("tone")), ""
+    )
+    if block.get("renderer") == "note" and tone == "":
+        return str((theme.get("status") or {}).get("warning") or theme["colors"]["accent"])
+    return str((theme.get("status") or {}).get(tone) or theme["colors"]["accent"])
+
+
+def note_byline(block: Mapping[str, Any]) -> str:
+    """Return ``"Note · author · date"`` for a note block."""
+    parts = ["Note"]
+    if block.get("author"):
+        parts.append(str(block["author"]))
+    if block.get("updated_at"):
+        parts.append(str(block["updated_at"])[:10])
+    return " · ".join(parts)
 
 
 def _vl() -> Any:

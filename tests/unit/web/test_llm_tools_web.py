@@ -310,7 +310,7 @@ def test_chat_with_tools_end_to_end(live_server: str, tool_gateway: str) -> None
         if line.startswith("data:")
     ]
     kinds = [e["type"] for e in events]
-    assert kinds[-1] == "done" and events[-1]["ok"] is True, events
+    assert kinds[-2:] == ["done", "session"] and events[-2]["ok"] is True, events
     call = next(e for e in events if e["type"] == "tool_call")
     assert call["name"] == "list_jobs" and call["path"] == "/api/v1/jobs"
     result = next(e for e in events if e["type"] == "tool_result")
@@ -461,7 +461,8 @@ def test_set_appearance_end_to_end(live_server: str) -> None:
     ui = [e for e in events if e["type"] == "ui_action"]
     assert ui and ui[0]["name"] == "set_appearance"
     assert ui[0]["args"] == {"theme": "tatooine", "appearance": {"--body-fs": "16px"}}
-    assert events[-1]["type"] == "done" and events[-1]["ok"] is True
+    assert events[-2]["type"] == "done" and events[-2]["ok"] is True
+    assert events[-1]["type"] == "session"
     assert any(e["type"] == "delta" and "Tatooine" in e["text"] for e in events)
     # The model saw the current look in its system prompt.
     system = _UiGateway.requests[0]["messages"][0]["content"]

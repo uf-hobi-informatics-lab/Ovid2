@@ -30,3 +30,22 @@ def test_sample_filters_by_patient_and_bounds_scan(tmp_path: Path) -> None:
         r.split(",")[0] for r in (tmp_path / "dst" / "person.csv").read_text().splitlines()[1:]
     }
     assert all(r.split(",")[1] in people for r in visit_rows)
+
+
+@pytest.mark.unit
+def test_sample_skips_unreadable_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A stray file the user cannot read (mktemp leftover) is skipped, not fatal."""
+    import ovid2.tools.parity_sample as mod
+
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "person.csv").write_text("person_id\n1\n2\n")
+    stray = src / "20260914_ziWY4TYd"
+    stray.write_text("x")
+    real_access = mod.os.access
+    monkeypatch.setattr(
+        mod.os, "access", lambda p, m: False if Path(p) == stray else real_access(p, m)
+    )
+    kept = sample(src, tmp_path / "dst", 2)
+    assert "20260914_ziWY4TYd" not in kept
+    assert kept["person.csv"] == 2

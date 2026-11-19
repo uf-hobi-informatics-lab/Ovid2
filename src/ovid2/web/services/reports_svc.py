@@ -59,7 +59,9 @@ __all__ = [
     "ReportNotFound",
     "apply_ops",
     "archive_report",
+    "create_private_note",
     "create_report",
+    "delete_private_note",
     "delete_user_template",
     "duplicate_report",
     "export_report",
@@ -67,6 +69,7 @@ __all__ = [
     "get_report",
     "get_version",
     "list_folders",
+    "list_private_notes",
     "list_reports",
     "list_shares",
     "list_templates",
@@ -80,6 +83,7 @@ __all__ = [
     "save_as_template",
     "set_favorite",
     "set_share",
+    "update_private_note",
     "update_report",
 ]
 
@@ -563,6 +567,8 @@ def apply_ops(
     base_layout: dict[str, Any] | None = None,
     render: bool = False,
     redact: bool = False,
+    mode: str = "view",
+    private_notes: bool = False,
 ) -> dict[str, Any]:
     """Apply edit ops atomically; save (new version) unless ``save=False``.
 
@@ -570,6 +576,10 @@ def apply_ops(
         base_layout: Apply to this (unsaved, browser working-copy) layout
             instead of the stored one. Only with ``save=False``.
         render: With ``save=False``, also return the render model.
+        mode: Render mode for ``render`` (``view`` / ``edit``; see
+            :func:`ovid2.reports.compose.render_model`).
+        private_notes: With ``render``, merge the caller's private notes
+            into the returned model (never into the layout).
 
     Returns:
         ``{report, notes}`` when saved, else ``{layout, notes[, model]}``.
@@ -581,7 +591,11 @@ def apply_ops(
     source = _source_or_error(current["source_id"])
     try:
         new_layout, notes = layout_mod.apply_ops(
-            base_layout if base_layout is not None else current["layout"], ops, source
+            base_layout if base_layout is not None else current["layout"],
+            ops,
+            source,
+            actor=who.user_id,
+            now=_now(),
         )
     except layout_mod.LayoutError as exc:
         raise ReportError("edit rejected", exc.errors) from exc
@@ -589,7 +603,9 @@ def apply_ops(
         out: dict[str, Any] = {"layout": new_layout, "notes": notes}
         if render:
             src = redact_source(source) if redact else source
-            out["model"] = render_model(new_layout, src, width="container", meta=_meta(current))
+            out["model"] = _model(
+                new_layout, src, current, who, mode=mode, private_notes=private_notes
+            )
         return out
     report = update_report(
         report_id,
@@ -831,7 +847,7 @@ def save_as_template(
                 _clean_title(name, "My template"),
                 str(description or "")[:2000],
                 source["kind"],
-                json.dumps(report["layout"]),
+                json.dumps(layout_mod.as_template(report["layout"])),
                 1 if shared else 0,
                 _now(),
             ),
@@ -921,21 +937,266 @@ def _render_source(source_id: str, redact: bool) -> dict[str, Any]:
     return redact_source(source) if redact else source
 
 
-def render_report(report_id: str, who: Principal, *, redact: bool = False) -> dict[str, Any]:
+def _mode(mode: str) -> str:
+    if mode not in ("view", "edit"):
+        raise ReportError(f"unknown render mode {mode!r}")
+    return mode
+
+
+def _model(
+    layout: dict[str, Any],
+    source: dict[str, Any],
+    report: dict[str, Any],
+    who: Principal,
+    *,
+    mode: str,
+    private_notes: bool,
+) -> dict[str, Any]:
+    """Render ``layout``; optionally merge the caller's private notes.
+
+    Private notes are flagged ``private: true`` (with their ``note_id``)
+    in the model so the Studio can draw them as the caller's own; they are
+    rendered for the caller only and never stored in the layout.
+    """
+    note_ids: set[str] = set()
+    if private_notes and not who.agent:
+        notes = list_private_notes(report["report_id"], who)
+        note_ids = {n["note_id"] for n in notes}
+        if notes:
+            extra = [(n["section_id"], n["after_block_id"], n["block"]) for n in notes]
+            layout = layout_mod.merge_blocks(layout, extra)
+    model = render_model(layout, source, width="container", meta=_meta(report), mode=_mode(mode))
+    if note_ids:
+        for sec in model["sections"]:
+            for b in sec["blocks"]:
+                if b["id"] in note_ids:
+                    b["private"] = True
+                    b["note_id"] = b["id"]
+            shared_ids = {s.get("id") for s in report["layout"].get("sections") or []}
+            if (
+                sec["blocks"]
+                and all(b.get("private") for b in sec["blocks"])
+                and sec["id"] not in shared_ids
+            ):
+                sec["private"] = True
+    return model
+
+
+def render_report(
+    report_id: str,
+    who: Principal,
+    *,
+    redact: bool = False,
+    mode: str = "view",
+    private_notes: bool = False,
+) -> dict[str, Any]:
     """Return the browser render model for the saved layout."""
     report = get_report(report_id, who)
     source = _render_source(report["source_id"], redact)
-    return render_model(report["layout"], source, width="container", meta=_meta(report))
+    return _model(report["layout"], source, report, who, mode=mode, private_notes=private_notes)
 
 
 def preview_model(
-    report_id: str, who: Principal, layout: dict[str, Any], *, redact: bool = False
+    report_id: str,
+    who: Principal,
+    layout: dict[str, Any],
+    *,
+    redact: bool = False,
+    mode: str = "view",
+    private_notes: bool = False,
 ) -> dict[str, Any]:
     """Validate an unsaved layout and return its render model."""
     report = get_report(report_id, who)
     source = _render_source(report["source_id"], redact)
     norm = _validated(layout, source)
-    return render_model(norm, source, width="container", meta=_meta(report))
+    return _model(norm, source, report, who, mode=mode, private_notes=private_notes)
+
+
+# ---------------------------------------------------------------------------
+# Private notes (per-user annotations, never part of the shared layout)
+# ---------------------------------------------------------------------------
+
+_NOTE_ID_RE = re.compile(r"^pn_[0-9a-f]{12}$")
+_MAX_PRIVATE_NOTES = 200
+
+
+def _note_row(row: Any) -> dict[str, Any]:
+    return {
+        "note_id": row["note_id"],
+        "report_id": row["report_id"],
+        "section_id": row["section_id"],
+        "after_block_id": row["after_block_id"],
+        "block": json.loads(row["block_json"]),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def _require_human(who: Principal) -> None:
+    # Private notes are personal: the assistant / MCP never read or write them.
+    if who.agent:
+        raise ReportForbidden("private notes are visible to their author only")
+
+
+def _clean_note_block(block: Any, note_id: str, who: Principal, now: str) -> dict[str, Any]:
+    if not isinstance(block, dict):
+        raise ReportError("block must be an object")
+    clean = {k: v for k, v in block.items() if k not in ("id", "author", "updated_at")}
+    clean["id"] = note_id
+    clean.setdefault("visible", True)
+    clean.setdefault("export", False)
+    if clean.get("type") == "note":
+        clean.setdefault("tone", "note")
+        clean["author"] = who.user_id[:200]
+        clean["updated_at"] = now
+    errs = layout_mod.validate_free_block(clean)
+    if errs:
+        raise ReportError("note invalid", errs)
+    return clean
+
+
+def _clean_anchor(value: Any, what: str) -> str | None:
+    if value in (None, ""):
+        return None
+    if not isinstance(value, str) or not re.match(r"^[a-z0-9][a-z0-9_-]{0,39}$", value):
+        raise ReportError(f"{what} must be a section / block id")
+    return value
+
+
+def list_private_notes(report_id: str, who: Principal) -> list[dict[str, Any]]:
+    """Return the caller's own private notes on a report they can see."""
+    _require_human(who)
+    get_report(report_id, who)
+    with web_db.connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM web_report_notes WHERE report_id = ? AND owner = ? ORDER BY created_at",
+            (report_id, who.user_id),
+        ).fetchall()
+    return [_note_row(r) for r in rows]
+
+
+def create_private_note(
+    report_id: str,
+    who: Principal,
+    *,
+    section_id: str,
+    block: dict[str, Any],
+    after_block_id: str | None = None,
+) -> dict[str, Any]:
+    """Add a private note (anyone who can *view* the report may annotate it)."""
+    _require_human(who)
+    get_report(report_id, who)
+    sid = _clean_anchor(section_id, "section_id")
+    if sid is None:
+        raise ReportError("section_id is required")
+    after = _clean_anchor(after_block_id, "after_block_id")
+    now = _now()
+    note_id = "pn_" + secrets.token_hex(6)
+    clean = _clean_note_block(block, note_id, who, now)
+    with web_db.connect() as conn:
+        (count,) = conn.execute(
+            "SELECT COUNT(*) FROM web_report_notes WHERE report_id = ? AND owner = ?",
+            (report_id, who.user_id),
+        ).fetchone()
+        if int(count) >= _MAX_PRIVATE_NOTES:
+            raise ReportError(f"at most {_MAX_PRIVATE_NOTES} private notes per report")
+        conn.execute(
+            "INSERT INTO web_report_notes (note_id, report_id, owner, section_id, after_block_id, "
+            "block_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (note_id, report_id, who.user_id, sid, after, json.dumps(clean), now, now),
+        )
+    web_db.audit(
+        actor=who.actor or who.user_id,
+        action="report.note_create",
+        target=report_id,
+        detail_json=json.dumps({"note_id": note_id, "type": clean["type"]}),
+    )
+    return _get_private_note(report_id, note_id, who)
+
+
+def _get_private_note(report_id: str, note_id: str, who: Principal) -> dict[str, Any]:
+    if not _NOTE_ID_RE.match(note_id or ""):
+        raise ReportNotFound(note_id)
+    with web_db.connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM web_report_notes WHERE note_id = ? AND report_id = ? AND owner = ?",
+            (note_id, report_id, who.user_id),
+        ).fetchone()
+    if row is None:
+        # Someone else's note is indistinguishable from a missing one.
+        raise ReportNotFound(note_id)
+    return _note_row(row)
+
+
+def update_private_note(
+    report_id: str,
+    note_id: str,
+    who: Principal,
+    *,
+    block: dict[str, Any] | None = None,
+    section_id: str | None = None,
+    after_block_id: str | None = None,
+    move: bool = False,
+) -> dict[str, Any]:
+    """Edit a private note's content and / or move it (``move=True``)."""
+    _require_human(who)
+    get_report(report_id, who)
+    current = _get_private_note(report_id, note_id, who)
+    now = _now()
+    new_block = current["block"]
+    if block is not None:
+        merged = {k: v for k, v in {**current["block"], **block}.items() if v is not None}
+        new_block = _clean_note_block(merged, note_id, who, now)
+    sid = current["section_id"]
+    after = current["after_block_id"]
+    if move:
+        sid = _clean_anchor(section_id, "section_id") or sid
+        after = _clean_anchor(after_block_id, "after_block_id")
+    with web_db.connect() as conn:
+        conn.execute(
+            "UPDATE web_report_notes SET block_json = ?, section_id = ?, after_block_id = ?, "
+            "updated_at = ? WHERE note_id = ? AND owner = ?",
+            (json.dumps(new_block), sid, after, now, note_id, who.user_id),
+        )
+    return _get_private_note(report_id, note_id, who)
+
+
+def delete_private_note(report_id: str, note_id: str, who: Principal) -> dict[str, Any]:
+    """Delete one of the caller's private notes."""
+    _require_human(who)
+    get_report(report_id, who)
+    _get_private_note(report_id, note_id, who)
+    with web_db.connect() as conn:
+        conn.execute(
+            "DELETE FROM web_report_notes WHERE note_id = ? AND owner = ?",
+            (note_id, who.user_id),
+        )
+    web_db.audit(
+        actor=who.actor or who.user_id,
+        action="report.note_delete",
+        target=report_id,
+        detail_json=json.dumps({"note_id": note_id}),
+    )
+    return {"ok": True, "note_id": note_id}
+
+
+def _with_private_notes(
+    layout: dict[str, Any], report_id: str, who: Principal, *, export_only: bool
+) -> dict[str, Any]:
+    """Return ``layout`` with the caller's private notes merged in."""
+    if who.agent:
+        return layout
+    notes = list_private_notes(report_id, who)
+    extra = []
+    for n in notes:
+        block = dict(n["block"])
+        if export_only and block.get("export") is not True:
+            continue
+        block["export"] = True
+        extra.append((n["section_id"], n["after_block_id"], block))
+    if not extra:
+        return layout
+    return layout_mod.merge_blocks(layout, extra)
 
 
 def export_dir() -> Path:
@@ -999,17 +1260,26 @@ def export_report(
     layout: dict[str, Any] | None = None,
     block_id: str | None = None,
     redact: bool = False,
+    include_private_notes: bool = False,
 ) -> ExportFile:
     """Render the report (or an unsaved ``layout``) to ``fmt`` via the executor.
 
-    Hidden sections / blocks are never exported (the render model drops
-    them). Every export is audited.
+    Hidden sections / blocks and ``export: false`` blocks are never
+    exported (the export render model drops them). With
+    ``include_private_notes`` the *caller's own* private notes marked
+    "include in export" are merged in; nobody else's notes ever are.
+    Every export is audited.
     """
     if fmt not in EXPORT_FORMATS:
         raise ReportError(f"unknown export format {fmt!r}")
     report = get_report(report_id, who)
     source = _render_source(report["source_id"], redact)
     final_layout = _validated(layout, source) if layout is not None else report["layout"]
+    private = 0
+    if include_private_notes and not who.agent:
+        before = sum(1 for _ in layout_mod.iter_blocks(final_layout))
+        final_layout = _with_private_notes(final_layout, report_id, who, export_only=True)
+        private = sum(1 for _ in layout_mod.iter_blocks(final_layout)) - before
     prune_exports()
     work = export_dir() / secrets.token_hex(12)
     work.mkdir(mode=0o700)
@@ -1049,7 +1319,13 @@ def export_report(
         action="report.export",
         target=report_id,
         detail_json=json.dumps(
-            {"format": fmt, "version": report["version"], "block": block_id, "redacted": redact}
+            {
+                "format": fmt,
+                "version": report["version"],
+                "block": block_id,
+                "redacted": redact,
+                "private_notes": private,
+            }
         ),
     )
     out = ExportFile(

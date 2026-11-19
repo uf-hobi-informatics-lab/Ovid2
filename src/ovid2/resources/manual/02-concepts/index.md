@@ -12,7 +12,7 @@ This chapter introduces them in dependency order.
   <a class="card" href="storage.md"><strong>Connections & addresses</strong><span>How Ovid2 reaches storage, and why an address is an exact location.</span></a>
   <a class="card" href="dataspace.md"><strong>The Data Space</strong><span>Every storage account as one browsable folder tree.</span></a>
   <a class="card" href="pipelines.md"><strong>Pipelines & kinds</strong><span>Pipeline packages, saved configs, and the seven job kinds.</span></a>
-  <a class="card" href="etl-stages.md"><strong>The five ETL stages</strong><span>Format, deduplicate, map, fix, write: what each stage guarantees.</span></a>
+  <a class="card" href="etl-stages.md"><strong>The ETL stages</strong><span>Format, deduplicate, transform, map, fix, then write: what each stage guarantees.</span></a>
   <a class="card" href="engines.md"><strong>Engines</strong><span>PySpark, Databricks, Snowpark, DuckDB, and how to choose.</span></a>
   <a class="card" href="cdms.md"><strong>Data models</strong><span>How a CDM is described as YAML, so the engine stays CDM-agnostic.</span></a>
   <a class="card" href="trust-model.md"><strong>Trust model</strong><span>Agent → API → executor, scoped secrets, and approval gates.</span></a>

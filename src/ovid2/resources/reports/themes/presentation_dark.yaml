@@ -1,18 +1,21 @@
+# Report themes style the *report output* only (Studio canvas, HTML/PDF/
+# DOCX/PNG/SVG exports). They never read the web page's theme tokens —
+# pinned by tests/contract/test_report_catalogues.py.
 name: presentation_dark
 label: Presentation (dark)
-description: Dark slides with bright accents and larger type, for projectors.
+description: Deep slate slides with luminous accents and larger type, for projectors and screens.
 mode: dark
-fonts: {body: "'Segoe UI', Helvetica, Arial, sans-serif", heading: "'Segoe UI', Helvetica, Arial, sans-serif", mono: "Menlo, Consolas, monospace"}
+fonts: {body: "Inter, 'Segoe UI', Helvetica, Arial, sans-serif", heading: "Inter, 'Segoe UI', Helvetica, Arial, sans-serif", mono: "'JetBrains Mono', Menlo, Consolas, monospace"}
 colors:
-  background: "#14181f"
-  surface: "#1e242d"
-  text: "#e8ecf1"
-  muted: "#9aa5b1"
-  border: "#333c48"
-  accent: "#58a6ff"
-  grid: "#2a313b"
-palette: ["#58a6ff", "#ffa657", "#ff7b72", "#7ee787", "#d2a8ff", "#f2cc60", "#79c0ff", "#ffbedd"]
+  background: "#0f141b"
+  surface: "#18202a"
+  text: "#e9eef5"
+  muted: "#97a3b3"
+  border: "#2b3542"
+  accent: "#6aa8ff"
+  grid: "#232c37"
+palette: ["#6aa8ff", "#ffad66", "#ff7f7a", "#7ee0a0", "#c9a5ff", "#f5d06a", "#62d2e8", "#ffb8d9"]
 sequential: plasma
 diverging: redyellowblue
 status: {passed: "#3fb950", exception: "#f85149", error: "#bc8cff", skipped: "#6e7681", not_applicable: "#484f58", warning: "#d29922"}
-sizes: {base: 13, title: 26, heading: 18, axis: 12}
+sizes: {base: 13, title: 28, heading: 18, axis: 12}

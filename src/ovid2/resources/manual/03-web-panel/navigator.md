@@ -39,6 +39,37 @@ You can narrow the tree in four ways:
 The navigator remembers what you had open and how you grouped it. The
 address bar is a deep link: `/navigator?p=<package>&t=<table>&f=<FIELD>`.
 
+## Which packages are listed
+
+By default the tree lists a package only if **at least one saved pipeline
+(run config) uses it**. The sources of the pipeline templates
+(`example_pcornet`, `pcornet_to_omop`, …) are always listed so you can
+clone them. Tick **Unused packages** to list every package on disk; the
+badge counts the hidden ones and an `unused` flag marks them
+(`/navigator?include_unused=true`).
+
+The list is read from disk on every request and is never cached. It also
+refreshes whenever you come back to the tab, so changes made in another
+tab, the CLI or git show up straight away:
+
+- **Deleting a pipeline** on **Pipelines** removes the run config. When it
+  was the package's last config, the package drops out of the tree.
+- **Delete package** (the package panel here, or the package hub) moves
+  the package folder *and* the run configs that use it to
+  `$XDG_STATE_HOME/ovid2/trash/pipelines/<name>-<timestamp>/`. Restore it
+  with `mv`. The confirmation dialog names the run configs that go with
+  it. Template sources cannot be deleted (the button is hidden for them),
+  and a package whose folder is a symlink is refused. Needs manage-config.
+  See [Delete a package](pipelines.md#delete-a-package).
+- The CLI equivalent is `ovid2 pipeline delete <name> [--with-configs] [--yes]`.
+- Agents use `DELETE /api/v1/pipeline-packages/{name}`, which needs a human
+  approval (`pipeline_package.delete`). It answers `409` while run configs
+  still use the package, unless `with_configs=true` is set.
+
+A deleted package folder that git tracks shows up as an unstaged deletion.
+Site packages also have entries in `scripts/public/manifest.toml`. Commit or
+clean those up separately.
+
 ## The graph
 
 | View | Shows |

@@ -61,7 +61,11 @@ from ovid2.web.models import (
     JobSubmitResponse,
     LlmChatRequest,
     LlmDetail,
+    LlmMessageMetaWrite,
     LlmProviderSpec,
+    LlmSessionDetail,
+    LlmSessionSummary,
+    LlmSessionWrite,
     LlmStatus,
     LlmSummary,
     LlmTestReport,
@@ -82,6 +86,7 @@ from ovid2.web.models import (
     PipelineConfigSummary,
     PipelineDetail,
     PipelineFilePreview,
+    PipelinePackageDeleteResult,
     PipelinePlanResponse,
     PipelineRunRequest,
     PipelineSummary,
@@ -95,6 +100,8 @@ from ovid2.web.models import (
     ReportFavoriteRequest,
     ReportOpsRequest,
     ReportPreviewRequest,
+    ReportPrivateNoteCreate,
+    ReportPrivateNoteUpdate,
     ReportShareRequest,
     ReportSourceIngestRequest,
     ReportTemplateSaveRequest,
@@ -141,6 +148,7 @@ from ovid2.web.services import (
     install_svc,
     jobs_svc,
     llm_chat_svc,
+    llm_sessions_svc,
     llms_svc,
     mappers_svc,
     pipeline_inspect_svc,
@@ -428,6 +436,52 @@ def api_delete_secret(name: str) -> WriteResult:
 def api_list_pipelines() -> list[PipelineSummary]:
     """Return every discoverable ``ovid2_pipelines.*`` package."""
     return pipelines_meta_svc.list_pipelines()
+
+
+@router.delete(
+    "/pipeline-packages/{name}",
+    response_model=PipelinePackageDeleteResult,
+    summary="Delete a pipeline package (moved to the trash)",
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG))],
+)
+def api_delete_pipeline_package(
+    name: str,
+    with_configs: bool = Query(
+        default=False, description="Also delete every run config that uses the package."
+    ),
+) -> PipelinePackageDeleteResult:
+    """Move ``ovid2_pipelines/<name>/`` to the XDG trash.
+
+    Gated (``pipeline_package.delete``): returns 202 with an
+    ``approval_id`` until a human approves. 409 when run configs still use
+    the package and ``with_configs`` is false; 400 for a protected
+    (template-source) package; 404 when unknown.
+    """
+    from ovid2.web.services import pipeline_packages_svc
+
+    if name not in pipelines_meta_svc.discover_pipelines():
+        raise HTTPException(status_code=404, detail=f"Pipeline package '{name}' not found.")
+    # Refuse an in-use delete *before* the gate so no approval is consumed.
+    in_use = pipeline_packages_svc.configs_using(name)
+    if in_use and not with_configs:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "status": "in_use",
+                "configs": in_use,
+                "message": str(pipeline_packages_svc.PackageInUse(name, in_use)),
+            },
+        )
+    _gate("pipeline_package.delete", name)
+    try:
+        return pipeline_packages_svc.delete_package(name, with_configs=with_configs, actor="web")
+    except pipeline_packages_svc.PackageInUse as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"status": "in_use", "configs": exc.configs, "message": str(exc)},
+        ) from exc
+    except pipeline_packages_svc.PackageDeleteError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get(
@@ -1030,14 +1084,24 @@ def api_inspect_package(
     dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
 )
 def api_navigator(
+    response: Response,
     group_by: str = Query(
         default="cdm",
         description="Grouping axis: cdm, profile, kind, template or cdm_profile.",
     ),
+    include_unused: bool = Query(
+        default=False,
+        description="Also list packages that no run config uses (template sources always show).",
+    ),
 ) -> dict[str, Any]:
-    """Return ``{group_by, group_by_choices, groups: [{key, label, pipelines}]}``."""
+    """Return ``{group_by, group_by_choices, include_unused, unused_count, groups}``.
+
+    Read fresh from disk on every call and marked ``no-store`` so a created
+    or deleted package / run config shows up on the next request.
+    """
+    response.headers["Cache-Control"] = "no-store"
     try:
-        return pipeline_lineage_svc.navigator_tree(group_by)
+        return pipeline_lineage_svc.navigator_tree(group_by, include_unused=include_unused)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
 
@@ -2720,11 +2784,152 @@ def api_llm_chat_stream(
         gen = llm_chat_svc.sse_stream(payload, actor=ctx.email or ctx.user_id, principal=principal)
     except llm_chat_svc.ChatDisabledError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except llm_sessions_svc.SessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Session not found.") from exc
     return StreamingResponse(
         gen,
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ---------------------------------------------------------------------------
+# Saved assistant sessions (the chatting user's own conversations)
+# ---------------------------------------------------------------------------
+
+
+def _session_owner(ctx: AuthContext) -> str:
+    """Return the session owner key for ``ctx``; refuse machine principals.
+
+    Sessions belong to a person (``anonymous`` while auth is off). The
+    assistant's own token (``llm:``) and the MCP service token may not
+    read or change a human's conversations.
+    """
+    if ctx.user_id.startswith(("llm:", "mcp:")):
+        raise HTTPException(
+            status_code=403, detail="Assistant sessions belong to a signed-in person."
+        )
+    return ctx.user_id
+
+
+def _session_id(session_id: str) -> str:
+    if not llm_sessions_svc.valid_id(session_id):
+        raise HTTPException(status_code=404, detail="Session not found.")
+    return session_id
+
+
+@router.get(
+    "/llm/sessions",
+    response_model=list[LlmSessionSummary],
+    summary="List (or keyword-search) the current user's assistant sessions",
+)
+def api_list_llm_sessions(
+    q: str | None = Query(None, max_length=200, description="Keywords (title + messages)."),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    ctx: AuthContext = Depends(require_capability(Capability.USE_LLM)),
+) -> list[LlmSessionSummary]:
+    """Newest first. With ``q`` every keyword must match the title or a message."""
+    owner = _session_owner(ctx)
+    rows = llm_sessions_svc.list_sessions(owner, query=q, limit=limit, offset=offset)
+    return [LlmSessionSummary(**r.to_dict()) for r in rows]
+
+
+@router.post(
+    "/llm/sessions",
+    response_model=LlmSessionSummary,
+    status_code=201,
+    summary="Start a new, empty assistant session",
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_create_llm_session(
+    payload: LlmSessionWrite,
+    ctx: AuthContext = Depends(require_capability(Capability.USE_LLM)),
+) -> LlmSessionSummary:
+    """Create a session; its title is generated after the first prompt unless given."""
+    row = llm_sessions_svc.create_session(_session_owner(ctx), payload.title)
+    return LlmSessionSummary(**row.to_dict())
+
+
+@router.get(
+    "/llm/sessions/{session_id}",
+    response_model=LlmSessionDetail,
+    summary="Get one of the current user's assistant sessions with its messages",
+)
+def api_get_llm_session(
+    session_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.USE_LLM)),
+) -> LlmSessionDetail:
+    """Return the session and its messages (404 when it is not the caller's)."""
+    try:
+        detail = llm_sessions_svc.get_session(_session_owner(ctx), _session_id(session_id))
+    except llm_sessions_svc.SessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Session not found.") from exc
+    return LlmSessionDetail(**detail.__dict__)
+
+
+@router.patch(
+    "/llm/sessions/{session_id}",
+    response_model=LlmSessionSummary,
+    summary="Rename one of the current user's assistant sessions",
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_rename_llm_session(
+    session_id: str,
+    payload: LlmSessionWrite,
+    ctx: AuthContext = Depends(require_capability(Capability.USE_LLM)),
+) -> LlmSessionSummary:
+    """Set a user-chosen title (the generated title never overwrites it)."""
+    try:
+        row = llm_sessions_svc.rename_session(
+            _session_owner(ctx), _session_id(session_id), payload.title
+        )
+    except llm_sessions_svc.SessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Session not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return LlmSessionSummary(**row.to_dict())
+
+
+@router.put(
+    "/llm/sessions/{session_id}/messages/{seq}/meta",
+    status_code=204,
+    summary="Store the final display state of an assistant message",
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_put_llm_message_meta(
+    session_id: str,
+    seq: int,
+    payload: LlmMessageMetaWrite,
+    ctx: AuthContext = Depends(require_capability(Capability.USE_LLM)),
+) -> Response:
+    """Keep proposal / UI-action states (ran, dismissed, undone) for reopening."""
+    try:
+        llm_sessions_svc.update_message_meta(
+            _session_owner(ctx), _session_id(session_id), seq, payload.meta
+        )
+    except llm_sessions_svc.SessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Message not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
+    return Response(status_code=204)
+
+
+@router.delete(
+    "/llm/sessions/{session_id}",
+    status_code=204,
+    summary="Delete one of the current user's assistant sessions",
+)
+def api_delete_llm_session(
+    session_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.USE_LLM)),
+) -> Response:
+    """Delete the caller's own conversation (user data, not a gated resource)."""
+    try:
+        llm_sessions_svc.delete_session(_session_owner(ctx), _session_id(session_id))
+    except llm_sessions_svc.SessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Session not found.") from exc
+    return Response(status_code=204)
 
 
 # ---------------------------------------------------------------------------
@@ -3302,6 +3507,8 @@ def api_report_ops(
             base_layout=payload.layout,
             render=payload.render,
             redact=_redact_rows(ctx),
+            mode=payload.mode,
+            private_notes=payload.private_notes,
         )
     except _REPORT_ERRORS as exc:
         raise _report_http(exc) from exc
@@ -3315,12 +3522,18 @@ def api_report_ops(
 )
 def api_render_report(
     report_id: str,
+    mode: str = Query("view", pattern="^(view|edit)$"),
+    private_notes: bool = Query(False, description="Merge your own private notes."),
     ctx: AuthContext = Depends(require_capability(Capability.VIEW_RUNS)),
 ) -> dict[str, Any]:
     """Return resolved blocks (Vega-Lite specs, KPI values, tables) in the report theme."""
     try:
         return reports_svc.render_report(
-            report_id, _report_principal(ctx), redact=_redact_rows(ctx)
+            report_id,
+            _report_principal(ctx),
+            redact=_redact_rows(ctx),
+            mode=mode,
+            private_notes=private_notes,
         )
     except _REPORT_ERRORS as exc:
         raise _report_http(exc) from exc
@@ -3340,8 +3553,99 @@ def api_preview_report(
     """Validate ``layout`` and return its render model (nothing is saved)."""
     try:
         return reports_svc.preview_model(
-            report_id, _report_principal(ctx), payload.layout, redact=_redact_rows(ctx)
+            report_id,
+            _report_principal(ctx),
+            payload.layout,
+            redact=_redact_rows(ctx),
+            mode=payload.mode,
+            private_notes=payload.private_notes,
         )
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.get(
+    "/reports/{report_id}/notes",
+    summary="Your private notes on a report (visible to you only)",
+    response_model=list,
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def api_list_report_notes(
+    report_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_RUNS)),
+) -> list[dict[str, Any]]:
+    """Return the caller's own private notes; agents get 403."""
+    try:
+        return reports_svc.list_private_notes(report_id, _report_principal(ctx))
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.post(
+    "/reports/{report_id}/notes",
+    summary="Add a private note to a report (only you will see it)",
+    response_model=dict,
+    status_code=201,
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_create_report_note(
+    report_id: str,
+    payload: ReportPrivateNoteCreate,
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_RUNS)),
+) -> dict[str, Any]:
+    """Viewers may annotate too: the note never enters the shared layout."""
+    try:
+        return reports_svc.create_private_note(
+            report_id,
+            _report_principal(ctx),
+            section_id=payload.section_id,
+            after_block_id=payload.after_block_id,
+            block=payload.block,
+        )
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.put(
+    "/reports/{report_id}/notes/{note_id}",
+    summary="Edit or move one of your private notes",
+    response_model=dict,
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_update_report_note(
+    report_id: str,
+    note_id: str,
+    payload: ReportPrivateNoteUpdate,
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_RUNS)),
+) -> dict[str, Any]:
+    """Merge ``block`` fields; with ``move`` re-anchor the note."""
+    try:
+        return reports_svc.update_private_note(
+            report_id,
+            note_id,
+            _report_principal(ctx),
+            block=payload.block,
+            section_id=payload.section_id,
+            after_block_id=payload.after_block_id,
+            move=payload.move,
+        )
+    except _REPORT_ERRORS as exc:
+        raise _report_http(exc) from exc
+
+
+@router.delete(
+    "/reports/{report_id}/notes/{note_id}",
+    summary="Delete one of your private notes",
+    response_model=dict,
+)
+def api_delete_report_note(
+    report_id: str,
+    note_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_RUNS)),
+) -> dict[str, Any]:
+    """Personal annotation, owner-only; audited (no approval gate: not shared data)."""
+    try:
+        return reports_svc.delete_private_note(report_id, note_id, _report_principal(ctx))
     except _REPORT_ERRORS as exc:
         raise _report_http(exc) from exc
 
@@ -3570,6 +3874,7 @@ def api_export_report(
             layout=payload.layout,
             block_id=payload.block_id,
             redact=_redact_rows(ctx),
+            include_private_notes=payload.include_private_notes,
         )
     except _REPORT_ERRORS as exc:
         raise _report_http(exc) from exc

@@ -33,6 +33,31 @@ Jobs that are already running keep the image they started with.
 records (90 days) are kept. Quick-download exports are deleted after one
 hour.
 
+### Assistant sessions
+
+Saved [assistant sessions](../07-assistant/sessions.md) are **kept until
+their owner deletes them**. No automatic expiry applies. They live in
+the web database (`$XDG_STATE_HOME/ovid2/scheduler.db`, tables
+`web_llm_sessions` and `web_llm_messages`, plus the search index
+`web_llm_messages_fts`), so the normal state backup covers them.
+
+To apply a site retention policy, stop the web service and delete old
+sessions with `sqlite3`. For example, to remove sessions untouched for
+180 days:
+
+```bash
+sqlite3 "$XDG_STATE_HOME/ovid2/scheduler.db" <<'SQL'
+CREATE TEMP TABLE old AS SELECT session_id FROM web_llm_sessions
+  WHERE updated_at < strftime('%Y-%m-%dT%H:%M:%S', 'now', '-180 days');
+DELETE FROM web_llm_messages      WHERE session_id IN (SELECT session_id FROM old);
+DELETE FROM web_llm_messages_fts  WHERE session_id IN (SELECT session_id FROM old);
+DELETE FROM web_llm_sessions      WHERE session_id IN (SELECT session_id FROM old);
+SQL
+```
+
+Audit rows for chat turns (`web_audit`, action `llm.chat`) contain only
+metadata and follow the normal job-record retention.
+
 ## Clean up
 
 - Per-run Docker networks and containers are removed when the run ends.

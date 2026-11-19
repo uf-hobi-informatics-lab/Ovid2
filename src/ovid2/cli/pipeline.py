@@ -1,12 +1,14 @@
 """``ovid2 pipeline`` — inspect and validate pipeline packages.
 
-Read-only commands (no pipeline data is written back). The command
+Read-only commands except ``delete`` (no pipeline data is written back). The command
 locates every ``ovid2_pipelines.<pipeline>`` package on ``sys.path`` and
 reports:
 
 - ``ovid2 pipeline list``     — every pipeline + its declared mapper type.
 - ``ovid2 pipeline validate`` — loads every YAML/Python spec and reports errors.
 - ``ovid2 pipeline tables``   — expands the canonical table list for a pipeline.
+- ``ovid2 pipeline delete``   — move a pipeline package to the XDG trash
+  (optionally with the run configs that use it). The only mutating action.
 
 ``ovid2 pipeline`` is kept as a hidden, deprecated alias for one release.
 """
@@ -100,6 +102,19 @@ def _add_actions(parser: argparse.ArgumentParser, *, command: str) -> None:
     tables.add_argument("pipeline", help="Pipeline name.")
     tables.set_defaults(_command=command, _entry=_entry_tables)
 
+    delete = action.add_parser(
+        "delete",
+        help="Move a pipeline package to the trash ($XDG_STATE_HOME/ovid2/trash/pipelines/).",
+    )
+    delete.add_argument("pipeline", help="Pipeline package name.")
+    delete.add_argument(
+        "--with-configs",
+        action="store_true",
+        help="Also delete every run config that uses the package.",
+    )
+    delete.add_argument("--yes", "-y", action="store_true", help="Do not ask for confirmation.")
+    delete.set_defaults(_command=command, _entry=_entry_delete)
+
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the ``pipeline`` subcommand plus the hidden ``partner`` alias.
@@ -169,4 +184,35 @@ def _entry_tables(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(f"[ovid2 pipeline] {exc}")
         return 1
+    return 0
+
+
+def _entry_delete(args: argparse.Namespace) -> int:
+    """Move a pipeline package (and optionally its run configs) to the trash."""
+    from ovid2.web.services import pipeline_packages_svc
+
+    name = str(args.pipeline)
+    configs = pipeline_packages_svc.configs_using(name)
+    if configs and not args.with_configs:
+        print(
+            f"[ovid2 pipeline] '{name}' is used by run config(s): {', '.join(configs)}. "
+            "Re-run with --with-configs to delete them too."
+        )
+        return 1
+    if not args.yes:
+        extra = f" and run config(s) {', '.join(configs)}" if configs else ""
+        answer = input(f"Delete pipeline package '{name}'{extra}? [y/N] ").strip().lower()
+        if answer not in {"y", "yes"}:
+            print("Aborted.")
+            return 1
+    try:
+        result = pipeline_packages_svc.delete_package(
+            name, with_configs=bool(args.with_configs), actor="cli"
+        )
+    except pipeline_packages_svc.PackageDeleteError as exc:
+        print(f"[ovid2 pipeline] {exc}")
+        return 1
+    print(f"Moved {result.path} -> {result.trash}")
+    for cfg in result.deleted_configs:
+        print(f"Deleted run config {cfg}")
     return 0
