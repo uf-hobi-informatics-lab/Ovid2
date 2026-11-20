@@ -18,18 +18,53 @@
         },
         "part": {
             "type": "string",
-            "description": "Grouping bucket for the run window / report nav tree.",
-            "enum": [
-                "part1",
-                "part2",
-                "part3",
-                "part4",
-                "mapping",
-                "freshness",
-                "integrity",
-                "completeness",
-                "semantic"
+            "description": "Grouping bucket for the run window / report nav tree. One of the core parts, or a part declared by the owning domain pack (`provides.parts` in pack.yaml; pinned by tests/contract/test_pack_manifests_valid.py).",
+            "anyOf": [
+                {
+                    "enum": [
+                        "part1",
+                        "part2",
+                        "part3",
+                        "part4",
+                        "mapping",
+                        "freshness",
+                        "integrity",
+                        "completeness",
+                        "semantic"
+                    ]
+                },
+                {"pattern": "^[a-z][a-z0-9_]*$"}
             ]
+        },
+        "severity": {
+            "type": "string",
+            "enum": ["blocker", "warning", "info"],
+            "default": "warning",
+            "description": "How serious an EXCEPTION is. `blocker` = the data should not be released until fixed; `warning` = needs review (the default, and the historical behaviour); `info` = informational. Carried into the JSON report and the health report source — never into the DCQ_RESULTS metric-row table (byte-compatible with the Snowflake port)."
+        },
+        "applies_to_cdms": {
+            "type": "array",
+            "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+            "description": "CDMs this check is meaningful for. Absent / empty = any CDM. A run whose CDM is not listed reports the check `not_applicable` without executing it."
+        },
+        "remediation": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "How to repair an EXCEPTION. Surfaced by GET /api/v1/runs/{id}/repair-context and the assistant's get_repair_context tool; the assistant may only *propose* the listed fixers / transforms (a human applies them).",
+            "properties": {
+                "hint": {"type": "string", "description": "Short, data-free guidance (never echo row values)."},
+                "fixers": {
+                    "type": "array",
+                    "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+                    "description": "Registered fixer names that typically repair this exception (pinned by tests/contract/test_check_remediation_resolves.py)."
+                },
+                "transforms": {
+                    "type": "array",
+                    "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+                    "description": "Transform ops from the public library that typically repair it."
+                },
+                "docs": {"type": "string", "description": "Manual page or URL with more detail."}
+            }
         },
         "edc_table": {
             "type": "string",

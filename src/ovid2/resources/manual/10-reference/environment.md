@@ -21,6 +21,8 @@ not listed here are internal; don't rely on them.
 | `OVID2_ENGINES_DIR` | `…/engines` | engines |
 | `OVID2_LLMS_DIR` | `…/llms` | assistant model connections |
 | `OVID2_TRANSFORMS_DIR` | `$XDG_CONFIG_HOME/ovid2/transforms` | user transform library (chains shared across pipelines) |
+| `OVID2_PACKS_DIR` | `$XDG_CONFIG_HOME/ovid2/packs` | folder [domain packs](../09-developers/domain-packs.md) (YAML-only) |
+| `OVID2_PACKS_ENABLED` | *(unset)* | comma-separated domain-pack ids to enable (`*` = all discovered); adds to `$XDG_CONFIG_HOME/ovid2/packs.yaml` |
 | `OVID2_SETTINGS_FILE` | `…/settings.json` | panel and worker settings |
 | `OVID2_SCHEDULER_DB` | `$XDG_STATE_HOME/ovid2/scheduler.db` | jobs, audit, users |
 | `OVID2_ARCHIVE_DIR` | under the state dir | daily event archive |

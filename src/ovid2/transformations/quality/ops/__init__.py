@@ -124,30 +124,96 @@ class OpContext:
         return self.session.read.option("header", True).option("sep", delimiter).csv(path)
 
 
+class OperatorCollisionError(ValueError):
+    """Raised when two modules register the same operator name."""
+
+
 def operator(
     name: str,
 ) -> Callable[
     [Callable[[OpContext, CheckSpec], list[MetricRow]]],
     Callable[[OpContext, CheckSpec], list[MetricRow]],
 ]:
-    """Register a function as the operator named ``name``."""
+    """Register a function as the operator named ``name``.
+
+    Raises:
+        OperatorCollisionError: When ``name`` is already registered by a
+            *different* function (re-importing the same module is fine).
+            Domain packs must namespace operators ``<pack_id>_<name>``.
+    """
 
     def _decorate(
         fn: Callable[[OpContext, CheckSpec], list[MetricRow]],
     ) -> Callable[[OpContext, CheckSpec], list[MetricRow]]:
+        existing = _OPERATORS.get(name)
+        if existing is not None and (
+            existing.__module__ != fn.__module__ or existing.__qualname__ != fn.__qualname__
+        ):
+            raise OperatorCollisionError(
+                f"health operator {name!r} already registered by "
+                f"{existing.__module__}.{existing.__qualname__}"
+            )
         _OPERATORS[name] = fn
         return fn
 
     return _decorate
 
 
+#: Pack id -> import error for packs whose ``operators_module`` failed.
+PACK_OPERATOR_ERRORS: dict[str, str] = {}
+_PACKS_LOADED = False
+
+
+def load_pack_operators() -> None:
+    """Import every active installed pack's ``operators_module`` (once).
+
+    Each module registers its operators with :func:`operator`. A pack
+    operator must be named ``<pack_id>_<name>``; one that is not, or that
+    collides, is reported in :data:`PACK_OPERATOR_ERRORS` and the pack's
+    remaining operators are kept. Executor tier only.
+    """
+    global _PACKS_LOADED
+    if _PACKS_LOADED:
+        return
+    _PACKS_LOADED = True
+    import importlib
+    import logging
+
+    from ovid2.packs import active_packs
+
+    log = logging.getLogger(__name__)
+    for info in active_packs():
+        if info.manifest is None or not info.may_ship_code:
+            continue
+        rel = info.manifest.provides.get("operators_module")
+        if not rel:
+            continue
+        module = f"{info.module}.{rel}" if info.module else str(rel)
+        before = set(_OPERATORS)
+        try:
+            importlib.import_module(module)
+        except Exception as exc:  # pack code is third-party: never crash the registry
+            PACK_OPERATOR_ERRORS[info.id] = f"{module}: {exc.__class__.__name__}: {exc}"
+            log.warning("pack %s: operators_module failed: %s", info.id, exc)
+            continue
+        for added in set(_OPERATORS) - before:
+            if not added.startswith(f"{info.id}_"):
+                _OPERATORS.pop(added, None)
+                PACK_OPERATOR_ERRORS[info.id] = (
+                    f"operator {added!r} must be named {info.id}_<name>; dropped"
+                )
+                log.warning("pack %s: operator %r not namespaced; dropped", info.id, added)
+
+
 def get_operator(name: str) -> Callable[[OpContext, CheckSpec], list[MetricRow]] | None:
     """Return the operator callable named ``name``, or ``None``."""
+    load_pack_operators()
     return _OPERATORS.get(name)
 
 
 def operator_names() -> frozenset[str]:
-    """Return the set of registered operator names."""
+    """Return the set of registered operator names (core + active packs)."""
+    load_pack_operators()
     return frozenset(_OPERATORS)
 
 
@@ -1607,8 +1673,11 @@ def _bad_zip(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
 
 
 __all__ = [
+    "PACK_OPERATOR_ERRORS",
     "OpContext",
+    "OperatorCollisionError",
     "get_operator",
+    "load_pack_operators",
     "operator",
     "operator_names",
 ]

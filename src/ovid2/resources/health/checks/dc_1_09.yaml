@@ -39,6 +39,13 @@ exception_metrics:
 thresholds:
   orphan_pct_gt: 5.0
 enabled: true
+severity: warning
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    Rows reference an ENCOUNTERID absent from ENCOUNTER. Null the orphan ids
+    with encounterid_orphans.
+  fixers: [encounterid_orphans]
 doc_summary: >-
   DC 1.09 (Table IIE): fewer than 5% of a table's records reference an
   ENCOUNTERID absent from ENCOUNTER.

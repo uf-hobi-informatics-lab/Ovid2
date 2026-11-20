@@ -20,6 +20,12 @@ exception_metrics:
 thresholds:
   coverage_pct_lt: 80.0
 enabled: true
+severity: warning
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    Investigate the source extract for the listed tables; this check has no
+    automatic fixer.
 doc_summary: >-
   DC 3.08 (Table IVH): at least 80% of PRESCRIBING records carry an RXNORM_CUI
   that maps to a Tier 1 RxNorm term type (SCD, SBD, BPCK, GPCK) via the PCORnet

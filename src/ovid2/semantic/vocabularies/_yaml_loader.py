@@ -84,6 +84,22 @@ def _bindings_dir() -> Path:
     return semantic_yaml_root() / "bindings"
 
 
+def _vocabulary_dirs() -> list[tuple[str, Path]]:
+    """Return ``(pack_id, dir)``: packaged first, then active domain packs."""
+    from ovid2.packs import pack_dirs
+
+    return [("", _vocabularies_dir())] + [
+        (info.id, path) for info, path in pack_dirs("vocabularies_dir")
+    ]
+
+
+def _binding_dirs() -> list[tuple[str, Path]]:
+    """Return ``(pack_id, dir)``: packaged first, then active domain packs."""
+    from ovid2.packs import pack_dirs
+
+    return [("", _bindings_dir())] + [(info.id, path) for info, path in pack_dirs("bindings_dir")]
+
+
 def _load_yaml(path: Path) -> dict[str, Any]:
     """Read a YAML file and require a dict at the top level."""
     with path.open(encoding="utf-8") as fh:
@@ -127,18 +143,23 @@ def iter_vocabulary_docs() -> list[tuple[str, dict[str, Any]]]:
     only for logging. The real handle name comes from ``payload['name']``.
     """
     result: list[tuple[str, dict[str, Any]]] = []
-    directory = _vocabularies_dir()
-    if not directory.is_dir():
-        return result
-    for path in sorted(directory.iterdir()):
-        if path.suffix != ".yaml":
+    for pack_id, directory in _vocabulary_dirs():
+        if not directory.is_dir():
             continue
-        try:
-            payload = _load_yaml(path)
-        except (ValueError, yaml.YAMLError) as exc:
-            logger.warning("Skipping vocabulary YAML %s: %s", path, exc)
-            continue
-        result.append((path.stem, payload))
+        for path in sorted(directory.iterdir()):
+            if path.suffix != ".yaml":
+                continue
+            try:
+                payload = _load_yaml(path)
+            except (ValueError, yaml.YAMLError) as exc:
+                logger.warning("Skipping vocabulary YAML %s: %s", path, exc)
+                continue
+            if pack_id and not str(payload.get("name", "")).startswith(f"{pack_id}."):
+                logger.warning(
+                    "Skipping pack vocabulary %s: name must start with %r.", path, f"{pack_id}."
+                )
+                continue
+            result.append((path.stem, payload))
     return result
 
 
@@ -150,9 +171,15 @@ def iter_binding_docs() -> list[tuple[str, dict[str, Any]]]:
     missing or doesn't match the filename stem is logged and skipped.
     """
     result: list[tuple[str, dict[str, Any]]] = []
-    directory = _bindings_dir()
-    if not directory.is_dir():
-        return result
+    for _pack_id, directory in _binding_dirs():
+        if directory.is_dir():
+            result.extend(_iter_binding_dir(directory))
+    return result
+
+
+def _iter_binding_dir(directory: Path) -> list[tuple[str, dict[str, Any]]]:
+    """Read every binding YAML in one directory."""
+    result: list[tuple[str, dict[str, Any]]] = []
     for path in sorted(directory.iterdir()):
         if path.suffix != ".yaml":
             continue

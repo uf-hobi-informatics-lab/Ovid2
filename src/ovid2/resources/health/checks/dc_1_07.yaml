@@ -33,6 +33,14 @@ exception_metrics:
 thresholds:
   null_pct_gt: 0.0
 enabled: true
+severity: blocker
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    Required fields are empty. Fix the source extract; where a row cannot be
+    repaired, drop it with delete_when_null_or_fon, or back-fill dates from
+    the encounter with copy_admit_date_or_delete.
+  fixers: [delete_when_null_or_fon, copy_admit_date_or_delete]
 doc_summary: >-
   DC 1.07 (Table IIC): required NOT-NULL CDM fields are populated in every
   record. Any missing / flavour-of-null value in a required field flags.

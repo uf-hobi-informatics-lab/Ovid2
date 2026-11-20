@@ -22,6 +22,12 @@ exception_metrics:
   - RECORDS_PER_ENCOUNTER
 thresholds: {}
 enabled: true
+severity: warning
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    Investigate the source extract for the listed tables; this check has no
+    automatic fixer.
 doc_summary: >-
   DC 3.01 (Table IVA): at least 1 DIAGNOSIS record with a known DX_TYPE per
   encounter for face-to-face encounter types (AV, ED, EI, IP, TH).

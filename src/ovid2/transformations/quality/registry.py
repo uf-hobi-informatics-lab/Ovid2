@@ -1,7 +1,9 @@
 """Declarative data-health check registry.
 
 Loads the YAML check specs under ``src/ovid2/resources/health/checks/``
-into :class:`CheckSpec` objects and exposes lookup / filter helpers. The
+**plus every active domain pack's** ``checks_dir`` (via the tier-neutral
+:mod:`ovid2.packs.content`) into :class:`CheckSpec` objects and exposes
+lookup / filter helpers. The
 registry is the source of truth for the ``ovid2 health`` runner, matching
 Ovid2's "configuration as data" principle (specs are data, operators are
 code).
@@ -18,22 +20,21 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-import yaml
+from ovid2.packs import content as _pack_content
 
 _CHECKS_DIR = Path(__file__).resolve().parent.parent.parent / "resources" / "health" / "checks"
 _PACKAGES_DIR = Path(__file__).resolve().parent.parent.parent / "resources" / "health" / "packages"
 
-_PART_ORDER: dict[str, int] = {
-    "part1": 0,
-    "part2": 1,
-    "part3": 2,
-    "part4": 3,
-    "mapping": 4,
-    "freshness": 5,
-    "integrity": 6,
-    "completeness": 7,
-    "semantic": 8,
-}
+#: Core part order. Pack-declared parts follow (see :func:`part_order`).
+_PART_ORDER: dict[str, int] = {p: i for i, p in enumerate(_pack_content.CORE_PARTS)}
+
+#: Valid ``severity`` values, most urgent first.
+SEVERITIES: tuple[str, ...] = ("blocker", "warning", "info")
+
+
+def part_order() -> dict[str, int]:
+    """Return ``part -> rank`` (core parts, then active packs' parts)."""
+    return _pack_content.part_order()
 
 
 @dataclass(frozen=True)
@@ -59,11 +60,22 @@ class CheckSpec:
     enabled: bool = True
     doc_summary: str = ""
     doc_interpretation: str = ""
+    severity: str = "warning"
+    applies_to_cdms: tuple[str, ...] = ()
+    remediation: dict[str, Any] = field(default_factory=dict)
+    pack: str = ""
 
     @property
     def sort_key(self) -> tuple[int, str]:
         """Deterministic ordering: by part, then by id."""
-        return (_PART_ORDER.get(self.part, 99), self.id)
+        return (part_order().get(self.part, 99), self.id)
+
+    def applies_to(self, cdm_name: str) -> bool:
+        """Return whether this check is meaningful for ``cdm_name``.
+
+        An empty ``applies_to_cdms`` means any CDM.
+        """
+        return not self.applies_to_cdms or cdm_name in self.applies_to_cdms
 
 
 @dataclass(frozen=True)
@@ -81,9 +93,10 @@ class CheckPackage:
     released: str
     checks: tuple[str, ...]
     description: str = ""
+    pack: str = ""
 
 
-def _package_from_dict(raw: dict[str, Any]) -> CheckPackage:
+def _package_from_dict(raw: dict[str, Any], *, pack: str = "") -> CheckPackage:
     """Build a :class:`CheckPackage` from a parsed YAML dict."""
     return CheckPackage(
         id=str(raw["id"]),
@@ -91,11 +104,15 @@ def _package_from_dict(raw: dict[str, Any]) -> CheckPackage:
         released=str(raw["released"]),
         checks=tuple(str(c) for c in raw["checks"]),
         description=str(raw.get("description", "")),
+        pack=pack,
     )
 
 
-def _spec_from_dict(raw: dict[str, Any]) -> CheckSpec:
+def _spec_from_dict(raw: dict[str, Any], *, pack: str = "") -> CheckSpec:
     """Build a :class:`CheckSpec` from a parsed YAML dict."""
+    severity = str(raw.get("severity", "warning"))
+    if severity not in SEVERITIES:
+        raise ValueError(f"severity {severity!r} not in {SEVERITIES}")
     return CheckSpec(
         id=str(raw["id"]),
         name=str(raw["name"]),
@@ -112,30 +129,48 @@ def _spec_from_dict(raw: dict[str, Any]) -> CheckSpec:
         enabled=bool(raw.get("enabled", True)),
         doc_summary=str(raw.get("doc_summary", "")),
         doc_interpretation=str(raw.get("doc_interpretation", "")),
+        severity=severity,
+        applies_to_cdms=tuple(str(c) for c in raw.get("applies_to_cdms", [])),
+        remediation=dict(raw.get("remediation", {})),
+        pack=pack,
     )
+
+
+def spec_sources() -> list[Path]:
+    """Return every spec file the registry loads (core + active packs)."""
+    return [doc.path for doc in _pack_content.iter_check_docs()]
+
+
+def package_sources() -> list[Path]:
+    """Return every package manifest the registry loads (core + active packs)."""
+    return [doc.path for doc in _pack_content.iter_package_docs()]
+
+
+def clear_cache() -> None:
+    """Drop the cached specs / packages (after enabling or editing a pack)."""
+    load_all_specs.cache_clear()
+    load_all_packages.cache_clear()
 
 
 @lru_cache(maxsize=1)
 def load_all_specs() -> tuple[CheckSpec, ...]:
     """Load and cache every check spec, sorted by part then id.
 
-    Malformed specs (missing required keys, bad YAML) are skipped with a
-    ``ValueError`` re-raised only if *no* spec loads — a single bad file
-    should not silently empty the registry.
+    Reads the core tree and every active domain pack's ``checks_dir``
+    (pack ids must start with ``<pack_id>.``; a duplicate id is skipped
+    with a warning). Malformed specs (missing required keys, bad YAML)
+    are skipped with a ``ValueError`` re-raised only if *no* spec loads
+    — a single bad file should not silently empty the registry.
     """
     specs: list[CheckSpec] = []
     errors: list[str] = []
     if not _CHECKS_DIR.is_dir():
         return ()
-    for path in sorted(_CHECKS_DIR.glob("*.yaml")):
+    for doc in _pack_content.iter_check_docs():
         try:
-            with path.open("r", encoding="utf-8") as fh:
-                raw = yaml.safe_load(fh)
-            if not isinstance(raw, dict):
-                raise ValueError(f"{path.name}: top-level YAML must be a mapping")
-            specs.append(_spec_from_dict(raw))
-        except (KeyError, ValueError, yaml.YAMLError) as exc:
-            errors.append(f"{path.name}: {exc}")
+            specs.append(_spec_from_dict(doc.raw, pack=doc.pack))
+        except (KeyError, ValueError) as exc:
+            errors.append(f"{doc.path.name}: {exc}")
     if not specs and errors:
         raise ValueError("No health check specs loaded. Errors: " + "; ".join(errors))
     specs.sort(key=lambda s: s.sort_key)
@@ -164,15 +199,11 @@ def load_all_packages() -> tuple[CheckPackage, ...]:
     errors: list[str] = []
     if not _PACKAGES_DIR.is_dir():
         return ()
-    for path in sorted(_PACKAGES_DIR.glob("*.yaml")):
+    for doc in _pack_content.iter_package_docs():
         try:
-            with path.open("r", encoding="utf-8") as fh:
-                raw = yaml.safe_load(fh)
-            if not isinstance(raw, dict):
-                raise ValueError(f"{path.name}: top-level YAML must be a mapping")
-            packages.append(_package_from_dict(raw))
-        except (KeyError, ValueError, yaml.YAMLError) as exc:
-            errors.append(f"{path.name}: {exc}")
+            packages.append(_package_from_dict(doc.raw, pack=doc.pack))
+        except (KeyError, ValueError) as exc:
+            errors.append(f"{doc.path.name}: {exc}")
     if not packages and errors:
         raise ValueError("No health check packages loaded. Errors: " + "; ".join(errors))
     packages.sort(key=lambda p: (p.released, p.id), reverse=True)
@@ -264,18 +295,24 @@ def select_specs(
 def parts() -> list[str]:
     """Return the distinct parts present in the registry, in canonical order."""
     seen = {spec.part for spec in load_all_specs()}
-    return sorted(seen, key=lambda p: _PART_ORDER.get(p, 99))
+    order = part_order()
+    return sorted(seen, key=lambda p: order.get(p, 99))
 
 
 __all__ = [
+    "SEVERITIES",
     "CheckPackage",
     "CheckSpec",
+    "clear_cache",
     "get_package",
     "get_spec",
     "latest_package",
     "load_all_packages",
     "load_all_specs",
+    "package_sources",
     "packages",
+    "part_order",
     "parts",
     "select_specs",
+    "spec_sources",
 ]

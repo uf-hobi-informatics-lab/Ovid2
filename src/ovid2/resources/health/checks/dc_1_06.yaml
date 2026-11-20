@@ -33,6 +33,14 @@ exception_metrics:
 thresholds:
   out_of_valueset_pct_gt: 0.0
 enabled: true
+severity: blocker
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    Out-of-valueset codes are local codes that were not translated. Add the
+    missing codes to the pipeline's mapper dictionary (translate_by_dict), or
+    map unknown values to the flavour-of-null OT/UN/NI.
+  transforms: [standardize_null]
 doc_summary: >-
   DC 1.06 (Table IIB): every column bound to a CDM-declared bounded valueset
   holds only permissible values (excluding flavour-of-null sentinels).

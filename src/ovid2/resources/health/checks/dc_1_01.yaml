@@ -45,6 +45,12 @@ exception_metrics:
 thresholds:
   missing_required_table_flag_eq: 1
 enabled: true
+severity: blocker
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    Investigate the source extract for the listed tables; this check has no
+    automatic fixer.
 doc_summary: >-
   DC 1.01 (Table IID): checks whether the PCORnet CDM tables exist for the
   input source. Core required tables (DEMOGRAPHIC, ENROLLMENT, ENCOUNTER,

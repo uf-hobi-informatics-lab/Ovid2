@@ -42,6 +42,12 @@ exception_metrics:
 thresholds:
   missing_pct_ge: 10.0
 enabled: true
+severity: warning
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    Investigate the source extract for the listed tables; this check has no
+    automatic fixer.
 doc_summary: >-
   DC 3.03 (Table IVC/IVD): key fields in the primary (IVC) and secondary
   (IVD) CDM tables are populated in at least 90% of records (missing rate

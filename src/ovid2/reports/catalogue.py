@@ -278,6 +278,46 @@ def _templates() -> dict[str, ReportTemplate]:
                 description=str(raw.get("description", "")),
                 layout=dict(raw["layout"]),
             )
+    out.update(_pack_templates(set(out)))
+    return out
+
+
+def _pack_templates(taken: set[str]) -> dict[str, ReportTemplate]:
+    """Return templates contributed by active domain packs.
+
+    A pack ships ``<report_templates_dir>/<source_kind>/<stem>.yaml`` for
+    an *existing* source kind; the id is ``<pack_id>.<kind>.<stem>`` and
+    the template is marked ``builtin=False`` (it is still read-only).
+    """
+    from pathlib import Path
+
+    from ovid2.packs.content import iter_template_dirs
+
+    out: dict[str, ReportTemplate] = {}
+    for pack_id, root in iter_template_dirs():
+        for kind_dir in sorted(Path(root).iterdir(), key=lambda p: p.name):
+            if not kind_dir.is_dir() or kind_dir.name.startswith(("_", ".")):
+                continue
+            for path in sorted(kind_dir.glob("*.yaml")):
+                tid = f"{pack_id}.{kind_dir.name}.{path.stem}"
+                if tid in taken or tid in out:
+                    continue
+                try:
+                    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+                    out[tid] = ReportTemplate(
+                        template_id=tid,
+                        source_kind=kind_dir.name,
+                        name=str(raw["name"]),
+                        description=str(raw.get("description", "")),
+                        layout=dict(raw["layout"]),
+                        builtin=False,
+                    )
+                except (OSError, yaml.YAMLError, KeyError, TypeError, ValueError) as exc:
+                    import logging
+
+                    logging.getLogger(__name__).warning(
+                        "pack %s: report template %s skipped: %s", pack_id, path, exc
+                    )
     return out
 
 
@@ -287,7 +327,7 @@ def list_templates(source_kind: str | None = None) -> list[ReportTemplate]:
 
 
 def get_template(template_id: str) -> ReportTemplate | None:
-    """Return one built-in template by id (``<kind>.<stem>``)."""
+    """Return one built-in or pack template by id (``<kind>.<stem>`` / ``<pack>.<kind>.<stem>``)."""
     return _templates().get(template_id)
 
 

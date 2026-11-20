@@ -507,6 +507,57 @@ Render a Report Studio bundle (layout + source) to pdf/html/docx/pptx/xlsx/svg/p
 | `--out-dir` `OUT_DIR` | Existing directory for the output file. |  |  |
 | `--block` `BLOCK` | svg/png only: export just this chart block id. |  |  |
 
+### `ovid2 tools pack`
+
+Domain packs bundle a CDM, health checks, packages, vocabularies, report templates and (pip packs only) operators / fixers. Output is JSON.
+
+#### `ovid2 tools pack list`
+
+List every discovered pack and its activation state.
+
+#### `ovid2 tools pack show`
+
+Show one pack and the checks / packages it contributes.
+
+| Argument | Description | Choices | Default |
+| --- | --- | --- | --- |
+| `pack_id` |  |  |  |
+
+#### `ovid2 tools pack validate`
+
+Validate a pack directory (exit 1 on errors).
+
+| Argument | Description | Choices | Default |
+| --- | --- | --- | --- |
+| `path` | Pack directory holding pack.yaml. |  |  |
+
+#### `ovid2 tools pack scaffold`
+
+Write a minimal, valid pack skeleton.
+
+| Argument | Description | Choices | Default |
+| --- | --- | --- | --- |
+| `pack_id` |  |  |  |
+| `--out-dir` `OUT_DIR` | Parent directory (default: cwd). |  | `.` |
+| `--domain` `DOMAIN` | Domain slug (e.g. clinical_trials). |  | `` |
+| `--python` | Lay out an installable distribution (entry point + operators stub). |  |  |
+
+#### `ovid2 tools pack enable`
+
+Enable a pack on this host (packs.yaml).
+
+| Argument | Description | Choices | Default |
+| --- | --- | --- | --- |
+| `pack_id` |  |  |  |
+
+#### `ovid2 tools pack disable`
+
+Disable a pack on this host (packs.yaml).
+
+| Argument | Description | Choices | Default |
+| --- | --- | --- | --- |
+| `pack_id` |  |  |  |
+
 ## `ovid2 scheduler`
 
 Poll a data directory for pipeline batches and dispatch ETL runs when they are ready. State is persisted to Snowflake or a local SQLite file.

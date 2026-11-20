@@ -64,6 +64,21 @@ Click a check to expand its per-table detail.
 | low mapping coverage | local or obsolete codes | map to standard codes; check the code type column |
 | missing required table | the source doesn't provide it | confirm with the data owner; mark as not provided |
 
+### Severity and the repair context
+
+Each check carries a **severity**: `blocker` (do not release until fixed),
+`warning` (review; the default) or `info`. The report summary counts failed
+checks per severity. A check limited to other data models
+(`applies_to_cdms`) is reported *not applicable* without running.
+
+`GET /api/v1/runs/<instance_id>/repair-context` lists the failed checks,
+most severe first, with the remediation hint and the fixers or transforms
+that usually repair each one. The assistant reads it through
+`get_repair_context` and can only *propose* a fix. The payload is
+aggregate-only: metric values that might echo source data are shown only
+to people allowed to view pipeline data. The hints come from the check's
+[domain pack](../09-developers/domain-packs.md).
+
 Report cycles (`20r1`, `dcq_v7_03`, …) are listed by
 `ovid2 health --list-packages`. Each is a YAML list of check ids, so you
 can see exactly which checks a cycle contains.

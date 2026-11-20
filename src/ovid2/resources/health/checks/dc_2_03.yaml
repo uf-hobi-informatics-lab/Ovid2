@@ -21,6 +21,13 @@ exception_metrics:
 thresholds:
   illogical_pct_gt: 5.0
 enabled: true
+severity: warning
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    A later date precedes its earlier partner (e.g. discharge before admit).
+    Correct with illogical_discharge_date / illogical_admit_date.
+  fixers: [illogical_discharge_date, illogical_admit_date]
 doc_summary: >-
   DC 2.03 (Table IIIC): fewer than 5% of records carry an illogical date
   sequence (a later date preceding its earlier partner, e.g. DISCHARGE_DATE

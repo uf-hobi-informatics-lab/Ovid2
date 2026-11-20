@@ -20,7 +20,9 @@ model ─ tool call ─┬─ GET tool   → executor calls /api/v1/… with a p
 ## Read tools
 
 The assistant can read jobs, job logs, runs, timelines, health reports,
-pipeline configs and packages, formatter and mapper specs, field-level
+pipeline configs and packages, domain packs (`list_packs`, `get_pack`), the
+repair context of a failed health run (`get_repair_context`), formatter and
+mapper specs, field-level
 lineage (`inspect_pipeline_lineage`, the same view as the
 [navigator](../03-web-panel/navigator.md)), addresses, connections,
 engines and the Data Space. These run automatically with a

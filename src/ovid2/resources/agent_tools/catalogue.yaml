@@ -165,6 +165,38 @@ tools:
     path: /api/v1/health/packages
     capability: view_runs
 
+  - name: get_repair_context
+    description: >-
+      Failed checks of a health run, ordered by severity, with the domain
+      pack's remediation hint and the fixers / transforms that typically
+      repair each one (aggregate only, no row values). Use it to propose a
+      fix with the PROPOSE tools.
+    method: GET
+    path: /api/v1/runs/{instance_id}/repair-context
+    capability: view_runs
+    params:
+      type: object
+      required: [instance_id]
+      properties:
+        instance_id: {type: string}
+
+  - name: list_packs
+    description: Domain packs (built-in / installed / folder) with activation state and what each provides.
+    method: GET
+    path: /api/v1/packs
+    capability: view_runs
+
+  - name: get_pack
+    description: One domain pack and the health checks / report-cycle packages it contributes.
+    method: GET
+    path: /api/v1/packs/{pack_id}
+    capability: view_runs
+    params:
+      type: object
+      required: [pack_id]
+      properties:
+        pack_id: {type: string}
+
   - name: list_transforms
     description: Public transformations library (op names, categories, parameters).
     method: GET

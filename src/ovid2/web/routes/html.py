@@ -3020,6 +3020,43 @@ def cdm_detail_page(request: Request, name: str) -> HTMLResponse:
 
 
 # ---------------------------------------------------------------------------
+# Domain packs — read-only catalogue
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/packs",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def packs_page(request: Request) -> HTMLResponse:
+    """List every discovered domain pack (built-in, installed, folder)."""
+    from ovid2.web.services import packs_svc
+
+    return templates.TemplateResponse(request, "packs.html", {"packs": packs_svc.list_packs()})
+
+
+@router.get(
+    "/packs/{pack_id}",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def pack_detail_page(request: Request, pack_id: str) -> HTMLResponse:
+    """Render one domain pack: manifest, activation state and its checks."""
+    from ovid2.web.services import health_report_svc, packs_svc
+
+    detail = packs_svc.get_pack_detail(pack_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"Domain pack '{pack_id}' not found.")
+    checks = [c for c in health_report_svc.list_checks() if c.get("pack") == pack_id]
+    return templates.TemplateResponse(
+        request, "pack_detail.html", {"pack": detail, "checks": checks}
+    )
+
+
+# ---------------------------------------------------------------------------
 # Pipelines (W7)
 # ---------------------------------------------------------------------------
 

@@ -47,6 +47,7 @@ __all__ = [
     "iter_valueset_docs",
     "load_cdm",
     "load_table_fields_from_yaml",
+    "pack_cdm_dir",
 ]
 
 
@@ -65,16 +66,36 @@ def cdm_yaml_root() -> Path:
         return Path(path)
 
 
+def pack_cdm_dir(cdm_name: str) -> Path | None:
+    """Return the active domain pack's ``cdms/<cdm_name>/`` tree, if any.
+
+    Tier-neutral (:mod:`ovid2.packs` reads manifests only).
+    """
+    from ovid2.packs import active_packs
+
+    for info in active_packs():
+        directory = info.cdm_dir(cdm_name)
+        if directory is not None:
+            return directory
+    return None
+
+
 def cdm_yaml_dir(cdm_name: str) -> Path:
-    """Return the packaged directory for ``cdm_name``.
+    """Return the YAML directory for ``cdm_name``.
+
+    Searches the packaged tree first, then every active domain pack
+    (``<pack>/cdms/<cdm_name>/``). A pack can never shadow a core CDM.
 
     Raises:
         CdmYamlError: If ``cdm_name`` has no YAML directory.
     """
     directory = cdm_yaml_root() / cdm_name
-    if not directory.is_dir():
-        raise CdmYamlError(f"No CDM YAML directory for '{cdm_name}' at {directory}.")
-    return directory
+    if directory.is_dir():
+        return directory
+    pack_dir = pack_cdm_dir(cdm_name)
+    if pack_dir is not None:
+        return pack_dir
+    raise CdmYamlError(f"No CDM YAML directory for '{cdm_name}' at {directory}.")
 
 
 # ---------------------------------------------------------------------------

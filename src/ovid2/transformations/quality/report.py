@@ -44,7 +44,14 @@ def build_report(
     """Build the report dict from the check outcomes."""
     parts: dict[str, dict[str, int]] = {}
     passed = exception = error = skipped = not_applicable = 0
+    #: Failed (exception / error) checks per severity.
+    failed_by_severity: dict[str, int] = {}
+    packs: dict[str, int] = {}
     for outcome in outcomes:
+        if outcome.status in ("exception", "error"):
+            failed_by_severity[outcome.severity] = failed_by_severity.get(outcome.severity, 0) + 1
+        if outcome.pack:
+            packs[outcome.pack] = packs.get(outcome.pack, 0) + 1
         bucket = parts.setdefault(
             outcome.part,
             {"total": 0, "passed": 0, "exception": 0, "error": 0, "not_applicable": 0},
@@ -84,6 +91,9 @@ def build_report(
             "checks_skipped": skipped,
             "checks_not_applicable": not_applicable,
             "parts": parts,
+            "failed_by_severity": failed_by_severity,
+            "blockers": failed_by_severity.get("blocker", 0),
+            "packs": packs,
         },
         "checks": [outcome.as_report_dict() for outcome in outcomes],
     }

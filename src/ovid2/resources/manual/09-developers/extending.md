@@ -50,6 +50,9 @@ of each recipe tells you if you missed one.
    then `register(handle)`.
 3. Bounded valuesets register automatically as `<cdm>.<table>.<column>`.
 
+A CDM for a new domain can also ship outside the core tree, in a
+[domain pack](domain-packs.md).
+
 → `test_cdm_yaml_loads.py`, `test_cdm_registry_complete.py`
 
 ## Add a vocabulary
@@ -217,6 +220,11 @@ reuse an existing operator with different `params`.
      What the check measures.
    doc_interpretation: >-
      How to read its metric rows.
+   severity: warning               # blocker | warning | info
+   applies_to_cdms: [pcornet_7_0]  # optional; other CDMs report n/a
+   remediation:                    # optional; feeds the repair context
+     hint: Normalise blank values, then fix the extract.
+     transforms: [standardize_null]
    ```
 
 2. `na_when_empty` lists tables whose **collective** emptiness makes the
@@ -239,7 +247,11 @@ reuse an existing operator with different `params`.
 5. Add a unit test under `tests/unit/quality/` (for example
    `test_health_ops.py`).
 
-→ `test_health_specs_valid.py`, `test_health_packages_valid.py`
+To ship checks for a new domain without editing core, put them in a
+[domain pack](domain-packs.md) instead.
+
+→ `test_health_specs_valid.py`, `test_health_packages_valid.py`,
+`test_check_remediation_resolves.py`
 
 ## Add a report source kind or chart kind
 

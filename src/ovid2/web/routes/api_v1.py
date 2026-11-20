@@ -151,6 +151,7 @@ from ovid2.web.services import (
     llm_sessions_svc,
     llms_svc,
     mappers_svc,
+    packs_svc,
     pipeline_inspect_svc,
     pipeline_lineage_svc,
     pipeline_plan_svc,
@@ -906,6 +907,37 @@ def api_health_packages() -> list[dict[str, Any]]:
 
 
 @router.get(
+    "/packs",
+    summary="Domain packs: built-in, installed and folder packs with activation state",
+    response_model=list,
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def api_list_packs() -> list[dict[str, Any]]:
+    """Return every discovered domain pack (built-in first).
+
+    Reads ``pack.yaml`` manifests only (web-safe; no pack code is
+    imported). Each entry carries id / version / label / domain / origin
+    / enabled / active / error / provides, plus the number of checks and
+    report-cycle packages it contributes.
+    """
+    return packs_svc.list_packs()
+
+
+@router.get(
+    "/packs/{pack_id}",
+    summary="One domain pack with the check and package ids it contributes",
+    response_model=dict,
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def api_get_pack(pack_id: str) -> dict[str, Any]:
+    """Return one domain pack (manifest + contributed check / package ids)."""
+    detail = packs_svc.get_pack_detail(pack_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"Domain pack '{pack_id}' not found.")
+    return detail
+
+
+@router.get(
     "/transforms",
     summary="Public transformations library catalogue",
     response_model=list[TransformSummary],
@@ -1463,6 +1495,33 @@ def api_run_health_report(instance_id: str) -> dict[str, Any]:
     if report is None:
         raise HTTPException(status_code=404, detail=f"No health report for run '{instance_id}'.")
     return report
+
+
+@router.get(
+    "/runs/{instance_id}/repair-context",
+    summary="Failed health checks with severity and remediation hints (aggregate only)",
+    response_model=dict,
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def api_run_repair_context(
+    instance_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_RUNS)),
+) -> dict[str, Any]:
+    """Return the repair context for a health run.
+
+    One entry per failed (exception / error) check, ordered by severity:
+    the exception metrics' counts and thresholds, and the domain pack's
+    remediation hint plus the fixers / transforms that typically repair
+    it. Metric ``value_str`` / ``details`` (which can echo source values)
+    are included only for humans with ``VIEW_PIPELINE_DATA`` — never for
+    agents. Read-only: the assistant can only *propose* a fix.
+    """
+    payload = health_report_svc.repair_context(
+        instance_id, include_row_values=not _redact_rows(ctx)
+    )
+    if payload is None:
+        raise HTTPException(status_code=404, detail=f"No health report for run '{instance_id}'.")
+    return payload
 
 
 # ---------------------------------------------------------------------------

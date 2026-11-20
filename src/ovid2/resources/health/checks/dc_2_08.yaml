@@ -46,6 +46,12 @@ exception_metrics:
 thresholds:
   nsd: -7.0
 enabled: true
+severity: warning
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    Investigate the source extract for the listed tables; this check has no
+    automatic fixer.
 doc_summary: >-
   DC 2.08 (Table IIIG): monthly record volumes are stable. For each table (and
   each ENC_TYPE in AV/ED/IP/EI/TH for ENCOUNTER/DIAGNOSIS/PROCEDURES), a month

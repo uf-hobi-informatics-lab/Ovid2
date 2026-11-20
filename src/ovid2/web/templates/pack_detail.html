@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% block title %}Pack {{ pack.id }} &mdash; Ovid2{% endblock %}
+{% block content %}
+{% import "_help.html" as help %}
+{% set prov = pack.provides or {} %}
+<section class="page pl-page" data-pack-origin="{{ pack.origin }}">
+  <p class="pl-back"><a href="/packs">{{ icons.icon("chevron-left", size=14) }} all packs</a></p>
+  <div class="page-header pl-header">
+    <div class="pl-title">
+      <h1>{{ pack.label or pack.id }}
+        {% if pack.description %}{{ help.tip(pack.description) }}{% endif %}
+      </h1>
+      <p class="pl-meta">
+        <span class="mono">{{ pack.id }}</span>
+        {% if pack.version %}&middot; v<span class="mono">{{ pack.version }}</span>{% endif %}
+        &middot; {{ pack.origin }}
+        {% if pack.domain %}&middot; {{ pack.domain }}{% endif %}
+      </p>
+    </div>
+    <div class="page-actions">
+      <a href="/api/v1/packs/{{ pack.id }}" class="button small">{{ icons.icon("api", size=15) }} JSON</a>
+    </div>
+  </div>
+
+  {% if pack.error %}
+    <p class="flash error">{{ pack.error }}</p>
+  {% elif not pack.active %}
+    <p class="flash">Not enabled. {{ help.tip("Run `ovid2 tools pack enable " ~ pack.id ~ "` (or add it to OVID2_PACKS_ENABLED) and restart the web server and worker.") }}</p>
+  {% endif %}
+  {% for w in pack.warnings %}
+    <p class="flash">{{ w }}</p>
+  {% endfor %}
+
+  <div class="pl-panel">
+    <div class="pl-panel-head">
+      <span class="pl-card-badge">{{ icons.icon("layers", size=16) }}</span>
+      <h2>Overview</h2>
+      <span class="pl-pill pl-src-pill">{{ 'active' if pack.active else 'inactive' }}</span>
+    </div>
+    <table class="kv-table">
+      <tbody>
+        <tr><th>Origin</th><td>{{ pack.origin }}{% if pack.distribution %} &middot; <span class="mono">{{ pack.distribution }}</span>{% endif %}</td></tr>
+        <tr><th>Requires Ovid2</th><td class="mono">{{ pack.requires_ovid2 or 'any' }}</td></tr>
+        <tr><th>CDMs</th>
+          <td class="mono small">
+            {% for c in prov.cdms or [] %}<a href="/cdms/{{ c }}">{{ c }}</a>{% if not loop.last %}, {% endif %}{% else %}&mdash;{% endfor %}
+          </td>
+        </tr>
+        <tr><th>Report-cycle packages</th>
+          <td class="mono small">{{ pack.packages | join(', ') if pack.packages else '—' }}</td>
+        </tr>
+        <tr><th>Ships code</th>
+          <td class="mono small">
+            {% if prov.operators_module or prov.fixers_module %}
+              {{ [prov.operators_module, prov.fixers_module] | select | join(', ') }}
+            {% else %}no{% endif %}
+          </td>
+        </tr>
+        {% if pack.homepage %}<tr><th>Homepage</th><td class="mono small">{{ pack.homepage }}</td></tr>{% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pl-panel">
+    <div class="pl-panel-head">
+      <span class="pl-card-badge">{{ icons.icon("check-square", size=16) }}</span>
+      <h2>Health checks
+        {{ help.tip("Severity decides how a failed check is reported: blocker = do not release; warning = review; info = informational. The remediation column lists the fixers / transforms that typically repair an exception — the assistant can only propose them.") }}
+      </h2>
+      <span class="group-count">{{ checks | length }}</span>
+    </div>
+    {% if checks %}
+      <div class="table-wrap">
+      <table class="runs-table" data-pack-checks="{{ pack.id }}">
+        <thead>
+          <tr><th>Id</th><th>Name</th><th>Part</th><th>Severity</th><th>Remediation</th></tr>
+        </thead>
+        <tbody>
+          {% for c in checks %}
+            <tr data-check-row="{{ c.id }}">
+              <td class="mono">{{ c.id }}</td>
+              <td>{{ c.name }} {{ help.tip(c.description) }}</td>
+              <td class="mono small">{{ c.part }}</td>
+              <td><span class="badge severity-{{ 'error' if c.severity == 'blocker' else 'warning' if c.severity == 'warning' else 'ok' }}">{{ c.severity }}</span></td>
+              <td class="mono small">
+                {{ (c.remediation.fixers + c.remediation.transforms) | join(', ') or '—' }}
+                {% if c.remediation.hint %}{{ help.tip(c.remediation.hint) }}{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    {% else %}
+      <p class="empty">This pack contributes no health checks.</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

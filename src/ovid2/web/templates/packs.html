@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% block title %}Domain packs &mdash; Ovid2{% endblock %}
+{% block content %}
+{% import "_help.html" as help %}
+{#
+  Domain packs index — same component-box language as the CDMs page.
+  Read-only: packs are installed with pip (or dropped as YAML folders)
+  and enabled by an administrator (`ovid2 tools pack enable`), never
+  from the browser — an installed pack ships code the executor imports.
+#}
+{% set n_active = packs | selectattr("active") | list | length %}
+<section class="page pl-page">
+  <div class="page-header pl-header">
+    <div class="pl-title">
+      <h1>Domain packs
+        {% call help.tip_block(label="What is a domain pack?") %}
+          <strong>A drop-in bundle that teaches Ovid2 a data domain.</strong>
+          A pack can ship a target data model (CDM), data-health checks with
+          severities and remediation hints, report-cycle packages, vocabularies,
+          report templates and &mdash; for pip-installed packs only &mdash; check
+          operators and fixers. PCORnet CDM v7.0 is the built-in reference pack.
+          Installing a pack does not enable it: an administrator lists it in
+          <code>OVID2_PACKS_ENABLED</code> or runs
+          <code>ovid2 tools pack enable &lt;id&gt;</code>.
+        {% endcall %}
+      </h1>
+    </div>
+    <div class="page-actions">
+      <a href="/api/v1/packs" class="button small">{{ icons.icon("api", size=15) }} JSON</a>
+    </div>
+  </div>
+
+  {% if packs %}
+    <div class="pl-stats" role="list" aria-label="Pack summary">
+      <div class="pl-stat pl-stat-total" role="listitem">
+        <span class="pl-stat-icon">{{ icons.icon("layers", size=20) }}</span>
+        <span class="pl-stat-body">
+          <span class="pl-stat-value">{{ packs | length }}</span>
+          <span class="pl-stat-label">packs</span>
+        </span>
+      </div>
+      <div class="pl-stat" role="listitem">
+        <span class="pl-stat-icon">{{ icons.icon("check", size=20) }}</span>
+        <span class="pl-stat-body">
+          <span class="pl-stat-value">{{ n_active }}</span>
+          <span class="pl-stat-label">active</span>
+        </span>
+      </div>
+      <div class="pl-stat" role="listitem">
+        <span class="pl-stat-icon">{{ icons.icon("check-square", size=20) }}</span>
+        <span class="pl-stat-body">
+          <span class="pl-stat-value">{{ packs | sum(attribute="check_count") }}</span>
+          <span class="pl-stat-label">checks</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="pl-grid">
+      {% for p in packs %}
+        <article class="pl-card" data-pack-row="{{ p.id }}" data-pack-origin="{{ p.origin }}"
+                 data-pack-active="{{ 'true' if p.active else 'false' }}">
+          <header class="pl-card-head">
+            <span class="pl-card-badge">{{ icons.icon("layers", size=16) }}</span>
+            <div class="pl-card-title">
+              <a href="/packs/{{ p.id }}" class="pl-card-name">{{ p.label or p.id }}</a>
+              <span class="pl-card-sub">
+                <span class="pl-kind-label mono">{{ p.id }}{% if p.version %} v{{ p.version }}{% endif %}</span>
+              </span>
+            </div>
+            <span class="pl-pill pl-src-pill">{{ p.origin }}</span>
+          </header>
+
+          <div class="pl-flow" aria-label="Pack {{ p.id }}">
+            <div class="pl-node pl-node-engine">
+              <span class="pl-node-icon">{{ icons.icon("cdms", size=14) }}</span>
+              <span class="pl-node-text">{{ (p.provides.cdms if p.provides else []) | length }} CDM(s)</span>
+            </div>
+            <span class="pl-link" aria-hidden="true"></span>
+            <div class="pl-node {{ 'is-open' if not p.check_count }}">
+              <span class="pl-node-icon">{{ icons.icon("check-square", size=14) }}</span>
+              <span class="pl-node-text">{{ p.check_count }} check{{ '' if p.check_count == 1 else 's' }}</span>
+            </div>
+          </div>
+
+          <footer class="pl-card-foot">
+            {% if p.error %}
+              <span class="flash error small">{{ p.error }}</span>
+            {% elif p.active %}
+              <span class="badge severity-ok">active</span>
+            {% else %}
+              <span class="badge">not enabled</span>
+            {% endif %}
+            <div class="row-actions pl-actions">
+              <a href="/packs/{{ p.id }}" class="icon-button pl-run"
+                 title="View" aria-label="View {{ p.id }}">{{ icons.icon("eye", size=15) }}</a>
+            </div>
+          </footer>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="empty">No domain packs found.</p>
+  {% endif %}
+</section>
+{% endblock %}

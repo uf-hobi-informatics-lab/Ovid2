@@ -118,6 +118,7 @@
   {% elif path.startswith('/secrets') %}{% set nav_active = 'secrets' %}
   {% elif path.startswith('/users') %}{% set nav_active = 'users' %}
   {% elif path.startswith('/cdms') %}{% set nav_active = 'cdms' %}
+  {% elif path.startswith('/packs') %}{% set nav_active = 'packs' %}
   {% elif path.startswith('/settings') %}{% set nav_active = 'settings' %}
   {% elif path.startswith('/install') %}{% set nav_active = 'install' %}
   {% elif path.startswith('/health') %}{% set nav_active = 'health' %}
@@ -224,6 +225,9 @@
       {% endif %}
       <a href="/cdms" class="nav-item {% if nav_active == 'cdms' %}active{% endif %}" data-nav="cdms">
         {{ icons.icon("cdms", size=18, cls="nav-icon") }}<span class="nav-label">CDMs</span>
+      </a>
+      <a href="/packs" class="nav-item {% if nav_active == 'packs' %}active{% endif %}" data-nav="packs">
+        {{ icons.icon("layers", size=18, cls="nav-icon") }}<span class="nav-label">Domain packs</span>
       </a>
       {% if has_cap(request, 'admin_all') %}
       <a href="/settings" class="nav-item {% if nav_active == 'settings' %}active{% endif %}" data-nav="settings">

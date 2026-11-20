@@ -492,7 +492,7 @@ def _run_container_mode(args: argparse.Namespace) -> int:
 
     failures = 0
     try:
-        candidates = all_candidate_tables(specs)
+        candidates = all_candidate_tables(specs, cdm_name)
         available = runner.register_input_tables(input_address, candidates)
 
         prior_tables: dict[str, object] = {}
@@ -546,7 +546,9 @@ def _run_container_mode(args: argparse.Namespace) -> int:
         print(
             f"[ovid2] Health complete. checks={summary['checks_total']} "
             f"passed={summary['checks_passed']} exception={summary['checks_exception']} "
-            f"error={summary['checks_error']}"
+            f"error={summary['checks_error']} "
+            f"not_applicable={summary['checks_not_applicable']} "
+            f"blockers={summary['blockers']}"
         )
     except Exception as exc:
         logger.exception("health run failed: %s", exc)

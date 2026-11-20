@@ -319,7 +319,29 @@ class HealthCheckRunner:
                 edc_table=spec.edc_table,
                 description=spec.description,
                 doc_interpretation=spec.doc_interpretation,
+                severity=spec.severity,
+                pack=spec.pack,
             )
+            cdm_name = str(getattr(self.cdm, "name", "") or "")
+            if cdm_name and not spec.applies_to(cdm_name):
+                # Domain-pack scoping: the check is not meaningful for this
+                # CDM, so it is reported n/a without running (or reading
+                # its tables).
+                outcome.status = "not_applicable"
+                outcome.skip_reason = (
+                    f"applies to {', '.join(spec.applies_to_cdms)}; run CDM is {cdm_name}"
+                )
+                self.bus.emit(
+                    check_completed(
+                        instance_id=self.instance_id,
+                        check_id=spec.id,
+                        name=spec.name,
+                        part=spec.part,
+                        status=outcome.status,
+                    )
+                )
+                outcomes.append(outcome)
+                continue
             self.bus.emit(
                 check_started(
                     instance_id=self.instance_id,
@@ -404,10 +426,17 @@ class HealthCheckRunner:
         return create_typed_dataframe(self.session, rows, RESULTS_SCHEMA)
 
 
-def all_candidate_tables(specs: list[CheckSpec]) -> list[str]:
-    """Return the distinct source tables referenced across ``specs``."""
+def all_candidate_tables(specs: list[CheckSpec], cdm_name: str | None = None) -> list[str]:
+    """Return the distinct source tables referenced across ``specs``.
+
+    When ``cdm_name`` is given, specs that do not apply to that CDM
+    (``applies_to_cdms``) contribute no tables — they are reported
+    ``not_applicable`` without reading anything.
+    """
     seen: dict[str, None] = {}
     for spec in specs:
+        if cdm_name is not None and not spec.applies_to(cdm_name):
+            continue
         for table in spec.source_tables:
             seen.setdefault(table.upper(), None)
         # orphan_fk / freshness reference tables in params too.

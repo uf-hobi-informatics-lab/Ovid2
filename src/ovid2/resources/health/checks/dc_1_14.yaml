@@ -19,6 +19,13 @@ exception_metrics:
 thresholds:
   orphan_rows_gt: 0
 enabled: true
+severity: warning
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    DEMOGRAPHIC patients are missing from HASH_TOKEN. Add stub rows with
+    add_missing_hash_token_patids.
+  fixers: [add_missing_hash_token_patids]
 doc_summary: >-
   DC 1.14 (Table IIE): every DEMOGRAPHIC PATID has a corresponding HASH_TOKEN
   record (linkage completeness).

@@ -29,6 +29,12 @@ exception_metrics:
 thresholds:
   bad_record_pct_gt: 5.0
 enabled: true
+severity: warning
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    A code field carries a type outside the permissible set. Fix the *_TYPE
+    mapping in the pipeline's mapper dictionaries.
 doc_summary: >-
   DC 1.13 (Table IIF): fewer than 5% of records carry a code-type value that
   does not match the CDM-permissible set for that code field.

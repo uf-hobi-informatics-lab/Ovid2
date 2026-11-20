@@ -39,8 +39,9 @@ CDM comes from a YAML directory read through a `CdmHandle` (see
 [Data models](../02-concepts/cdms.md)). That is the trajectory of the
 project — **each new domain arrives the way PCORnet and OMOP did**, as a
 data-model directory, optional vocabularies, pipeline specs and health
-checks, with no change to the engine, drivers or compute layer. See
-[Extending Ovid2 → Add a CDM](../09-developers/extending.md#add-a-cdm).
+checks, with no change to the engine, drivers or compute layer. A
+[domain pack](../09-developers/domain-packs.md) bundles all of these into
+one drop-in directory or Python package.
 
 The rest of this manual uses healthcare examples because that is where
 Ovid2 runs in production today; the concepts apply unchanged to any domain.

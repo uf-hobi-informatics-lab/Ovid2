@@ -33,6 +33,33 @@ from ovid2.cdm.registry import (
 )
 from ovid2.schema.cdm import CdmField  # re-export for convenience
 
+
+def _register_pack_cdms() -> None:
+    """Register every CDM provided by an active (non-built-in) domain pack.
+
+    A broken pack CDM is logged and skipped — it never stops the core
+    CDMs from loading. Tier-neutral: reads YAML only.
+    """
+    import logging
+
+    from ovid2.cdm.yaml_loader import CdmYamlError, load_cdm
+    from ovid2.packs import active_packs
+
+    log = logging.getLogger(__name__)
+    for info in active_packs():
+        if info.builtin or info.manifest is None:
+            continue
+        for name in info.manifest.cdms:
+            if name in registered_cdms():
+                continue
+            try:
+                register(load_cdm(name))
+            except (CdmYamlError, ValueError, KeyError, OSError) as exc:
+                log.warning("pack %s: CDM %s not registered: %s", info.id, name, exc)
+
+
+_register_pack_cdms()
+
 __all__ = [
     "DEFAULT_CDM",
     "GENERIC_CDM_LABELS",

@@ -24,30 +24,23 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from ovid2.packs import content as _pack_content
+
 logger = logging.getLogger(__name__)
 
-#: Canonical part ordering for the check catalogue.
+#: Canonical *core* part ordering for the check catalogue.
 #:
-#: Web-safe mirror of
-#: :data:`ovid2.transformations.quality.registry._PART_ORDER` — the web
-#: tier is contractually forbidden from importing pipeline code
-#: (``tests/contract/test_web_no_pipeline_imports.py``), so the numeric
-#: bucket order is duplicated here. It MUST stay in lock-step with the
-#: registry so the browser catalogue (and the live-console roster it
-#: seeds) lists checks in the same order the runner emits them:
-#: ``part1 → … → part4 → mapping → freshness → integrity →
-#: completeness → semantic``. Unknown parts sort last (``99``).
-_PART_ORDER: dict[str, int] = {
-    "part1": 0,
-    "part2": 1,
-    "part3": 2,
-    "part4": 3,
-    "mapping": 4,
-    "freshness": 5,
-    "integrity": 6,
-    "completeness": 7,
-    "semantic": 8,
-}
+#: The web tier may not import pipeline code
+#: (``tests/contract/test_web_no_pipeline_imports.py``); both this module
+#: and :mod:`ovid2.transformations.quality.registry` read the order from
+#: the tier-neutral :mod:`ovid2.packs.content` (core parts, then the parts
+#: active domain packs declare), so the browser catalogue lists checks in
+#: the order the runner emits them. Unknown parts sort last (``99``).
+_PART_ORDER: dict[str, int] = {p: i for i, p in enumerate(_pack_content.CORE_PARTS)}
+
+
+def _part_rank(part: str) -> int:
+    return _pack_content.part_order().get(part, 99)
 
 
 def _check_sort_key(check: dict[str, Any]) -> tuple[int, tuple[object, ...]]:
@@ -61,8 +54,7 @@ def _check_sort_key(check: dict[str, Any]) -> tuple[int, tuple[object, ...]]:
     :attr:`ovid2.transformations.quality.registry.CheckSpec.sort_key`.
     """
     part = str(check.get("part", ""))
-    rank = _PART_ORDER.get(part, 99)
-    return (rank, _natural_id_key(str(check.get("id", ""))))
+    return (_part_rank(part), _natural_id_key(str(check.get("id", ""))))
 
 
 def _natural_id_key(check_id: str) -> tuple[object, ...]:
@@ -159,25 +151,22 @@ def _packages_dir() -> Path:
 def list_checks() -> list[dict[str, Any]]:
     """Return the registered health-check catalogue (web-safe).
 
-    Reads the packaged YAML specs directly. Each entry carries the
-    fields the panel / MCP client needs: ``id``, ``name``, ``part``,
-    ``operator``, ``description``, ``edc_table``, ``enabled``.
+    Reads the packaged YAML specs **and** every active domain pack's
+    specs through the tier-neutral :mod:`ovid2.packs.content` (no
+    pipeline import). Each entry carries the fields the panel / MCP
+    client needs: ``id``, ``name``, ``part``, ``operator``,
+    ``description``, ``edc_table``, ``enabled``, plus the pack fields
+    ``pack``, ``severity``, ``applies_to_cdms`` and ``remediation``.
     """
-    import yaml
-
-    checks_dir = _checks_dir()
-    if not checks_dir.is_dir():
+    if not _checks_dir().is_dir():
         return []
     out: list[dict[str, Any]] = []
-    for path in sorted(checks_dir.glob("*.yaml")):
-        try:
-            with path.open("r", encoding="utf-8") as fh:
-                raw = yaml.safe_load(fh)
-        except (OSError, yaml.YAMLError) as exc:
-            logger.warning("health check spec %s unreadable: %s", path, exc)
+    for doc in _pack_content.iter_check_docs():
+        raw = doc.raw
+        if "id" not in raw:
             continue
-        if not isinstance(raw, dict) or "id" not in raw:
-            continue
+        rem_raw = raw.get("remediation")
+        remediation: dict[str, Any] = rem_raw if isinstance(rem_raw, dict) else {}
         out.append(
             {
                 "id": str(raw.get("id", "")),
@@ -187,10 +176,39 @@ def list_checks() -> list[dict[str, Any]]:
                 "description": str(raw.get("description", "")),
                 "edc_table": str(raw.get("edc_table", "")),
                 "enabled": bool(raw.get("enabled", True)),
+                "pack": doc.pack,
+                "severity": str(raw.get("severity", "warning")),
+                "applies_to_cdms": [str(c) for c in raw.get("applies_to_cdms", [])],
+                "remediation": {
+                    "hint": str(remediation.get("hint", "")),
+                    "fixers": [str(f) for f in remediation.get("fixers", [])],
+                    "transforms": [str(t) for t in remediation.get("transforms", [])],
+                    "docs": str(remediation.get("docs", "")),
+                },
             }
         )
     out.sort(key=_check_sort_key)
     return out
+
+
+def check_catalogue() -> dict[str, dict[str, Any]]:
+    """Return :func:`list_checks` keyed by check id."""
+    return {c["id"]: c for c in list_checks()}
+
+
+def repair_context(instance_id: str, *, include_row_values: bool) -> dict[str, Any] | None:
+    """Return the repair context for a health run, or ``None`` without a report.
+
+    Aggregate-only unless ``include_row_values`` (humans with
+    ``VIEW_PIPELINE_DATA``; never agents). See
+    :func:`ovid2.packs.repair.build_repair_context`.
+    """
+    from ovid2.packs.repair import build_repair_context
+
+    report = get_report(instance_id)
+    if report is None:
+        return None
+    return build_repair_context(report, check_catalogue(), include_row_values=include_row_values)
 
 
 def list_packages() -> list[dict[str, Any]]:
@@ -201,20 +219,12 @@ def list_packages() -> list[dict[str, Any]]:
     ``checks`` list. Ordered most-recent first (by ``released`` date,
     then ``id`` descending) so the first entry is the picker default.
     """
-    import yaml
-
-    packages_dir = _packages_dir()
-    if not packages_dir.is_dir():
+    if not _packages_dir().is_dir():
         return []
     out: list[dict[str, Any]] = []
-    for path in sorted(packages_dir.glob("*.yaml")):
-        try:
-            with path.open("r", encoding="utf-8") as fh:
-                raw = yaml.safe_load(fh)
-        except (OSError, yaml.YAMLError) as exc:
-            logger.warning("health package manifest %s unreadable: %s", path, exc)
-            continue
-        if not isinstance(raw, dict) or "id" not in raw:
+    for doc in _pack_content.iter_package_docs():
+        raw = doc.raw
+        if "id" not in raw:
             continue
         out.append(
             {
@@ -223,6 +233,7 @@ def list_packages() -> list[dict[str, Any]]:
                 "released": str(raw.get("released", "")),
                 "description": str(raw.get("description", "")),
                 "checks": [str(c) for c in raw.get("checks", [])],
+                "pack": doc.pack,
             }
         )
     out.sort(key=lambda p: (p["released"], p["id"]), reverse=True)
@@ -230,9 +241,11 @@ def list_packages() -> list[dict[str, Any]]:
 
 
 __all__ = [
+    "check_catalogue",
     "get_report",
     "list_checks",
     "list_packages",
+    "repair_context",
     "report_available",
     "report_path",
     "report_summary",

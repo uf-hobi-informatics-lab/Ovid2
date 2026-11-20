@@ -84,6 +84,13 @@ Dictionary
 : A Python mapping of source values to standard values, defined in a
   pipeline's `dictionaries.py` and used by `translate_by_dict`.
 
+Domain pack
+: A drop-in bundle (`pack.yaml`) that teaches Ovid2 a data domain — a data
+  model, health checks with severities and remediation hints, packages,
+  vocabularies, report templates and (pip packs only) operators and fixers.
+  PCORnet CDM v7.0 is the built-in reference pack.
+  → [Domain packs](../09-developers/domain-packs.md)
+
 Draft job
 : A fully specified job that waits, unqueued, until a human presses ▶.
   The assistant hands work to you this way.

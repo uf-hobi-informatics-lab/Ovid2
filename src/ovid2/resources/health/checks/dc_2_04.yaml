@@ -15,6 +15,12 @@ exception_metrics:
 thresholds:
   enc_per_visit_gt: 2.0
 enabled: true
+severity: warning
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    Investigate the source extract for the listed tables; this check has no
+    automatic fixer.
 doc_summary: >-
   DC 2.04 (Table IIID): for ED/EI/IP encounter types, no more than 2
   encounters per distinct visit (PATID + ADMIT_DATE + ENC_TYPE).

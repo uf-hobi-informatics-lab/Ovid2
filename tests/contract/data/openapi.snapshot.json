@@ -10107,6 +10107,75 @@
         ]
       }
     },
+    "/api/v1/packs": {
+      "get": {
+        "description": "Return every discovered domain pack (built-in first).\n\nReads ``pack.yaml`` manifests only (web-safe; no pack code is\nimported). Each entry carries id / version / label / domain / origin\n/ enabled / active / error / provides, plus the number of checks and\nreport-cycle packages it contributes.",
+        "operationId": "api_list_packs_api_v1_packs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {},
+                  "title": "Response Api List Packs Api V1 Packs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Domain packs: built-in, installed and folder packs with activation state",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/packs/{pack_id}": {
+      "get": {
+        "description": "Return one domain pack (manifest + contributed check / package ids).",
+        "operationId": "api_get_pack_api_v1_packs__pack_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pack_id",
+            "required": true,
+            "schema": {
+              "title": "Pack Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Get Pack Api V1 Packs  Pack Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "One domain pack with the check and package ids it contributes",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
     "/api/v1/pipeline-packages": {
       "get": {
         "description": "Return every discoverable ``ovid2_pipelines.*`` package.",
@@ -14369,6 +14438,51 @@
           }
         },
         "summary": "Most recent engine.metrics sample for a run",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/runs/{instance_id}/repair-context": {
+      "get": {
+        "description": "Return the repair context for a health run.\n\nOne entry per failed (exception / error) check, ordered by severity:\nthe exception metrics' counts and thresholds, and the domain pack's\nremediation hint plus the fixers / transforms that typically repair\nit. Metric ``value_str`` / ``details`` (which can echo source values)\nare included only for humans with ``VIEW_PIPELINE_DATA`` \u2014 never for\nagents. Read-only: the assistant can only *propose* a fix.",
+        "operationId": "api_run_repair_context_api_v1_runs__instance_id__repair_context_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "instance_id",
+            "required": true,
+            "schema": {
+              "title": "Instance Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Run Repair Context Api V1 Runs  Instance Id  Repair Context Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Failed health checks with severity and remediation hints (aggregate only)",
         "tags": [
           "v1"
         ]

@@ -29,6 +29,12 @@ exception_metrics:
 thresholds:
   duplicate_pk_count_gt: 0
 enabled: true
+severity: warning
+remediation:
+  hint: >-
+    Composite key is not unique. Run the deduplicate stage or a dedup
+    transform.
+  transforms: [dedup]
 doc_summary: >-
   Native primary-key integrity panel: each table's composite primary key
   (from the CDM handle) is unique. Uses COUNT(*) vs COUNT(DISTINCT key). The

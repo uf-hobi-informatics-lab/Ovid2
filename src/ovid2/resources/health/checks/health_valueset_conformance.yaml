@@ -21,6 +21,11 @@ exception_metrics:
 thresholds:
   out_of_valueset_pct_gt: 5.0
 enabled: true
+severity: warning
+remediation:
+  hint: >-
+    Values outside the bound valueset. Extend the mapper dictionary for the
+    column.
 doc_summary: >-
   Native valueset-conformance panel: for every column with a CDM-declared
   bounded valueset (SEX, DX_TYPE, ...), the fraction of rows whose value falls

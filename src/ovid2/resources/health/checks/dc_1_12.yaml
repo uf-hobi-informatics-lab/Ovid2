@@ -33,6 +33,13 @@ exception_metrics:
 thresholds:
   orphan_rows_gt: 0
 enabled: true
+severity: warning
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    Rows reference a PROVIDERID absent from PROVIDER. Null the orphan ids with
+    providerid_orphans.
+  fixers: [providerid_orphans]
 doc_summary: >-
   DC 1.12 (Table IIE): every PROVIDERID referenced by a data table exists in
   PROVIDER.

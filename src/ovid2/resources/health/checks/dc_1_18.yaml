@@ -35,6 +35,12 @@ exception_metrics:
 thresholds:
   missing_refresh_date_flag_eq: 1
 enabled: true
+severity: warning
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    A table has no valid refresh date in HARVEST. Populate the HARVEST
+    *_REFRESH_DATE columns for every delivered table.
 doc_summary: >-
   DC 1.18 (Table ID): every populated CDM table exposes at least one
   resolvable event/refresh date, so a data-refresh date can be derived.

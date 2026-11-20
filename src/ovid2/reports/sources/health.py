@@ -9,7 +9,8 @@ datasets a researcher can chart without touching the raw JSON:
 - ``checks``     — one row per check (table, status colouring);
 - ``metrics``    — one row per metric (scatter / heatmap / table);
 - ``by_table``   — exceptions per source table (bar / heatmap);
-- ``exceptions`` — exception-flagged metrics only.
+- ``exceptions`` — exception-flagged metrics only;
+- ``severity``   — failed checks per severity (blocker / warning / info).
 
 Metric ``details`` and ``value_str`` can echo source values, so they are
 tagged ``sensitivity: row_values``.
@@ -26,6 +27,7 @@ from ovid2.reports.sources import column, dataset, make_source
 __all__ = ["build"]
 
 _STATUSES = ("passed", "exception", "error", "skipped", "not_applicable")
+_SEVERITIES = ("blocker", "warning", "info")
 
 
 def _overview(report: Mapping[str, Any], summary: Mapping[str, Any]) -> str:
@@ -40,6 +42,9 @@ def _overview(report: Mapping[str, Any], summary: Mapping[str, Any]) -> str:
         "",
         f"- **{passed}** passed ({rate:.0%}), **{exc}** raised exceptions and **{err}** errored.",
     ]
+    blockers = int(summary.get("blockers") or 0)
+    if blockers:
+        lines.append(f"- **{blockers}** failed check(s) are **blockers**.")
     worst = sorted(
         (c for c in report.get("checks") or [] if c.get("status") == "exception"),
         key=lambda c: -int(c.get("exception_count") or 0),
@@ -85,6 +90,8 @@ def build(report: Mapping[str, Any], *, key: str | None = None) -> dict[str, Any
                 "metric_count": int(c.get("metric_count") or 0),
                 "error": c.get("error") or "",
                 "interpretation": c.get("doc_interpretation") or "",
+                "severity": c.get("severity") or "warning",
+                "pack": c.get("pack") or "",
             }
         )
         for m in c.get("metrics") or []:
@@ -169,8 +176,29 @@ def build(report: Mapping[str, Any], *, key: str | None = None) -> dict[str, Any
                 column("metric_count", "quantitative", "Metrics"),
                 column("error", "text", "Error"),
                 column("interpretation", "text", "Interpretation"),
+                column("severity", "ordinal", "Severity"),
+                column("pack", "nominal", "Domain pack"),
             ],
             check_rows,
+        ),
+        "severity": dataset(
+            "Failed checks by severity",
+            [
+                column("severity", "ordinal", "Severity"),
+                column("checks", "quantitative", "Failed checks"),
+            ],
+            [
+                {"severity": sev, "checks": n}
+                for sev in _SEVERITIES
+                if (
+                    n := sum(
+                        1
+                        for c in checks
+                        if c.get("status") in ("exception", "error")
+                        and (c.get("severity") or "warning") == sev
+                    )
+                )
+            ],
         ),
         "metrics": dataset("Check metrics", metric_cols, metric_rows),
         "exceptions": dataset(

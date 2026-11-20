@@ -17,6 +17,12 @@ exception_metrics:
 thresholds:
   missing_pct_ge: 20.0
 enabled: true
+severity: warning
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    Investigate the source extract for the listed tables; this check has no
+    automatic fixer.
 doc_summary: >-
   DC 3.18 (Table IB): geocode completeness - ADDRESS_ZIP5 and county/FIPS are
   populated for at least 80% of address records (missing rate below 20%).

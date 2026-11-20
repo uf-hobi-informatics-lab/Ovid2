@@ -30,6 +30,12 @@ exception_metrics:
 thresholds:
   empty_required_table_flag_eq: 1
 enabled: true
+severity: blocker
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    Investigate the source extract for the listed tables; this check has no
+    automatic fixer.
 doc_summary: >-
   DC 1.02 (Table IID): required CDM tables are populated (row count > 0).
 doc_interpretation: >-

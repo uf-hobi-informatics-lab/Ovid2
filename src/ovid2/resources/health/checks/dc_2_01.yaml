@@ -28,6 +28,13 @@ exception_metrics:
 thresholds:
   future_date_pct_gt: 5.0
 enabled: true
+severity: warning
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    Dates later than the refresh date. Null them with future_date_to_null
+    after confirming the source clock / timezone is right.
+  fixers: [future_date_to_null]
 doc_summary: >-
   DC 2.01 (Table IIIA): the share of rows carrying a date later than the
   report/refresh date must not exceed 5%.

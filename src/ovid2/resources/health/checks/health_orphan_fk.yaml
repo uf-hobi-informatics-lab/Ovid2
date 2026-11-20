@@ -41,6 +41,11 @@ exception_metrics:
 thresholds:
   orphan_rows_gt: 0
 enabled: true
+severity: warning
+remediation:
+  hint: >-
+    Child rows reference an absent parent. Use the matching orphan fixer.
+  fixers: [patid_orphans, encounterid_orphans, providerid_orphans]
 doc_summary: >-
   Referential-integrity sweep: for each declared child->parent relationship,
   counts child rows whose foreign key has no matching parent row.

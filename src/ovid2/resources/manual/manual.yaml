@@ -109,7 +109,7 @@ chapters:
   - slug: 09-developers
     title: Developer guide
     summary: Work on Ovid2 itself — repository layout, invariants and contract tests, extension points, portable engine code, testing and contributing.
-    pages: [index, repository, invariants, extending, portable-code, events, testing, contributing, writing-docs]
+    pages: [index, repository, invariants, extending, domain-packs, portable-code, events, testing, contributing, writing-docs]
 
   - slug: 10-reference
     title: Reference

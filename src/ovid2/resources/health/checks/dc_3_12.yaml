@@ -18,6 +18,12 @@ exception_metrics:
 thresholds:
   coverage_pct_lt: 80.0
 enabled: true
+severity: warning
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    Investigate the source extract for the listed tables; this check has no
+    automatic fixer.
 doc_summary: >-
   DC 3.12 (Table IVI): at least 80% of LAB_RESULT_CM records carry a populated
   RESULT_UNIT.

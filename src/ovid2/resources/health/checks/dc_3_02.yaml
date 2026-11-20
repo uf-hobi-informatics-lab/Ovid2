@@ -21,6 +21,12 @@ exception_metrics:
   - RECORDS_PER_ENCOUNTER
 thresholds: {}
 enabled: true
+severity: warning
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    Investigate the source extract for the listed tables; this check has no
+    automatic fixer.
 doc_summary: >-
   DC 3.02 (Table IVB): sufficient PROCEDURES records with a known PX_TYPE per
   encounter (AV/ED at least 0.75; EI/IP at least 1.0).

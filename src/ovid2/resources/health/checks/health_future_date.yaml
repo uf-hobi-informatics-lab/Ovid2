@@ -21,6 +21,11 @@ exception_metrics:
 thresholds:
   future_date_rows_gt: 0
 enabled: true
+severity: warning
+remediation:
+  hint: >-
+    Dates later than the run date. Null them with future_date_to_null.
+  fixers: [future_date_to_null]
 doc_summary: >-
   Native strict future-date panel: count of rows whose date columns are later
   than the run date. Any future date is implausible for a completed refresh.

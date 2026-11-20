@@ -24,6 +24,13 @@ exception_metrics:
 thresholds:
   implausible_pct_gt: 10.0
 enabled: true
+severity: warning
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    Numeric values outside plausible ranges. Check the unit mapping first;
+    implausible values can be nulled with a clamp / null_if transform.
+  transforms: [clamp, null_if]
 doc_summary: >-
   DC 2.02 (Table IIIB): fewer than 10% of a numeric field's values fall
   outside a plausible physiologic / operational range (height, weight, blood

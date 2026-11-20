@@ -67,7 +67,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     """Register the ``tools`` subcommand tree on the top-level parser."""
     parser = subparsers.add_parser(
         "tools",
-        help="Ad-hoc tools (raw_upload, migrate-addresses, import-cdm, import-vocabulary, ...).",
+        help="Ad-hoc tools (raw_upload, import-cdm, import-vocabulary, pack, ...).",
         description="One-off utilities that share the Ovid2 address + engine stack.",
     )
     parser.set_defaults(_command="tools")
@@ -256,6 +256,12 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     from ovid2.tools import report_export as _report_export
 
     _report_export.register(tool_subparsers)
+
+    # ``ovid2 tools pack`` — domain packs (list / show / validate /
+    # scaffold / enable / disable).
+    from ovid2.tools import pack as _pack
+
+    _pack.register(tool_subparsers)
 
     def _fallback(_args: argparse.Namespace) -> int:
         parser.print_help(sys.stderr)

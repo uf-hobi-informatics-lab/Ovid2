@@ -17,6 +17,7 @@ exception_metrics:
 thresholds:
   unmapped_pct_gt: 1.0
 enabled: true
+severity: info
 doc_summary: >-
   Mapping / vocabulary coverage rollup: for each pipeline dictionary
   (<table>_<column>_dict), the fraction of rows whose source value is not

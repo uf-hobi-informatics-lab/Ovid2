@@ -232,7 +232,70 @@ def is_compatible_with_cdm(fix_name: str, cdm_name: str) -> bool:
     """Return ``True`` when ``fix_name`` is safe to run under ``cdm_name``.
 
     Generic fixes are compatible with every CDM. CDM-scoped fixes are
-    compatible only with their own CDM.
+    compatible only with their own CDM(s); a scope may list several CDMs
+    separated by commas (``"acme_sdtm,acme_adam"``).
     """
     scope = scope_of(fix_name)
-    return scope == "generic" or scope == cdm_name
+    return scope == "generic" or cdm_name in {s.strip() for s in scope.split(",")}
+
+
+# ---------------------------------------------------------------------------
+# Domain-pack fixers
+# ---------------------------------------------------------------------------
+# Installed (pip) domain packs may ship fixers: ``provides.fixers_module``
+# names a module exposing ``FIXERS: dict[str, type[BaseFixer]]`` and
+# ``provides.fixers`` carries the web-safe metadata (summary, scope,
+# aliases, column roles) the web tier reads without importing pack code
+# (:func:`ovid2.config.fixers_catalogue._pack_entries`). Names must be
+# ``<pack_id>_<name>``; a collision with a core fixer is refused.
+
+#: Pack id -> load error for packs whose ``fixers_module`` failed.
+PACK_FIXER_ERRORS: dict[str, str] = {}
+
+
+def _load_pack_fixers() -> None:
+    """Merge every active installed pack's fixers into the registries."""
+    import importlib
+    import logging
+
+    from ovid2.packs import active_packs
+
+    log = logging.getLogger(__name__)
+    for info in active_packs():
+        if info.manifest is None or not info.may_ship_code:
+            continue
+        rel = info.manifest.provides.get("fixers_module")
+        if not rel:
+            continue
+        module_name = f"{info.module}.{rel}" if info.module else str(rel)
+        try:
+            module = importlib.import_module(module_name)
+        except Exception as exc:  # third-party pack code: never crash the registry
+            PACK_FIXER_ERRORS[info.id] = f"{module_name}: {exc.__class__.__name__}: {exc}"
+            log.warning("pack %s: fixers_module failed: %s", info.id, exc)
+            continue
+        fixers = getattr(module, "FIXERS", None)
+        if not isinstance(fixers, dict):
+            PACK_FIXER_ERRORS[info.id] = f"{module_name}: missing FIXERS dict"
+            continue
+        meta = info.manifest.fixers
+        for name, cls in fixers.items():
+            problem = ""
+            if not name.startswith(f"{info.id}_"):
+                problem = f"fixer {name!r} must be named {info.id}_<name>"
+            elif name in COMMON_FIXES:
+                problem = f"fixer {name!r} already registered"
+            elif not (isinstance(cls, type) and issubclass(cls, BaseFixer)):
+                problem = f"fixer {name!r} is not a BaseFixer subclass"
+            elif name not in meta:
+                problem = f"fixer {name!r} has no provides.fixers metadata in pack.yaml"
+            if problem:
+                PACK_FIXER_ERRORS[info.id] = problem
+                log.warning("pack %s: %s; skipped", info.id, problem)
+                continue
+            COMMON_FIXES[name] = cls
+            FIXER_ALIASES[name] = dict(meta[name].get("aliases") or {})
+            FIXER_SCOPES[name] = str(meta[name].get("scope") or "generic")
+
+
+_load_pack_fixers()

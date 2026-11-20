@@ -1,0 +1,123 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://ovid2.dev/schemas/pack.v1.json",
+    "title": "Ovid2 domain pack manifest",
+    "description": "One domain pack (`pack.yaml`). A pack bundles a target data model (CDM YAML trees), declarative data-health checks and report-cycle packages, semantic vocabularies and column bindings, Report Studio templates, remediation hints and — for installed Python packs only — check operators and fixers. Built-in packs live under `src/ovid2/resources/packs/<id>/` and describe content that ships in the core tree (`provides.members`); installed packs are Python distributions registered under the `ovid2.packs` entry-point group; folder packs are YAML-only directories under `$XDG_CONFIG_HOME/ovid2/packs/<id>/`. Every name a non-built-in pack contributes is namespaced by its id. ADR: .opencode/knowledge/delta/adr-domain-packs.md.",
+    "type": "object",
+    "required": ["v", "id", "version", "label"],
+    "additionalProperties": false,
+    "$defs": {
+        "rel_dir": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*(^|/)\\.\\.(/|$))[A-Za-z0-9_./-]+$",
+            "description": "Directory relative to the pack root (no absolute paths, no `..`)."
+        },
+        "snake": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+        "fixer_meta": {
+            "type": "object",
+            "required": ["summary"],
+            "additionalProperties": false,
+            "properties": {
+                "summary": {
+                    "type": "string",
+                    "description": "One-line summary. Must equal the first docstring line of the fixer class (pinned by tests/contract/test_fixers_catalogue_synchronised.py)."
+                },
+                "scope": {
+                    "type": "string",
+                    "description": "`generic` or the CDM name the fixer is restricted to.",
+                    "default": "generic"
+                },
+                "aliases": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string", "enum": ["src1", "src2"]},
+                    "description": "Named-field aliases for the positional `src1` / `src2` slots."
+                },
+                "column_roles": {
+                    "type": "object",
+                    "description": "Which columns the fixer touches (grammar: ovid2.config.column_roles). Drives the pipeline navigator."
+                }
+            }
+        }
+    },
+    "properties": {
+        "v": {"type": "integer", "const": 1},
+        "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,40}$",
+            "description": "Stable pack id. Prefix for every name the pack contributes: `<id>` / `<id>_…` for CDMs, fixers, operators and parts; `<id>.…` for check ids, check packages, vocabularies and report templates."
+        },
+        "version": {"type": "string", "minLength": 1, "description": "Pack version (free-form; semver recommended)."},
+        "label": {"type": "string", "minLength": 1, "description": "Human label shown in pickers and on /packs."},
+        "description": {"type": "string"},
+        "domain": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*$",
+            "description": "Domain slug (e.g. `healthcare`, `clinical_trials`, `finance`)."
+        },
+        "homepage": {"type": "string"},
+        "requires_ovid2": {
+            "type": "string",
+            "description": "Comma-separated version constraints on the Ovid2 release (`>=0.1`, `<1.0`, `==0.1.0`). A pack whose constraint fails stays inactive."
+        },
+        "provides": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "cdms": {
+                    "type": "array",
+                    "items": {"$ref": "#/$defs/snake"},
+                    "description": "CDM names. Installed / folder packs ship `cdms/<name>/` (the C1 YAML tree layout); built-in packs name CDMs that ship in core."
+                },
+                "checks_dir": {"$ref": "#/$defs/rel_dir", "description": "Directory of health_check.v1 specs."},
+                "packages_dir": {"$ref": "#/$defs/rel_dir", "description": "Directory of health_package.v1 report-cycle manifests."},
+                "vocabularies_dir": {"$ref": "#/$defs/rel_dir", "description": "Directory of semantic_handle.v1 vocabularies."},
+                "bindings_dir": {"$ref": "#/$defs/rel_dir", "description": "Directory of semantic_bindings.v1 column-binding files."},
+                "report_templates_dir": {
+                    "$ref": "#/$defs/rel_dir",
+                    "description": "Directory laid out as `<source_kind>/<stem>.yaml` (Report Studio templates for an existing report-source kind)."
+                },
+                "parts": {
+                    "type": "array",
+                    "description": "Extra check `part` buckets the pack's checks may use (ordered after the core parts).",
+                    "items": {
+                        "type": "object",
+                        "required": ["id", "label"],
+                        "additionalProperties": false,
+                        "properties": {
+                            "id": {"$ref": "#/$defs/snake"},
+                            "label": {"type": "string"}
+                        }
+                    }
+                },
+                "operators_module": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$",
+                    "description": "Installed packs only. Module (inside the pack's package) whose import registers health-check operators via `@operator`. Executor tier only."
+                },
+                "fixers_module": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$",
+                    "description": "Installed packs only. Module exposing `FIXERS: dict[str, type[BaseFixer]]`. Executor tier only."
+                },
+                "fixers": {
+                    "type": "object",
+                    "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+                    "additionalProperties": {"$ref": "#/$defs/fixer_meta"},
+                    "description": "Web-safe metadata for every fixer in `fixers_module` (the web tier never imports pack code)."
+                },
+                "members": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "description": "Built-in packs only: core content this pack owns (attribution on /packs, list endpoints and reports).",
+                    "properties": {
+                        "checks": {"type": "array", "items": {"type": "string"}},
+                        "packages": {"type": "array", "items": {"type": "string"}},
+                        "fixers": {"type": "array", "items": {"type": "string"}},
+                        "vocabularies": {"type": "array", "items": {"type": "string"}}
+                    }
+                }
+            }
+        }
+    }
+}

@@ -48,6 +48,13 @@ exception_metrics:
 thresholds:
   orphan_rows_gt: 0
 enabled: true
+severity: blocker
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    Rows reference a PATID with no DEMOGRAPHIC record. Check the DEMOGRAPHIC
+    extract is complete; otherwise drop the orphans with patid_orphans.
+  fixers: [patid_orphans]
 doc_summary: >-
   DC 1.08 (Table IIE): every PATID in a data table is present in DEMOGRAPHIC.
 doc_interpretation: >-

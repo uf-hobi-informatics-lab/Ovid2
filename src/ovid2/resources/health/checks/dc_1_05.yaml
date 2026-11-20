@@ -34,6 +34,15 @@ exception_metrics:
 thresholds:
   duplicate_pk_count_gt: 0
 enabled: true
+severity: blocker
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    Duplicate composite keys usually mean the deduplicate stage did not run or
+    the CDM's composite key differs from the source grain. Re-run with the
+    deduplicate stage, or add a dedup transform keyed on the table's composite
+    key.
+  transforms: [dedup]
 doc_summary: >-
   DC 1.05 (Table IIA): the CDM-declared composite primary key of each table
   is unique (distinct-key count equals row count).

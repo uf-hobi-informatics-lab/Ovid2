@@ -23,6 +23,12 @@ exception_metrics:
 thresholds:
   null_pct_gt: 90.0
 enabled: true
+severity: warning
+remediation:
+  hint: >-
+    High share of missing values. Normalise blank / sentinel values to null
+    with standardize_null, then fix the extract.
+  transforms: [standardize_null]
 doc_summary: >-
   DC 3.09 (Table IIIC): per-column null / flavour-of-null rate. Feeds the
   completeness heatmap in the report viewer.

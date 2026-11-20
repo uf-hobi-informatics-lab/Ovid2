@@ -238,6 +238,42 @@ FIXER_COLUMN_ROLES: dict[str, dict[str, Any]] = {
     },
 }
 
+
+def _pack_entries() -> None:
+    """Merge active installed packs' fixer metadata (``provides.fixers``).
+
+    The web tier never imports pack code, so a pack's ``pack.yaml``
+    carries the catalogue entry (summary / scope / aliases / column
+    roles) for each fixer in its ``fixers_module``. The executor side
+    (:mod:`ovid2.transformations.fixers.common.registry`) merges the same
+    names into ``COMMON_FIXES``; ``test_fixers_catalogue_synchronised.py``
+    keeps the two views equal.
+    """
+    from ovid2.packs import active_packs
+
+    for info in active_packs():
+        if info.manifest is None or not info.may_ship_code:
+            continue
+        if not info.manifest.provides.get("fixers_module"):
+            continue
+        for name, meta in info.manifest.fixers.items():
+            if not name.startswith(f"{info.id}_") or name in FIXER_CATALOGUE:
+                continue
+            FIXER_CATALOGUE[name] = {
+                "summary": str(meta.get("summary", "")),
+                "scope": str(meta.get("scope") or "generic"),
+                "aliases": dict(meta.get("aliases") or {}),
+                "pack": info.id,
+            }
+            roles = meta.get("column_roles")
+            FIXER_COLUMN_ROLES[name] = (
+                dict(roles) if isinstance(roles, dict) else {"scope": "table"}
+            )
+
+
+_pack_entries()
+
+
 #: Legacy (vendored) fixer names whose stem differs from the Ovid2 fixer.
 LEGACY_FIX_NAMES: dict[str, str] = {
     "illogical_admit_date_more_than_5_days_fix": "illogical_admit_date",
@@ -258,10 +294,13 @@ def native_fix_name(legacy_name: str) -> str | None:
 def list_fixers(cdm: str | None = None) -> list[dict[str, Any]]:
     """Return catalogue entries (``name`` added), optionally CDM-filtered."""
     out: list[dict[str, Any]] = []
+    from ovid2.packs.discovery import pack_for_fixer
+
     for name, entry in sorted(FIXER_CATALOGUE.items()):
-        if cdm and entry["scope"] not in ("generic", cdm):
+        scopes = {s.strip() for s in str(entry["scope"]).split(",")}
+        if cdm and "generic" not in scopes and cdm not in scopes:
             continue
-        out.append({"name": name, **entry})
+        out.append({"name": name, "pack": entry.get("pack") or pack_for_fixer(name), **entry})
     return out
 
 

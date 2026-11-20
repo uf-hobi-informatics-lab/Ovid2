@@ -122,6 +122,10 @@ class CheckOutcome:
         status: Terminal status.
         rows: Metric rows produced.
         error: Error message when ``status == 'error'``.
+        severity: ``blocker`` | ``warning`` | ``info`` (from the spec).
+        pack: Owning domain pack id (blank = core, unowned).
+        skip_reason: Why the check did not run (``not_applicable`` /
+            ``skipped``); blank otherwise.
     """
 
     check_id: str
@@ -133,6 +137,9 @@ class CheckOutcome:
     status: CheckStatus = "passed"
     rows: list[MetricRow] = field(default_factory=list)
     error: str | None = None
+    severity: str = "warning"
+    pack: str = ""
+    skip_reason: str = ""
 
     @property
     def exception_count(self) -> int:
@@ -158,6 +165,9 @@ class CheckOutcome:
             "metric_count": len(self.rows),
             "error": self.error,
             "doc_interpretation": self.doc_interpretation,
+            "severity": self.severity,
+            "pack": self.pack,
+            "skip_reason": self.skip_reason,
             "metrics": [r.as_report_dict() for r in self.rows],
         }
 

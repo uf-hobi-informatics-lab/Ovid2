@@ -35,6 +35,13 @@ exception_metrics:
 thresholds:
   panel_pct_gt: 5.0
 enabled: true
+severity: warning
+applies_to_cdms: [pcornet_7_0]
+remediation:
+  hint: >-
+    LOINC panel codes are present where result codes are expected. Remove
+    panel codes with panel_loinc_remover (or move them with loinc_mover).
+  fixers: [panel_loinc_remover, loinc_mover]
 doc_summary: >-
   DC 1.20 (Table IIG): fewer than 5% of LOINC-coded records use a LOINC
   panel/order code (panels do not carry individual results).

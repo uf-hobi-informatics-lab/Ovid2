@@ -194,9 +194,13 @@ def find_cdm_default_spec(cdm_name: str, table: str) -> Path | None:
     ``legacy_ovid``-profile pipelines that do not override the table with
     their own ``mappers/<table>.yaml``.
     """
-    from ovid2.cdm.yaml_loader import cdm_yaml_root
+    from ovid2.cdm.yaml_loader import CdmYamlError, cdm_yaml_dir
 
-    candidate = cdm_yaml_root() / cdm_name / "mappers" / f"{table}.yaml"
+    try:
+        root = cdm_yaml_dir(cdm_name)
+    except CdmYamlError:
+        return None
+    candidate = root / "mappers" / f"{table}.yaml"
     return candidate if candidate.is_file() else None
 
 

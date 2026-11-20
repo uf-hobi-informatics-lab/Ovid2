@@ -22,6 +22,7 @@ exception_metrics:
 thresholds:
   row_delta_pct_abs_gt: 20.0
 enabled: true
+severity: info
 doc_summary: >-
   Freshness & volume trend: compares each table's row count against the same
   table in a prior refresh (--prev-input-address). Generalises EDC Part 4.
