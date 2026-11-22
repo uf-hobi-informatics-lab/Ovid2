@@ -69,7 +69,7 @@ def _rules() -> tuple[frozenset[str], dict[str, re.Pattern[str]], dict[str, re.P
 
 
 def default_appearance() -> dict[str, Any]:
-    """Return the empty preference document (theme chosen by the browser)."""
+    """Return the empty preference document (theme = the shipped default, data-factory)."""
     return {"theme": None, "colors": {}, "appearance": {}, "saved_themes": []}
 
 

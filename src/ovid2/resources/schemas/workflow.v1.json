@@ -1,0 +1,329 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://ovid2.dev/schemas/workflow.v1.json",
+    "title": "Ovid2 workflow",
+    "description": "A workflow chains saved pipeline configs into a DAG ($XDG_CONFIG_HOME/ovid2/workflows/<name>.json). A `data` edge feeds the upstream step's output address into the downstream step's input; an `after` edge only orders the steps. The workflow owns its trigger (manual / cron / interval / watch); a watch trigger scans the root step's input. On failure, finished steps are rolled back (new outputs dropped, overwritten outputs restored from a pre-step backup). Edges may branch: `on` (success / failure / always / otherwise) and an optional `when` condition over the upstream step's facts (see ovid2.config.workflow_conditions); a step joins its incoming edges with `join` (all / any) and may declare `probes` (aggregate counts over its output, computed in the executor).",
+    "type": "object",
+    "required": [
+        "v",
+        "steps"
+    ],
+    "additionalProperties": false,
+    "properties": {
+        "v": {
+            "type": "integer",
+            "const": 1
+        },
+        "description": {
+            "type": "string",
+            "maxLength": 500
+        },
+        "enabled": {
+            "type": "boolean"
+        },
+        "created_at": {
+            "type": "string"
+        },
+        "updated_at": {
+            "type": "string"
+        },
+        "trigger": {
+            "type": "object",
+            "required": [
+                "type"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "type": {
+                    "enum": [
+                        "manual",
+                        "cron",
+                        "interval",
+                        "watch"
+                    ]
+                },
+                "cron": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "interval_minutes": {
+                    "type": [
+                        "integer",
+                        "null"
+                    ],
+                    "minimum": 1
+                },
+                "watch_min_wait_minutes": {
+                    "type": [
+                        "integer",
+                        "null"
+                    ],
+                    "minimum": 0
+                }
+            }
+        },
+        "steps": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+                "$ref": "#/$defs/step"
+            }
+        },
+        "edges": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/edge"
+            }
+        }
+    },
+    "$defs": {
+        "step": {
+            "type": "object",
+            "required": [
+                "id",
+                "pipeline"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                },
+                "pipeline": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "label": {
+                    "type": "string",
+                    "maxLength": 80
+                },
+                "rollback": {
+                    "type": "boolean"
+                },
+                "overrides": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "input_address": {
+                            "type": [
+                                "string",
+                                "null"
+                            ]
+                        },
+                        "output_address": {
+                            "type": [
+                                "string",
+                                "null"
+                            ]
+                        },
+                        "tables": {
+                            "type": [
+                                "array",
+                                "null"
+                            ],
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "allow_overwrite": {
+                            "type": [
+                                "boolean",
+                                "null"
+                            ]
+                        }
+                    }
+                },
+                "position": {
+                    "type": [
+                        "object",
+                        "null"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                        "x": {
+                            "type": "number"
+                        },
+                        "y": {
+                            "type": "number"
+                        }
+                    }
+                },
+                "join": {
+                    "enum": [
+                        "all",
+                        "any"
+                    ],
+                    "description": "With several incoming edges: 'all' runs only when every incoming edge is taken; 'any' runs when at least one is (after all upstream steps settle)."
+                },
+                "probes": {
+                    "type": "array",
+                    "maxItems": 10,
+                    "items": {
+                        "$ref": "#/$defs/probe"
+                    },
+                    "description": "Data probes run against this step's output after it succeeds; conditions read them as query.<name>."
+                }
+            }
+        },
+        "edge": {
+            "type": "object",
+            "required": [
+                "from",
+                "to"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "from": {
+                    "type": "string"
+                },
+                "to": {
+                    "type": "string"
+                },
+                "type": {
+                    "enum": [
+                        "data",
+                        "after"
+                    ]
+                },
+                "on": {
+                    "enum": [
+                        "success",
+                        "failure",
+                        "always",
+                        "otherwise"
+                    ],
+                    "description": "Upstream outcome that follows this edge (default success)."
+                },
+                "when": {
+                    "$ref": "#/$defs/condition"
+                },
+                "label": {
+                    "type": "string",
+                    "maxLength": 80
+                }
+            }
+        },
+        "probe": {
+            "type": "object",
+            "required": [
+                "name",
+                "table"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,39}$"
+                },
+                "table": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                },
+                "agg": {
+                    "enum": [
+                        "count",
+                        "count_distinct",
+                        "null_count",
+                        "non_null_count"
+                    ]
+                },
+                "column": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "maxLength": 128
+                },
+                "where": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "maxLength": 4000,
+                    "description": "Row filter (Spark SQL, checked by sql_expr_guard)."
+                }
+            }
+        },
+        "condition": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "description": "Boolean tree: {all:[...]}, {any:[...]}, {not:{...}} or a leaf {field, op, value?, case_sensitive?}.",
+            "oneOf": [
+                {
+                    "type": "null"
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "all"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                        "all": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                                "$ref": "#/$defs/condition"
+                            }
+                        }
+                    }
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "any"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                        "any": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                                "$ref": "#/$defs/condition"
+                            }
+                        }
+                    }
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "not"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                        "not": {
+                            "$ref": "#/$defs/condition"
+                        }
+                    }
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "field",
+                        "op"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                        "field": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                        },
+                        "op": {
+                            "type": "string"
+                        },
+                        "value": {},
+                        "case_sensitive": {
+                            "type": "boolean"
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}

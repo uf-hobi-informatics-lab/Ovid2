@@ -31,10 +31,10 @@ session and a user row, so :func:`current_user` still returns an
 set is empty) so the ``require_*`` dependencies naturally answer ``403``
 (authenticated but not authorized) rather than ``401`` (unauthenticated).
 
-``AuthContext`` is deliberately shaped so the later break-glass login (todo 11
-— synthetic ``system_admin`` with ``user_id="breakglass"``) and the MCP
-service-principal (todo 21 — ``user_id="mcp:<name>"`` with a mapped role) can
-be represented without a rewrite. Those flows are **not** implemented here.
+Two principals have no ``web_users`` row: the break-glass admin (a session
+whose ``user_id`` is :data:`BREAKGLASS_USER_ID`, resolved to a synthetic
+``system_admin``) and the MCP service principal (``user_id="mcp:service"``,
+resolved from a bearer token with a mapped role).
 """
 
 from __future__ import annotations
@@ -89,6 +89,10 @@ class AuthContext:
     role: Role
     email: str | None = None
     anonymous_bypass: bool = False
+
+
+#: ``user_id`` of the break-glass admin's sessions (no ``web_users`` row).
+BREAKGLASS_USER_ID: str = "breakglass"
 
 
 def _synthetic_admin() -> AuthContext:
@@ -153,7 +157,7 @@ def current_user(request: Request) -> AuthContext | None:
         return llm_ctx
 
     settings = settings_svc.get_settings()
-    if not settings.auth.enabled:
+    if not settings.auth.effective_enabled():
         return _synthetic_admin()
 
     session_id = cookie_read_session_id(request)
@@ -163,6 +167,18 @@ def current_user(request: Request) -> AuthContext | None:
     session = sessions_svc.get_valid(session_id)
     if session is None:
         return _service_principal(request)
+
+    if session.user_id == BREAKGLASS_USER_ID:
+        # The break-glass admin has no ``web_users`` row; its session is
+        # minted only by a successful ``/login/breakglass`` (argon2-verified)
+        # and resolves to a synthetic system admin.
+        sessions_svc.touch(session_id, settings.auth.idle_ttl_minutes)
+        return AuthContext(
+            user_id=BREAKGLASS_USER_ID,
+            role=Role.SYSTEM_ADMIN,
+            email=None,
+            anonymous_bypass=False,
+        )
 
     record = users_svc.get_user(session.user_id)
     if record is None:

@@ -502,7 +502,7 @@ class PySparkEngine(BaseEngine):
 
             try:
                 session = self.get_session()
-                row = session.sql("SELECT 1 AS ok").collect()  # noqa: OVID2001
+                row = session.sql("SELECT 1 AS ok").collect()  # noqa: OVID2001 — engine liveness probe
             finally:
                 if saved_stderr_fd is not None:
                     with contextlib.suppress(OSError):

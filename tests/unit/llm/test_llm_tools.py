@@ -249,8 +249,10 @@ def test_loop_caps_iterations_and_drops_tools_on_last_step() -> None:
             ToolContext(("health",), api, max_iterations=3),
         )
     )
-    assert len(prov.seen) == 3
-    assert prov.seen[0][1] and prov.seen[-1][1] is None  # health only: no write tools
+    # 3 tool steps + 1 forced tool-free answer.
+    assert len(prov.seen) == 4
+    assert prov.seen[0][1] and prov.seen[2][1] is None  # health only: no write tools
+    assert prov.seen[-1][1] is None
 
 
 def test_last_step_keeps_write_tools_so_model_can_draft() -> None:
@@ -283,7 +285,72 @@ def test_read_call_on_last_step_is_rejected() -> None:
         )
     )
     assert len(api.calls) == 1
-    assert events[-1]["type"] == "tool_result" and events[-1]["rejected"] is True
+    rejected = [e for e in events if e["type"] == "tool_result" and e.get("rejected")]
+    assert rejected and "final step" in rejected[-1]["summary"]
+    assert "did you mean" not in rejected[-1]["summary"]
+    # The turn still ends in words (forced, tool-free answer).
+    assert events[-1]["type"] == "delta" and events[-1]["text"]
+    assert prov.seen[-1][1] is None
+
+
+def test_final_step_is_announced_to_the_model() -> None:
+    prov = _Scripted([[_call("list_jobs", {}, cid="a")], [{"type": "delta", "text": "ok"}]])
+    list(
+        run_tool_loop(
+            prov,
+            [{"role": "user", "content": "q"}],
+            ToolContext(("list_jobs",), _FakeApi(), max_iterations=2),
+        )
+    )
+    first_msgs, last_msgs = prov.seen[0][0], prov.seen[1][0]
+    assert not any("FINAL step" in str(m.get("content")) for m in first_msgs)
+    assert last_msgs[-1]["role"] == "system" and "FINAL step" in last_msgs[-1]["content"]
+
+
+def test_turn_never_ends_without_text() -> None:
+    """A model that keeps calling tools past the budget, then says nothing, still answers."""
+    looping = [[_call("list_jobs", {"limit": i + 1}, cid=f"c{i}")] for i in range(2)]
+    prov = _Scripted([*looping, []])  # forced answer comes back empty
+    events = list(
+        run_tool_loop(
+            prov,
+            [{"role": "user", "content": "q"}],
+            ToolContext(("list_jobs",), _FakeApi(), max_iterations=2),
+        )
+    )
+    from ovid2.llm.tool_loop import NO_ANSWER_FALLBACK
+
+    assert events[-1] == {"type": "delta", "text": NO_ANSWER_FALLBACK}
+
+
+def test_unavailable_tool_never_suggests_itself() -> None:
+    from ovid2.agent_tools import get_tool
+    from ovid2.llm.tool_loop import suggest_tools
+
+    tools = [t for t in (get_tool("list_pipeline_configs"), get_tool("draft_workflow")) if t]
+    prov = _Scripted([[_call("list_pipeline_configz", {})], [{"type": "delta", "text": "ok"}]])
+    events = list(
+        run_tool_loop(
+            prov,
+            [{"role": "user", "content": "q"}],
+            ToolContext(tuple(t.name for t in tools), _FakeApi()),
+        )
+    )
+    assert "list_pipeline_configs" in events[0]["summary"]
+    assert "list_pipeline_configz" not in suggest_tools("list_pipeline_configz", tools)
+
+
+def test_unknown_argument_lists_accepted_ones() -> None:
+    from ovid2.agent_tools import ToolCallError, build_request, get_tool
+
+    tool = get_tool("list_pipeline_configs")
+    assert tool is not None
+    with pytest.raises(ToolCallError, match=r"accepted: none"):
+        build_request(tool, {"limit": 5})
+    jobs = get_tool("list_jobs")
+    assert jobs is not None
+    with pytest.raises(ToolCallError, match=r"accepted: .*limit"):
+        build_request(jobs, {"bogus": 1})
 
 
 def test_loop_dedupes_identical_calls() -> None:
@@ -505,6 +572,7 @@ def test_set_appearance_accepts_every_shipped_theme() -> None:
         "financial",
         "lego",
         "spaceship",
+        "data-factory",
     ):
         validate_args(tool, {"theme": slug})
 
@@ -587,6 +655,7 @@ def test_loop_rejects_bad_ui_action_args_and_dedupes_repeats() -> None:
     assert events[0]["type"] == "tool_result" and events[0]["rejected"] is True
     assert [e["type"] for e in events].count("ui_action") == 1
     assert "repeat UI action" in events[2]["summary"]
+    assert events[2]["duplicate"] is True and not events[2].get("rejected")
 
 
 def test_ui_actions_available_without_api_client_and_on_last_step() -> None:
@@ -702,3 +771,92 @@ def test_unknown_copy_tool_name_suggests_draft_tools() -> None:
     tools = [t for t in load_catalogue() if t.name in wanted]
     out = suggest_tools("copy_tables", tools)
     assert set(out[:2]) == {"create_job_draft", "draft_pipeline_config"}
+
+
+# ---------------------------------------------------------------------------
+# "convert OMOP to PCORnet, back it up, run the EDC checks" — the workflow
+# hand-off when addresses are still unknown (open_workflow_canvas).
+# ---------------------------------------------------------------------------
+
+
+_CANVAS_ARGS: dict[str, Any] = {
+    "name": "omop_to_pcornet",
+    "steps": [
+        {"id": "backup", "pipeline": "COPY", "label": "Back up the OMOP source"},
+        {"id": "etl", "pipeline": "site"},
+        {"id": "edc", "pipeline": "DC_CHECKS"},
+    ],
+    "edges": [
+        {"from": "backup", "to": "etl", "type": "after"},
+        {"from": "etl", "to": "edc", "type": "data"},
+    ],
+    "missing": ["OMOP source address", "backup address", "PCORnet output address"],
+}
+
+
+def test_open_workflow_canvas_is_a_pinned_ui_action() -> None:
+    from ovid2.agent_tools import validate_args
+
+    tool = get_tool("open_workflow_canvas")
+    assert tool is not None and tool.ui_action and not tool.method
+    assert tool.description.startswith("UI:")
+    assert validate_args(tool, _CANVAS_ARGS) == _CANVAS_ARGS
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        {"steps": []},
+        {"steps": [{"id": "Bad ID", "pipeline": "COPY"}]},
+        {"steps": [{"id": "a", "pipeline": "<script>"}]},
+        {"steps": [{"id": "a", "pipeline": "COPY", "overrides": {"allow_overwrite": True}}]},
+        {"steps": [{"id": "a", "pipeline": "COPY", "probes": []}]},
+        {"steps": [{"id": "a", "pipeline": "COPY"}], "trigger": {"type": "cron"}},
+        {"steps": [{"id": "a", "pipeline": "COPY"}], "missing": ["<b>x</b>"]},
+    ],
+)
+def test_open_workflow_canvas_rejects_unsafe_args(args: dict[str, Any]) -> None:
+    from ovid2.agent_tools import validate_args
+
+    tool = get_tool("open_workflow_canvas")
+    assert tool is not None
+    with pytest.raises(ToolCallError):
+        validate_args(tool, args)
+
+
+def test_omop_to_pcornet_request_opens_the_canvas_and_answers() -> None:
+    configs = json.dumps(
+        [
+            {"name": "COPY", "kind": "copy", "cdm": None, "input_cdm": None},
+            {"name": "DC_CHECKS", "kind": "dq_checks", "cdm": None, "input_cdm": None},
+            {"name": "site", "kind": "etl", "cdm": "pcornet_7_0", "input_cdm": "omop_5_3"},
+        ]
+    )
+    prov = _Scripted(
+        [
+            [_call("list_pipeline_configs", {}, "a")],
+            [_call("open_workflow_canvas", _CANVAS_ARGS, "b")],
+            [{"type": "delta", "text": "Opened the canvas; pick the source and backup."}],
+        ]
+    )
+    names = ("list_pipeline_configs", "list_addresses", "draft_workflow", "open_workflow_canvas")
+    events = list(
+        run_tool_loop(
+            prov,
+            [{"role": "user", "content": "convert omop to pcornet, back up, run edc"}],
+            ToolContext(names, _FakeApi(configs)),
+        )
+    )
+    ui = [e for e in events if e["type"] == "ui_action"]
+    assert ui and ui[0]["name"] == "open_workflow_canvas" and ui[0]["args"] == _CANVAS_ARGS
+    assert events[-1]["type"] == "delta" and "canvas" in events[-1]["text"]
+    assert not [e for e in events if e.get("rejected")]
+
+
+def test_prompt_and_catalogue_explain_input_cdm_and_canvas_fallback() -> None:
+    from ovid2.llm.tool_loop import TOOL_PROMPT
+
+    assert "input_cdm" in TOOL_PROMPT and "open_workflow_canvas" in TOOL_PROMPT
+    assert "Undo button" in TOOL_PROMPT
+    tool = get_tool("list_pipeline_configs")
+    assert tool is not None and "input_cdm" in tool.description

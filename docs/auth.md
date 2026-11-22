@@ -1,10 +1,14 @@
 # Ovid2 web panel authentication + RBAC — operator guide
 
 The Ovid2 web control panel supports **Google / Microsoft single sign-on**
-with role-based access control. It ships **OFF by default**: until you enable
-it and configure a provider, the panel behaves exactly as before (open access
-behind the network boundary / reverse proxy). This guide walks through turning
-it on.
+with role-based access control. **Sign-in is ON by default** (since
+2026-11-20): when `auth.enabled` is not set in `settings.json` it is on,
+except in `ovid2 dev` sandboxes (`OVID2_DEPLOYMENT=dev`). An explicit
+`"enabled": false` still turns it off, and `ovid2 web` then refuses to bind
+anything but loopback unless you pass `--insecure-allow-network-without-auth`.
+`ovid2 init` asks for a break-glass admin password (or reads it from
+`OVID2_BREAKGLASS_PASSWORD_FILE`) so the first admin can sign in. See
+the adr-secure-defaults design note.
 
 See the design rationale in
 the adr-web-auth-rbac design note.

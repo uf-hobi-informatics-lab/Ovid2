@@ -712,6 +712,17 @@ class JobDetail(BaseModel):
     started_at: str | None = None
     ended_at: str | None = None
     error: str | None = None
+    workflow_run_id: str | None = Field(
+        None, description="Workflow run this job belongs to (null for standalone jobs)."
+    )
+    workflow_step_id: str | None = None
+    result: dict[str, Any] | None = Field(
+        None,
+        description=(
+            "Structured result of a job-only tool (``workflow_probe`` numbers); "
+            "null for pipeline jobs."
+        ),
+    )
 
 
 class JobListResponse(BaseModel):
@@ -1276,6 +1287,14 @@ class PipelineConfigDetail(BaseModel):
             "`ovid2.cdm.registry`."
         ),
     )
+    input_cdm: str | None = Field(
+        None,
+        description=(
+            "Data model the pipeline *reads* (e.g. `omop_5_3` for an OMOP → "
+            "PCORnet conversion). Stored on the config, else taken from the "
+            "package's `INPUT_CDM` setting; null when unknown or the same as `cdm`."
+        ),
+    )
     pipeline: str
     input_address: str
     output_address: str
@@ -1320,6 +1339,10 @@ class PipelineConfigSummary(BaseModel):
     name: str
     kind: str = "etl"
     cdm: str | None = None
+    input_cdm: str | None = Field(
+        None,
+        description="Data model the pipeline reads (see PipelineConfigDetail.input_cdm).",
+    )
     pipeline: str
     input_address: str
     output_address: str
@@ -1360,6 +1383,13 @@ class PipelineWrite(BaseModel):
     cdm: str | None = Field(
         None,
         description=("CDM name — required when `kind=etl`, ignored otherwise."),
+    )
+    input_cdm: str | None = Field(
+        None,
+        description=(
+            "Data model the pipeline reads (`kind=etl` only). Leave empty to use "
+            "the package's `INPUT_CDM` setting."
+        ),
     )
     pipeline: str
     input_address: str
@@ -1457,6 +1487,270 @@ class PipelineRunRequest(BaseModel):
             "launches it (POST /jobs/{job_id}/launch)."
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# Workflows — chains of saved pipelines (adr-workflows.md)
+# ---------------------------------------------------------------------------
+
+
+class WorkflowStepOverrides(BaseModel):
+    """Per-step overrides applied on top of the referenced pipeline config.
+
+    Every field is optional; ``None`` keeps the pipeline's own value. An
+    input that arrives over a ``data`` edge always wins over
+    ``input_address``.
+    """
+
+    input_address: str | None = Field(
+        None, description="Address name to read from (ignored when a data edge feeds this step)."
+    )
+    output_address: str | None = Field(None, description="Address name to write to.")
+    tables: list[str] | None = Field(
+        None, description="Table list for this step (copy / move); `null` keeps the pipeline's."
+    )
+    allow_overwrite: bool | None = Field(
+        None,
+        description=(
+            "Standing permission for this step to overwrite an occupied output; "
+            "`null` falls back to the pipeline's `allow_overwrite`."
+        ),
+    )
+
+
+class WorkflowStepPosition(BaseModel):
+    """Canvas coordinates of a step node (cosmetic)."""
+
+    x: float = 0.0
+    y: float = 0.0
+
+
+class WorkflowProbe(BaseModel):
+    """An aggregate computed on a step's output for branch conditions.
+
+    Runs in the executor (``ovid2 tools workflow-probe``) after the step
+    succeeds and returns one number — never row values. ``where`` is a
+    row filter checked by :mod:`ovid2.config.sql_expr_guard`.
+    """
+
+    name: str = Field(..., description="Probe name, read by conditions as `query.<name>`.")
+    table: str = Field(..., description="Table at the step's output address.")
+    agg: Literal["count", "count_distinct", "null_count", "non_null_count"] = "count"
+    column: str | None = Field(None, description="Column for count_distinct / null counts.")
+    where: str | None = Field(None, description="Optional row filter (Spark SQL predicate).")
+
+
+class WorkflowStep(BaseModel):
+    """One node of a workflow: a saved pipeline config plus overrides."""
+
+    id: str = Field(..., description="Step id, unique within the workflow (`[a-z0-9_-]`).")
+    pipeline: str = Field(..., description="Saved pipeline config name (from GET /pipelines).")
+    label: str = Field("", max_length=80, description="Optional display label.")
+    overrides: WorkflowStepOverrides = Field(default_factory=WorkflowStepOverrides)
+    rollback: bool = Field(
+        True,
+        description=(
+            "Undo this step's output when the workflow fails. A step whose "
+            "output driver cannot drop tables must set this to false."
+        ),
+    )
+    position: WorkflowStepPosition | None = None
+    join: Literal["all", "any"] = Field(
+        "all",
+        description=(
+            "With several incoming links: `all` runs only when every incoming link "
+            "is taken (one branch not taken skips this step); `any` waits for every "
+            "upstream step to settle and runs when at least one link was taken."
+        ),
+    )
+    probes: list[WorkflowProbe] = Field(
+        default_factory=list,
+        description=(
+            "Data probes computed on this step's output after it succeeds "
+            "(numbers only); outgoing link conditions read them as `query.<name>`."
+        ),
+    )
+
+
+class WorkflowEdge(BaseModel):
+    """A dependency between two steps, optionally conditional.
+
+    ``data`` — the upstream step's output address becomes the downstream
+    step's input. ``after`` — ordering only; the downstream step keeps its
+    own input and output.
+
+    ``on`` picks the upstream outcome that follows the link (``success`` /
+    ``failure`` / ``always`` / ``otherwise`` — the else branch) and
+    ``when`` is an optional condition over the upstream step's facts
+    (:mod:`ovid2.config.workflow_conditions`).
+    """
+
+    source: str = Field(..., alias="from", description="Upstream step id.")
+    target: str = Field(..., alias="to", description="Downstream step id.")
+    type: Literal["data", "after"] = "data"
+    on: Literal["success", "failure", "always", "otherwise"] = Field(
+        "success",
+        description=(
+            "Upstream outcome that follows this link: `success` (default), `failure` "
+            "(a recovery path — the failure no longer aborts the workflow), `always`, "
+            "or `otherwise` (taken when no other conditional success link matched)."
+        ),
+    )
+    when: dict[str, Any] | None = Field(
+        None,
+        description=(
+            "Condition tree: {all:[...]}, {any:[...]}, {not:{...}} or a leaf "
+            "{field, op, value?, case_sensitive?}. Fields and operators: "
+            "GET /workflow-conditions."
+        ),
+    )
+    label: str = Field("", max_length=80, description="Optional branch label.")
+
+    model_config = {"populate_by_name": True}
+
+
+class WorkflowWrite(BaseModel):
+    """Payload for creating or updating a workflow definition."""
+
+    description: str = Field("", max_length=500)
+    enabled: bool = True
+    trigger: PipelineTrigger = Field(default_factory=lambda: PipelineTrigger(type="manual"))
+    steps: list[WorkflowStep] = Field(default_factory=list)
+    edges: list[WorkflowEdge] = Field(default_factory=list)
+
+
+class WorkflowDetail(WorkflowWrite):
+    """A stored workflow plus its runtime state."""
+
+    name: str
+    path: str = ""
+    root_steps: list[str] = Field(default_factory=list)
+    last_fired_at: str | None = None
+    next_fire_at: str | None = None
+    last_run_id: str | None = None
+    last_run_status: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class WorkflowSummary(BaseModel):
+    """Listing entry for the workflows index page."""
+
+    name: str
+    description: str = ""
+    enabled: bool = True
+    trigger_type: str = "manual"
+    step_count: int = 0
+    edge_count: int = 0
+    steps: list[WorkflowStep] = Field(default_factory=list)
+    edges: list[WorkflowEdge] = Field(default_factory=list)
+    next_fire_at: str | None = None
+    last_fired_at: str | None = None
+    last_run_id: str | None = None
+    last_run_status: str | None = None
+    updated_at: str | None = None
+
+
+class WorkflowDuplicateRequest(BaseModel):
+    """Body for ``POST /workflows/{name}/duplicate``."""
+
+    new_name: str | None = Field(
+        None, description="Name of the copy; defaults to `<name>_copy` (first free)."
+    )
+
+
+class WorkflowDraftRequest(WorkflowWrite):
+    """Body for ``POST /workflow-drafts`` — a workflow the human reviews on the canvas."""
+
+    name: str = Field(..., description="Workflow name (letters, digits, '-', '_', '.').")
+
+
+class WorkflowValidation(BaseModel):
+    """Outcome of validating a workflow definition."""
+
+    ok: bool
+    errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    step_errors: dict[str, list[str]] = Field(default_factory=dict)
+    order: list[str] = Field(default_factory=list, description="A topological step order.")
+
+
+class WorkflowRunRequest(BaseModel):
+    """Optional body for ``POST /workflows/{name}/run``."""
+
+    input_address: str | None = Field(
+        None, description="Bind the root step(s) input for this run (address name)."
+    )
+
+
+class WorkflowStepRun(BaseModel):
+    """Runtime state of one step inside a workflow run."""
+
+    step_id: str
+    pipeline: str
+    status: str
+    job_id: str | None = None
+    instance_id: str | None = None
+    input_address: str | None = None
+    output_address: str | None = None
+    pre_existing_tables: list[str] | None = None
+    backup_address: str | None = None
+    snapshot_job_id: str | None = None
+    rollback_job_id: str | None = None
+    rollback_action: str | None = None
+    error: str | None = None
+    started_at: str | None = None
+    ended_at: str | None = None
+    outcome: str | None = Field(
+        None, description="`succeeded` / `failed` once the step settled (before rollback)."
+    )
+    reason: str | None = Field(
+        None, description="Why the step was skipped, or how its failure was handled."
+    )
+    facts: dict[str, Any] | None = Field(
+        None, description="Facts gathered for its outgoing conditions (no row values)."
+    )
+    probe_job_id: str | None = None
+
+
+class WorkflowEdgeDecision(BaseModel):
+    """Whether one link was taken in a run, and why."""
+
+    source: str = Field(..., alias="from")
+    target: str = Field(..., alias="to")
+    taken: bool
+    reason: str = ""
+
+    model_config = {"populate_by_name": True}
+
+
+class WorkflowRunDetail(BaseModel):
+    """One execution of a workflow."""
+
+    run_id: str
+    workflow: str
+    trigger: str
+    batch_id: str | None = None
+    status: str
+    created_at: str
+    started_at: str | None = None
+    ended_at: str | None = None
+    error: str | None = None
+    created_by: str = "web"
+    definition: WorkflowWrite | None = None
+    steps: list[WorkflowStepRun] = Field(default_factory=list)
+    edges: list[WorkflowEdgeDecision] = Field(
+        default_factory=list, description="Decided links (taken / not taken)."
+    )
+    handled_failures: int = Field(0, description="Failed steps routed to a failure path.")
+    skipped: int = Field(0, description="Steps on branches that were not taken.")
+
+
+class WorkflowRunListResponse(BaseModel):
+    """Paginated workflow runs."""
+
+    total: int
+    runs: list[WorkflowRunDetail] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -1629,9 +1923,22 @@ class AuthProviderConfig(BaseModel):
 
 
 class SettingsAuth(BaseModel):
-    """Authentication settings."""
+    """Authentication settings.
 
-    enabled: bool = Field(default=False, description="Whether authentication is enabled")
+    ``enabled`` is tri-state: ``True`` / ``False`` when set explicitly in
+    ``settings.json``, ``None`` (the default) when unset — then
+    :meth:`effective_enabled` applies the deployment default (**on**
+    unless ``OVID2_DEPLOYMENT=dev``; see :mod:`ovid2.config.deployment`).
+    Always read ``effective_enabled()``, never ``enabled`` directly.
+    """
+
+    enabled: bool | None = Field(
+        default=None,
+        description=(
+            "Whether authentication is enabled. Unset = on, except in "
+            "OVID2_DEPLOYMENT=dev instances."
+        ),
+    )
     providers: dict[str, AuthProviderConfig] = Field(
         default_factory=dict, description="Authentication providers configuration"
     )
@@ -1671,6 +1978,14 @@ class SettingsAuth(BaseModel):
                 if email:  # Only add non-empty strings
                     normalized.append(email)
         return normalized
+
+    def effective_enabled(self) -> bool:
+        """Return whether auth is on, applying the deployment default when unset."""
+        if self.enabled is not None:
+            return self.enabled
+        from ovid2.config.deployment import is_dev
+
+        return not is_dev()
 
 
 class SettingsLlm(BaseModel):

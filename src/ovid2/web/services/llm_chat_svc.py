@@ -401,6 +401,7 @@ def sse_stream(
                         "summary": event.get("summary"),
                         "preview": str(event.get("preview") or "")[:4000],
                         "rejected": bool(event.get("rejected")),
+                        "duplicate": bool(event.get("duplicate")),
                     }
                 elif kind in ("proposal", "open_draft"):
                     prop: dict[str, Any] = {

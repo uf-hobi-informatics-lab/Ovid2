@@ -38,10 +38,12 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "batch_input_address",
+    "child_address",
     "last_checked_at",
     "last_seen",
     "record_seen",
     "scan_for_new_batches",
+    "scan_location",
 ]
 
 
@@ -127,8 +129,8 @@ def _watched_prefix(address: object) -> str:
     return location_path(getattr(address, "location", None) or {}, warehouse=warehouse)
 
 
-def batch_input_address(detail: PipelineConfigDetail, folder: str, *, actor: str) -> str:
-    """Return (resolving or creating) the address for one watched batch.
+def child_address(input_address: str, folder: str, *, actor: str) -> str:
+    """Return (resolving or creating) the address of ``<input>/<folder>``.
 
     The watched input address names the parent location; the batch's
     address points exactly at ``<parent>/<folder>`` on the same storage
@@ -138,10 +140,10 @@ def batch_input_address(detail: PipelineConfigDetail, folder: str, *, actor: str
         addresses_svc.AddressError: When the parent address is not a
             connection-shape address or the child cannot be created.
     """
-    address = addresses_svc.get_address(detail.input_address)
+    address = addresses_svc.get_address(input_address)
     if address is None or not address.connection:
         raise addresses_svc.AddressError(
-            f"watch input '{detail.input_address}' is not a connection-shape address."
+            f"watch input '{input_address}' is not a connection-shape address."
         )
     parent = _watched_prefix(address)
     child_path = "/".join(p for p in (parent, folder.strip("/")) if p)
@@ -154,28 +156,30 @@ def batch_input_address(detail: PipelineConfigDetail, folder: str, *, actor: str
     return addresses_svc.resolve_or_create_address(address.connection, location, actor=actor)
 
 
-def scan_for_new_batches(detail: PipelineConfigDetail) -> list[str]:
-    """Return the unseen batch folders directly under a pipeline's input location.
+def batch_input_address(detail: PipelineConfigDetail, folder: str, *, actor: str) -> str:
+    """Return the address for one watched batch of a pipeline (see :func:`child_address`)."""
+    return child_address(detail.input_address, folder, actor=actor)
 
-    Lists one level of the pipeline's input *location* (the input
-    address is the exact watched folder / database) and returns
-    every ``dir`` entry whose name sorts strictly after the stored
-    ``last_seen_batch`` cursor, ascending. When no cursor exists yet
-    every present folder is unseen (a freshly-enabled watch pipeline
-    picks up existing unprocessed batches); the worker records each as
-    seen so subsequent scans yield nothing.
+
+def scan_location(cursor_key: str, input_address: str) -> list[str]:
+    """Return the unseen batch folders directly under ``input_address``.
+
+    ``cursor_key`` names the cursor row (a pipeline name, or
+    ``workflow:<name>`` for a watch-triggered workflow). Lists one level
+    of the input *location* and returns every ``dir`` entry whose name
+    sorts strictly after the stored ``last_seen_batch``, ascending. With
+    no cursor yet every present folder is unseen.
 
     Returns an empty list when the input address is unresolvable, is a
     legacy (connectionless) address, the driver cannot list directories,
-    or the listing fails — never raises, so one misbehaving pipeline
+    or the listing fails — never raises, so one misbehaving watcher
     cannot break the worker tick.
     """
-    input_address = detail.input_address
     address = addresses_svc.get_address(input_address)
     if address is None or not address.connection:
         logger.warning(
-            "watch pipeline %s: input_address %r is not a connection-shape address; skipping scan.",
-            detail.name,
+            "watch %s: input_address %r is not a connection-shape address; skipping scan.",
+            cursor_key,
             input_address,
         )
         return []
@@ -184,21 +188,26 @@ def scan_for_new_batches(detail: PipelineConfigDetail) -> list[str]:
             address.connection, _watched_prefix(address) or None
         )
     except storage_browse_svc.StorageBrowseError as exc:
-        logger.warning("watch pipeline %s: browse failed: %s", detail.name, exc)
+        logger.warning("watch %s: browse failed: %s", cursor_key, exc)
         return []
     if not response.supported:
         logger.warning(
-            "watch pipeline %s: storage account %r cannot list directories.",
-            detail.name,
+            "watch %s: storage account %r cannot list directories.",
+            cursor_key,
             address.connection,
         )
         return []
 
-    cursor = last_seen(detail.name, input_address)
+    cursor = last_seen(cursor_key, input_address)
     folders = sorted(e.name for e in response.entries if e.kind == "dir")
     unseen = folders if cursor is None else [n for n in folders if n > cursor]
-    _touch_checked(detail.name, input_address)
+    _touch_checked(cursor_key, input_address)
     return unseen
+
+
+def scan_for_new_batches(detail: PipelineConfigDetail) -> list[str]:
+    """Return the unseen batch folders under a pipeline's input (see :func:`scan_location`)."""
+    return scan_location(detail.name, detail.input_address)
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -60,6 +60,7 @@
               <a href="/addresses/{{ a.name }}/edit" class="small">edit</a>
               <form action="/addresses/{{ a.name }}/delete" method="post" style="display: inline;"
                     onsubmit="return confirm('Delete address {{ a.name }}?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="link-button small danger">delete</button>
               </form>
             </td>

@@ -20,6 +20,7 @@
     var p = window.OVID2_APPEARANCE || {};
     var KNOWN = ["clinical", "matrix", "super-mario-world",
                  "tatooine", "financial", "lego", "spaceship",
+                 "data-factory",
                  /* legacy light/dark aliases (map to clinical/matrix) */
                  "light", "dark"];
     /* Retired slugs remapped to their replacements (mirrors
@@ -27,13 +28,10 @@
     var ALIASES = { dune: "tatooine", industry: "lego" };
     var slug = p.theme;
     if (slug && ALIASES[slug]) { slug = ALIASES[slug]; }
+    /* No saved (or an unknown) theme -> the shipped default, Data
+     * Factory (mirrors DEFAULT_THEME in theme.js). */
     if (!slug || KNOWN.indexOf(slug) === -1) {
-      var prefersDark = false;
-      try {
-        prefersDark = window.matchMedia
-          && window.matchMedia("(prefers-color-scheme: dark)").matches;
-      } catch (e) { prefersDark = false; }
-      slug = prefersDark ? "matrix" : "clinical";
+      slug = "data-factory";
     }
     root.setAttribute("data-theme", slug);
     var hex = /^#[0-9a-fA-F]{6}$/;

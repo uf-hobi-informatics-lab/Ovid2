@@ -105,6 +105,10 @@
         <option value="">Any CDM</option>
         {% for c in cdms %}<option value="{{ c | lower }}">{{ c }}</option>{% endfor %}
       </select>
+      <select id="pf-input-cdm" data-filter="input_cdm" class="pl-chip-select" aria-label="Input CDM">
+        <option value="">Any input</option>
+        {% for c in cdms %}<option value="{{ c | lower }}">from {{ c }}</option>{% endfor %}
+      </select>
       <span class="pl-toolbar-count small" data-pl-count aria-live="polite"></span>
     </div>
 
@@ -123,14 +127,15 @@
                      data-name="{{ r.name | lower }}"
                      data-trigger="{{ r.trigger_type }}"
                      data-enabled="{{ 'yes' if r.enabled else 'no' }}"
-                     data-cdm="{{ (r.cdm or '') | lower }}">
+                     data-cdm="{{ (r.cdm or '') | lower }}"
+                     data-input-cdm="{{ (r.input_cdm or '') | lower }}">
               <header class="pl-card-head">
                 <span class="pl-card-badge">{{ icons.icon(kind_icons.get(r.kind, "pipelines"), size=18) }}</span>
                 <div class="pl-card-title">
                   <a href="/pipelines/{{ r.name }}" class="pl-card-name">{{ r.name }}</a>
                   <span class="pl-card-sub">
                     <span class="pl-kind-label">{{ r.kind }}</span>
-                    {% if r.cdm %}<span class="pl-dot" aria-hidden="true">&middot;</span><span class="mono">{{ r.cdm }}</span>{% endif %}
+                    {% if r.cdm %}<span class="pl-dot" aria-hidden="true">&middot;</span>{% if r.input_cdm and r.input_cdm != r.cdm %}<span class="mono" title="Reads {{ r.input_cdm }}, writes {{ r.cdm }}">{{ r.input_cdm }} &rarr; {{ r.cdm }}</span>{% else %}<span class="mono">{{ r.cdm }}</span>{% endif %}{% endif %}
                   </span>
                 </div>
                 <span class="pl-status {{ 'is-on' if r.enabled else 'is-off' }}"

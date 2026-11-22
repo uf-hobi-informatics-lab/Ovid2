@@ -203,6 +203,35 @@ def split_dataspace_path(full: str) -> tuple[str, str]:
     return head, rest
 
 
+#: Hidden folder (under a folder-store address) holding workflow-rollback
+#: snapshots. Dot-prefixed, so table listings never show it.
+WORKFLOW_BACKUP_DIR: str = ".ovid2_wf_backup"
+
+#: Suffix of the sibling schema holding warehouse workflow-rollback snapshots.
+WORKFLOW_BACKUP_SCHEMA_TAG: str = "_OVID2BK_"
+
+
+def safe_backup_key(key: str) -> str:
+    """Return ``key`` reduced to ``[A-Za-z0-9_]`` (max 32 chars) for a backup name.
+
+    Raises:
+        BatchPathError: When nothing usable is left.
+    """
+    cleaned = re.sub(r"[^A-Za-z0-9_]+", "_", str(key or "")).strip("_")[:32]
+    if not cleaned:
+        raise BatchPathError(f"invalid backup key {key!r}")
+    return cleaned
+
+
+def workflow_backup_schema(schema: str, key: str) -> str:
+    """Return the sibling schema name that holds a warehouse backup.
+
+    ``SITE_X`` + run ``3f9a…`` → ``SITE_X_OVID2BK_3F9A12C4``.
+    """
+    short = safe_backup_key(key)[:8].upper()
+    return f"{schema}{WORKFLOW_BACKUP_SCHEMA_TAG}{short}"
+
+
 def sql_ident(name: str) -> str:
     """Return ``name`` as a SQL identifier, double-quoting when required.
 

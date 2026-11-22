@@ -1177,3 +1177,79 @@ class TestSnowparkSkipsSparkCluster:
         assert "--network" not in cmd
         assert not any("spark://" in tok for tok in cmd)
         assert cmd[-cmd[::-1].index("--engine") :][0] == "snowpark"
+
+
+class TestConcurrentCopyDuckDB:
+    """Parallel copy tables on DuckDB each get a private engine cursor.
+
+    Regression guard: the thread pool used to share the root DuckDB
+    connection across table threads, intermittently failing with
+    "Attempting to execute an unsuccessful or closed pending query result"
+    (seen live on a 2-table disc → disc DuckDB copy driven by a workflow).
+    """
+
+    def test_each_table_runs_inside_table_worker(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import contextlib
+        import threading
+
+        monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "4")
+        scopes: list[int] = []
+        inside = threading.local()
+
+        class Eng:
+            def table_concurrency(self) -> int:
+                return 4
+
+            @contextlib.contextmanager
+            def table_worker(self):  # type: ignore[no-untyped-def]
+                inside.on = True
+                scopes.append(threading.get_ident())
+                try:
+                    yield
+                finally:
+                    inside.on = False
+
+        stager = mock.MagicMock()
+
+        def _mat(*a: Any, **kw: Any) -> Any:
+            assert getattr(inside, "on", False), "materialise ran outside table_worker()"
+            return "df"
+
+        stager.materialise.side_effect = _mat
+        specs = [
+            __import__("ovid2.tools.table_specs", fromlist=["TableSpec"]).TableSpec(
+                table_name=f"t{i}", file_name=f"t{i}"
+            )
+            for i in range(6)
+        ]
+        failures = copy_module._copy_tables_concurrently(
+            specs, stager, mock.MagicMock(), mock.MagicMock(), _mk_args(), engine=Eng()
+        )
+        assert failures == 0
+        assert len(scopes) == 6
+
+    def test_real_duckdb_parallel_reads_are_stable(self) -> None:
+        """Many parallel staged reads on one DuckDBEngine never trip the shared-cursor race."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        from ovid2.core.engines.duckdb import DuckDBEngine
+
+        eng = DuckDBEngine(args={"threads": 4, "memory_limit": "1GB"})
+        eng.get_session()
+        try:
+            errors: list[str] = []
+
+            def work(i: int) -> None:
+                try:
+                    with eng.table_worker():
+                        rel = eng.connection().sql(f"SELECT range AS x, {i} AS t FROM range(20000)")
+                        frame = eng.materialise(eng.wrap(rel), f"t{i}")
+                        assert frame.relation.aggregate("count(*)").fetchone()[0] == 20000
+                except Exception as exc:
+                    errors.append(f"{i}: {exc}")
+
+            with ThreadPoolExecutor(max_workers=6) as pool:
+                list(pool.map(work, range(24)))
+            assert not errors, errors
+        finally:
+            eng.stop_session()

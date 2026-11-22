@@ -36,14 +36,34 @@ _MARKER = "ovid2: legacy-port"
 _LEGACY_PATH = re.compile(r"""['"]/(app|data|ovid_credentials)/""")
 
 
-def _legacy_pipelines() -> list[str]:
-    out: list[str] = []
-    for settings in sorted(_PIPES.glob("*/pipeline_settings.py")):
-        if re.search(
-            r'^ETL_PROFILE\s*=\s*"legacy_ovid"', settings.read_text(encoding="utf-8"), re.M
+def _etl_profile(settings: Path) -> str | None:
+    """Return the literal ``ETL_PROFILE`` of a ``pipeline_settings.py`` (AST, any quoting)."""
+    tree = ast.parse(settings.read_text(encoding="utf-8"), filename=str(settings))
+    for node in tree.body:
+        target = (
+            node.targets[0]
+            if isinstance(node, ast.Assign) and len(node.targets) == 1
+            else node.target
+            if isinstance(node, ast.AnnAssign)
+            else None
+        )
+        value = getattr(node, "value", None)
+        if (
+            isinstance(target, ast.Name)
+            and target.id == "ETL_PROFILE"
+            and isinstance(value, ast.Constant)
+            and isinstance(value.value, str)
         ):
-            out.append(settings.parent.name)
-    return out
+            return value.value
+    return None
+
+
+def _legacy_pipelines() -> list[str]:
+    return [
+        settings.parent.name
+        for settings in sorted(_PIPES.glob("*/pipeline_settings.py"))
+        if _etl_profile(settings) == "legacy_ovid"
+    ]
 
 
 _PIPELINES = _legacy_pipelines()
@@ -111,16 +131,29 @@ def test_legacy_ports_load(pipeline: str) -> None:
 def test_legacy_port_waiver_only_in_generated_ports() -> None:
     offenders: list[str] = []
     for py in (_ROOT / "src" / "ovid2").rglob("*.py"):
-        head = py.read_text(encoding="utf-8")[:3000]
+        head = py.read_text(encoding="utf-8")
         if _MARKER in head and "tools/legacy_formatter_migrator.py" not in str(py):
             offenders.append(str(py.relative_to(_ROOT)))
     for py in _PIPES.rglob("*.py"):
         if "_superseded" in py.parts:
             continue
-        head = py.read_text(encoding="utf-8", errors="ignore")[:3000]
+        head = py.read_text(encoding="utf-8", errors="ignore")
         if _MARKER in head and py.parent.name != "formatters_custom":
             offenders.append(str(py.relative_to(_ROOT)))
     assert not offenders, "legacy-port waiver outside generated ports:\n" + "\n".join(offenders)
+
+
+@pytest.mark.contract
+def test_etl_profile_detection_is_quote_agnostic(tmp_path: Path) -> None:
+    """Negative control: single quotes / annotations still detect the profile."""
+    for text in (
+        "ETL_PROFILE = 'legacy_ovid'\n",
+        'ETL_PROFILE: str = "legacy_ovid"\n',
+        'ETL_PROFILE="legacy_ovid"\n',
+    ):
+        settings = tmp_path / "pipeline_settings.py"
+        settings.write_text(text, encoding="utf-8")
+        assert _etl_profile(settings) == "legacy_ovid", text
 
 
 @pytest.mark.contract

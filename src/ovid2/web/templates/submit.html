@@ -54,6 +54,7 @@
         data-visibility-root
         data-kind="{{ preselect_kind or 'etl' }}"
         data-plan-url="/api/v1/pipeline-packages/">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <div class="builder-nav" id="builder-nav">
 

@@ -38,6 +38,7 @@
   <form method="post"
         action="{% if mode == 'new' %}/engines{% else %}/engines/{{ name }}{% endif %}"
         class="edit-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if mode == 'new' %}
       <div class="form-row">
         <label for="name">Name</label>
@@ -69,6 +70,7 @@
 
   {% if mode == 'edit' %}
     <form method="post" action="/engines/{{ name }}/test" class="edit-form" style="margin-top: 1em;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="button">Test warehouse</button>
       {{ help.tip("Launches ovid2 tools test-engine " ~ name ~ " in a subprocess: builds a session, runs SELECT 1 and tears it down. Unsaved edits are not tested — save first, then test.") }}
     </form>

@@ -20,7 +20,15 @@ from starlette.responses import Response
 from ovid2 import __version__
 from ovid2.config.pipeline_packages import ensure_pipeline_packages_on_path
 from ovid2.web import db as web_db
-from ovid2.web.routes import api_v1, auth, branding, html, llm_html, manual_html
+from ovid2.web.routes import (
+    api_v1,
+    auth,
+    branding,
+    html,
+    llm_html,
+    manual_html,
+    workflows_html,
+)
 from ovid2.web.templating import static_dir
 
 logger = logging.getLogger(__name__)
@@ -102,6 +110,7 @@ def create_app() -> FastAPI:
         app.mount("/static", NoCacheStaticFiles(directory=str(static_path)), name="static")
 
     app.include_router(llm_html.router)
+    app.include_router(workflows_html.router)
     app.include_router(html.router)
     app.include_router(api_v1.router)
     app.include_router(branding.router)

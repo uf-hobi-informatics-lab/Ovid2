@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% block title %}Run {{ run.run_id }} &mdash; {{ name }} &mdash; Ovid2{% endblock %}
+{% block content %}
+{% import "_help.html" as help %}
+{#
+  Live view of one workflow run (static/workflow_run.js): the frozen
+  definition drawn read-only, every step coloured by its state, polled
+  while the run is active. The side panel lists each step with its job,
+  error and rollback action, and offers Cancel / Retry rollback.
+#}
+<section class="page wf-editor-page wf-run-page" id="wf-run"
+         data-name="{{ name }}" data-run-id="{{ run.run_id }}"
+         data-can-run="{{ 'true' if can_run else 'false' }}">
+  <div class="wf-topbar">
+    <a href="/workflows/{{ name }}" class="icon-button" title="Back to the workflow" aria-label="Back to the workflow">{{ icons.icon("chevron-left", size=18) }}</a>
+    <span class="wf-card-badge">{{ icons.icon("dag", size=18) }}</span>
+    <div class="wf-title-block">
+      <h1 class="wf-title">{{ name }} <span class="wf-run-id mono">#{{ run.run_id[:8] }}</span>
+        {% call help.tip_block(label="About workflow runs") %}
+          Steps run as ordinary jobs (each links to its job page). After a step
+          settles, each of its links is decided: links whose condition held are
+          followed (solid), the others are not taken (faded) and the steps behind
+          them are skipped. A failure with an "on failure" link is handled: that
+          step's output is rolled back and the recovery path runs. Any other
+          failure, or a cancel, skips the remaining steps and rolls every finished
+          step back: tables it created are dropped and tables it overwrote are
+          restored from the backup taken just before it ran.
+        {% endcall %}
+      </h1>
+      <span class="wf-run-pill status-{{ run.status }}" data-run-status><span class="wf-run-dot" aria-hidden="true"></span>{{ run.status | replace('_', ' ') }}</span>
+    </div>
+    <span class="pl-flex"></span>
+    <div class="wf-tools">
+      <button type="button" class="icon-button" data-wf-act="fit" title="Fit to screen" aria-label="Fit to screen">{{ icons.icon("search", size=16) }}</button>
+    </div>
+    {% if can_run %}
+    <button type="button" class="button small danger" data-run-act="cancel" hidden>{{ icons.icon("stop", size=15) }} Cancel</button>
+    <button type="button" class="button small" data-run-act="rollback" hidden>{{ icons.icon("undo", size=15) }} Retry rollback</button>
+    <button type="button" class="button small" data-run-act="rerun" hidden>{{ icons.icon("play", size=15) }} Run again</button>
+    {% endif %}
+  </div>
+  <div class="flash error" data-run-error role="alert" {% if not run.error %}hidden{% endif %}>{{ run.error or '' }}</div>
+
+  <div class="wf-layout wf-run-layout">
+    <div class="wf-stage">
+      <svg class="wf-canvas" data-wf-canvas role="img" aria-label="Workflow run graph"></svg>
+      <div class="wf-legend" aria-hidden="true">
+        <span><i class="wf-legend-dot status-running"></i>running</span>
+        <span><i class="wf-legend-dot status-done"></i>done</span>
+        <span><i class="wf-legend-dot status-failed"></i>failed</span>
+        <span><i class="wf-legend-dot status-rolled_back"></i>rolled back</span>
+        <span><i class="wf-legend-dot status-skipped"></i>skipped</span>
+        <span><i class="wf-legend-dot status-probing"></i>probing</span>
+        <span><i class="wf-legend-line is-not-taken"></i>not taken</span>
+      </div>
+    </div>
+    <aside class="wf-inspector" aria-label="Run details">
+      <div class="wf-pane-head"><h2>{{ icons.icon("activity", size=16) }} Steps</h2></div>
+      <dl class="wf-run-meta">
+        <dt>Trigger</dt><dd>{{ run.trigger }}</dd>
+        {% if run.batch_id %}<dt>Batch</dt><dd class="mono">{{ run.batch_id }}</dd>{% endif %}
+        <dt>Started</dt><dd>{{ run.started_at | localtime if run.started_at else '' }}</dd>
+        <dt>Ended</dt><dd data-run-ended>{{ run.ended_at | localtime if run.ended_at else '' }}</dd>
+        <dt>By</dt><dd class="mono">{{ run.created_by }}</dd>
+      </dl>
+      <ol class="wf-run-steps" data-run-steps></ol>
+    </aside>
+  </div>
+</section>
+<script type="application/json" id="wf-catalog">{{ catalog | tojson }}</script>
+<script type="application/json" id="wf-run-initial">{{ run | tojson }}</script>
+<script type="module" src="/static/workflow_run.js"></script>
+{% endblock %}

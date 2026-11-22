@@ -522,11 +522,62 @@ def tabular_source_from_config(
     )
 
 
+def admin_store_from_config(
+    args: dict[str, Any],
+    secrets: dict[str, Any],
+    location: dict[str, Any],
+) -> Any:
+    """Return an :class:`~ovid2.drivers._object_store_admin.AdminStore` over the container.
+
+    Used by workflow rollback (snapshot / restore / drop of whole tables).
+
+    Raises:
+        NotImplementedError: SDK absent / no container.
+    """
+    from ovid2.drivers._object_store_admin import AdminStore
+
+    try:
+        import azure.storage.blob  # noqa: F401
+    except ImportError as exc:
+        raise NotImplementedError("azure-storage-blob is not installed on this host.") from exc
+    container = location.get("container") or args.get("container_default")
+    if not container:
+        raise NotImplementedError(
+            "No container set on the storage account (location.container "
+            "or connection container_default)."
+        )
+    mode = resolve_connection_auth_mode(dict(secrets))
+    account = str(args.get("account_name") or "")
+    suffix = str(args.get("endpoint_suffix") or "core.windows.net")
+    url = f"https://{account}.blob.{suffix}" if account else ""
+    service = _build_client(mode, dict(args), dict(secrets), url)
+    cc = service.get_container_client(str(container))
+
+    class _AzureAdmin(AdminStore):
+        def list_keys(self, prefix: str) -> list[str]:
+            return [str(b.name) for b in cc.list_blobs(name_starts_with=prefix or None)]
+
+        def copy(self, src_key: str, dst_key: str) -> None:
+            data = cc.download_blob(src_key, max_concurrency=4).readall()
+            cc.upload_blob(dst_key, data, overwrite=True, max_concurrency=4)
+
+        def delete(self, keys: list[str]) -> None:
+            for key in keys:
+                try:
+                    cc.delete_blob(key)
+                except Exception as exc:
+                    if "BlobNotFound" not in str(exc):
+                        raise
+
+    return _AzureAdmin()
+
+
 __all__ = [
     "_AUTH_HINTS",
     "_PROBE_TIMEOUT_SECONDS",
     "_build_client",
     "_fast_fail_kwargs",
+    "admin_store_from_config",
     "list_dir_from_config",
     "list_tables_from_config",
     "probe_auth_from_config",

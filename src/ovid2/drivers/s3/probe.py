@@ -102,6 +102,7 @@ def probe_auth_from_config(
 
 
 __all__ = [
+    "admin_store_from_config",
     "list_dir_from_config",
     "list_tables_from_config",
     "probe_auth_from_config",
@@ -352,3 +353,49 @@ def tabular_source_from_config(
     return ObjectStoreSource(
         head=head, listing=listing, fetch=fetch, base=str(location.get("path") or "")
     )
+
+
+def admin_store_from_config(
+    args: dict[str, Any],
+    secrets: dict[str, Any],
+    location: dict[str, Any],
+) -> Any:
+    """Return an :class:`~ovid2.drivers._object_store_admin.AdminStore` over the bucket.
+
+    Used by workflow rollback (snapshot / restore / drop of whole tables).
+
+    Raises:
+        NotImplementedError: boto3 absent / no bucket.
+    """
+    from ovid2.drivers._object_store_admin import AdminStore
+
+    try:
+        import boto3
+    except ImportError as exc:
+        raise NotImplementedError("boto3 is not installed on this host.") from exc
+    bucket = location.get("bucket") or args.get("bucket_default")
+    if not bucket:
+        raise NotImplementedError(
+            "No bucket set on the storage account (location.bucket or connection bucket_default)."
+        )
+    client = _build_s3_client(boto3, args, secrets)
+
+    class _S3Admin(AdminStore):
+        def list_keys(self, prefix: str) -> list[str]:
+            keys: list[str] = []
+            for page in client.get_paginator("list_objects_v2").paginate(
+                Bucket=bucket, Prefix=prefix
+            ):
+                keys.extend(str(o["Key"]) for o in page.get("Contents", []) or [])
+            return keys
+
+        def copy(self, src_key: str, dst_key: str) -> None:
+            client.copy({"Bucket": bucket, "Key": src_key}, bucket, dst_key)
+
+        def delete(self, keys: list[str]) -> None:
+            for i in range(0, len(keys), 1000):
+                batch = [{"Key": k} for k in keys[i : i + 1000]]
+                if batch:
+                    client.delete_objects(Bucket=bucket, Delete={"Objects": batch, "Quiet": True})
+
+    return _S3Admin()

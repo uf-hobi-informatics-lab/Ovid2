@@ -26,12 +26,13 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/branding/favicon.png">
   {% include "_appearance_prepaint.html" %}
   <link rel="stylesheet" href="/static/ovid2.css">
+  <script src="/static/ovid_mark.js" defer></script>
 </head>
 <body class="login-body">
   <main class="login-shell" role="main">
     <section class="login-card" aria-labelledby="login-heading">
       <header class="login-header">
-        <img src="/branding/ovid_logo_128.png" alt="Ovid2" width="64" height="64">
+        <ovid-mark class="login-mark" size="64" state="idle" silent aria-label="Ovid2"></ovid-mark>
         <h1 id="login-heading">Sign in to Ovid2</h1>
       </header>
 
@@ -69,6 +70,7 @@
         <details class="login-breakglass"{% if not providers %} open{% endif %}>
           <summary>Break-glass admin sign-in</summary>
           <form action="/login/breakglass" method="post" class="login-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="next" value="{{ next }}">
             <label for="bg-password">Break-glass password</label>
             <input type="password" id="bg-password" name="password"

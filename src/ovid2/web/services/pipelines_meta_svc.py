@@ -98,6 +98,20 @@ def _load_pipeline_settings(pipeline: str) -> dict[str, Any]:
     return result
 
 
+def package_input_cdm(pipeline: str) -> str | None:
+    """Return the package's declared source data model (``INPUT_CDM``), or None.
+
+    A package sets ``INPUT_CDM`` in ``pipeline_settings.py`` when the data it
+    reads is in a different model than the one it writes (an OMOP → PCORnet
+    conversion declares ``INPUT_CDM = 'omop_5_3'`` next to
+    ``cdm = 'pcornet_7_0'``).
+    """
+    if not pipeline:
+        return None
+    value = _load_pipeline_settings(pipeline).get("INPUT_CDM")
+    return str(value) if isinstance(value, str) and value.strip() else None
+
+
 def _file_info(path: Path) -> PipelineFileInfo | None:
     """Return :class:`PipelineFileInfo` for one file, or None if absent."""
     if not path.is_file():

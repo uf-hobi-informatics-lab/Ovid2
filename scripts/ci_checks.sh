@@ -11,6 +11,11 @@
 #   scripts/ci_checks.sh --docker [GATE ...] # run inside a python:3.14 image
 #                                            # with the CI dependency set
 # Gates: lint, typecheck, contract, unit   (default: all four, in order)
+#        integration  — tests/integration minus io_matrix (needs a JDK)
+#        io_matrix    — DuckDB × driver emulator matrix (needs Docker; pulls
+#                       the digest-pinned images in tests/integration/io_matrix/images.py)
+# The two heavy gates are opt-in: CI runs them only when engine / driver /
+# pipeline code changes (see bitbucket-pipelines.yml / .github/workflows).
 #
 # The tree is bind-mounted read-write (like a CI checkout): some tests
 # create gitignored scratch dirs such as ``output/``.
@@ -27,6 +32,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 ALL_GATES=(lint typecheck contract unit)
+KNOWN_GATES=(lint typecheck contract unit integration io_matrix)
 UNIT_MARKERS="not contract and not integration and not real_connection and not real_cluster and not perf and not endurance"
 
 if [ "${1:-}" = "--docker" ]; then
@@ -43,7 +49,7 @@ def block(name: str) -> list[str]:
     m = re.search(r"^" + name + r"\s*=\s*\[(.*?)^\]", s, re.S | re.M)
     return re.findall(r'^\s*"([^"]+)"', m.group(1), re.M) if m else []
 reqs = block("dependencies")
-for extra in ("dev", "spark", "web", "mcp", "azure"):
+for extra in ("dev", "spark", "web", "mcp", "azure", "s3", "gcs", "postgres", "mssql"):
     reqs += block(extra)
 open(sys.argv[1], "w", encoding="utf-8").write("\n".join(reqs) + "\n")
 PY
@@ -125,8 +131,34 @@ for gate in "${gates[@]}"; do
                 --junitxml="$junit_dir/unit.xml" || rc=$?
             annotate_failures "$junit_dir/unit.xml"
             ;;
+        integration)
+            pytest -q -p no:cacheprovider -rfEs \
+                -m "integration and not io_matrix and not real_connection and not real_cluster" \
+                --junitxml="$junit_dir/integration.xml" tests/integration || rc=$?
+            annotate_failures "$junit_dir/integration.xml"
+            ;;
+        io_matrix)
+            if ! docker info >/dev/null 2>&1; then
+                echo "io_matrix needs a Docker daemon" >&2
+                rc=2
+            else
+                for image in $(python3 -m tests.integration.io_matrix.images); do
+                    docker image inspect "$image" >/dev/null 2>&1 \
+                        || docker pull -q "$image" >/dev/null || rc=$?
+                done
+                # Every leg must actually run: a skip (missing image / extra)
+                # would turn the matrix green without testing anything.
+                [ "$rc" -eq 0 ] && { pytest -q -p no:cacheprovider -rfEs -m io_matrix \
+                    --junitxml="$junit_dir/io_matrix.xml" tests/integration/io_matrix || rc=$?; }
+                annotate_failures "$junit_dir/io_matrix.xml"
+                if [ "$rc" -eq 0 ] && grep -q "<skipped" "$junit_dir/io_matrix.xml"; then
+                    echo "io_matrix: a leg was skipped — treating as failure" >&2
+                    rc=1
+                fi
+            fi
+            ;;
         *)
-            echo "unknown gate: $gate (expected one of: ${ALL_GATES[*]})" >&2
+            echo "unknown gate: $gate (expected one of: ${KNOWN_GATES[*]})" >&2
             rc=2
             ;;
     esac

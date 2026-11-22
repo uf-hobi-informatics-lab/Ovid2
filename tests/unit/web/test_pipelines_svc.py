@@ -769,3 +769,38 @@ def test_run_now_open_tables_sends_all_sentinel(
     monkeypatch.setattr(pipelines_svc.jobs_svc, "create_draft", _fake_draft)
     pipelines_svc.run_now("r_copy_open_all", actor="test", draft=True)
     assert captured["tables"] == ["all"]
+
+
+@pytest.mark.unit
+def test_input_cdm_falls_back_to_package_setting(
+    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An etl config reports the package's INPUT_CDM; a stored value wins; copy has none."""
+    _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
+    monkeypatch.setattr(
+        "ovid2.web.services.pipelines_svc.pipelines_meta_svc.package_input_cdm",
+        lambda p: "omop_5_3" if p == "ptr" else None,
+    )
+    pipelines_svc.write_pipeline("conv", _base_payload(cdm="pcornet_7_0"), create_only=True)
+    detail = pipelines_svc.get_pipeline("conv")
+    assert detail is not None and detail.input_cdm == "omop_5_3"
+    row = next(s for s in pipelines_svc.list_pipelines() if s.name == "conv")
+    assert row.input_cdm == "omop_5_3"
+
+    pipelines_svc.write_pipeline(
+        "conv2", _base_payload(cdm="pcornet_7_0", input_cdm="pcornet_7_0"), create_only=True
+    )
+    stored = pipelines_svc.get_pipeline("conv2")
+    assert stored is not None and stored.input_cdm == "pcornet_7_0"
+    # set_enabled round-trips the *stored* value only (never freezes the fallback).
+    pipelines_svc.set_enabled("conv", False)
+    assert '"input_cdm": null' in Path(detail.path).read_text(encoding="utf-8")
+
+
+@pytest.mark.unit
+def test_unknown_input_cdm_rejected(isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _prepare_pipeline_and_address(isolated_xdg, monkeypatch)
+    with pytest.raises(pipelines_svc.PipelineError, match="input CDM"):
+        pipelines_svc.write_pipeline(
+            "bad", _base_payload(cdm="pcornet_7_0", input_cdm="nope_cdm"), create_only=True
+        )

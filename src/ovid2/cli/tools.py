@@ -60,7 +60,9 @@ CONTROL_TOOLS: dict[str, str] = {
     "test-engine": "_test_engine_entry",
     "describe-table": "ovid2.tools.table_ops._describe_entry",
 }
-ROW_ACCESS_TOOLS: frozenset[str] = frozenset({"sample-table", "count-rows", "export-table"})
+ROW_ACCESS_TOOLS: frozenset[str] = frozenset(
+    {"sample-table", "count-rows", "export-table", "workflow-probe"}
+)
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -188,6 +190,28 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     probe_out.add_argument("address", help="Output address config name.")
     probe_out.set_defaults(_entry=_probe_output_entry, _tool="probe-output")
 
+    # ``ovid2 tools workflow-storage <action> --address A …`` — workflow
+    # rollback storage admin (snapshot / restore / drop whole tables, drop
+    # a backup). Spawned by the web worker as an ordinary job (scoped
+    # secrets of that one address); see adr-workflows.md.
+    wf_storage = tool_subparsers.add_parser(
+        "workflow-storage",
+        help="Snapshot / restore / drop tables at an address for workflow rollback.",
+        description=(
+            "Whole-table storage admin used by workflow rollback. "
+            "'snapshot' copies the tables into a hidden backup named by --key, "
+            "'restore' puts them back, 'drop' deletes them, 'drop-backup' "
+            "removes the backup. Prints one JSON object on the last line."
+        ),
+    )
+    wf_storage.add_argument(
+        "action", choices=("snapshot", "restore", "drop", "drop-backup"), help="Operation."
+    )
+    wf_storage.add_argument("--address", dest="address", required=True, help="Address name.")
+    wf_storage.add_argument("--key", default="", help="Backup key (the workflow run id).")
+    wf_storage.add_argument("--tables", nargs="*", default=[], help="Logical table names.")
+    wf_storage.set_defaults(_entry=_workflow_storage_entry, _tool="workflow-storage")
+
     # ``ovid2 tools test-llm <name>`` / ``ovid2 tools llm-chat`` — LLM
     # executor commands (L1). The web tier uses the faster
     # ``python -m ovid2.llm`` entry; these are the operator-facing twins.
@@ -251,6 +275,12 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 
     _table_ops.register(tool_subparsers)
 
+    # ``ovid2 tools workflow-probe`` — aggregate counts for workflow branch
+    # conditions (executor tier; spawned by the web worker as a job).
+    from ovid2.tools import workflow_probe as _workflow_probe
+
+    _workflow_probe.register(tool_subparsers)
+
     # ``ovid2 tools report-export`` — Report Studio renderer (executor
     # tier; reportlab / python-docx / xlsxwriter / vl-convert).
     from ovid2.tools import report_export as _report_export
@@ -262,6 +292,13 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     from ovid2.tools import pack as _pack
 
     _pack.register(tool_subparsers)
+
+    # ``ovid2 tools secret-status`` — value-free "is this secret filled
+    # in?" report, brokered by the web install wizard (no plaintext in
+    # the web process).
+    from ovid2.tools import secret_status as _secret_status
+
+    _secret_status.register(tool_subparsers)
 
     def _fallback(_args: argparse.Namespace) -> int:
         parser.print_help(sys.stderr)
@@ -599,6 +636,66 @@ def _probe_output_entry(args: argparse.Namespace) -> int:
         result["message"] = str(exc)
     except Exception as exc:
         result["message"] = f"probe failed: {exc}"
+
+    sys.stdout.write(_json.dumps(result) + "\n")
+    sys.stdout.flush()
+    return 0 if result.get("ok") else 1
+
+
+def _workflow_storage_entry(args: argparse.Namespace) -> int:
+    """Run one workflow-rollback storage operation and emit JSON.
+
+    JSON schema::
+
+        {"ok": bool, "action": str, "address": str, "type": str,
+         "tables": [str, ...], "message": str|None}
+
+    Exit code 0 on success, 1 on failure (the worker marks the job
+    failed and the workflow shows ``rollback_failed``).
+    """
+    import json as _json
+
+    from ovid2.drivers.registry import driver_from_address
+
+    result: dict[str, object] = {
+        "ok": False,
+        "action": args.action,
+        "address": args.address,
+        "type": "",
+        "tables": [],
+        "message": None,
+    }
+    tables = [str(t).split("=", 1)[0] for t in (args.tables or []) if str(t).strip()]
+    try:
+        driver = driver_from_address(args.address)
+        result["type"] = driver.type_name
+        if not type(driver).supports_workflow_rollback():
+            raise NotImplementedError(
+                f"storage type '{driver.type_name}' does not support workflow rollback"
+            )
+        if args.action in ("snapshot", "restore", "drop-backup") and not args.key:
+            raise ValueError("--key is required for this action")
+        if args.action == "snapshot":
+            done = driver.snapshot_tables(tables, args.key)
+        elif args.action == "restore":
+            done = driver.restore_tables(tables, args.key)
+        elif args.action == "drop":
+            done = driver.drop_tables(tables)
+        else:
+            driver.drop_backup(args.key)
+            done = []
+        result["tables"] = list(done)
+        result["ok"] = True
+        print(
+            f"[ovid2] workflow-storage {args.action} on {args.address}: "
+            f"{len(done)} table(s) {', '.join(done)}"
+        )
+    except (FileNotFoundError, PermissionError, ValueError, KeyError, NotImplementedError) as exc:
+        result["message"] = str(exc)
+        print(f"error: {exc}", file=sys.stderr)
+    except Exception as exc:
+        result["message"] = f"workflow-storage failed: {exc}"
+        print(f"error: workflow-storage failed: {exc}", file=sys.stderr)
 
     sys.stdout.write(_json.dumps(result) + "\n")
     sys.stdout.flush()

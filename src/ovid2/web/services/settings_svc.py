@@ -89,13 +89,15 @@ def get_settings() -> GlobalSettings:
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            logger.warning("settings.json unreadable at %s: %s", path, exc)
+            # Fail closed: the default GlobalSettings() leaves auth unset,
+            # which resolves to *on* outside OVID2_DEPLOYMENT=dev.
+            logger.error("settings.json unreadable at %s: %s (using defaults)", path, exc)
             value = GlobalSettings()
         else:
             try:
                 value = GlobalSettings.model_validate(payload)
             except Exception as exc:
-                logger.warning("settings.json failed validation: %s", exc)
+                logger.error("settings.json failed validation: %s (using defaults)", exc)
                 value = GlobalSettings()
 
     with _CACHE_LOCK:

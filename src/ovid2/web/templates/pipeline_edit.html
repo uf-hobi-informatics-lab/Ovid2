@@ -56,6 +56,16 @@
         {% endfor %}
       </select>
     </div>
+    <div class="form-row" id="input-cdm-row" data-show-kind-flag="uses_cdm">
+      <label for="input_cdm">Input CDM {{ help.tip("The data model this pipeline reads, e.g. omop_5_3 for an OMOP to PCORnet conversion. Auto uses the package's INPUT_CDM setting.") }}</label>
+      <select id="input_cdm" name="input_cdm">
+        {% set stored_in = pipeline_config.input_cdm if pipeline_config.input_cdm != package_input_cdm else None %}
+        <option value="">(auto — {{ package_input_cdm or "same as CDM" }})</option>
+        {% for c in cdms %}
+          <option value="{{ c }}" {% if stored_in == c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
 
     <div class="form-row" data-show-kind-flag="package_required|health_selection">
       <label for="pipeline">Pipeline package {{ help.tip("Bound to the pipeline at creation; not re-pointable here.") }}</label>

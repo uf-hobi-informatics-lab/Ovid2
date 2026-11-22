@@ -51,16 +51,17 @@ import json
 import logging
 import os
 import shutil
-import stat
 import subprocess
 import sys
 import threading
+import time
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from ovid2.config import paths as _paths
+from ovid2.config.secret_refs import SecretScope
 from ovid2.config.settings import DOCKER_IMAGE
 from ovid2.installer import doctor as _doctor
 from ovid2.installer import init as _init
@@ -74,6 +75,7 @@ from ovid2.web.models import (
     SecretWrite,
 )
 from ovid2.web.services import addresses_svc, pipelines_meta_svc, secrets_svc
+from ovid2.web.services._broker import BrokerError, run_tool_json
 from ovid2.web.settings import web_log_dir
 
 logger = logging.getLogger(__name__)
@@ -116,9 +118,6 @@ SNOWFLAKE_SECRET_NAME: str = "snowflake"  # noqa: S105 — file stem, not a pass
 
 #: Keys the Snowflake secret must contain to count as "filled in".
 SNOWFLAKE_REQUIRED_KEYS: tuple[str, ...] = ("account", "user", "password")
-
-#: The exact set of values considered placeholder / unfilled.
-_PLACEHOLDER_VALUES: frozenset[str] = frozenset({"", "REPLACE_ME", "CHANGEME"})
 
 BUILD_RUNNING: str = "running"
 BUILD_SUCCEEDED: str = "succeeded"
@@ -236,39 +235,70 @@ def run_bootstrap(*, actor: str = "web") -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def _read_snowflake_values() -> dict[str, Any] | None:
-    """Return the on-disk contents of ``secrets.d/snowflake.json``.
+#: Seconds a brokered ``secret-status`` result is reused (the wizard polls).
+_SECRET_STATUS_TTL_SECONDS: float = 30.0
 
-    Returns ``None`` when the file is missing. Values are never returned
-    outside :mod:`ovid2.web.services.install_svc`; this helper exists
-    only to detect placeholder templates and is not exposed on the API.
+#: ``name -> (monotonic_ts, file_fingerprint, result)``. The fingerprint
+#: is the candidate files' ``(path, mtime_ns, size)`` — a ``stat`` only,
+#: never a read — so an edited / created / deleted secret invalidates it.
+_secret_status_cache: dict[str, tuple[float, tuple[object, ...], dict[str, Any]]] = {}
+
+
+def _clear_secret_status_cache() -> None:
+    """Drop cached ``secret-status`` results (after a save, and in tests)."""
+    _secret_status_cache.clear()
+
+
+def _secret_fingerprint(name: str) -> tuple[object, ...]:
+    """Return a ``stat``-only fingerprint of the candidate secret files."""
+    out: list[object] = []
+    for directory in (_paths.secrets_dir(), Path("/etc/ovid2/secrets.d")):
+        candidate = directory / f"{name}.json"
+        try:
+            st = candidate.stat()
+        except OSError:
+            continue
+        out.append((str(candidate), st.st_mtime_ns, st.st_size, st.st_mode))
+    return tuple(out)
+
+
+def _snowflake_status() -> dict[str, Any] | None:
+    """Return the value-free status of ``secrets.d/snowflake.json``.
+
+    The plaintext is never read in the web process: the check is
+    brokered to ``ovid2 tools secret-status`` in a scoped executor
+    subprocess whose :class:`SecretScope` names only this secret (harness
+    / API / executor trust model). The result carries key names, file
+    mode and the list of unfilled required keys — no values.
+
+    Returns:
+        The status dict, or ``None`` when the broker failed.
     """
-    xdg_config = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    candidates = (
-        Path(xdg_config) / "ovid2" / "secrets.d" / f"{SNOWFLAKE_SECRET_NAME}.json",
-        Path("/etc/ovid2/secrets.d") / f"{SNOWFLAKE_SECRET_NAME}.json",
-    )
-    for candidate in candidates:
-        if candidate.is_file():
-            try:
-                with candidate.open(encoding="utf-8") as fh:
-                    data = json.load(fh)
-            except (OSError, json.JSONDecodeError):
-                return None
-            if isinstance(data, dict):
-                return data
-    return None
-
-
-def _is_snowflake_filled(values: dict[str, Any] | None) -> bool:
-    """Return ``True`` when the Snowflake secret has real (non-placeholder) values."""
-    if values is None:
-        return False
-    for key in SNOWFLAKE_REQUIRED_KEYS:
-        value = values.get(key)
-        if not isinstance(value, str) or value.strip() in _PLACEHOLDER_VALUES:
-            return False
-    return True
+    now = time.monotonic()
+    fingerprint = _secret_fingerprint(SNOWFLAKE_SECRET_NAME)
+    cached = _secret_status_cache.get(SNOWFLAKE_SECRET_NAME)
+    if (
+        cached is not None
+        and cached[1] == fingerprint
+        and now - cached[0] < _SECRET_STATUS_TTL_SECONDS
+    ):
+        return cached[2]
+    try:
+        result = run_tool_json(
+            [
+                "secret-status",
+                "--name",
+                SNOWFLAKE_SECRET_NAME,
+                "--require",
+                ",".join(SNOWFLAKE_REQUIRED_KEYS),
+            ],
+            scope=SecretScope(extra_refs=(SNOWFLAKE_SECRET_NAME,)),
+        )
+    except BrokerError as exc:
+        logger.warning("secret-status broker failed: %s", exc)
+        return None
+    _secret_status_cache[SNOWFLAKE_SECRET_NAME] = (now, fingerprint, result)
+    return result
 
 
 def save_snowflake_secret(payload: SecretWrite, *, actor: str = "web") -> dict[str, Any]:
@@ -298,6 +328,7 @@ def save_snowflake_secret(payload: SecretWrite, *, actor: str = "web") -> dict[s
         after_hash=_hash({"keys": sorted(payload.values.keys())}),
         detail_json=json.dumps({"path": result.path, "action": result.action}),
     )
+    _clear_secret_status_cache()
     return {"path": result.path, "action": result.action}
 
 
@@ -678,23 +709,23 @@ def _step_bootstrap() -> InstallStepStatus:
 
 
 def _step_snowflake() -> InstallStepStatus:
-    """Check whether ``secrets.d/snowflake.json`` has real values."""
-    values = _read_snowflake_values()
-    if values is None:
+    """Check whether ``secrets.d/snowflake.json`` has real values (brokered)."""
+    status = _snowflake_status()
+    if status is None:
+        return InstallStepStatus(
+            key="snowflake",
+            status="warning",
+            summary="Could not check the Snowflake secret (executor subprocess failed).",
+        )
+    if not status.get("exists"):
         return InstallStepStatus(
             key="snowflake",
             status="pending",
             summary="secrets.d/snowflake.json missing — run bootstrap first.",
         )
-    filled = _is_snowflake_filled(values)
-    keys = sorted(values.keys())
-    # Also verify the file has the correct permissions.
-    xdg_config = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    path = Path(xdg_config) / "ovid2" / "secrets.d" / f"{SNOWFLAKE_SECRET_NAME}.json"
-    mode_ok = True
-    if path.is_file():
-        mode_ok = stat.S_IMODE(path.stat().st_mode) == 0o600
-    if not filled:
+    keys = list(status.get("keys") or [])
+    mode_ok = bool(status.get("mode_0600"))
+    if not status.get("filled"):
         return InstallStepStatus(
             key="snowflake",
             status="pending",
@@ -706,7 +737,7 @@ def _step_snowflake() -> InstallStepStatus:
             key="snowflake",
             status="warning",
             summary="Snowflake secret is filled but file mode is not 0600.",
-            detail={"keys": keys, "path": str(path)},
+            detail={"keys": keys, "path": str(status.get("path") or "")},
         )
     return InstallStepStatus(
         key="snowflake",

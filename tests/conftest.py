@@ -81,3 +81,15 @@ def spark() -> Iterator[object]:
         yield session
     finally:
         session.stop()
+
+
+@pytest.fixture(autouse=True)
+def _default_dev_deployment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run tests as an ``OVID2_DEPLOYMENT=dev`` instance unless they opt out.
+
+    Production is the *code* default (auth on, secrets scope enforced) — the
+    suite historically assumed the open dev behaviour, so tests default to
+    ``dev``; tests of the production defaults ``monkeypatch.delenv`` /
+    ``setenv("OVID2_DEPLOYMENT", "production")`` explicitly.
+    """
+    monkeypatch.setenv("OVID2_DEPLOYMENT", "dev")

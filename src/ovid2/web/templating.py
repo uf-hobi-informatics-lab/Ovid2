@@ -239,9 +239,11 @@ def _auth_enabled() -> bool:
     try:
         from ovid2.web.services import settings_svc
 
-        return bool(settings_svc.get_settings().auth.enabled)
+        return bool(settings_svc.get_settings().auth.effective_enabled())
     except Exception:
-        return False
+        from ovid2.config.deployment import is_dev
+
+        return not is_dev()
 
 
 def user_appearance(request: object) -> dict[str, Any]:

@@ -148,3 +148,40 @@ def test_read_pipeline_file_truncates_large_files(in_memory_pipeline: str, tmp_p
         assert "truncated" in content
     finally:
         pipelines_meta_svc.MAX_PREVIEW_BYTES = 1_048_576
+
+
+@pytest.mark.unit
+def test_package_input_cdm_reads_setting(
+    in_memory_pipeline: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert pipelines_meta_svc.package_input_cdm(in_memory_pipeline) is None
+    assert pipelines_meta_svc.package_input_cdm("") is None
+    monkeypatch.setattr(
+        pipelines_meta_svc, "_load_pipeline_settings", lambda _p: {"INPUT_CDM": "omop_5_3"}
+    )
+    assert pipelines_meta_svc.package_input_cdm(in_memory_pipeline) == "omop_5_3"
+
+
+@pytest.mark.unit
+def test_omop_sourced_ports_declare_input_cdm() -> None:
+    """The OMOP-sourced legacy ports stamp INPUT_CDM (and only they do)."""
+    import ast
+
+    pipes = Path(__file__).resolve().parents[3] / "pipelines" / "ovid2_pipelines"
+    if not (pipes / "site").is_dir():
+        pytest.skip("site pipeline ports absent (public mirror)")
+
+    def setting(pkg: str) -> str | None:
+        tree = ast.parse((pipes / pkg / "pipeline_settings.py").read_text(encoding="utf-8"))
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == "INPUT_CDM" for t in node.targets
+            ):
+                return ast.literal_eval(node.value)  # type: ignore[no-any-return]
+        return None
+
+    for pkg in ("zeta", "acme", "kappa", "delta", "site", "nu", "xi", "omicron"):
+        assert setting(pkg) == "omop_5_3", pkg
+    for pkg in ("beta", "eta", "iota", "mu", "pi"):
+        assert setting(pkg) is None, pkg
+    assert setting("pcornet_to_omop") == "pcornet_7_0"

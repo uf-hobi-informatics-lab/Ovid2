@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}ovid-mark demo &mdash; Ovid2{% endblock %}
+{% block content %}
+{% import "_help.html" as help %}
+<section class="page ovm-demo" data-ovm-demo>
+  <div class="page-header">
+    <h1>ovid-mark {{ help.tip("Dev-only preview of the animated Ovid2 logo web component (static/ovid_mark.js). Pick a state, or let the autoplay loop cycle through every state. The same element drives the topbar mark and the favicon. Served only when OVID2_DEPLOYMENT=dev.") }}</h1>
+    <div class="page-actions">
+      <label class="ovm-demo-auto"><input type="checkbox" data-ovm-autoplay> Autoplay</label>
+      <button class="button small" type="button" data-ovm-flick>flick()</button>
+    </div>
+  </div>
+
+  <section class="card">
+    <h2>State</h2>
+    <div class="ovm-demo-states" role="group" aria-label="Mark state">
+      {% for s in states %}
+        <button class="button small{% if s == 'idle' %} primary{% endif %}" type="button"
+                data-ovm-state="{{ s }}" aria-pressed="{{ 'true' if s == 'idle' else 'false' }}">{{ s }}</button>
+      {% endfor %}
+    </div>
+    <p class="mono small" data-ovm-log>state: idle</p>
+  </section>
+
+  <section class="card">
+    <h2>Sizes</h2>
+    <div class="ovm-demo-sizes">
+      {% for px in sizes %}
+        <figure class="ovm-demo-size">
+          <ovid-mark data-ovm-sample size="{{ px }}" state="idle"{% if not loop.first %} silent{% endif %}></ovid-mark>
+          <figcaption class="mono small">{{ px }} px</figcaption>
+        </figure>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="card ovm-demo-dark">
+    <h2>On a dark surface</h2>
+    <div class="ovm-demo-sizes">
+      <ovid-mark data-ovm-sample size="96" state="idle" silent></ovid-mark>
+      <ovid-mark data-ovm-sample size="48" state="idle" silent></ovid-mark>
+    </div>
+  </section>
+</section>
+<script src="/static/ovid_mark_demo.js" defer></script>
+{% endblock %}

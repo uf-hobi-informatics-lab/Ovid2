@@ -151,10 +151,13 @@ def test_pipeline_private_transform(web_client, clone: str) -> None:  # type: ig
     assert r.status_code == 200, r.text
     listed = web_client.get(f"/api/v1/pipeline-packages/{clone}/transforms").json()
     assert [d["name"] for d in listed] == ["local_fix"]
-    assert (
-        web_client.delete(f"/api/v1/pipeline-packages/{clone}/transforms/local_fix").status_code
-        == 200
-    )
+    url = f"/api/v1/pipeline-packages/{clone}/transforms/local_fix"
+    r = web_client.delete(url)
+    assert r.status_code == 202
+    assert r.json()["detail"]["action"] == "pipeline_transform.delete"
+    approval_id = r.json()["detail"]["approval_id"]
+    web_client.post(f"/api/v1/approvals/{approval_id}/approve", json={"decided_by": "test"})
+    assert web_client.delete(url).status_code == 200
 
 
 def test_fixers_yaml_editing(web_client, clone: str) -> None:  # type: ignore[no-untyped-def]

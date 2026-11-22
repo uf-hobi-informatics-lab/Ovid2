@@ -17,8 +17,8 @@
  * State is stored per user ON THE SERVER (``GET``/``PUT
  * /api/v1/me/appearance``) so the look follows the user to any browser
  * or laptop; nothing is kept in the browser. The document is:
- *   theme         the selected theme slug (null = clinical / matrix by
- *                 the OS colour-scheme preference)
+ *   theme         the selected theme slug (null = the shipped default,
+ *                 DEFAULT_THEME = "data-factory")
  *   colors        quick colour overrides, any subset of
  *                 { accent, bg, surface, fg }
  *   appearance    a flat map of per-component CSS-var overrides
@@ -40,11 +40,17 @@
   var STORAGE_KEY = "ovid2Theme";
   var CUSTOM_KEY = "ovid2ThemeCustom";
   var CUSTOM_KEYS = ["accent", "bg", "surface", "fg"];
+  // Theme used when the user has not chosen one (mirrors the pre-paint
+  // fallback in templates/_appearance_prepaint.html).
+  var DEFAULT_THEME = "data-factory";
 
   // slug -> full theme metadata. swatch colours mirror the palette
   // token values authored in ovid2.css so the switcher preview matches
-  // what a click actually applies. The seven shipped themes.
+  // what a click actually applies. The eight shipped themes; the
+  // first (Data Factory) is the default.
   var THEMES = [
+    { slug: "data-factory", label: "Data Factory", mode: "light",
+      swatch: { bg: "#eceff3", surface: "#ffffff", accent: "#1a5ad7", fg: "#11161d" } },
     { slug: "clinical", label: "Clinical", mode: "light",
       swatch: { bg: "#f4f7fa", surface: "#ffffff", accent: "#08759a", fg: "#0e1a24" } },
     { slug: "matrix", label: "Matrix", mode: "dark",
@@ -90,7 +96,7 @@
     var attr = document.documentElement.getAttribute("data-theme");
     if (isKnownSlug(attr)) { return attr; }
     if (LEGACY_ALIASES[attr]) { return LEGACY_ALIASES[attr]; }
-    return "clinical";
+    return DEFAULT_THEME;
   }
 
   /* ---- Colour maths (WCAG legibility guardrail) ------------------ */

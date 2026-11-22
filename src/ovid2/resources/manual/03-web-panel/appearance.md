@@ -9,11 +9,21 @@ rail.
 
 ## Themes
 
-The panel ships several themes: **light** and **dark** basics, plus
-character themes with their own fonts and effects (*clinical*,
-*financial*, *matrix*, *spaceship*, *tatooine*, *lego*, *super mario
-world*). The day/night button in the top bar switches between light and
-dark.
+The panel ships eight themes, each with its own colours, fonts and small
+effects:
+
+| Theme | Mode | Feel |
+| --- | --- | --- |
+| *Data Factory* (default) | light | industrial line control: steel grey, a dark machine-side menu, drive-blue accent, condensed telemetry type |
+| *Clinical* | light | calm hospital teal, IBM Plex |
+| *LEGO* | light | toy bricks |
+| *Super Mario World* | light | 16-bit sky and bricks |
+| *Matrix* | dark | phosphor-green digital rain |
+| *Financial* | dark | amber trading terminal, dense tables |
+| *Spaceship* | dark | sci-fi console, teal glow |
+| *Star Wars / Tatooine* | dark | desert dusk, cut-corner panels |
+
+Until you pick a theme, the panel uses **Data Factory**.
 
 ## Customise
 

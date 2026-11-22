@@ -61,10 +61,17 @@ def test_branding_favicon_png_served(web_client: object) -> None:
 
 @pytest.mark.unit
 def test_branding_favicon_svg_served(web_client: object) -> None:
-    """``GET /branding/favicon.svg`` serves the SVG-wrapped mark."""
+    """``GET /branding/favicon.svg`` serves the vector sprout mark.
+
+    It is real vector geometry (the ``<ovid-mark>`` paths), not a PNG
+    wrapped in an SVG.
+    """
     response = web_client.get("/branding/favicon.svg")  # type: ignore[attr-defined]
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/svg+xml"
+    assert b"<image" not in response.content
+    assert b'viewBox="0 2 200 160"' in response.content
+    assert b"M100 131.8 C76 80 40 60 10.9 73.9" in response.content
 
 
 @pytest.mark.unit
@@ -108,9 +115,10 @@ def test_dashboard_has_drawer_and_theme_toggle(web_client: object) -> None:
     # SVG favicon link present (with PNG fallback for older browsers).
     assert '<link rel="icon"' in body
     assert "/branding/favicon.svg" in body
-    # Topbar wordmark: the "Ovid2" text is the home link, styled with the
-    # theme display face. The planet/orbit glyph was removed permanently.
+    # Topbar: the animated <ovid-mark> + "Ovid2" wordmark is the home
+    # link. The planet/orbit glyph was removed permanently.
     assert 'class="brand-mark-link" href="/"' in body
+    assert "<ovid-mark" in body
     assert '<span class="brand-text">Ovid<span class="brand-accent">2</span>' in body
     assert 'class="brand-mark"' not in body
     assert 'class="brand-logo"' not in body
@@ -173,8 +181,9 @@ def test_nav_js_served(web_client: object) -> None:
     response = web_client.get("/static/nav.js")  # type: ignore[attr-defined]
     assert response.status_code == 200
     body = response.text
-    assert "drawer-toggle" in body
+    assert "data-drawer-toggle" in body
     assert "drawer-open" in body
+    assert "drawer-rail" in body
 
 
 @pytest.mark.unit

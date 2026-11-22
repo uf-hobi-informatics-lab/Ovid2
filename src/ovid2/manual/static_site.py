@@ -73,7 +73,7 @@ def _copy_static(out: Path) -> None:
         src = _WEB_STATIC / "fonts" / font
         if src.is_file():
             shutil.copy2(src, static / "fonts" / font)
-    favicon = _PKG / "resources" / "branding" / "ovid_logo.svg"
+    favicon = _PKG / "resources" / "branding" / "ovid_sprout.svg"
     if favicon.is_file():
         shutil.copy2(favicon, static / "favicon.svg")
 

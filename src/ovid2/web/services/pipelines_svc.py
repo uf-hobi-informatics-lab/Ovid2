@@ -362,6 +362,19 @@ def _read_raw(path: Path) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _resolve_input_cdm(doc: dict[str, Any], spec: Any) -> str | None:
+    """Source data model of a config: stored ``input_cdm``, else the package's.
+
+    Only CDM-consuming kinds carry one (copy / dq_checks never do).
+    """
+    if spec is not None and not spec.uses_cdm:
+        return None
+    stored = str(doc.get("input_cdm") or "").strip()
+    if stored:
+        return stored
+    return pipelines_meta_svc.package_input_cdm(str(doc.get("pipeline") or ""))
+
+
 def _row_to_detail(name: str, path: Path, doc: dict[str, Any]) -> PipelineConfigDetail:
     """Convert an on-disk document + state row into a :class:`PipelineConfigDetail`."""
     state = _read_state(name) or {}
@@ -401,6 +414,7 @@ def _row_to_detail(name: str, path: Path, doc: dict[str, Any]) -> PipelineConfig
         path=str(path),
         kind=kind,
         cdm=(str(cdm) if cdm else None),
+        input_cdm=_resolve_input_cdm(doc, spec),
         pipeline=str(doc.get("pipeline", "")),
         input_address=str(doc.get("input_address", "")),
         output_address=str(doc.get("output_address", "")),
@@ -459,6 +473,7 @@ def list_pipelines() -> list[PipelineConfigSummary]:
                 name=name,
                 kind=kind,
                 cdm=(str(doc.get("cdm")) if doc.get("cdm") else None),
+                input_cdm=_resolve_input_cdm(doc, spec),
                 pipeline=str(doc.get("pipeline", "")),
                 input_address=str(doc.get("input_address", "")),
                 output_address=str(doc.get("output_address", "")),
@@ -604,6 +619,7 @@ def _validate_kind(payload: PipelineWrite) -> None:
     # copy / move) and skip the CDM-registration check entirely.
     if not spec.uses_cdm:
         payload.cdm = None
+        payload.input_cdm = None
 
     # Copy / move accept none of the etl-only fields — scrub them so the
     # worker's argv builder cannot forward them.
@@ -631,6 +647,13 @@ def _validate_kind(payload: PipelineWrite) -> None:
     # CDM-registration check (only for kinds that consume a CDM).
     if not spec.uses_cdm:
         return
+    if payload.input_cdm:
+        from ovid2.cdm import registered_cdms as _registered
+
+        if payload.input_cdm not in set(_registered()):
+            raise PipelineError(
+                f"Unknown input CDM '{payload.input_cdm}'. Registered: {sorted(_registered())}."
+            )
     if not payload.cdm:
         # Deferred resolution: the pipeline picks its default CDM at
         # runtime. Backwards-compatible with pre-C1 pipelines.
@@ -698,6 +721,7 @@ def write_pipeline(
     doc: dict[str, Any] = {
         "kind": normalize_kind(payload.kind),
         "cdm": payload.cdm,
+        "input_cdm": payload.input_cdm,
         "pipeline": payload.pipeline,
         "input_address": payload.input_address,
         "output_address": payload.output_address,
@@ -792,9 +816,11 @@ def set_enabled(name: str, enabled: bool, *, actor: str = "web") -> PipelineConf
     detail = get_pipeline(name)
     if detail is None:
         raise PipelineError(f"Pipeline '{name}' not found.")
+    stored_input_cdm = str(_read_raw(Path(detail.path)).get("input_cdm") or "") or None
     payload = PipelineWrite(
         kind=detail.kind,
         cdm=detail.cdm,
+        input_cdm=stored_input_cdm,
         pipeline=detail.pipeline,
         input_address=detail.input_address,
         output_address=detail.output_address,

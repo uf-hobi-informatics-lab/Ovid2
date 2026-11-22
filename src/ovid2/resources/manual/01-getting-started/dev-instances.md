@@ -51,7 +51,7 @@ is reclaimed automatically.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `OVID2_DEV_HOST` | the host's LAN address | bind address (`127.0.0.1` for SSH-tunnel only) |
+| `OVID2_DEV_HOST` | `127.0.0.1` | bind address (a LAN address needs sign-in enabled for the instance) |
 | `OVID2_DEV_PORT_RANGE` | `8100-8199` | inclusive port range |
 | `OVID2_DEV_HOME` | `~/.local/share/ovid2-dev` | where instance trees live |
 | `OVID2_DEV_REGISTRY` | `/var/tmp/ovid2-dev` | shared lease registry |
@@ -59,18 +59,19 @@ is reclaimed automatically.
 
 ## Security note
 
-Auth is **off** on a dev instance, and by default it binds to the host's
-LAN address so teammates can reach it. Anyone on the network can then use
-the panel, and with it **your** connections. `ovid2 dev up` prints a
-reminder whenever it binds to anything other than `127.*`.
+Dev instances run with `OVID2_DEPLOYMENT=dev`, so sign-in is **off** and
+secret scopes are only warned about. They bind to **loopback** by default;
+reach one from another machine with an SSH tunnel.
 
-Before adding credentials you care about, do one of these:
-
-- bind to loopback and use an SSH tunnel:
-  `ovid2 dev up --host 127.0.0.1` (or set `OVID2_DEV_HOST=127.0.0.1`);
-- turn on auth for the instance: `eval "$(ovid2 dev env)"; ovid2 web
-  reset-break-glass`, then set `auth.enabled` in its `settings.json`. See
-  [Authentication & roles](../08-operations/auth.md).
+To share an instance on the network, turn on sign-in for it first
+(`eval "$(ovid2 dev env)"; ovid2 web reset-break-glass`, then set
+`auth.enabled` to `true` in its `settings.json`; see
+[Authentication & roles](../08-operations/auth.md)) and then
+`ovid2 dev up --host <lan-ip>`. With sign-in off, a non-loopback host is
+refused: an open panel on the network gives every visitor full admin,
+including deleting pipeline packages and overwriting secrets.
+`--insecure-allow-network-without-auth` overrides this; don't use it on a
+shared network.
 
 While auth is off, everyone using the instance also shares one
 [assistant history](../07-assistant/sessions.md#who-can-see-my-sessions).

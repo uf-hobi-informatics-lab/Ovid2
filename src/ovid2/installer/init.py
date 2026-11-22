@@ -177,12 +177,80 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         action="store_true",
         help="Prompt for Snowflake credentials on stdin instead of writing a template.",
     )
+    parser.add_argument(
+        "--no-breakglass",
+        action="store_true",
+        help="Do not set a break-glass admin password (sign-in will have no admin yet).",
+    )
     parser.set_defaults(_command="init", _entry=_entry)
 
 
+#: Env var naming a file whose first line is the break-glass password
+#: (unattended installs; the file should be 0600 and deleted afterwards).
+BREAKGLASS_PASSWORD_FILE_ENV: str = "OVID2_BREAKGLASS_PASSWORD_FILE"  # noqa: S105 — env var name
+
+_BREAKGLASS_HINT: str = (
+    "no admin can sign in yet — run `ovid2 web reset-break-glass` (or configure "
+    "OIDC and `ovid2 web grant-admin <email>`) before opening the panel."
+)
+
+
+def ensure_breakglass(*, interactive: bool) -> list[str]:
+    """Make sure a first admin can sign in once auth is on (the default).
+
+    Outside ``OVID2_DEPLOYMENT=dev`` the panel starts with sign-in on, so
+    a fresh install with no admin would lock the browser out. This sets
+    the break-glass admin password when none is configured — from
+    :data:`BREAKGLASS_PASSWORD_FILE_ENV` (unattended) or a ``getpass``
+    prompt when stdin is a terminal. Otherwise it only logs the CLI hint.
+
+    Args:
+        interactive: Whether prompting on stdin is allowed.
+
+    Returns:
+        Human-readable log lines.
+    """
+    import sys
+
+    from ovid2.config.deployment import is_dev
+
+    if is_dev():
+        return []
+    try:
+        from ovid2.web.auth import breakglass
+    except ImportError:  # the [web] extra is not installed
+        return []
+    if breakglass.is_configured():
+        return ["kept existing break-glass admin password"]
+
+    password: str | None = None
+    source = os.environ.get(BREAKGLASS_PASSWORD_FILE_ENV, "").strip()
+    if source:
+        try:
+            password = Path(source).read_text(encoding="utf-8").splitlines()[0].strip()
+        except (OSError, IndexError):
+            return [f"could not read {BREAKGLASS_PASSWORD_FILE_ENV}={source}; " + _BREAKGLASS_HINT]
+    elif interactive and sys.stdin.isatty():
+        first = getpass.getpass("Break-glass admin password (min 12 chars, blank to skip): ")
+        if first:
+            if getpass.getpass("Confirm: ") != first:
+                return ["passwords did not match; " + _BREAKGLASS_HINT]
+            password = first
+    if not password:
+        return [_BREAKGLASS_HINT]
+    if len(password) < 12:
+        return ["break-glass password shorter than 12 characters; " + _BREAKGLASS_HINT]
+    breakglass.set_password(password, actor="ovid2 init")
+    return ["set break-glass admin password (sign in at /login)"]
+
+
 def _entry(args: argparse.Namespace) -> int:
-    """Run bootstrap and print the log."""
+    """Run bootstrap (+ break-glass setup) and print the log."""
+    import sys
+
     log = bootstrap(interactive=args.interactive)
+    if not args.no_breakglass:
+        log += ensure_breakglass(interactive=sys.stdin.isatty())
     for line in log:
         print(line)
     return 0

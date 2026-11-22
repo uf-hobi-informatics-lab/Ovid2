@@ -141,6 +141,86 @@ _WEB_PIPELINE_RUNS_INDEXES = [
 ]
 
 
+# Workflows (adr-workflows.md): runtime state per workflow definition, one
+# row per workflow run (with its frozen definition) and one row per step of
+# that run. Workflow *definitions* live as JSON under
+# ``$XDG_CONFIG_HOME/ovid2/workflows/``.
+_WEB_WORKFLOWS_DDL: tuple[str, ...] = (
+    """
+    CREATE TABLE IF NOT EXISTS web_workflows_state (
+        name           TEXT PRIMARY KEY,
+        enabled        INTEGER NOT NULL DEFAULT 1,
+        last_fired_at  TEXT,
+        next_fire_at   TEXT,
+        last_run_id    TEXT
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS web_workflow_runs (
+        run_id           TEXT PRIMARY KEY,
+        workflow         TEXT NOT NULL,
+        trigger          TEXT NOT NULL,
+        batch_id         TEXT,
+        root_input       TEXT,
+        status           TEXT NOT NULL,
+        cancel_requested INTEGER NOT NULL DEFAULT 0,
+        created_at       TEXT NOT NULL,
+        created_by       TEXT NOT NULL DEFAULT 'web',
+        started_at       TEXT,
+        ended_at         TEXT,
+        error            TEXT,
+        definition_json  TEXT NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_web_workflow_runs_wf ON web_workflow_runs(workflow, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS ix_web_workflow_runs_status ON web_workflow_runs(status)",
+    """
+    CREATE TABLE IF NOT EXISTS web_workflow_steps (
+        run_id                    TEXT NOT NULL,
+        step_id                   TEXT NOT NULL,
+        pipeline                  TEXT NOT NULL,
+        status                    TEXT NOT NULL,
+        job_id                    TEXT,
+        input_address             TEXT,
+        output_address            TEXT,
+        pre_existing_tables_json  TEXT,
+        backup_address            TEXT,
+        snapshot_job_id           TEXT,
+        rollback_job_id           TEXT,
+        rollback_action           TEXT,
+        rollback_plan_json        TEXT,
+        error                     TEXT,
+        started_at                TEXT,
+        ended_at                  TEXT,
+        PRIMARY KEY (run_id, step_id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_web_workflow_steps_job ON web_workflow_steps(job_id)",
+)
+
+#: Columns added to ``web_jobs`` after its first release. ``ALTER TABLE …
+#: ADD COLUMN`` is idempotent here: a duplicate-column error is ignored.
+_WEB_JOBS_ADDED_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("workflow_run_id", "TEXT"),
+    ("workflow_step_id", "TEXT"),
+    # Last-line JSON result of a job-only tool whose answer the web tier
+    # needs (``workflow_probe``: numbers only, never row values).
+    ("result_json", "TEXT"),
+)
+
+#: Columns added to ``web_workflow_steps`` for branching (adr-workflows.md):
+#: the settled outcome, why a step was skipped / how a failure was handled,
+#: the facts its outgoing conditions read, the probe job, and the decisions
+#: on its outgoing links.
+_WEB_WORKFLOW_STEPS_ADDED_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("outcome", "TEXT"),
+    ("reason", "TEXT"),
+    ("facts_json", "TEXT"),
+    ("probe_job_id", "TEXT"),
+    ("decisions_json", "TEXT"),
+)
+
+
 _WEB_USERS_DDL = """
 CREATE TABLE IF NOT EXISTS web_users (
     user_id         TEXT PRIMARY KEY,
@@ -348,6 +428,20 @@ def ensure_schema() -> None:
         conn.execute(_WEB_JOBS_DDL)
         for stmt in _WEB_JOBS_INDEXES:
             conn.execute(stmt)
+        existing_cols = {str(r[1]) for r in conn.execute("PRAGMA table_info(web_jobs)")}
+        for col, col_type in _WEB_JOBS_ADDED_COLUMNS:
+            if col not in existing_cols:
+                with contextlib.suppress(sqlite3.OperationalError):
+                    conn.execute("ALTER TABLE web_jobs ADD COLUMN " + col + " " + col_type)
+        for stmt in _WEB_WORKFLOWS_DDL:
+            conn.execute(stmt)
+        step_cols = {str(r[1]) for r in conn.execute("PRAGMA table_info(web_workflow_steps)")}
+        for col, col_type in _WEB_WORKFLOW_STEPS_ADDED_COLUMNS:
+            if col not in step_cols:
+                with contextlib.suppress(sqlite3.OperationalError):
+                    conn.execute(
+                        "ALTER TABLE web_workflow_steps ADD COLUMN " + col + " " + col_type
+                    )
         conn.execute(_WEB_AUDIT_DDL)
         for stmt in _WEB_AUDIT_INDEXES:
             conn.execute(stmt)

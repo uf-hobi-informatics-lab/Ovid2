@@ -226,7 +226,7 @@
   }
 
   function markActiveTheme(container) {
-    var slug = lib.currentTheme ? lib.currentTheme() : "clinical";
+    var slug = lib.currentTheme ? lib.currentTheme() : "data-factory";
     var rows = container.querySelectorAll("[data-theme-slug]");
     for (var i = 0; i < rows.length; i++) {
       rows[i].classList.toggle("active",
@@ -475,7 +475,7 @@
       var arr = readSaved();
       var entry = {
         name: nm,
-        theme: lib.currentTheme ? lib.currentTheme() : "clinical",
+        theme: lib.currentTheme ? lib.currentTheme() : "data-factory",
         overrides: foldedOverrides()
       };
       // Overwrite a same-named theme rather than duplicating.

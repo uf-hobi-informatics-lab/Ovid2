@@ -18,7 +18,21 @@ Move). Each row shows:
 - whether it is enabled;
 - its actions: **run**, **edit**, **delete**.
 
-You can filter by name, CDM, type, trigger and status.
+When a config reads one data model and writes another, its card shows
+both, for example `omop_5_3 → pcornet_7_0`.
+
+You can filter by name, CDM, input CDM (*Any input*), type, trigger and
+status.
+
+### Input CDM
+
+Every config has an **input CDM** (`input_cdm`): the data model it *reads*,
+as opposed to the CDM it writes. If you don't set it, the config uses the
+package's `INPUT_CDM` setting. If the package has none, the input CDM is the
+same as the CDM. To change it, open the config's **edit** page and pick from
+the *Input CDM* select. Choose *(auto)* to go back to the package's value.
+The assistant uses this field to find a conversion pipeline, for example
+OMOP → PCORnet.
 
 ### Create a pipeline config
 

@@ -19,6 +19,7 @@
       <a href="/addresses/{{ name }}/edit" class="button primary small">Edit</a>
       {% if address.connection %}
         <form action="/connections/{{ address.connection }}/test" method="post" style="display: inline;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="button small"
                   title="Probe the '{{ address.connection }}' connection this address views.">
             Test underlying connection
@@ -27,6 +28,7 @@
       {% endif %}
       <form action="/addresses/{{ name }}/delete" method="post" style="display: inline;"
             onsubmit="return confirm('Delete address {{ name }}?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="button danger small">Delete</button>
       </form>
     </p>

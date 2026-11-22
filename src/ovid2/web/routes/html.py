@@ -17,13 +17,6 @@ from ovid2.config import addresses as _addresses
 from ovid2.web.auth.csrf import require_csrf
 from ovid2.web.auth.deps import require_capability
 from ovid2.web.auth.roles import Capability, Role
-
-# TODO(csrf): wire require_csrf + {{ csrf_token() }} into the remaining
-# mutation forms (addresses, connections, engines, submit, install).
-# Pipelines, pipeline packages, formatters and mappers are wired
-# (pipeline-builder change). Wave-3 todo 15 wires only the
-# settings + secrets forms as the proof-of-concept to keep parallel-edit
-# risk low; the rest are a follow-up pass.
 from ovid2.web.models import (
     AddressWrite,
     ConnectionWrite,
@@ -330,7 +323,12 @@ def _parse_kv_form(form_body: dict[str, str]) -> dict[str, str]:
     return pairs
 
 
-@router.post("/addresses", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/addresses",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG)), Depends(require_csrf)],
+)
 async def address_create_post(request: Request) -> RedirectResponse:
     """Handle the step-2 "new address" form submission.
 
@@ -419,6 +417,7 @@ def address_edit_page(
     "/addresses/{name}/delete",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG)), Depends(require_csrf)],
 )
 def address_delete_post(request: Request, name: str) -> RedirectResponse:
     """Delete an address config and return to the index."""
@@ -448,6 +447,7 @@ def address_detail_page(request: Request, name: str) -> HTMLResponse:
     "/addresses/{name}",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG)), Depends(require_csrf)],
 )
 async def address_update_post(request: Request, name: str) -> RedirectResponse:
     """Handle the address edit form submission (PUT semantics).
@@ -518,7 +518,12 @@ def secret_new_page(
     )
 
 
-@router.post("/secrets", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/secrets",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.MANAGE_SECRETS))],
+)
 async def secret_create_post(
     request: Request, _csrf: None = Depends(require_csrf)
 ) -> RedirectResponse:
@@ -564,6 +569,7 @@ def secret_edit_page(
     "/secrets/{name}/delete",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.MANAGE_SECRETS))],
 )
 def secret_delete_post(
     request: Request, name: str, _csrf: None = Depends(require_csrf)
@@ -580,6 +586,7 @@ def secret_delete_post(
     "/secrets/{name}",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.MANAGE_SECRETS))],
 )
 async def secret_update_post(
     request: Request, name: str, _csrf: None = Depends(require_csrf)
@@ -1756,6 +1763,7 @@ def formatter_delete_post(request: Request, name: str, table: str) -> RedirectRe
     "/pipeline-packages/{name}/formatters/validate",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG)), Depends(require_csrf)],
 )
 def formatter_validate_partial(request: Request, name: str) -> HTMLResponse:
     """HTMX target on the pipeline detail page — inline validation report."""
@@ -1923,6 +1931,7 @@ def mapper_delete_post(request: Request, name: str, table: str) -> RedirectRespo
     "/pipeline-packages/{name}/mappers/validate",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG)), Depends(require_csrf)],
 )
 def mapper_validate_partial(request: Request, name: str) -> HTMLResponse:
     """HTMX target on the pipeline detail page — inline mapper validation."""
@@ -2148,7 +2157,13 @@ def submit_form(
     )
 
 
-@router.post("/submit", response_class=HTMLResponse, response_model=None, include_in_schema=False)
+@router.post(
+    "/submit",
+    response_class=HTMLResponse,
+    response_model=None,
+    include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.SUBMIT_JOBS)), Depends(require_csrf)],
+)
 async def submit_form_post(
     request: Request,
     pipeline: str = Form(...),
@@ -2373,6 +2388,7 @@ async def submit_form_post(
     "/jobs/{job_id}/cancel",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.SUBMIT_JOBS)), Depends(require_csrf)],
 )
 def job_cancel_html(request: Request, job_id: str) -> RedirectResponse:
     """Cancel a job and redirect back to its detail page."""
@@ -2390,6 +2406,7 @@ def job_cancel_html(request: Request, job_id: str) -> RedirectResponse:
     response_class=HTMLResponse,
     response_model=None,
     include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.SUBMIT_JOBS)), Depends(require_csrf)],
 )
 def job_launch_html(
     request: Request,
@@ -2424,6 +2441,7 @@ def job_launch_html(
     "/jobs/{job_id}/discard",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.SUBMIT_JOBS)), Depends(require_csrf)],
 )
 def job_discard_html(request: Request, job_id: str) -> RedirectResponse:
     """Discard a draft job and return to the Jobs list."""
@@ -2439,6 +2457,7 @@ def job_discard_html(request: Request, job_id: str) -> RedirectResponse:
     response_class=HTMLResponse,
     response_model=None,
     include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.SUBMIT_JOBS)), Depends(require_csrf)],
 )
 def job_rerun_html(
     request: Request,
@@ -2525,7 +2544,12 @@ def install_page(
     )
 
 
-@router.post("/install/bootstrap", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/install/bootstrap",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.ADMIN_ALL)), Depends(require_csrf)],
+)
 def install_bootstrap_html(request: Request) -> RedirectResponse:
     """Run the XDG bootstrap and redirect back to the wizard."""
     try:
@@ -2535,7 +2559,12 @@ def install_bootstrap_html(request: Request) -> RedirectResponse:
     return RedirectResponse(url="/install?flash=XDG+tree+ready", status_code=303)
 
 
-@router.post("/install/snowflake", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/install/snowflake",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.ADMIN_ALL)), Depends(require_csrf)],
+)
 async def install_snowflake_html(request: Request) -> RedirectResponse:
     """Persist the Snowflake secret entered in the wizard form."""
     form = dict(await request.form())
@@ -2561,6 +2590,7 @@ async def install_snowflake_html(request: Request) -> RedirectResponse:
     "/install/image/build",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.ADMIN_ALL)), Depends(require_csrf)],
 )
 async def install_image_build_html(request: Request) -> RedirectResponse:
     """Kick off a background docker build from the wizard."""
@@ -2600,6 +2630,7 @@ def install_image_build_page(request: Request, build_id: str) -> HTMLResponse:
     "/install/pipeline/verify",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.ADMIN_ALL)), Depends(require_csrf)],
 )
 async def install_pipeline_verify_html(request: Request) -> RedirectResponse:
     """Verify the selected pipeline and flash the outcome."""
@@ -2683,7 +2714,12 @@ def connection_new_page(
     )
 
 
-@router.post("/connections", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/connections",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG)), Depends(require_csrf)],
+)
 async def connection_create_post(request: Request) -> RedirectResponse:
     """Handle the "new connection" form submission."""
     form = dict(await request.form())
@@ -2737,6 +2773,7 @@ def connection_edit_page(
     "/connections/{name}/delete",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG)), Depends(require_csrf)],
 )
 def connection_delete_post(request: Request, name: str) -> RedirectResponse:
     """Delete a connection and return to the index."""
@@ -2751,6 +2788,7 @@ def connection_delete_post(request: Request, name: str) -> RedirectResponse:
     "/connections/{name}/test",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG)), Depends(require_csrf)],
 )
 def connection_test_post(request: Request, name: str) -> HTMLResponse:
     """Probe a connection and re-render the detail page with the report."""
@@ -2789,6 +2827,7 @@ def connection_detail_page(request: Request, name: str) -> HTMLResponse:
     "/connections/{name}",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG)), Depends(require_csrf)],
 )
 async def connection_update_post(request: Request, name: str) -> RedirectResponse:
     """Handle the edit-form submission for a connection."""
@@ -2877,7 +2916,12 @@ def engine_new_page(
     )
 
 
-@router.post("/engines", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/engines",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG)), Depends(require_csrf)],
+)
 async def engine_create_post(request: Request) -> RedirectResponse:
     """Handle the "new engine" form submission."""
     form = dict(await request.form())
@@ -2929,6 +2973,7 @@ def engine_edit_page(
     "/engines/{name}/delete",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG)), Depends(require_csrf)],
 )
 def engine_delete_post(request: Request, name: str) -> RedirectResponse:
     """Delete an engine and return to the index."""
@@ -2943,6 +2988,7 @@ def engine_delete_post(request: Request, name: str) -> RedirectResponse:
     "/engines/{name}/test",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG)), Depends(require_csrf)],
 )
 def engine_test_post(request: Request, name: str) -> HTMLResponse:
     """Probe an engine and re-render the detail page with the report."""
@@ -2981,6 +3027,7 @@ def engine_detail_page(request: Request, name: str, error: str | None = None) ->
     "/engines/{name}",
     response_class=HTMLResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG)), Depends(require_csrf)],
 )
 async def engine_update_post(request: Request, name: str) -> RedirectResponse:
     """Handle the edit-form submission for an engine."""
@@ -3117,6 +3164,7 @@ def _build_pipeline_write(form: dict[str, str]) -> PipelineWrite:
         raw = str(form.get("watch_min_wait_minutes", "")).strip()
         trigger_kwargs["watch_min_wait_minutes"] = int(raw) if raw else None
     cdm_value = str(form.get("cdm", "")).strip() or None
+    input_cdm_value = str(form.get("input_cdm", "")).strip() or None
     kind = normalize_kind(form.get("kind"))
     # copy/move cannot use ``all`` (``ovid2 tools copy|move`` has no such
     # sentinel), so never default their tables to ``["all"]`` — an empty
@@ -3145,6 +3193,7 @@ def _build_pipeline_write(form: dict[str, str]) -> PipelineWrite:
     return PipelineWrite(
         kind=kind,
         cdm=cdm_value,
+        input_cdm=input_cdm_value,
         pipeline=str(form.get("pipeline", "")).strip(),
         input_address=str(form.get("input_address", "")).strip(),
         output_address=str(form.get("output_address", "")).strip(),
@@ -3587,6 +3636,7 @@ def pipeline_config_edit_page(
             "mode": "edit",
             "name": name,
             "pipeline_config": detail,
+            "package_input_cdm": pipelines_meta_svc.package_input_cdm(detail.pipeline),
             "addresses": _addresses.list_available_addresses(),
             "pipeline_kinds": list(PIPELINE_KINDS),
             "kind_choices": kind_choices(),
@@ -3923,7 +3973,12 @@ def _timezones() -> list[str]:
     return ["UTC", *names]
 
 
-@router.post("/settings", response_class=HTMLResponse, include_in_schema=False)
+@router.post(
+    "/settings",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.ADMIN_ALL))],
+)
 async def settings_post(request: Request, _csrf: None = Depends(require_csrf)) -> RedirectResponse:
     """Persist the settings form."""
     form = dict(await request.form())
@@ -3962,6 +4017,9 @@ async def settings_post(request: Request, _csrf: None = Depends(require_csrf)) -
             ods=current.ods,
             fs_picker=current.fs_picker,
             llm=current.llm,
+            # The form never edits auth; dropping it would silently reset
+            # providers / cookie name / the enabled flag to defaults.
+            auth=current.auth,
             admin=SettingsAdmin(
                 storage_account=(str(form.get("admin_storage_account", "")).strip() or None),
             ),
@@ -4076,3 +4134,49 @@ def fs_picker_partial(
         return templates.TemplateResponse(request, "_fs_picker.html", context)
     context["listing"] = listing
     return templates.TemplateResponse(request, "_fs_picker.html", context)
+
+
+# ---------------------------------------------------------------------------
+# Dev-only: <ovid-mark> demo (``/dev/ovid-mark``)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/dev/ovid-mark",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    dependencies=[Depends(require_capability(Capability.VIEW_PUBLIC))],
+)
+def dev_ovid_mark(request: Request) -> HTMLResponse:
+    """Render the ``<ovid-mark>`` demo (every state, autoplay, four sizes).
+
+    Only served when ``OVID2_DEPLOYMENT=dev``; any other deployment answers
+    404 so the page never ships as a public surface.
+
+    Args:
+        request: The incoming request.
+
+    Returns:
+        The rendered demo page.
+
+    Raises:
+        HTTPException: 404 outside a dev deployment.
+    """
+    from ovid2.config import deployment
+
+    if not deployment.is_dev():
+        raise HTTPException(status_code=404, detail="Not Found")
+    states = [
+        "idle",
+        "extract",
+        "transform",
+        "load",
+        "running",
+        "sync",
+        "success",
+        "warning",
+        "error",
+    ]
+    return templates.TemplateResponse(
+        request, "dev_ovid_mark.html", {"states": states, "sizes": [300, 96, 48, 24]}
+    )

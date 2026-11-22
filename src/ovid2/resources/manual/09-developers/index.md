@@ -32,6 +32,19 @@ Then start a private instance with `ovid2 dev up`. See
 ```bash
 scripts/ci_checks.sh                  # lint, typecheck, contract, unit: what CI runs
 scripts/ci_checks.sh --docker contract unit   # the same, in a clean python:3.14 image
+scripts/ci_checks.sh integration      # tests/integration (needs a JDK)
+scripts/ci_checks.sh io_matrix        # DuckDB × driver emulators (needs Docker)
 uv run ruff check --fix && uv run ruff format
 uv run mypy src/ovid2                 # strict
 ```
+
+CI runs the four fast gates on every push. The two heavy gates run only
+when engine, driver, transformation, formatter, mapper or integration-test
+code changes, and on merges to `main`, so a documentation change never pays
+for the emulator matrix. The emulator images are pinned by digest in
+`tests/integration/io_matrix/images.py`; a skipped matrix leg counts as a
+failure.
+
+Transitional contract exemptions live in
+`tests/contract/data/shrink_only.json` and may only shrink. After removing
+debt, lock it in with `OVID2_UPDATE_RATCHETS=1 pytest tests/contract`.

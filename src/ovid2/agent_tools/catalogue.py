@@ -237,7 +237,10 @@ def _coerce_args(tool: AgentTool, args: Any) -> dict[str, Any]:
     known = set(tool.params.get("properties") or {})
     unknown = sorted(set(args) - known)
     if unknown:
-        raise ToolCallError(f"unknown argument(s) for '{tool.name}': {', '.join(unknown)}")
+        allowed = ", ".join(sorted(known)) if known else "none - call it with {}"
+        raise ToolCallError(
+            f"unknown argument(s) for '{tool.name}': {', '.join(unknown)} (accepted: {allowed})"
+        )
     clean = {k: v for k, v in args.items() if v is not None}
     try:
         jsonschema.validate(clean, tool.params)

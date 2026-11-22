@@ -478,6 +478,7 @@ def _run_container_mode(args: argparse.Namespace) -> int:
             args,
             bus=bus,
             instance_id=instance.instance_id,
+            engine=engine,
         )
     finally:
         sampler.stop()
@@ -496,6 +497,7 @@ def _copy_tables_concurrently(
     *,
     bus: EventBus | None = None,
     instance_id: str = "",
+    engine: object | None = None,
 ) -> int:
     """Copy every resolved table, fanning out across driver threads.
 
@@ -531,7 +533,29 @@ def _copy_tables_concurrently(
             return
         bus.emit(event_factory(instance_id=instance_id, **kwargs))  # type: ignore[operator]
 
+    import contextlib
+
+    from ovid2.core.table_runner import supports_parallel_tables
+
+    def _worker_scope() -> contextlib.AbstractContextManager[None]:
+        """Per-thread engine scope (DuckDB: a private cursor per table thread).
+
+        A DuckDB connection must not be shared by threads running queries at
+        the same time — doing so intermittently fails with "Attempting to
+        execute an unsuccessful or closed pending query result". Engines
+        that support parallel tables expose ``table_worker()``; Spark-family
+        engines do not need one.
+        """
+        if engine is not None and supports_parallel_tables(engine):
+            return engine.table_worker()  # type: ignore[attr-defined,no-any-return]
+        return contextlib.nullcontext()
+
     def _copy_one(spec: TableSpec) -> tuple[str, str | None]:
+        """Copy one table on its own engine scope; return ``(name, error)``."""
+        with _worker_scope():
+            return _copy_one_inner(spec)
+
+    def _copy_one_inner(spec: TableSpec) -> tuple[str, str | None]:
         """Copy one table; return ``(table_name, error_or_None)``."""
         table_name = spec.table_name
         file_name = spec.file_name

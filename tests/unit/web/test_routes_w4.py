@@ -235,16 +235,41 @@ def test_api_put_formatter_rejects_invalid_schema(
 
 @pytest.mark.unit
 def test_api_delete_formatter(web_client: object, pipeline_on_disk: str) -> None:
-    """DELETE removes a formatter YAML."""
+    """DELETE is gated (202 → approve), then removes a formatter YAML."""
     web_client.put(  # type: ignore[attr-defined]
         f"/api/v1/pipeline-packages/{pipeline_on_disk}/formatters/demographic",
         json={"raw_text": _VALID_FORMATTER},
     )
-    r = web_client.delete(  # type: ignore[attr-defined]
-        f"/api/v1/pipeline-packages/{pipeline_on_disk}/formatters/demographic"
+    url = f"/api/v1/pipeline-packages/{pipeline_on_disk}/formatters/demographic"
+    r = web_client.delete(url)  # type: ignore[attr-defined]
+    assert r.status_code == 202
+    assert r.json()["detail"]["action"] == "formatter.delete"
+    approval_id = r.json()["detail"]["approval_id"]
+    web_client.post(  # type: ignore[attr-defined]
+        f"/api/v1/approvals/{approval_id}/approve", json={"decided_by": "test"}
     )
+    r = web_client.delete(url)  # type: ignore[attr-defined]
     assert r.status_code == 200
     assert r.json()["action"] == "deleted"
+
+
+@pytest.mark.unit
+def test_api_delete_mapper_is_gated(web_client: object, pipeline_on_disk: str) -> None:
+    """DELETE of a mapper YAML needs a ``mapper.delete`` approval first."""
+    url = f"/api/v1/pipeline-packages/{pipeline_on_disk}/mappers/demographic"
+    web_client.put(  # type: ignore[attr-defined]
+        url, json={"raw_text": "v: 1\ntable: demographic\nops: []\n"}
+    )
+    r = web_client.delete(url)  # type: ignore[attr-defined]
+    assert r.status_code == 202
+    assert r.json()["detail"]["action"] == "mapper.delete"
+    assert web_client.get(url).status_code == 200  # type: ignore[attr-defined]
+    approval_id = r.json()["detail"]["approval_id"]
+    web_client.post(  # type: ignore[attr-defined]
+        f"/api/v1/approvals/{approval_id}/approve", json={"decided_by": "test"}
+    )
+    assert web_client.delete(url).status_code == 200  # type: ignore[attr-defined]
+    assert web_client.get(url).status_code == 404  # type: ignore[attr-defined]
 
 
 @pytest.mark.unit

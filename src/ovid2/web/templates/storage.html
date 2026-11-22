@@ -126,6 +126,7 @@
                        title="Edit" aria-label="Edit {{ c.name }}">{{ icons.icon("edit", size=15) }}</a>
                     <form action="/connections/{{ c.name }}/delete" method="post" class="pl-inline-form"
                           onsubmit="return confirm('Delete storage account {{ c.name }}?')">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                       <button type="submit" class="icon-button danger"
                               title="Delete" aria-label="Delete {{ c.name }}">{{ icons.icon("trash", size=15) }}</button>
                     </form>

@@ -29,6 +29,7 @@
   <form method="post"
         action="{% if mode == 'new' %}/connections{% else %}/connections/{{ name }}{% endif %}"
         class="edit-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if mode == 'new' %}
       <div class="form-row">
         <label for="name">Name</label>
@@ -60,6 +61,7 @@
 
   {% if mode == 'edit' %}
     <form method="post" action="/connections/{{ name }}/test" class="edit-form" style="margin-top: 1em;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="button">Test storage account</button>
       {{ help.tip("Probes the saved configuration with a lightweight round-trip (SELECT 1, HEAD on a bucket, or a stat on a filesystem root). Unsaved edits are not tested — save first, then test.") }}
     </form>

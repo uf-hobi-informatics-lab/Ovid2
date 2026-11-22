@@ -26,6 +26,7 @@
   <form method="post"
         action="{% if mode == 'new' %}/addresses{% else %}/addresses/{{ name }}{% endif %}"
         class="edit-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     {% if mode == 'new' %}
       {# Kept for backwards compatibility only; new-address flow now

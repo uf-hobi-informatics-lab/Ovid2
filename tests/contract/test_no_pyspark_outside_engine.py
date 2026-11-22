@@ -28,9 +28,11 @@ from pathlib import Path
 
 import pytest
 
-#: Modules that are ALLOWED to import ``pyspark.*``. Anything else
-#: MUST go through :mod:`ovid2.core.engines.protocols` and pull
-#: functions from ``engine.get_functions()``.
+#: Modules that are ALLOWED to import ``pyspark.*`` **at runtime**.
+#: ``if TYPE_CHECKING:`` imports are annotations only and need no entry
+#: (pruned 2026-11-20 from 37 entries to these 7). Shrink-only:
+#: ``test_pyspark_allowlist_entries_still_needed`` fails on a stale entry
+#: and ``test_pyspark_allowlist_never_grows`` pins the count.
 _PYSPARK_ALLOWED: frozenset[str] = frozenset(
     {
         # Concrete engine + wrappers.
@@ -39,58 +41,17 @@ _PYSPARK_ALLOWED: frozenset[str] = frozenset(
         # Engine-dispatching column DSL: resolves to pyspark.sql.functions
         # only when the active engine is Spark-family (lazy import).
         "src/ovid2/core/engines/dsl.py",
-        # Transitional grace list — these files predate the abstraction
-        # and get ported incrementally. Every entry below is a call-out
-        # for the follow-up "port to EngineFunctions" pass; do NOT add
-        # new ones without an ADR. See
-        # the adr-engines-resource-and-abstraction design note.
+        # Transitional — runtime pyspark still used; port to EngineFunctions.
+        # See the adr-engines-resource-and-abstraction design note.
         "src/ovid2/core/pipeline.py",
-        "src/ovid2/core/addresses/base.py",
-        # ``core/addresses/disc.py`` is intentionally absent —
-        # migrated to ``drivers/disc/spark.py`` under D3.disc.
-        # ``core/addresses/snowflake.py`` is intentionally absent —
-        # migrated to ``drivers/snowflake/spark.py`` under D3.snowflake.
-        # ``core/addresses/azure_blob.py`` is intentionally absent —
-        # migrated to ``drivers/azure_blob/spark.py`` under D3.azure_blob.
-        # ``core/addresses/s3.py`` is intentionally absent —
-        # migrated to ``drivers/s3/spark.py`` under D3.s3.
         "src/ovid2/utils/common.py",
-        "src/ovid2/utils/geocoding.py",
-        "src/ovid2/formatters/engine.py",
-        "src/ovid2/formatters/base.py",
-        "src/ovid2/formatters/adapters/base.py",
-        "src/ovid2/formatters/adapters/_sources.py",
-        "src/ovid2/formatters/adapters/semantic_join.py",
-        "src/ovid2/formatters/adapters/source_passthrough.py",
-        "src/ovid2/formatters/adapters/custom.py",
-        "src/ovid2/formatters/adapters/union_of_specs.py",
-        "src/ovid2/mappers/base.py",
-        "src/ovid2/mappers/engine.py",
-        "src/ovid2/mappers/ops/passthrough.py",
-        "src/ovid2/mappers/ops/literal.py",
-        "src/ovid2/mappers/ops/case_map.py",
-        "src/ovid2/mappers/ops/hash_id.py",
-        "src/ovid2/mappers/ops/regex_replace.py",
-        "src/ovid2/mappers/ops/translate_by_dict.py",
-        "src/ovid2/mappers/ops/translate_by_concept.py",
-        "src/ovid2/mappers/ops/legacy_select.py",
-        "src/ovid2/transformations/base.py",
-        "src/ovid2/transformations/deduplicate.py",
-        "src/ovid2/transformations/format.py",
-        "src/ovid2/transformations/map.py",
-        "src/ovid2/transformations/fix.py",
-        "src/ovid2/transformations/mappers/base.py",
         "src/ovid2/transformations/deduplicators/base.py",
-        "src/ovid2/transformations/fixers/base.py",
-        "src/ovid2/transformations/quality/mapping_report.py",
-        "src/ovid2/transformations/quality/mapping_gap.py",
-        # ``transformations/quality/runner.py`` + ``quality/ops/__init__.py``
-        # are intentionally absent — ported to ``EngineFunctions`` so the
-        # data-health / EDC checks run on every engine family.
-        "src/ovid2/transformations/analysis/distinct_values.py",
-        "src/ovid2/transformations/analysis/monthly_counts.py",
     }
 )
+
+#: Frozen upper bound on :data:`_PYSPARK_ALLOWED`. Lower it when an entry
+#: is ported; never raise it without an ADR.
+_PYSPARK_ALLOWED_MAX: int = 6
 
 #: Directory-tree grace list. Every ``.py`` under one of these
 #: directories is temporarily allowed to import pyspark. Each entry is
@@ -180,20 +141,27 @@ def _imports_root(module_name: str, roots: tuple[str, ...]) -> bool:
 
 
 def _bad_imports(py: Path, forbidden_roots: tuple[str, ...]) -> list[str]:
-    """Return a list of ``line: module`` offenders for one file."""
-    text = py.read_text(encoding="utf-8")
-    tree = ast.parse(text, filename=str(py))
+    """Return ``line: module`` offenders for one file (runtime imports only).
+
+    Uses the evasion-resistant walker: multi-name imports, ``from snowflake
+    import snowpark`` (→ ``snowflake.snowpark``), relative imports and
+    literal ``importlib.import_module`` / ``__import__``. Imports under
+    ``if TYPE_CHECKING:`` are annotations and are ignored.
+    """
+    from tests.contract._ast_utils import dynamic_imports, iter_imports
+
+    tree = ast.parse(py.read_text(encoding="utf-8"), filename=str(py))
     offenders: list[str] = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                if _imports_root(alias.name, forbidden_roots):
-                    offenders.append(f"{node.lineno}: import {alias.name}")
-        elif isinstance(node, ast.ImportFrom):
-            module = node.module or ""
-            if _imports_root(module, forbidden_roots):
-                names = ", ".join(a.name for a in node.names)
-                offenders.append(f"{node.lineno}: from {module} import {names}")
+    seen: set[tuple[int, str]] = set()
+    for ref in iter_imports(tree):
+        if ref.type_checking or not _imports_root(ref.module, forbidden_roots):
+            continue
+        if (ref.lineno, ref.module) not in seen:
+            seen.add((ref.lineno, ref.module))
+            offenders.append(f"{ref.lineno}: import {ref.module}")
+    for dyn in dynamic_imports(tree):
+        if dyn.module and _imports_root(dyn.module, forbidden_roots):
+            offenders.append(f"{dyn.lineno}: import_module({dyn.module!r})")
     return offenders
 
 
@@ -239,3 +207,68 @@ def test_snowpark_imports_confined_to_engine_layer(src_root: Path) -> None:
         "The pipeline speaks Snowpark through SnowparkEngine, never directly.\n"
         + "\n".join(offenders)
     )
+
+
+@pytest.mark.contract
+def test_pyspark_allowlist_entries_still_needed(repo_root: Path) -> None:
+    """Every allow-list entry must still exist and import pyspark at runtime."""
+    stale = [
+        rel
+        for rel in sorted(_PYSPARK_ALLOWED)
+        if not (repo_root / rel).is_file() or not _bad_imports(repo_root / rel, ("pyspark",))
+    ]
+    stale += [
+        rel
+        for rel in sorted(_SNOWPARK_ALLOWED)
+        if not (repo_root / rel).is_file()
+        or not _bad_imports(repo_root / rel, ("snowflake.snowpark",))
+    ]
+    assert not stale, (
+        "Stale allow-list entries (no runtime import any more) — remove them and "
+        "lower _PYSPARK_ALLOWED_MAX:\n" + "\n".join(stale)
+    )
+
+
+@pytest.mark.contract
+def test_pyspark_allowlist_never_grows() -> None:
+    """The per-file allow-list is shrink-only."""
+    assert len(_PYSPARK_ALLOWED) <= _PYSPARK_ALLOWED_MAX, (
+        f"_PYSPARK_ALLOWED grew to {len(_PYSPARK_ALLOWED)} (max {_PYSPARK_ALLOWED_MAX}). "
+        "Route new code through ovid2.core.engines.dsl / EngineFunctions."
+    )
+
+
+@pytest.mark.contract
+def test_pyspark_tree_grace_lists_only_shrink(repo_root: Path) -> None:
+    """Runtime pyspark importers under the grace-list trees may only decrease."""
+    from tests.contract._ratchet import check_ratchet
+
+    counts: dict[str, int] = {}
+    for tree in _PYSPARK_ALLOWED_TREES:
+        for py in _iter_py(repo_root / tree):
+            if _bad_imports(py, ("pyspark",)):
+                counts[str(py.relative_to(repo_root))] = 1
+    check_ratchet("pyspark_tree_runtime_importers", counts)
+
+
+@pytest.mark.contract
+def test_import_detector_catches_evasions(tmp_path: Path) -> None:
+    """Negative control: aliasing, ``from X import Y`` and importlib are seen."""
+    bad = tmp_path / "bad.py"
+    bad.write_text(
+        "import os, pyspark.sql as ps\n"
+        "from snowflake import snowpark\n"
+        "import importlib\n"
+        "importlib.import_module('pyspark.sql.functions')\n"
+        "from typing import TYPE_CHECKING\n"
+        "if TYPE_CHECKING:\n"
+        "    import pyspark\n",
+        encoding="utf-8",
+    )
+    spark = _bad_imports(bad, ("pyspark",))
+    assert len(spark) == 2, spark  # aliased import + import_module; TYPE_CHECKING ignored
+    assert _bad_imports(bad, ("snowflake.snowpark",))
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit("Run through pytest.")

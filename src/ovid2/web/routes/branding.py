@@ -11,20 +11,19 @@ The route is deliberately excluded from the OpenAPI schema
 not a JSON API surface, and its inclusion would churn the snapshot test.
 
 Only names on the internal allow-list are served; anything else returns
-404. The web control panel v2 uses the SVG version as both the topbar
-logo and the favicon — because the SVG is wrapped in a
-``viewBox="0 0 256 256"``, the browser can never accidentally render it
-at native pixel size (the bug that motivated the redesign).
+404. The topbar logo is the animated ``<ovid-mark>`` web component
+(``static/ovid_mark.js``); the favicon is the matching vector sprout.
 
 Assets served:
 
-- ``ovid_logo.svg`` — SVG wrapper around the packaged raster. Used by
-  the topbar, favicon, and any Retina-aware consumer.
+- ``ovid_logo.svg`` — SVG wrapper around the packaged raster (legacy).
+- ``ovid_sprout.svg`` — the vector sprout mark, same geometry as
+  ``<ovid-mark>`` at rest.
 - ``ovid_logo.png`` — 1254 × 1254 master, kept for legacy consumers.
 - ``ovid_logo_32.png`` / ``_64.png`` / ``_128.png`` — pre-rendered small
   variants. Used by consumers that cannot render SVG.
 - ``favicon.png`` / ``favicon.svg`` — aliases pointing at the small
-  raster and the SVG respectively.
+  raster and the vector sprout respectively.
 
 Caching policy
 ==============
@@ -56,6 +55,7 @@ _MEDIA_TYPES: dict[str, str] = {
     "ovid_logo_32.png": "image/png",
     "ovid_logo_64.png": "image/png",
     "ovid_logo_128.png": "image/png",
+    "ovid_sprout.svg": "image/svg+xml",
     "favicon.svg": "image/svg+xml",
     "favicon.png": "image/png",
 }
@@ -67,7 +67,8 @@ _ASSETS: dict[str, str] = {
     "ovid_logo_32.png": "ovid_logo_32.png",
     "ovid_logo_64.png": "ovid_logo_64.png",
     "ovid_logo_128.png": "ovid_logo_128.png",
-    "favicon.svg": "ovid_logo.svg",
+    "ovid_sprout.svg": "ovid_sprout.svg",
+    "favicon.svg": "ovid_sprout.svg",
     "favicon.png": "ovid_logo_32.png",
 }
 

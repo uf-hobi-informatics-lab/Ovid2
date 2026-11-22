@@ -181,6 +181,51 @@ class SnowflakeDriver(Driver):
         return count_rows_from_config(dict(self.args), dict(self.secrets), path)
 
     # ------------------------------------------------------------------
+    # Storage admin (workflow rollback)
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def supports_workflow_rollback(cls) -> bool:
+        """A schema's tables can be cloned to / from a sibling backup schema."""
+        return True
+
+    def _admin_db_schema(self) -> tuple[str, str]:
+        from ovid2.drivers._layout import warehouse_db_schema
+
+        database, schema = warehouse_db_schema(self.location)
+        if not database or not schema:
+            raise ValueError("Snowflake workflow rollback needs a DATABASE/SCHEMA address.")
+        return database, schema
+
+    def snapshot_tables(self, tables: list[str], key: str) -> list[str]:
+        """Zero-copy clone ``tables`` into ``<SCHEMA>_OVID2BK_<key>``."""
+        from ovid2.drivers.snowflake import admin
+
+        db, schema = self._admin_db_schema()
+        return admin.snapshot_tables(dict(self.args), dict(self.secrets), db, schema, tables, key)
+
+    def restore_tables(self, tables: list[str], key: str) -> list[str]:
+        """Clone ``tables`` back from the backup schema."""
+        from ovid2.drivers.snowflake import admin
+
+        db, schema = self._admin_db_schema()
+        return admin.restore_tables(dict(self.args), dict(self.secrets), db, schema, tables, key)
+
+    def drop_tables(self, tables: list[str]) -> list[str]:
+        """``DROP TABLE IF EXISTS`` each table."""
+        from ovid2.drivers.snowflake import admin
+
+        db, schema = self._admin_db_schema()
+        return admin.drop_tables(dict(self.args), dict(self.secrets), db, schema, tables)
+
+    def drop_backup(self, key: str) -> None:
+        """Drop the backup schema."""
+        from ovid2.drivers.snowflake import admin
+
+        db, schema = self._admin_db_schema()
+        admin.drop_backup(dict(self.args), dict(self.secrets), db, schema, key)
+
+    # ------------------------------------------------------------------
     # ``all`` expansion + size hints (control plane, ``SHOW`` only)
     # ------------------------------------------------------------------
 

@@ -30,6 +30,7 @@ if (bar) {
     if (c.trigger && row.dataset.trigger !== c.trigger) return false;
     if (c.enabled && row.dataset.enabled !== c.enabled) return false;
     if (c.cdm && !row.dataset.cdm.includes(c.cdm)) return false;
+    if (c.input_cdm && (row.dataset.inputCdm || "") !== c.input_cdm) return false;
     return true;
   };
 

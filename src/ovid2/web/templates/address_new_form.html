@@ -34,6 +34,7 @@
     <form method="post"
           action="{% if mode == 'new' %}/addresses{% else %}/addresses/{{ name }}{% endif %}"
           class="edit-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="connection" value="{{ connection.name }}">
 
       {% if mode == 'new' %}

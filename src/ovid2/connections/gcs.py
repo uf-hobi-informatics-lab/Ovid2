@@ -33,7 +33,7 @@ class GcsConnection(BaseConnection):
             )
         try:
             info = json.loads(sa_json) if isinstance(sa_json, str) else dict(sa_json)
-            creds = service_account.Credentials.from_service_account_info(info)
+            creds = service_account.Credentials.from_service_account_info(info)  # type: ignore[no-untyped-call, unused-ignore]
             client = storage.Client(
                 project=str(self.args.get("project_id") or ""),
                 credentials=creds,

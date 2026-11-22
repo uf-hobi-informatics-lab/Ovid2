@@ -17,6 +17,7 @@ unchanged.
 
 from __future__ import annotations
 
+import contextlib
 import os
 from typing import IO, TYPE_CHECKING, Any
 
@@ -297,6 +298,107 @@ class DiscDriver(TabularIntrospectionMixin, Driver):
         if path is None:
             return {}
         return sizes_for(self._list_batch_dir(path), file_names)
+
+    # ------------------------------------------------------------------
+    # Storage admin (workflow rollback)
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def supports_workflow_rollback(cls) -> bool:
+        """Disc folders can snapshot / restore / drop whole tables."""
+        return True
+
+    def _table_paths(self, root: str, table: str) -> list[str]:
+        """Return the entries under ``root`` that make up logical ``table``."""
+        from ovid2.drivers._table_listing import strip_table_extension
+
+        if not os.path.isdir(root):
+            return []
+        want = strip_table_extension(table).lower()
+        out: list[str] = []
+        with os.scandir(root) as scanner:
+            for entry in scanner:
+                if entry.name.startswith("."):
+                    continue
+                if strip_table_extension(entry.name).lower() == want:
+                    out.append(entry.path)
+        return sorted(out)
+
+    def _backup_dir(self, key: str) -> str:
+        from ovid2.drivers._layout import WORKFLOW_BACKUP_DIR, safe_backup_key
+
+        return os.path.join(self._data_root(), WORKFLOW_BACKUP_DIR, safe_backup_key(key))
+
+    @staticmethod
+    def _remove(path: str) -> None:
+        import shutil
+
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path)
+        elif os.path.lexists(path):
+            os.remove(path)
+
+    @staticmethod
+    def _copy(src: str, dst: str) -> None:
+        import shutil
+
+        if os.path.isdir(src):
+            shutil.copytree(src, dst, symlinks=True)
+        else:
+            shutil.copy2(src, dst)
+
+    def snapshot_tables(self, tables: list[str], key: str) -> list[str]:
+        """Copy each table's file / folder into ``.ovid2_wf_backup/<key>/``."""
+        root = self._data_root()
+        backup = self._backup_dir(key)
+        if os.path.isdir(backup):
+            self._remove(backup)
+        os.makedirs(backup, mode=0o755, exist_ok=True)
+        copied: list[str] = []
+        for table in tables:
+            paths = self._table_paths(root, table)
+            for path in paths:
+                self._copy(path, os.path.join(backup, os.path.basename(path)))
+            if paths:
+                copied.append(table)
+        return copied
+
+    def restore_tables(self, tables: list[str], key: str) -> list[str]:
+        """Replace each table with its copy from the backup folder."""
+        root = self._data_root()
+        backup = self._backup_dir(key)
+        restored: list[str] = []
+        for table in tables:
+            saved = self._table_paths(backup, table)
+            if not saved:
+                continue
+            for path in self._table_paths(root, table):
+                self._remove(path)
+            for path in saved:
+                self._copy(path, os.path.join(root, os.path.basename(path)))
+            restored.append(table)
+        return restored
+
+    def drop_tables(self, tables: list[str]) -> list[str]:
+        """Delete each table's file / folder at the address."""
+        root = self._data_root()
+        dropped: list[str] = []
+        for table in tables:
+            paths = self._table_paths(root, table)
+            for path in paths:
+                self._remove(path)
+            if paths:
+                dropped.append(table)
+        return dropped
+
+    def drop_backup(self, key: str) -> None:
+        """Remove ``.ovid2_wf_backup/<key>/`` (and the parent when empty)."""
+        backup = self._backup_dir(key)
+        if os.path.isdir(backup):
+            self._remove(backup)
+        parent = os.path.dirname(backup)
+        with contextlib.suppress(OSError):
+            os.rmdir(parent)
 
     # ------------------------------------------------------------------
     # Legacy bridge

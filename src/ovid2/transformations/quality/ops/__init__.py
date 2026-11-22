@@ -1323,7 +1323,7 @@ def _monthly_volume(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
         monthly = _group_count(
             fn, df.filter(parsed.isNotNull()), fn.date_format(parsed, "yyyy-MM").alias("YM")
         )
-        buckets = monthly.orderBy(fn.col("YM").asc()).collect()  # noqa: OVID2001 analysis pass
+        buckets = monthly.orderBy(fn.col("YM").asc()).collect()  # noqa: OVID2001 — health analysis month buckets
         pairs = [(str(r["YM"]), int(r[_N])) for r in buckets if r["YM"] is not None]
         if not pairs:
             continue

@@ -50,10 +50,12 @@
   <div class="page-actions">
     <a href="/connections/{{ connection.name }}/edit" class="button primary">Edit</a>
     <form action="/connections/{{ connection.name }}/test" method="post" style="display: inline;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="button">Test storage account</button>
     </form>
     <form action="/connections/{{ connection.name }}/delete" method="post" style="display: inline;"
           onsubmit="return confirm('Delete storage account {{ connection.name }}?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="button danger">Delete</button>
     </form>
   </div>

@@ -36,6 +36,8 @@ from typing import Any
 
 import pytest
 
+from tests.integration.io_matrix.images import EMULATOR_IMAGES
+
 pytestmark = [pytest.mark.io_matrix, pytest.mark.integration]
 
 duckdb = pytest.importorskip("duckdb")
@@ -102,14 +104,14 @@ def _container(
 @pytest.fixture(scope="session")
 def s3_port() -> Iterator[int]:
     port = _free_port()
-    yield from _container("adobe/s3mock:latest", port, 9090, env={"initialBuckets": "ovid2"})
+    yield from _container(EMULATOR_IMAGES["s3"], port, 9090, env={"initialBuckets": "ovid2"})
 
 
 @pytest.fixture(scope="session")
 def azurite_port() -> Iterator[int]:
     port = _free_port()
     yield from _container(
-        "mcr.microsoft.com/azure-storage/azurite:latest",
+        EMULATOR_IMAGES["azure_blob"],
         port,
         10000,
         "azurite-blob",
@@ -123,7 +125,7 @@ def azurite_port() -> Iterator[int]:
 def gcs_port() -> Iterator[int]:
     port = _free_port()
     yield from _container(
-        "fsouza/fake-gcs-server:latest",
+        EMULATOR_IMAGES["gcs"],
         port,
         port,
         "-scheme",
@@ -138,7 +140,7 @@ def gcs_port() -> Iterator[int]:
 @pytest.fixture(scope="session")
 def pg_port() -> Iterator[int]:
     port = _free_port()
-    gen = _container("postgres:16", port, 5432, env={"POSTGRES_PASSWORD": "pw"})
+    gen = _container(EMULATOR_IMAGES["postgres"], port, 5432, env={"POSTGRES_PASSWORD": "pw"})
     value = next(gen)
     # The port opens before initdb finishes; wait for real readiness.
     deadline = time.time() + 60
@@ -161,7 +163,7 @@ def pg_port() -> Iterator[int]:
 def mssql_port() -> Iterator[int]:
     port = _free_port()
     gen = _container(
-        "mcr.microsoft.com/mssql/server:2022-latest",
+        EMULATOR_IMAGES["mssql"],
         port,
         1433,
         env={"ACCEPT_EULA": "Y", "MSSQL_SA_PASSWORD": "Ovid2_Test!pw"},

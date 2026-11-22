@@ -778,7 +778,9 @@ def _read_header_columns_from_gcs(
         from google.oauth2 import service_account
 
         info = json.loads(sa_json) if isinstance(sa_json, str) else dict(sa_json)
-        client_kwargs["credentials"] = service_account.Credentials.from_service_account_info(info)
+        client_kwargs["credentials"] = service_account.Credentials.from_service_account_info(  # type: ignore[no-untyped-call, unused-ignore]
+            info
+        )
 
     client = storage.Client(**client_kwargs)
     blob = client.bucket(bucket).blob(key)

@@ -122,6 +122,13 @@ model ─ tool call ─┬─ GET tool  → executor calls /api/v1/... with a pe
   `POST /api/v1/pipelines/{name}/run` also accepts `input_address`,
   `output_address` (these bind an open side of the config) and
   `draft: true`.
+- **Draft workflows** (`draft_workflow`). *"Run A, then copy its output
+  to B"* becomes a workflow saved **disabled** through
+  `POST /api/v1/workflow-drafts` and opened on the workflow canvas
+  (`/workflows/<name>?draft=1`); the human saves and enables or runs it.
+  Read tools `list_workflows`, `get_workflow`, `list_workflow_runs`,
+  `get_workflow_run`; proposals `run_workflow`, `duplicate_workflow`,
+  `enable_workflow` / `disable_workflow`, `cancel_workflow_run`.
 - **Proposals** (`submit_run`, `cancel_job`,
   `rerun_job`, enable/disable a pipeline config). The executor never
   runs these. The panel shows the method, path and body. **Run** sends

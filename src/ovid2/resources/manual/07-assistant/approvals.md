@@ -14,13 +14,19 @@ person has to agree first. Ovid2 records each such request as an
 | --- | --- | --- |
 | `dataspace.agent_row_access` | an **agent** (MCP or assistant) samples or exports rows, or downloads an artifact | `rows:<path>` (one table) |
 | `run.overwrite` | an **agent** confirms writing over an occupied output | the output address |
+| `workflow.data_probe` | an **agent** saves a workflow with a [data probe](../03-web-panel/workflows.md#data-probes) that has a row filter | `workflow:<name>` |
 | `secret.delete`, `connection.delete`, `engine.delete`, `address.delete`, `llm.delete` | deleting that resource | the resource name |
 | `pipeline.delete` | deleting a saved pipeline (run config) | the config name |
 | `pipeline_package.delete` | deleting a pipeline **package** (the code folder, which is moved to the trash) | the package name |
 | `transform.delete` | deleting a transform-library chain that pipelines may have assigned | the chain name |
+| `formatter.delete`, `mapper.delete` | deleting a formatter or mapper YAML spec through the API | `<package>/<table>` |
+| `pipeline_transform.delete` | deleting a pipeline-private transform chain through the API | `<package>/<chain>` |
+| `workflow.delete` | deleting a workflow definition | the workflow name |
 
-Deleting your own [assistant session](sessions.md) does **not** need
-approval. It is your own conversation, not a shared resource.
+Deleting something that belongs only to you does **not** need approval:
+your own [assistant session](sessions.md), your own report template or
+private note, or a report share you granted. These API routes are marked
+*owner-scoped*; every other `DELETE` route is gated.
 
 People with the right role are **not** gated on reading rows they may
 see. They confirm overwrites interactively instead. See
@@ -53,3 +59,6 @@ curl -sX POST http://127.0.0.1:8090/api/v1/approvals/<id>/deny
 - **Narrow.** It covers exactly the action and target it names, such as
   one table.
 - **Audited.** The request, the decision and the operation are all logged.
+  The decider recorded is the signed-in person, not a name in the request.
+- **Not self-service.** With sign-in enabled, nobody can approve or deny
+  their own request, and agents (MCP, assistant) can never decide one.

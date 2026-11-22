@@ -81,7 +81,7 @@ class MappingGapTransformer(BaseTransformer):
                     lit("Y"),
                 ).otherwise(lit("N")),
             )
-            unmapped = gap_df.filter(col("is_mapped") == "N").count()  # noqa: OVID2001
+            unmapped = gap_df.filter(col("is_mapped") == "N").count()  # noqa: OVID2001 — mapping-gap summary count
 
             if unmapped > 0:
                 message = (

@@ -3,16 +3,22 @@
  *
  * Responsibilities:
  *
- *   1. Toggle the mobile drawer (viewport < 900 px). ARIA-correct,
- *      trap keyboard focus while open, close on ESC or scrim click,
- *      and re-hide when the viewport crosses back above 900 px.
+ *   1. Toggle the mobile drawer (viewport < 900 px) via ``html.drawer-open``.
+ *      ARIA-correct, close on ESC or scrim click, and re-hide when the
+ *      viewport crosses back above 900 px. Never persisted.
  *
- *   2. Toggle the medium-viewport icon rail (900–1199 px). Persists
- *      the collapsed/expanded state to ``localStorage`` under the key
- *      ``ovid2DrawerCollapsed`` so subsequent page loads honour the
- *      user's preference. A pre-paint snippet in ``base.html`` applies
- *      the class before first paint to avoid a flash of the wrong
- *      width.
+ *   2. Toggle the wide-viewport (>= 900 px) icon rail via
+ *      ``html.drawer-rail``. Persisted to ``localStorage`` under
+ *      ``ovid2DrawerWideCollapsed`` so a collapsed rail survives
+ *      navigation; a pre-paint snippet in ``base.html`` restores it
+ *      before first paint. The retired medium-only key
+ *      ``ovid2DrawerCollapsed`` (and the old ``drawer-collapsed`` class)
+ *      is migrated once and then removed.
+ *
+ *      Both states are driven by the same ``[data-drawer-toggle]``
+ *      buttons: ``#drawer-toggle`` sits in a fixed rail-width slot at
+ *      the top of the drawer (never moves), ``#drawer-toggle-mobile`` in
+ *      the topbar (phones only).
  *
  *   3. Overflow cue. When the menu is taller than the viewport, the
  *      list (``.drawer-nav``) scrolls; edge fades (``has-more-above`` /
@@ -27,36 +33,42 @@
 (function () {
   "use strict";
 
-  var STORAGE_KEY = "ovid2DrawerCollapsed";
-  // Wide-viewport (>= 900px) collapse state. Persisted so that
-  // navigating via a rail icon while collapsed keeps the drawer
-  // collapsed on the destination page instead of springing back open.
-  var OPEN_KEY = "ovid2DrawerWideCollapsed";
+  // Wide-viewport (>= 900px) rail state. Persisted so that navigating via
+  // a rail icon keeps the drawer collapsed on the destination page.
+  var RAIL_KEY = "ovid2DrawerWideCollapsed";
+  // Retired medium-only (900-1199px) key; migrated into RAIL_KEY once.
+  var LEGACY_KEY = "ovid2DrawerCollapsed";
   var MOBILE_QUERY = "(max-width: 899.98px)";
-  var MEDIUM_QUERY = "(min-width: 900px) and (max-width: 1199.98px)";
 
   var html = document.documentElement;
   var mobileMql = null;
   try { mobileMql = window.matchMedia(MOBILE_QUERY); } catch (e) { /* ignore */ }
-  var mediumMql = null;
-  try { mediumMql = window.matchMedia(MEDIUM_QUERY); } catch (e) { /* ignore */ }
 
   function isMobile() { return mobileMql ? mobileMql.matches : false; }
-  function isMedium() { return mediumMql ? mediumMql.matches : false; }
+
+  function toggles() {
+    return document.querySelectorAll("[data-drawer-toggle]");
+  }
+
+  /* Keep every toggle's ARIA in sync with the state it controls. */
+  function syncAria() {
+    var mobile = isMobile();
+    var expanded = mobile
+      ? html.classList.contains("drawer-open")
+      : !html.classList.contains("drawer-rail");
+    toggles().forEach(function (btn) {
+      btn.setAttribute("aria-expanded", expanded ? "true" : "false");
+      if (btn.id === "drawer-toggle") {
+        btn.setAttribute("aria-label", expanded ? "Collapse navigation" : "Expand navigation");
+      }
+    });
+  }
 
   /* ---------- Mobile drawer ---------- */
 
   function openDrawer() {
     html.classList.add("drawer-open");
-    var toggle = document.getElementById("drawer-toggle");
-    if (toggle) toggle.setAttribute("aria-expanded", "true");
-    // On desktop, ``drawer-open`` collapses the rail (see ovid2.css). Persist
-    // that so it survives navigation. On mobile it is the transient
-    // off-canvas state and must never be persisted (drawer always starts
-    // closed on a fresh mobile page load).
-    if (!isMobile()) {
-      try { localStorage.setItem(OPEN_KEY, "1"); } catch (e) { /* ignore */ }
-    }
+    syncAria();
     // Move focus to the first nav item so keyboard users can navigate.
     var firstLink = document.querySelector(".drawer-nav .nav-item");
     if (firstLink) firstLink.focus();
@@ -64,31 +76,37 @@
 
   function closeDrawer() {
     html.classList.remove("drawer-open");
-    var toggle = document.getElementById("drawer-toggle");
-    if (toggle) toggle.setAttribute("aria-expanded", "false");
-    if (!isMobile()) {
-      try { localStorage.setItem(OPEN_KEY, "0"); } catch (e) { /* ignore */ }
-    }
+    syncAria();
+  }
+
+  /* ---------- Wide-viewport icon rail ---------- */
+
+  function setRail(on) {
+    html.classList.toggle("drawer-rail", on);
+    try { localStorage.setItem(RAIL_KEY, on ? "1" : "0"); } catch (e) { /* ignore */ }
+    syncAria();
   }
 
   function toggleDrawer() {
-    if (html.classList.contains("drawer-open")) closeDrawer();
-    else openDrawer();
+    if (isMobile()) {
+      if (html.classList.contains("drawer-open")) closeDrawer();
+      else openDrawer();
+    } else {
+      setRail(!html.classList.contains("drawer-rail"));
+    }
   }
 
-  /* ---------- Medium-viewport rail collapse ---------- */
-
-  function collapseRail() {
-    html.classList.add("drawer-collapsed");
-    try { localStorage.setItem(STORAGE_KEY, "1"); } catch (e) { /* ignore */ }
-  }
-  function expandRail() {
+  /* One-time migration from the retired medium-only rail key/class. */
+  function migrateLegacyRail() {
     html.classList.remove("drawer-collapsed");
-    try { localStorage.setItem(STORAGE_KEY, "0"); } catch (e) { /* ignore */ }
-  }
-  function toggleRail() {
-    if (html.classList.contains("drawer-collapsed")) expandRail();
-    else collapseRail();
+    try {
+      var legacy = localStorage.getItem(LEGACY_KEY);
+      if (legacy === null) return;
+      if (localStorage.getItem(RAIL_KEY) === null) {
+        localStorage.setItem(RAIL_KEY, legacy === "1" ? "1" : "0");
+      }
+      localStorage.removeItem(LEGACY_KEY);
+    } catch (e) { /* ignore */ }
   }
 
   /* ---------- Overflow cue ("▾ N more") ---------- */
@@ -166,32 +184,20 @@
   /* ---------- Wiring ---------- */
 
   function init() {
-    var toggle   = document.getElementById("drawer-toggle");
-    var collapse = document.getElementById("drawer-collapse");
-    var scrim    = document.querySelector(".drawer-scrim");
+    migrateLegacyRail();
+    syncAria();
 
-    if (toggle) {
-      toggle.setAttribute("aria-expanded",
-        html.classList.contains("drawer-open") ? "true" : "false");
-    }
-
-    /* Delegated click handler. Using ``document`` guarantees the button
-     * keeps working even if a future htmx swap (or a test harness that
-     * mounts the topbar late) replaces the button after init runs. It
-     * also correctly resolves the target when the click lands on the
-     * inner <span> / <svg> child rather than the <button> itself. */
+    /* Delegated click handler. Using ``document`` guarantees the buttons
+     * keep working even if a future htmx swap (or a test harness that
+     * mounts the shell late) replaces them after init runs. It also
+     * resolves the target when the click lands on the inner <svg>. */
     document.addEventListener("click", function (event) {
       var target = event.target;
       if (!target || typeof target.closest !== "function") return;
 
-      if (target.closest("#drawer-toggle")) {
+      if (target.closest("[data-drawer-toggle]")) {
         event.preventDefault();
         toggleDrawer();
-        return;
-      }
-      if (target.closest("#drawer-collapse")) {
-        event.preventDefault();
-        toggleRail();
         return;
       }
       if (target.closest("#nav-more")) {
@@ -206,24 +212,21 @@
       }
     });
 
-    /* Silence the unused-var lints without dropping the null-guarded
-     * lookups above (they double as a smoke test that the shell markup
-     * is present before we wire delegation). */
-    void collapse; void scrim;
-
     // ESC closes the mobile drawer.
     document.addEventListener("keydown", function (event) {
       if (event.key === "Escape" && html.classList.contains("drawer-open")) {
         closeDrawer();
-        if (toggle) toggle.focus();
+        var mobileToggle = document.getElementById("drawer-toggle-mobile");
+        if (mobileToggle) mobileToggle.focus();
       }
     });
 
-    // Auto-close the mobile drawer if the viewport grows past the
-    // breakpoint (e.g. user rotates a tablet).
+    // Crossing the 900 px breakpoint: close the transient mobile drawer
+    // and re-sync ARIA (the toggles control a different state each side).
     if (mobileMql) {
       var mobileHandler = function () {
         if (!mobileMql.matches) closeDrawer();
+        else syncAria();
       };
       if (typeof mobileMql.addEventListener === "function") {
         mobileMql.addEventListener("change", mobileHandler);

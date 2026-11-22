@@ -42,6 +42,7 @@ Creates $XDG_CONFIG_HOME/ovid2/{configs,secrets.d}, drops sample address configs
 | Argument | Description | Choices | Default |
 | --- | --- | --- | --- |
 | `--interactive` | Prompt for Snowflake credentials on stdin instead of writing a template. |  |  |
+| `--no-breakglass` | Do not set a break-glass admin password (sign-in will have no admin yet). |  |  |
 
 ## `ovid2 doctor`
 
@@ -331,6 +332,17 @@ Resolves the named output address (secrets included) and lists the tables alread
 | --- | --- | --- | --- |
 | `address` | Output address config name. |  |  |
 
+### `ovid2 tools workflow-storage`
+
+Whole-table storage admin used by workflow rollback. 'snapshot' copies the tables into a hidden backup named by --key, 'restore' puts them back, 'drop' deletes them, 'drop-backup' removes the backup. Prints one JSON object on the last line.
+
+| Argument | Description | Choices | Default |
+| --- | --- | --- | --- |
+| `action` | Operation. | `snapshot`, `restore`, `drop`, `drop-backup` |  |
+| `--address` `ADDRESS` | Address name. |  |  |
+| `--key` `KEY` | Backup key (the workflow run id). |  | `` |
+| `--tables` `TABLES` | Logical table names. |  | `[]` |
+
 ### `ovid2 tools test-llm`
 
 Probe an LLM connection (resolves its API key), print JSON.
@@ -496,6 +508,16 @@ Export a table / data file to csv / xlsx / pdf / docx, print JSON.
 | `--out` `OUT` | Output file path. |  |  |
 | `--in-process` | Run the export in this process even when unbounded (default: exports over the host row limit run in a container). |  |  |
 
+### `ovid2 tools workflow-probe`
+
+Runs the data probes of a workflow step against its output address (in-process DuckDB) and prints one JSON object with the numbers on the last line. Numbers only; no row values are emitted.
+
+| Argument | Description | Choices | Default |
+| --- | --- | --- | --- |
+| `--address` `ADDRESS` | Address name. |  |  |
+| `--spec` `SPEC` | JSON list of probes: [{"name", "table", "agg", "column"?, "where"?}]. |  |  |
+| `--engine` `ENGINE` | Engine (default: duckdb, in-process). |  | `duckdb` |
+
 ### `ovid2 tools report-export`
 
 Render a Report Studio bundle (layout + source) to pdf/html/docx/pptx/xlsx/svg/png/md/json.
@@ -557,6 +579,15 @@ Disable a pack on this host (packs.yaml).
 | Argument | Description | Choices | Default |
 | --- | --- | --- | --- |
 | `pack_id` |  |  |  |
+
+### `ovid2 tools secret-status`
+
+Loads secrets.d/<name>.json in the executor and prints one JSON object: exists, keys, mode_0600, filled, missing. Values are never printed.
+
+| Argument | Description | Choices | Default |
+| --- | --- | --- | --- |
+| `--name` `NAME` | Secret name (file stem under secrets.d/). |  |  |
+| `--require` `REQUIRE` | Comma-separated keys that must hold a non-placeholder value. |  | `` |
 
 ## `ovid2 scheduler`
 
@@ -633,6 +664,7 @@ Serve the Ovid2 control panel over HTTP.
 | --- | --- | --- | --- |
 | `--bind` `BIND` | Host:port to bind (default: 127.0.0.1:8090). |  | `127.0.0.1:8090` |
 | `--reload` | Enable uvicorn auto-reload (dev only). |  |  |
+| `--insecure-allow-network-without-auth` | Allow binding a non-loopback address while sign-in is off. Anyone who can reach the port gets full admin. Never use on a shared network. |  |  |
 | `--log-level` `LOG_LEVEL` | uvicorn log level (default: info). | `critical`, `error`, `warning`, `info`, `debug`, `trace` | `info` |
 
 ### `ovid2 web grant-admin`
@@ -678,6 +710,7 @@ Model-Context-Protocol server that exposes the Ovid2 REST API to LLM agents. Rea
 | --- | --- | --- | --- |
 | `--transport` `TRANSPORT` | MCP transport (default: stdio). | `stdio`, `http` | `stdio` |
 | `--bind` `BIND` | HTTP bind host:port (default: 127.0.0.1:8091). Ignored for stdio. |  | `127.0.0.1:8091` |
+| `--insecure-allow-network` | Allow the HTTP transport on a non-loopback address. The MCP HTTP endpoint does not authenticate its clients and acts with its own service token, so only expose it behind an authenticating proxy. |  |  |
 | `--upstream` `UPSTREAM` | Base URL of the ovid2-web REST API (default: http://127.0.0.1:8090). |  | `http://127.0.0.1:8090` |
 
 ## `ovid2 dev`
@@ -692,7 +725,8 @@ Start (and on first use, create) an instance.
 | --- | --- | --- | --- |
 | `name` | Instance name. |  |  |
 | `--port` `PORT` | Exact web port (MCP = +1). |  |  |
-| `--host` `HOST` | Bind address (default: host LAN IP). |  |  |
+| `--host` `HOST` | Bind address (default: 127.0.0.1). A LAN address needs sign-in enabled for the instance, or --insecure-allow-network-without-auth. |  |  |
+| `--insecure-allow-network-without-auth` | Allow a non-loopback --host while sign-in is off (anyone can admin it). |  |  |
 | `--image` `IMAGE` | Docker image tag for runs. |  |  |
 | `--no-worker` | Do not start web-worker. |  |  |
 | `--mcp` | Also start the MCP HTTP server. |  |  |
@@ -706,7 +740,8 @@ Stop then start an instance.
 | --- | --- | --- | --- |
 | `name` | Instance name. |  |  |
 | `--port` `PORT` | Exact web port (MCP = +1). |  |  |
-| `--host` `HOST` | Bind address (default: host LAN IP). |  |  |
+| `--host` `HOST` | Bind address (default: 127.0.0.1). A LAN address needs sign-in enabled for the instance, or --insecure-allow-network-without-auth. |  |  |
+| `--insecure-allow-network-without-auth` | Allow a non-loopback --host while sign-in is off (anyone can admin it). |  |  |
 | `--image` `IMAGE` | Docker image tag for runs. |  |  |
 | `--no-worker` | Do not start web-worker. |  |  |
 | `--mcp` | Also start the MCP HTTP server. |  |  |

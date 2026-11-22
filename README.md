@@ -91,7 +91,7 @@ deploying organization (see [Pipelines](#pipelines-adapters-mappers--fixes)).
 | --- | --- |
 | Engine, drivers, engines, formatters, mappers, fixers, transforms | Feature-complete, alpha |
 | Web control panel + JSON API + MCP server | Feature-complete, alpha |
-| Web authentication (OIDC SSO + RBAC) | Implemented, **off by default** |
+| Web authentication (OIDC SSO + RBAC) | Implemented, **on by default** outside dev instances |
 | LLM assistant (general + System 1) | Implemented, **off until you configure a model** |
 | Pipeline navigator (field-level lineage, declarative UDFs) | Implemented, alpha |
 | Report Studio (reports, charts, themes, sharing, exports) | Implemented, alpha |
@@ -1051,21 +1051,26 @@ See [`docs/pipelines.md`](docs/pipelines.md#health-checks-report-cycle-packages-
 
 `ovid2 web` serves a FastAPI + HTMX control panel (loopback
 `127.0.0.1:8090` by default; put TLS in front with a reverse proxy) with a
-JSON API at `/api/v1` (**139 paths**; interactive docs at `/docs`, schema at `/openapi.json`) and a live D3
-run canvas. Submit, monitor, cancel, rerun, and schedule runs; browse
+JSON API at `/api/v1` (**161 paths**; interactive docs at `/docs`, schema at `/openapi.json`) and a live D3
+run canvas. Submit, monitor, cancel, rerun, and schedule runs; chain pipelines into
+**workflows** on a visual canvas; browse
 pipelines (with a field-level **navigator**), formatters, mappers, transforms,
 connections, addresses, engines, CDMs, health reports, research reports (Report Studio), and the Data Space; edit configs and secrets (secret
-*values* are never returned by the API). Appearance is themeable (several
-built-in themes plus custom overrides).
+*values* are never returned by the API). Appearance is themeable (eight
+built-in themes, **Data Factory** by default, plus custom overrides). The
+animated Ovid2 mark in the top bar shows pipeline activity: it follows the
+job on a run page and shows whether any job is running everywhere else. The
+browser-tab icon uses the same colours.
 
-**Authentication is optional and OFF by default.** Set `auth.enabled=true` in
-`settings.json` to require **Google / Microsoft SSO** with four roles
+**Sign-in is ON by default** outside dev instances (`OVID2_DEPLOYMENT=dev`,
+set by `ovid2 dev`). `auth.enabled` in `settings.json` can turn it off. A bad
+`settings.json` fails closed, and `ovid2 web` refuses to bind a non-loopback
+address while unauthenticated. Sign-in uses **Google / Microsoft SSO** with four roles
 (`system_admin`, `pipeline_operator`, `viewer`, `guest`); new users are
 `pending` until an admin activates them. First-admin bootstrap, a break-glass
 local admin, and host CLI recovery (`ovid2 web grant-admin` / `list-admins` /
 `set-role` / `reset-break-glass`) mean you can never get locked out. With auth
-disabled the panel is fully open behind the network boundary — **bind it to a
-trusted network only**. Full setup in [`docs/auth.md`](docs/auth.md).
+disabled the panel is fully open, so it is only allowed on loopback. Full setup in [`docs/auth.md`](docs/auth.md).
 
 Capabilities are cumulative:
 
@@ -1076,7 +1081,7 @@ Capabilities are cumulative:
 | View pipeline data, submit / cancel jobs | | | ✓ | ✓ |
 | Manage config / secrets / users / LLMs, settings, install | | | | ✓ |
 
-`ovid2 mcp` exposes a curated **101-tool** MCP surface over that API for AI
+`ovid2 mcp` exposes a curated **113-tool** MCP surface over that API for AI
 agents (stdio or streamable-HTTP transport). It speaks *only* HTTP to the API
 and imports no pipeline, driver, or secret module — the agent tier is the
 untrusted planner. Agents can browse metadata freely, but reading row values
@@ -1112,16 +1117,24 @@ metadata only (actor, session, model, token counts, latency, tool names).
 
 With **assistant tools** enabled, the general model can call a pinned
 allow-list of Ovid2 API routes
-(`src/ovid2/resources/agent_tools/catalogue.yaml`, 63 tools):
+(`src/ovid2/resources/agent_tools/catalogue.yaml`, 77 tools):
 
-- **Read tools** (47 GET routes) run automatically with a per-turn,
+- **Read tools** (54 GET routes) run automatically with a per-turn,
   GET-only token capped at the user's role (at most pipeline operator).
 - **Proposals and drafts** (submit / cancel / rerun / draft a job) are never
   executed by the model: they appear as cards you click **Run** on, or as a
   draft job you launch with ▶.
-- **UI actions** restyle *your* page (theme, fonts, saved appearances) or
-  edit the open report's unsaved working copy, after your browser
-  re-validates every value; nothing reaches the API.
+- **UI actions** do one of three things in *your* page:
+  - restyle it (theme, fonts, saved appearances);
+  - edit the open report's unsaved working copy;
+  - open the workflow canvas with an unsaved draft (`open_workflow_canvas`)
+    when a workflow can't be saved yet.
+
+  Your browser re-validates every value first. Nothing reaches the API.
+- **Input CDM.** Pipeline configs record the data model they read
+  (`input_cdm`, e.g. `omop_5_3 → pcornet_7_0`). The assistant uses it to
+  find conversions. Asked for "back up, convert, then check", it drafts a
+  copy → ETL → health workflow.
 - Secrets, settings, users, approvals, LLM connections, file system browsing,
   and every DELETE are **never** exposed (enforced by
   `tests/contract/test_agent_tools_catalogue.py`).
@@ -1246,6 +1259,23 @@ config's trigger (`manual` / `cron` / `interval` / `watch`), and spawns
 instance id. Cron/interval schedules are computed with `croniter`; `watch`
 pipelines fire when a new `<pipeline>/<batch>` folder appears. Draft jobs are
 never picked up until launched.
+
+### Workflows
+
+**Operate → Workflows** chains saved pipeline configs into a DAG drawn on a
+pan / zoom canvas (drag pipelines from a palette, drag a port to link steps,
+edit the selection in an inspector, undo / redo, validate). A **data** link
+feeds one step's output address in as the next step's input; an **after**
+link only orders steps, so pipelines on unrelated storage can be sequenced.
+The workflow owns its trigger — `manual`, `cron`, `interval`, or `watch`
+(one run per new batch folder under the first step's input) — inherited from
+the first pipeline. Each step runs as an ordinary job; on failure or cancel,
+remaining steps are skipped and finished steps are **rolled back
+automatically** (new tables dropped, overwritten tables restored from a
+pre-step backup on disc / s3 / azure_blob / Snowflake). Workflows can be
+added, edited, duplicated, enabled / disabled and deleted from the UI, the
+REST API (`/api/v1/workflows`, `/api/v1/workflow-runs`) and MCP; the
+assistant **drafts** them (saved disabled, opened on the canvas for review).
 
 The older in-process `ovid2 scheduler` (`src/ovid2/scheduler/`) is retained
 **for rollback only** and is not the recommended path.

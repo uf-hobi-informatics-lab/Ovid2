@@ -147,6 +147,8 @@ _DRAFT_ROUTES = {
     ("POST", "/api/v1/pipelines/{name}/draft"),
     # Report Studio: a private, unshared draft report (adr-report-studio.md).
     ("POST", "/api/v1/report-drafts"),
+    # Workflows: a *disabled* workflow opened on the canvas (adr-workflows.md).
+    ("POST", "/api/v1/workflow-drafts"),
 }
 
 
@@ -178,6 +180,8 @@ def test_draft_routes_never_queue() -> None:
     assert "draft=True" in b and "jobs_svc.submit(" not in b
     c = _body("api_create_report_draft")
     assert 'status="draft"' in c and "jobs_svc." not in c and "export_report(" not in c
+    d = _body("api_create_workflow_draft")
+    assert "enabled=False" in d and "start_run(" not in d and "jobs_svc." not in d
 
 
 @pytest.mark.contract
@@ -249,7 +253,13 @@ _UI_ACTIONS = {
     # Report Studio working-copy edits (adr-report-studio.md): validated by
     # the server-side layout validator, undoable, never saved by the agent.
     "edit_report_layout",
+    # Workflow canvas hand-off (adr-llm-dual-system.md "UI actions"): opens
+    # /workflows/new with an unsaved, browser-revalidated working copy.
+    "open_workflow_canvas",
 }
+# A UI action is ``use_llm`` unless its effect only makes sense for a user
+# who can finish it (the workflow canvas hand-off needs ``manage_config``).
+_UI_ACTION_CAPABILITY = {"open_workflow_canvas": "manage_config"}
 _STATIC = Path(__file__).resolve().parents[2] / "src" / "ovid2" / "web" / "static"
 _TEMPLATES = _STATIC.parent / "templates"
 
@@ -267,7 +277,7 @@ def test_ui_actions_are_pinned() -> None:
     for t in load_catalogue():
         if t.ui_action:
             assert t.params.get("additionalProperties") is False, t.name
-            assert t.capability == "use_llm", t.name
+            assert t.capability == _UI_ACTION_CAPABILITY.get(t.name, "use_llm"), t.name
 
 
 @pytest.mark.contract

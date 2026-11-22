@@ -143,7 +143,21 @@ def _row_to_job_detail(row: dict[str, object]) -> JobDetail:
         started_at=(str(row["started_at"]) if row.get("started_at") else None),
         ended_at=(str(row["ended_at"]) if row.get("ended_at") else None),
         error=(str(row["error"]) if row.get("error") else None),
+        workflow_run_id=(str(row["workflow_run_id"]) if row.get("workflow_run_id") else None),
+        workflow_step_id=(str(row["workflow_step_id"]) if row.get("workflow_step_id") else None),
+        result=_parse_result(row.get("result_json")),
     )
+
+
+def _parse_result(raw: object) -> dict[str, Any] | None:
+    """Decode a ``result_json`` column (``None`` when absent or not an object)."""
+    if not raw:
+        return None
+    try:
+        value = json.loads(str(raw))
+    except (TypeError, ValueError):
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def _fetchrow(conn: sqlite3.Connection, job_id: str) -> dict[str, object] | None:
@@ -477,6 +491,145 @@ def submit_export(request: OdsExportJobRequest, *, actor: str = "web") -> JobSub
         detail_json=json.dumps({"job_id": job_id, "format": request.format}),
     )
     return JobSubmitResponse(job_id=job_id, instance_id=instance_id, status=STATUS_QUEUED)
+
+
+def submit_workflow_storage(
+    *,
+    action: str,
+    address: str,
+    tables: list[str],
+    key: str,
+    label: str,
+    batch_id: str,
+    workflow_run_id: str,
+    workflow_step_id: str,
+    actor: str = "worker",
+) -> JobSubmitResponse:
+    """Queue a ``workflow_storage`` job (snapshot / restore / drop at one address).
+
+    Created only by :mod:`workflow_runner_svc` for workflow rollback. The
+    worker runs ``ovid2 tools workflow-storage`` with the scoped secrets of
+    ``address`` (stored as the job's output address).
+
+    Raises:
+        SubmitError: On an unknown action.
+    """
+    if action not in ("snapshot", "restore", "drop", "drop-backup"):
+        raise SubmitError(f"Unknown workflow storage action '{action}'.")
+    web_db.ensure_schema()
+    job_id = _new_job_id()
+    instance_id = _new_instance_id()
+    extra_args: dict[str, Any] = {"kind": "workflow_storage", "action": action, "key": key}
+    with web_db.connect() as conn:
+        conn.execute(
+            "INSERT INTO web_jobs "
+            "(job_id, submitted_at, submitted_by, parent_job_id, pipeline, batch_id, "
+            "input_address, output_address, tables_json, transformations_json, "
+            "extra_args_json, status, cancel_requested, instance_id, workflow_run_id, "
+            "workflow_step_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
+            (
+                job_id,
+                _now_iso(),
+                actor,
+                None,
+                label,
+                batch_id or key,
+                address,
+                address,
+                json.dumps(list(tables)),
+                json.dumps([]),
+                json.dumps(extra_args),
+                STATUS_QUEUED,
+                instance_id,
+                workflow_run_id,
+                workflow_step_id,
+            ),
+        )
+    web_db.audit(
+        actor=actor,
+        action=f"workflow.storage.{action}",
+        target=address,
+        detail_json=json.dumps({"job_id": job_id, "run_id": workflow_run_id, "tables": tables}),
+    )
+    return JobSubmitResponse(job_id=job_id, instance_id=instance_id, status=STATUS_QUEUED)
+
+
+def submit_workflow_probe(
+    *,
+    address: str,
+    probes: list[dict[str, Any]],
+    label: str,
+    batch_id: str,
+    workflow_run_id: str,
+    workflow_step_id: str,
+    actor: str = "worker",
+) -> JobSubmitResponse:
+    """Queue a ``workflow_probe`` job (aggregate counts at one address).
+
+    Created only by :mod:`workflow_runner_svc` once a step with data probes
+    succeeds. The worker runs ``ovid2 tools workflow-probe`` with the
+    scoped secrets of ``address`` and stores the tool's JSON line (numbers
+    only) in ``result_json``.
+
+    Raises:
+        SubmitError: When ``probes`` is empty.
+    """
+    if not probes:
+        raise SubmitError("A workflow probe job needs at least one probe.")
+    web_db.ensure_schema()
+    job_id = _new_job_id()
+    instance_id = _new_instance_id()
+    extra_args: dict[str, Any] = {
+        "kind": "workflow_probe",
+        "engine": "duckdb",
+        "probes": list(probes),
+    }
+    with web_db.connect() as conn:
+        conn.execute(
+            "INSERT INTO web_jobs "
+            "(job_id, submitted_at, submitted_by, parent_job_id, pipeline, batch_id, "
+            "input_address, output_address, tables_json, transformations_json, "
+            "extra_args_json, status, cancel_requested, instance_id, workflow_run_id, "
+            "workflow_step_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
+            (
+                job_id,
+                _now_iso(),
+                actor,
+                None,
+                label,
+                batch_id or workflow_run_id,
+                address,
+                address,
+                json.dumps(sorted({str(p.get("table") or "") for p in probes})),
+                json.dumps([]),
+                json.dumps(extra_args),
+                STATUS_QUEUED,
+                instance_id,
+                workflow_run_id,
+                workflow_step_id,
+            ),
+        )
+    web_db.audit(
+        actor=actor,
+        action="workflow.probe",
+        target=address,
+        detail_json=json.dumps(
+            {"job_id": job_id, "run_id": workflow_run_id, "probes": [p.get("name") for p in probes]}
+        ),
+    )
+    return JobSubmitResponse(job_id=job_id, instance_id=instance_id, status=STATUS_QUEUED)
+
+
+def tag_workflow_job(job_id: str, *, run_id: str, step_id: str) -> None:
+    """Link an existing job to a workflow run step."""
+    web_db.ensure_schema()
+    with web_db.connect() as conn:
+        conn.execute(
+            "UPDATE web_jobs SET workflow_run_id = ?, workflow_step_id = ? WHERE job_id = ?",
+            (run_id, step_id, job_id),
+        )
 
 
 def export_artifact(job_id: str) -> tuple[Path, str] | None:
@@ -1035,6 +1188,16 @@ def mark_running_pid(job_id: str, pid: int) -> None:
     web_db.ensure_schema()
     with web_db.connect() as conn:
         conn.execute("UPDATE web_jobs SET pid = ? WHERE job_id = ?", (int(pid), job_id))
+
+
+def record_result(job_id: str, result: dict[str, Any] | None) -> None:
+    """Store the structured last-line result of a job-only tool."""
+    web_db.ensure_schema()
+    with web_db.connect() as conn:
+        conn.execute(
+            "UPDATE web_jobs SET result_json = ? WHERE job_id = ?",
+            (json.dumps(result) if result is not None else None, job_id),
+        )
 
 
 def mark_terminal(job_id: str, *, status: str, error: str | None = None) -> None:

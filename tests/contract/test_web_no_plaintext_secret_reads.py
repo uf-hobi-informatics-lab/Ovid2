@@ -147,6 +147,39 @@ def _resolves_only_auth_secret(node: ast.Call, auth_var_names: frozenset[str]) -
     return False
 
 
+def _evasions(tree: ast.Module) -> list[tuple[int, str]]:
+    """Return spellings that would reach a secret reader without its plain name.
+
+    * ``from … import load_secret as ls`` — an alias hides the call name;
+    * ``getattr(mod, "load_secret")`` — dynamic attribute access;
+    * ``fn = secrets.load_secret`` / passing it as a value — a reference
+      that is not the ``func`` of a call.
+    """
+    hits: list[tuple[int, str]] = []
+    call_funcs = {id(n.func) for n in ast.walk(tree) if isinstance(n, ast.Call)}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                if alias.name in SECRET_READ_CALLS and alias.asname not in (None, alias.name):
+                    hits.append((node.lineno, f"aliases {alias.name} as {alias.asname}"))
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "getattr"
+            and len(node.args) >= 2
+            and isinstance(node.args[1], ast.Constant)
+            and node.args[1].value in SECRET_READ_CALLS
+        ):
+            hits.append((node.lineno, f"getattr(…, {node.args[1].value!r})"))
+        elif (
+            isinstance(node, ast.Attribute)
+            and node.attr in SECRET_READ_CALLS
+            and id(node) not in call_funcs
+        ):
+            hits.append((node.lineno, f"references {node.attr} without calling it"))
+    return hits
+
+
 @pytest.mark.contract
 def test_web_never_resolves_plaintext_secrets(src_root: Path) -> None:
     """No web module may call resolve_secrets() / load_secret().
@@ -164,6 +197,7 @@ def test_web_never_resolves_plaintext_secrets(src_root: Path) -> None:
         rel_to_web = py.relative_to(web_root).as_posix()
         tree = ast.parse(py.read_text(encoding="utf-8"), filename=str(py))
         auth_var_names = _auth_secret_var_names(tree)
+        offenders += [f"{py.relative_to(src_root)}:{line} {what}" for line, what in _evasions(tree)]
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -185,6 +219,87 @@ def test_web_never_resolves_plaintext_secrets(src_root: Path) -> None:
         "in-process reads are ``auth_``-prefixed control-plane self-secrets "
         "from web/auth/*:\n" + "\n".join(offenders)
     )
+
+
+#: Web-relative modules allowed to open files under ``secrets.d``: the
+#: secret editor (writes, key listing, masked merge) and the auth
+#: control-plane self-secret readers above.
+_SECRET_FILE_MODULES: frozenset[str] = frozenset({"services/secrets_svc.py"}) | _AUTH_SECRET_MODULES
+
+#: Call names that read a file's contents.
+_FILE_READ_CALLS: frozenset[str] = frozenset({"open", "read_text", "read_bytes", "load"})
+
+#: Markers that a function is addressing the secrets directory.
+_SECRET_DIR_MARKERS: tuple[str, ...] = ("secrets.d", "secrets_dir(", "secret_path")
+
+
+def _direct_secret_file_reads(tree: ast.Module) -> list[tuple[int, str]]:
+    """Return ``(lineno, function)`` for functions that read a secrets.d file.
+
+    A function is flagged when its source mentions the secrets directory
+    (a ``secrets.d`` literal, a ``secrets_dir()`` call, or a
+    ``secret_path`` name) **and** it performs a file read
+    (``open`` / ``Path.open`` / ``read_text`` / ``read_bytes`` /
+    ``json.load``). This catches the bypass of opening a secret blob
+    directly instead of calling ``load_secret``.
+    """
+    hits: list[tuple[int, str]] = []
+    for fn in ast.walk(tree):
+        if not isinstance(fn, ast.FunctionDef | ast.AsyncFunctionDef):
+            continue
+        source = ast.unparse(fn)
+        if not any(marker in source for marker in _SECRET_DIR_MARKERS):
+            continue
+        for node in ast.walk(fn):
+            if isinstance(node, ast.Call) and _call_name(node) in _FILE_READ_CALLS:
+                hits.append((node.lineno, fn.name))
+                break
+    return hits
+
+
+@pytest.mark.contract
+def test_web_never_opens_secret_files_directly(src_root: Path) -> None:
+    """No web module may open a ``secrets.d`` file outside the secret editor."""
+    web_root = src_root / "web"
+    if not web_root.is_dir():
+        pytest.skip("Web tier not present.")
+    offenders: list[str] = []
+    for py in web_root.rglob("*.py"):
+        rel_to_web = py.relative_to(web_root).as_posix()
+        if rel_to_web in _SECRET_FILE_MODULES:
+            continue
+        tree = ast.parse(py.read_text(encoding="utf-8"), filename=str(py))
+        for lineno, func in _direct_secret_file_reads(tree):
+            offenders.append(f"{py.relative_to(src_root)}:{lineno} ({func}) reads a secrets.d file")
+    assert not offenders, (
+        "Web tier must not read secret files in-process; broker the check "
+        "through an `ovid2 tools …` executor subprocess (e.g. secret-status):\n"
+        + "\n".join(offenders)
+    )
+
+
+@pytest.mark.contract
+def test_evasion_detector_catches_aliases() -> None:
+    """Negative control for alias / getattr / by-reference evasions."""
+    tree = ast.parse(
+        "from ovid2.config.secrets import load_secret as ls\n"
+        "fn = secrets.load_secret\n"
+        "getattr(secrets, 'resolve_secrets')(x)\n"
+    )
+    kinds = " ".join(what for _l, what in _evasions(tree))
+    assert "aliases" in kinds and "references" in kinds and "getattr" in kinds
+
+
+@pytest.mark.contract
+def test_direct_secret_read_detector_catches_old_pattern() -> None:
+    """Negative control: the pre-fix install_svc helper is flagged."""
+    sample = ast.parse(
+        "def _read():\n"
+        "    p = Path(x) / 'ovid2' / 'secrets.d' / 'snowflake.json'\n"
+        "    with p.open() as fh:\n"
+        "        return json.load(fh)\n"
+    )
+    assert _direct_secret_file_reads(sample)
 
 
 if __name__ == "__main__":  # pragma: no cover

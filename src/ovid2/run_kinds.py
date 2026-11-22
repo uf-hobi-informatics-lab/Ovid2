@@ -1,7 +1,8 @@
 """Run-kind registry — the single source of truth for pipeline *kinds*.
 
 A **run kind** (``etl``, ``analysis``, ``dq_checks``, ``health``,
-``copy``, ``move`` — plus the job-only ``export``) is not a cosmetic label: it carries executor
+``copy``, ``move`` — plus the job-only ``export``,
+``workflow_storage`` and ``workflow_probe``) is not a cosmetic label: it carries executor
 behaviour — which CLI subcommand the worker invokes, which argv builder
 shapes the command line, whether the container mounts ``/data``
 read-only, whether an installed ``ovid2_pipelines.<name>`` package is
@@ -55,7 +56,9 @@ __all__ = [
 ]
 
 #: How the worker/CLI shapes the container argv for a kind.
-ArgvBuilder = Literal["etl", "health", "copy", "move", "export"]
+ArgvBuilder = Literal[
+    "etl", "health", "copy", "move", "export", "workflow_storage", "workflow_probe"
+]
 
 #: How the ``tables`` field is interpreted for a kind.
 #:
@@ -276,6 +279,46 @@ KIND_REGISTRY: dict[str, KindSpec] = {
         tables_mode="none",
         # Runs in a single driver container (no Spark cluster); ``/data``
         # stays read-only — the artifact directory is mounted rw on its own.
+        read_only_data_mount=True,
+        create_flow="plain",
+        job_only=True,
+    ),
+    "workflow_storage": KindSpec(
+        name="workflow_storage",
+        label="Workflow rollback",
+        description=(
+            "Whole-table snapshot / restore / drop at one address, queued by a "
+            "workflow run to back up an occupied output before a step and to "
+            "roll it back when the workflow fails."
+        ),
+        package_required=False,
+        cli_subcommand="tools workflow-storage",
+        argv_builder="workflow_storage",
+        uses_transformations=False,
+        uses_cdm=False,
+        tables_mode="none",
+        # Host-side executor subprocess with the scoped secrets of one
+        # address; no container, no /data mount.
+        read_only_data_mount=True,
+        create_flow="plain",
+        job_only=True,
+    ),
+    "workflow_probe": KindSpec(
+        name="workflow_probe",
+        label="Workflow data probe",
+        description=(
+            "Aggregate counts (optionally filtered) over a finished workflow "
+            "step's output, queued by a workflow run so a branch condition can "
+            "test them. Returns numbers only, never row values."
+        ),
+        package_required=False,
+        cli_subcommand="tools workflow-probe",
+        argv_builder="workflow_probe",
+        uses_transformations=False,
+        uses_cdm=False,
+        tables_mode="none",
+        # Host-side executor subprocess (in-process DuckDB) with the scoped
+        # secrets of one address; no container, no /data mount.
         read_only_data_mount=True,
         create_flow="plain",
         job_only=True,

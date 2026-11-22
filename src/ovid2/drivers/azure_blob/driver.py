@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from ovid2.drivers._object_store_admin import ObjectStoreAdminMixin
 from ovid2.drivers._table_listing import PrefixTableListingMixin
 from ovid2.drivers._tabular import TabularIntrospectionMixin
 from ovid2.drivers.azure_blob.metadata import (
@@ -40,6 +41,7 @@ from ovid2.drivers.azure_blob.metadata import (
     location_fields as _location_fields,
 )
 from ovid2.drivers.azure_blob.probe import (
+    admin_store_from_config,
     list_dir_from_config,
     list_tables_from_config,
     probe_auth_from_config,
@@ -58,7 +60,9 @@ if TYPE_CHECKING:
     from ovid2.drivers.azure_blob.spark import AzureBlobIO
 
 
-class AzureBlobDriver(TabularIntrospectionMixin, PrefixTableListingMixin, Driver):
+class AzureBlobDriver(
+    ObjectStoreAdminMixin, TabularIntrospectionMixin, PrefixTableListingMixin, Driver
+):
     """Native driver for the ``azure_blob`` peripheral.
 
     Constructor keeps the uniform ``(args, secrets, location)`` shape
@@ -109,6 +113,10 @@ class AzureBlobDriver(TabularIntrospectionMixin, PrefixTableListingMixin, Driver
         return list_tables_from_config(
             dict(self.args), dict(self.secrets), dict(self.location), sub_prefix
         )
+
+    def _admin_store(self) -> Any:
+        """SDK-backed store for workflow rollback (snapshot / restore / drop)."""
+        return admin_store_from_config(dict(self.args), dict(self.secrets), dict(self.location))
 
     def _tabular_source(self) -> Any:
         """Ranged-read :class:`ObjectStoreSource` for the Data Space explorer."""

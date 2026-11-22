@@ -57,7 +57,21 @@ function bootTerminal() {
     : mountTablePanel({});
   terminalHandle = mountTerminal(pane, {
     d3: window.d3,
-    onEvents: panel ? panel.handleEvents : null,
+    onEvents(events) {
+      if (panel) panel.handleEvents(events);
+      // Re-broadcast each polled batch so page chrome (the header
+      // <ovid-mark>, via ovid_mark_status.js) can follow the run's
+      // stage without opening a second event poll.
+      try {
+        window.dispatchEvent(
+          new CustomEvent("ovid2:run-events", {
+            detail: { instanceId: pane.dataset.instanceId || null, events },
+          }),
+        );
+      } catch (e) {
+        /* ignore */
+      }
+    },
   });
   return terminalHandle;
 }

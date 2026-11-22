@@ -5,8 +5,13 @@ audience: [admin]
 ---
 
 The panel supports **OIDC single sign-on** (Google, Microsoft, or any
-OIDC provider) with role-based access control. It ships **off**: until
-you enable it, anyone who can reach the port has full control.
+OIDC provider) with role-based access control. Sign-in is **on by
+default**: when `auth.enabled` is not set it is on, except in
+[dev instances](../01-getting-started/dev-instances.md)
+(`OVID2_DEPLOYMENT=dev`). `ovid2 init` asks for a
+[break-glass](#recovery) password so the first admin can sign in; for an
+unattended install put it in a 0600 file named by
+`OVID2_BREAKGLASS_PASSWORD_FILE`.
 
 ## Concepts
 
@@ -114,4 +119,11 @@ ovid2 web reset-break-glass      # then use the Break-glass form on /login
 
 ## Turning auth off
 
-Set `auth.enabled` to `false` and restart the panel.
+Set `auth.enabled` to `false` and restart the panel. With sign-in off every
+visitor is a full admin, so `ovid2 web` then **refuses to bind** anything
+but loopback (`127.0.0.1`, `::1`, `localhost`) unless you pass
+`--insecure-allow-network-without-auth`. The MCP HTTP transport likewise
+refuses a non-loopback bind without `--insecure-allow-network`.
+
+If `settings.json` cannot be read or fails validation, the panel keeps
+sign-in **on** (outside dev instances) and logs an error.

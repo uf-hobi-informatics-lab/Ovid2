@@ -1,0 +1,54 @@
+{
+  "cross_pipeline_imports": {
+    "files": {},
+    "total": 0
+  },
+  "ovid2001_suppressions": {
+    "files": {
+      "pipelines/ovid2_pipelines/example_pcornet/formatters_custom/harvest_formatter.py": 1,
+      "src/ovid2/core/engines/_duck_frame.py": 1,
+      "src/ovid2/core/engines/databricks_spark.py": 1,
+      "src/ovid2/core/engines/duckdb.py": 2,
+      "src/ovid2/core/engines/duckdb_stager.py": 1,
+      "src/ovid2/core/engines/pyspark.py": 2,
+      "src/ovid2/core/engines/snowpark.py": 5,
+      "src/ovid2/core/engines/stager.py": 2,
+      "src/ovid2/core/pipeline.py": 1,
+      "src/ovid2/transformations/analysis/distinct_values.py": 3,
+      "src/ovid2/transformations/analysis/monthly_counts.py": 1,
+      "src/ovid2/transformations/fixers/common/patterns_remover.py": 1,
+      "src/ovid2/transformations/quality/mapping_gap.py": 2,
+      "src/ovid2/transformations/quality/ops/__init__.py": 3,
+      "src/ovid2/transformations/quality/runner.py": 1
+    },
+    "total": 27
+  },
+  "pcornet_literals": {
+    "files": {
+      "src/ovid2/mappers/ops/legacy_select.py": 5,
+      "src/ovid2/transformations/fixers/common/copy_admit_date_or_delete.py": 3,
+      "src/ovid2/transformations/fixers/common/delete_records_after_death.py": 3,
+      "src/ovid2/transformations/fixers/common/delete_records_before_birth.py": 3,
+      "src/ovid2/transformations/fixers/common/encounterid_orphans.py": 4,
+      "src/ovid2/transformations/fixers/common/illogical_admit_date.py": 2,
+      "src/ovid2/transformations/fixers/common/illogical_discharge_date.py": 3,
+      "src/ovid2/transformations/fixers/common/norm_range_normalization.py": 34,
+      "src/ovid2/transformations/fixers/common/patid_orphans.py": 2,
+      "src/ovid2/transformations/fixers/common/providerid_orphans.py": 1,
+      "src/ovid2/transformations/fixers/common/replication.py": 6,
+      "src/ovid2/transformations/quality/ops/__init__.py": 35
+    },
+    "total": 101
+  },
+  "pyspark_tree_runtime_importers": {
+    "files": {
+      "src/ovid2/legacy/csv_roundtrip.py": 1,
+      "src/ovid2/legacy/dedup.py": 1,
+      "src/ovid2/legacy/fix_shim.py": 1,
+      "src/ovid2/legacy/fix_stage.py": 1,
+      "src/ovid2/legacy/reference.py": 1,
+      "src/ovid2/legacy/udfs.py": 1
+    },
+    "total": 6
+  }
+}

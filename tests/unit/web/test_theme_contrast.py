@@ -30,6 +30,7 @@ _SLUGS = (
     "financial",
     "lego",
     "spaceship",
+    "data-factory",
 )
 _ON_CARD = ("--fg", "--fg-muted", "--fg-subtle", "--ok", "--warn", "--err")
 _AA = 4.5

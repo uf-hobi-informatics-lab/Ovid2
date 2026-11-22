@@ -129,8 +129,18 @@ from ovid2.web.models import (
     UserDetail,
     UserRoleRequest,
     UserSummary,
+    WorkflowDetail,
+    WorkflowDraftRequest,
+    WorkflowDuplicateRequest,
+    WorkflowRunDetail,
+    WorkflowRunListResponse,
+    WorkflowRunRequest,
+    WorkflowSummary,
+    WorkflowValidation,
+    WorkflowWrite,
     WriteResult,
 )
+from ovid2.web.routes._route_policy import owner_scoped
 from ovid2.web.services import (
     addresses_svc,
     approvals_svc,
@@ -169,6 +179,8 @@ from ovid2.web.services import (
     timeline_svc,
     transforms_svc,
     users_svc,
+    workflow_runner_svc,
+    workflows_svc,
 )
 from ovid2.web.settings import LLM_TOOLS_API_URL, RUN_EVENTS_PAGE_SIZE
 
@@ -735,7 +747,12 @@ def api_put_formatter(
     dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG))],
 )
 def api_delete_formatter(pipeline: str, table: str) -> WriteResult:
-    """Remove a formatter YAML spec (Python-dict specs are never touched)."""
+    """Remove a formatter YAML spec (Python-dict specs are never touched).
+
+    Gated: destructive pipeline code, so it requires a prior human
+    approval (``formatter.delete``); HTTP 202 until approved.
+    """
+    _gate("formatter.delete", f"{pipeline}/{table}")
     try:
         return formatters_svc.delete_formatter(pipeline, table, actor="web")
     except formatters_svc.FormatterError as exc:
@@ -808,7 +825,12 @@ def api_put_mapper(
     dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG))],
 )
 def api_delete_mapper(pipeline: str, table: str) -> WriteResult:
-    """Remove a mapper YAML spec (Python ``SPEC`` modules are never touched)."""
+    """Remove a mapper YAML spec (Python ``SPEC`` modules are never touched).
+
+    Gated: destructive pipeline code, so it requires a prior human
+    approval (``mapper.delete``); HTTP 202 until approved.
+    """
+    _gate("mapper.delete", f"{pipeline}/{table}")
     try:
         return mappers_svc.delete_mapper(pipeline, table, actor="web")
     except mappers_svc.MapperError as exc:
@@ -1259,7 +1281,12 @@ def api_delete_pipeline_transform(
     name: str,
     ctx: AuthContext = Depends(require_capability(Capability.MANAGE_CONFIG)),
 ) -> WriteResult:
-    """Delete ``<pkg>/transforms/<name>.yaml``."""
+    """Delete ``<pkg>/transforms/<name>.yaml``.
+
+    Gated: destructive pipeline code (``pipeline_transform.delete``);
+    HTTP 202 until a human approves.
+    """
+    _gate("pipeline_transform.delete", f"{pipeline}/{name}", requested_by=_actor(ctx))
     try:
         return WriteResult(
             **builder_svc.delete_pipeline_transform(pipeline, name, actor=_actor(ctx))
@@ -2284,6 +2311,311 @@ def api_disable_pipeline_config(name: str) -> PipelineConfigDetail:
 
 
 # ---------------------------------------------------------------------------
+# Workflows — chains of saved pipelines (adr-workflows.md)
+# ---------------------------------------------------------------------------
+
+
+#: Approval action for an agent authoring a workflow data probe with a row filter.
+AGENT_WORKFLOW_PROBE_ACTION = "workflow.data_probe"
+
+
+def _gate_agent_workflow_overwrite(ctx: AuthContext | None, name: str, body: WorkflowWrite) -> None:
+    """Gate what an agent may grant a workflow without a human.
+
+    - Standing overwrite on a step → ``run.overwrite`` approval.
+    - A data probe with a row filter (``where``) → ``workflow.data_probe``
+      approval: a count under an arbitrary filter can reveal row values one
+      guess at a time, so an agent may only add one after a human approves.
+    """
+    if any(s.overrides.allow_overwrite for s in body.steps):
+        _gate_agent_overwrite(ctx, True, f"workflow:{name}")
+    if _is_agent(ctx) and any(p.where for s in body.steps for p in s.probes):
+        _gate(
+            AGENT_WORKFLOW_PROBE_ACTION,
+            f"workflow:{name}",
+            requested_by=ctx.user_id if ctx else "agent",
+        )
+
+
+@router.get(
+    "/workflow-conditions",
+    summary="Workflow branch-condition catalogue",
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_workflow_conditions() -> dict[str, Any]:
+    """Return the fields, operators, link outcomes, join modes and probe aggregates.
+
+    Conditions on workflow links (``edges[].when``) may only use these
+    fields and operators; see adr-workflows.md ("Branching").
+    """
+    from ovid2.config import workflow_conditions
+
+    return workflow_conditions.catalogue()
+
+
+@router.get(
+    "/workflows",
+    response_model=list[WorkflowSummary],
+    summary="List workflows",
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_list_workflows() -> list[WorkflowSummary]:
+    """Return every workflow (DAG of saved pipelines) with its runtime state."""
+    return workflows_svc.list_workflows()
+
+
+@router.get(
+    "/workflows/{name}",
+    response_model=WorkflowDetail,
+    summary="Get one workflow",
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_get_workflow(name: str) -> WorkflowDetail:
+    """Return one workflow definition plus next fire / last run."""
+    detail = workflows_svc.get_workflow(name)
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"Workflow '{name}' not found.")
+    return detail
+
+
+@router.post(
+    "/workflows/{name}",
+    response_model=WriteResult,
+    status_code=201,
+    summary="Create a workflow",
+    dependencies=[
+        Depends(require_json_content_type),
+        Depends(require_capability(Capability.MANAGE_CONFIG)),
+    ],
+)
+def api_create_workflow(
+    name: str,
+    payload: WorkflowWrite,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_CONFIG)),
+) -> WriteResult:
+    """Create a new workflow; fails with 400 when the name exists or the DAG is invalid."""
+    _gate_agent_workflow_overwrite(ctx, name, payload)
+    try:
+        return workflows_svc.write_workflow(name, payload, actor=_actor(ctx), create_only=True)
+    except workflows_svc.WorkflowError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.put(
+    "/workflows/{name}",
+    response_model=WriteResult,
+    summary="Create or update a workflow",
+    dependencies=[
+        Depends(require_json_content_type),
+        Depends(require_capability(Capability.MANAGE_CONFIG)),
+    ],
+)
+def api_put_workflow(
+    name: str,
+    payload: WorkflowWrite,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_CONFIG)),
+) -> WriteResult:
+    """Idempotent create-or-update of a workflow."""
+    _gate_agent_workflow_overwrite(ctx, name, payload)
+    try:
+        return workflows_svc.write_workflow(name, payload, actor=_actor(ctx))
+    except workflows_svc.WorkflowError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete(
+    "/workflows/{name}",
+    response_model=WriteResult,
+    summary="Delete a workflow",
+    dependencies=[Depends(require_capability(Capability.MANAGE_CONFIG))],
+)
+def api_delete_workflow(name: str) -> WriteResult:
+    """Remove a workflow definition (run history is kept). Approval-gated."""
+    _gate("workflow.delete", name)
+    try:
+        return workflows_svc.delete_workflow(name, actor="web")
+    except workflows_svc.WorkflowError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post(
+    "/workflows/{name}/duplicate",
+    response_model=WriteResult,
+    status_code=201,
+    summary="Duplicate a workflow",
+    dependencies=[
+        Depends(require_json_content_type),
+        Depends(require_capability(Capability.MANAGE_CONFIG)),
+    ],
+)
+def api_duplicate_workflow(
+    name: str,
+    body: WorkflowDuplicateRequest | None = None,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_CONFIG)),
+) -> WriteResult:
+    """Copy a workflow under a new name; the copy starts disabled."""
+    try:
+        return workflows_svc.duplicate_workflow(
+            name, (body.new_name if body else None), actor=_actor(ctx)
+        )
+    except workflows_svc.WorkflowError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post(
+    "/workflows/{name}/validate",
+    response_model=WorkflowValidation,
+    summary="Validate a workflow definition without saving it",
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_validate_workflow(name: str, payload: WorkflowWrite) -> WorkflowValidation:
+    """Return errors / warnings / a topological order for ``payload``."""
+    del name
+    return workflows_svc.validate(payload)
+
+
+@router.post(
+    "/workflows/{name}/run",
+    response_model=WorkflowRunDetail,
+    status_code=201,
+    summary="Run a workflow now",
+    dependencies=[Depends(require_capability(Capability.SUBMIT_JOBS))],
+)
+def api_run_workflow(
+    name: str,
+    body: WorkflowRunRequest | None = None,
+    ctx: AuthContext = Depends(require_capability(Capability.SUBMIT_JOBS)),
+) -> WorkflowRunDetail:
+    """Start a workflow run regardless of its trigger."""
+    detail = workflows_svc.get_workflow(name)
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"Workflow '{name}' not found.")
+    root_input = ((body.input_address if body else None) or "").strip() or None
+    try:
+        run_id = workflow_runner_svc.start_run(
+            detail, trigger="manual", actor=_actor(ctx), root_input=root_input
+        )
+    except workflow_runner_svc.WorkflowRunError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    run = workflow_runner_svc.get_run(run_id)
+    assert run is not None
+    return run
+
+
+@router.post(
+    "/workflows/{name}/enable",
+    response_model=WorkflowDetail,
+    summary="Enable a workflow (its trigger will fire)",
+    dependencies=[Depends(require_capability(Capability.SUBMIT_JOBS))],
+)
+def api_enable_workflow(name: str) -> WorkflowDetail:
+    """Set enabled=true on the named workflow."""
+    try:
+        return workflows_svc.set_enabled(name, True, actor="web")
+    except workflows_svc.WorkflowError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post(
+    "/workflows/{name}/disable",
+    response_model=WorkflowDetail,
+    summary="Disable a workflow (its trigger will not fire)",
+    dependencies=[Depends(require_capability(Capability.SUBMIT_JOBS))],
+)
+def api_disable_workflow(name: str) -> WorkflowDetail:
+    """Set enabled=false on the named workflow."""
+    try:
+        return workflows_svc.set_enabled(name, False, actor="web")
+    except workflows_svc.WorkflowError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post(
+    "/workflow-drafts",
+    response_model=WriteResult,
+    status_code=201,
+    summary="Save a disabled workflow draft for review on the canvas",
+    dependencies=[
+        Depends(require_json_content_type),
+        Depends(require_capability(Capability.MANAGE_CONFIG)),
+    ],
+)
+def api_create_workflow_draft(
+    body: WorkflowDraftRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_CONFIG)),
+) -> WriteResult:
+    """Store a workflow with ``enabled=False`` so nothing ever fires.
+
+    Used by the assistant's ``draft_workflow`` tool: the browser opens the
+    draft on the workflow canvas, where the human reviews, edits, saves and
+    enables (or runs) it. Never starts a run.
+    """
+    payload = WorkflowWrite(**body.model_dump(exclude={"name", "enabled"}), enabled=False)
+    _gate_agent_workflow_overwrite(ctx, body.name, payload)
+    try:
+        return workflows_svc.write_workflow(body.name, payload, actor=_actor(ctx), create_only=True)
+    except workflows_svc.WorkflowError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get(
+    "/workflow-runs",
+    response_model=WorkflowRunListResponse,
+    summary="List workflow runs",
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def api_list_workflow_runs(
+    workflow: str | None = None,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> WorkflowRunListResponse:
+    """Return workflow runs, newest first (optionally for one workflow)."""
+    return workflow_runner_svc.list_runs(workflow=workflow, limit=limit, offset=offset)
+
+
+@router.get(
+    "/workflow-runs/{run_id}",
+    response_model=WorkflowRunDetail,
+    summary="Get one workflow run with its step states",
+    dependencies=[Depends(require_capability(Capability.VIEW_RUNS))],
+)
+def api_get_workflow_run(run_id: str) -> WorkflowRunDetail:
+    """Return one workflow run."""
+    run = workflow_runner_svc.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"Workflow run '{run_id}' not found.")
+    return run
+
+
+@router.post(
+    "/workflow-runs/{run_id}/cancel",
+    response_model=WorkflowRunDetail,
+    summary="Cancel a workflow run (finished steps are rolled back)",
+    dependencies=[Depends(require_capability(Capability.SUBMIT_JOBS))],
+)
+def api_cancel_workflow_run(run_id: str) -> WorkflowRunDetail:
+    """Stop the run; completed steps are rolled back."""
+    try:
+        return workflow_runner_svc.cancel_run(run_id, actor="web")
+    except workflow_runner_svc.WorkflowRunError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post(
+    "/workflow-runs/{run_id}/rollback",
+    response_model=WorkflowRunDetail,
+    summary="Retry a failed rollback",
+    dependencies=[Depends(require_capability(Capability.SUBMIT_JOBS))],
+)
+def api_retry_workflow_rollback(run_id: str) -> WorkflowRunDetail:
+    """Re-run the failed rollback actions of a ``rollback_failed`` run."""
+    try:
+        return workflow_runner_svc.retry_rollback(run_id, actor="web")
+    except workflow_runner_svc.WorkflowRunError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
 # Settings (W7)
 # ---------------------------------------------------------------------------
 
@@ -2978,6 +3310,7 @@ def api_put_llm_message_meta(
     "/llm/sessions/{session_id}",
     status_code=204,
     summary="Delete one of the current user's assistant sessions",
+    openapi_extra=owner_scoped("Deletes only the caller's own assistant conversation."),
 )
 def api_delete_llm_session(
     session_id: str,
@@ -3074,14 +3407,52 @@ def api_get_approval(approval_id: str) -> ApprovalSummary:
     return row
 
 
+def _decision_for(
+    ctx: AuthContext, approval_id: str, payload: ApprovalDecision
+) -> ApprovalDecision:
+    """Return ``payload`` stamped with the real decider, refusing unsafe deciders.
+
+    An approval is a *human* check on a proposed destructive operation,
+    so:
+
+    * an agent principal (``mcp:`` / ``llm:``) may never decide one;
+    * an authenticated principal may not decide its own request.
+
+    The audit ``decided_by`` is taken from the principal, not the
+    client-supplied payload, unless auth is disabled (single synthetic
+    identity, where the payload label is all there is).
+
+    Raises:
+        HTTPException: 403 when the caller may not decide this request.
+    """
+    if _is_agent(ctx):
+        raise HTTPException(
+            status_code=403, detail="Agents cannot approve or deny approval requests."
+        )
+    if ctx.anonymous_bypass:
+        return payload
+    row = approvals_svc.get_approval(approval_id)
+    if row is not None and row.requested_by in {ctx.user_id, ctx.email}:
+        raise HTTPException(
+            status_code=403,
+            detail="A principal cannot approve or deny its own request.",
+        )
+    return payload.model_copy(update={"decided_by": ctx.email or ctx.user_id})
+
+
 @router.post(
     "/approvals/{approval_id}/approve",
     response_model=ApprovalSummary,
     summary="Approve a pending destructive operation",
     dependencies=[Depends(require_capability(Capability.ADMIN_ALL))],
 )
-def api_approve(approval_id: str, payload: ApprovalDecision) -> ApprovalSummary:
+def api_approve(
+    approval_id: str,
+    payload: ApprovalDecision,
+    ctx: AuthContext = Depends(require_capability(Capability.ADMIN_ALL)),
+) -> ApprovalSummary:
     """Flip a pending approval to ``approved`` (human-in-the-loop)."""
+    payload = _decision_for(ctx, approval_id, payload)
     try:
         return approvals_svc.decide(approval_id, True, payload)
     except KeyError as exc:
@@ -3096,8 +3467,13 @@ def api_approve(approval_id: str, payload: ApprovalDecision) -> ApprovalSummary:
     summary="Deny a pending destructive operation",
     dependencies=[Depends(require_capability(Capability.ADMIN_ALL))],
 )
-def api_deny(approval_id: str, payload: ApprovalDecision) -> ApprovalSummary:
+def api_deny(
+    approval_id: str,
+    payload: ApprovalDecision,
+    ctx: AuthContext = Depends(require_capability(Capability.ADMIN_ALL)),
+) -> ApprovalSummary:
     """Flip a pending approval to ``denied``."""
+    payload = _decision_for(ctx, approval_id, payload)
     try:
         return approvals_svc.decide(approval_id, False, payload)
     except KeyError as exc:
@@ -3425,6 +3801,7 @@ def api_get_report_template(
     "/report-templates/{template_id}",
     summary="Delete one of your report templates",
     response_model=dict,
+    openapi_extra=owner_scoped("Deletes a template owned by the caller; built-ins are read-only."),
 )
 def api_delete_report_template(
     template_id: str,
@@ -3696,6 +4073,7 @@ def api_update_report_note(
     "/reports/{report_id}/notes/{note_id}",
     summary="Delete one of your private notes",
     response_model=dict,
+    openapi_extra=owner_scoped("Deletes the caller's own private (unshared) report note."),
 )
 def api_delete_report_note(
     report_id: str,
@@ -3872,6 +4250,9 @@ def api_share_report(
     "/reports/{report_id}/shares/{principal_kind}/{principal}",
     summary="Stop sharing a report with a user or role (owner; audited)",
     response_model=list,
+    openapi_extra=owner_scoped(
+        "Revokes a share the report owner granted; the report itself is untouched."
+    ),
 )
 def api_unshare_report(
     report_id: str,

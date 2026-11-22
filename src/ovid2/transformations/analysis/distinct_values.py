@@ -57,8 +57,8 @@ class DistinctValuesTransformer(BaseTransformer):
                 )
                 .orderBy(col("count").desc())
             )
-            n_distinct = distinct.count()  # noqa: OVID2001
-            top = distinct.limit(_TOP_VALUES).collect()  # noqa: OVID2001 bounded top-N
+            n_distinct = distinct.count()  # noqa: OVID2001 — analysis pass count
+            top = distinct.limit(_TOP_VALUES).collect()  # noqa: OVID2001 — bounded top-N values
             null_rows = sum(int(r["count"]) for r in top if r[col_name] is None)
             append_analysis_record(
                 instance_id,

@@ -26,7 +26,6 @@ from starlette.responses import Response
 from ovid2.web import db as web_db
 from ovid2.web.app import create_app
 from ovid2.web.auth import cookie as cookie_mod
-from ovid2.web.auth import csrf as csrf_mod
 from ovid2.web.auth.roles import Role
 from ovid2.web.models import GlobalSettings, SettingsAuth
 from ovid2.web.services import sessions_svc, settings_svc, users_svc
@@ -107,9 +106,11 @@ def _set_cookie(client: TestClient, cookie: str | None) -> None:
         client.cookies.set("ovid2_session", cookie)
 
 
-def _csrf_headers() -> dict[str, str]:
-    """Return a header dict carrying a valid stateless CSRF token."""
-    return {csrf_mod.CSRF_HEADER_NAME: csrf_mod.issue_token()}
+def _csrf_headers(client: TestClient) -> dict[str, str]:
+    """Return a header dict carrying a CSRF token bound to ``client``'s session."""
+    from tests.helpers.csrf import csrf_headers_for
+
+    return csrf_headers_for(client)
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +227,7 @@ def test_admin_activate_redirects_and_activates(
     response = app_client.post(
         f"/users/{pending_id}/activate",
         data={"role": "viewer"},
-        headers=_csrf_headers(),
+        headers=_csrf_headers(app_client),
     )
     assert response.status_code == 303
     assert response.headers["location"] == "/users"
@@ -249,7 +250,7 @@ def test_admin_invalid_role_redirects_with_error(
     response = app_client.post(
         f"/users/{pending_id}/activate",
         data={"role": "pending"},
-        headers=_csrf_headers(),
+        headers=_csrf_headers(app_client),
     )
     assert response.status_code == 303
     assert response.headers["location"].startswith("/users?error=")
@@ -281,7 +282,9 @@ def test_last_admin_disable_guard_surfaces_error(
     )
     _set_cookie(app_client, _signed_cookie_value(session.session_id))
 
-    response = app_client.post(f"/users/{admin_record['user_id']}/disable", headers=_csrf_headers())
+    response = app_client.post(
+        f"/users/{admin_record['user_id']}/disable", headers=_csrf_headers(app_client)
+    )
     assert response.status_code == 303
     assert response.headers["location"].startswith("/users?error=")
     record = users_svc.get_user(str(admin_record["user_id"]))

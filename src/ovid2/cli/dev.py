@@ -53,6 +53,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ovid2.config.deployment import is_loopback_host
+
 __all__ = [
     "DEFAULT_PORT_RANGE",
     "Lease",
@@ -60,6 +62,7 @@ __all__ = [
     "default_host",
     "instance_env",
     "instance_root",
+    "lan_host",
     "list_leases",
     "port_range",
     "registry_dir",
@@ -90,6 +93,7 @@ _LEAKY_ENV: tuple[str, ...] = (
     "OVID2_PACKS_DIR",
     "OVID2_PACKS_ENABLED",
     "OVID2_PIPELINES_DIR",
+    "OVID2_WORKFLOWS_DIR",
     "OVID2_WEB_LOG_DIR",
     "OVID2_WEB_EXPORT_DIR",
     "OVID2_REPORTS_DIR",
@@ -97,6 +101,8 @@ _LEAKY_ENV: tuple[str, ...] = (
     "OVID2_SECRETS_FILE",
     "OVID2_SECRETS_DIR",
     "OVID2_SECRETS_SCOPE_MODE",
+    "OVID2_BREAKGLASS_PASSWORD_FILE",
+    "OVID2_DEPLOYMENT",
     "OVID2_SEED_FILE",
     "OVID2_ARCHIVE_DIR",
     "OVID2_WORK_DIR",
@@ -201,15 +207,23 @@ def port_range() -> tuple[int, int]:
 def default_host() -> str:
     """Return the address dev instances bind to.
 
-    ``$OVID2_DEV_HOST`` wins. Otherwise the host's primary LAN address is
-    discovered by asking the kernel which source address it would use
-    for an outbound UDP datagram (nothing is sent — UDP ``connect`` only
-    selects a route), so teammates can open the panel from a browser.
-    Falls back to loopback.
+    ``$OVID2_DEV_HOST`` wins; otherwise **loopback** (``127.0.0.1``).
+    Dev instances run with sign-in off, so a LAN bind would make every
+    visitor a full admin — expose one deliberately with ``--host <ip>``
+    after enabling auth (or with ``--insecure-allow-network-without-auth``).
     """
     override = os.environ.get("OVID2_DEV_HOST", "").strip()
     if override:
         return override
+    return "127.0.0.1"
+
+
+def lan_host() -> str | None:
+    """Return the host's primary LAN address, or ``None`` when undiscoverable.
+
+    Asks the kernel which source address it would use for an outbound UDP
+    datagram (nothing is sent — UDP ``connect`` only selects a route).
+    """
     with (
         contextlib.suppress(OSError),
         socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe,
@@ -218,7 +232,7 @@ def default_host() -> str:
         addr = str(probe.getsockname()[0])
         if addr and not addr.startswith("0."):
             return addr
-    return "127.0.0.1"
+    return None
 
 
 def default_image() -> str:
@@ -262,6 +276,9 @@ def instance_env(
         env[var] = str(root / sub)
     env.update(
         {
+            # Secure defaults key off this: auth off by default and
+            # secrets-scope ``warn`` apply only to explicit dev instances.
+            "OVID2_DEPLOYMENT": "dev",
             "OVID2_DEV_INSTANCE": name,
             "OVID2_DEV_ROOT": str(root),
             "OVID2_WORK_DIR": str(root / "run" / "ovid2"),
@@ -659,6 +676,21 @@ def _url(meta: Mapping[str, Any]) -> str:
     return f"http://{meta.get('host')}:{meta.get('port')}"
 
 
+def _instance_auth_enabled(root: Path) -> bool:
+    """Return whether the instance's ``settings.json`` explicitly enables auth.
+
+    Dev instances default to auth **off**, so only an explicit
+    ``"auth": {"enabled": true}`` counts.
+    """
+    path = root / "config" / "ovid2" / "settings.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    auth = data.get("auth") if isinstance(data, dict) else None
+    return isinstance(auth, dict) and auth.get("enabled") is True
+
+
 def _cmd_up(args: argparse.Namespace) -> int:
     name = validate_name(args.name)
     root = instance_root(name)
@@ -668,8 +700,25 @@ def _cmd_up(args: argparse.Namespace) -> int:
         print(f"[ovid2 dev] '{name}' already running at {_url(meta)} (pids {live})")
         return 0
 
-    host = args.host or meta.get("host") or default_host()
+    # A previously stored host is reused only when it is loopback: an old
+    # instance that used to bind the LAN must be re-exposed deliberately.
+    stored = str(meta.get("host") or "")
+    host = args.host or (stored if stored and is_loopback_host(stored) else default_host())
     image = args.image or meta.get("image") or default_image()
+    if (
+        not is_loopback_host(host)
+        and not getattr(args, "insecure_network", False)
+        and not _instance_auth_enabled(root)
+    ):
+        print(
+            f"[ovid2 dev] refusing to bind '{name}' to {host}: sign-in is off for this "
+            "instance, so anyone on the network would be a full admin. Use the default "
+            "(127.0.0.1) with an SSH tunnel, or enable auth first "
+            f'(eval "$(ovid2 dev env {name})"; ovid2 web reset-break-glass; set '
+            '"auth": {"enabled": true} in its settings.json).',
+            file=sys.stderr,
+        )
+        return 2
     if meta.get("port"):
         release_lease(int(meta["port"]))
     try:
@@ -696,14 +745,35 @@ def _cmd_up(args: argparse.Namespace) -> int:
     py = [sys.executable, "-m", "ovid2.cli"]
     pids: dict[str, int] = {
         "web": _spawn(
-            [*py, "web", "--bind", f"{host}:{lease.port}"], root=root, env=env, log=logs / "web.log"
+            [
+                *py,
+                "web",
+                "--bind",
+                f"{host}:{lease.port}",
+                *(
+                    ["--insecure-allow-network-without-auth"]
+                    if getattr(args, "insecure_network", False)
+                    else []
+                ),
+            ],
+            root=root,
+            env=env,
+            log=logs / "web.log",
         )
     }
     if not args.no_worker:
         pids["worker"] = _spawn([*py, "web-worker"], root=root, env=env, log=logs / "worker.log")
     if args.mcp:
         pids["mcp"] = _spawn(
-            [*py, "mcp", "--transport", "http", "--bind", f"{host}:{lease.mcp_port}"],
+            [
+                *py,
+                "mcp",
+                "--transport",
+                "http",
+                "--bind",
+                f"{host}:{lease.mcp_port}",
+                *(["--insecure-allow-network"] if getattr(args, "insecure_network", False) else []),
+            ],
             root=root,
             env=env,
             log=logs / "mcp.log",
@@ -740,10 +810,10 @@ def _cmd_up(args: argparse.Namespace) -> int:
     print(f'  shell   eval "$(ovid2 dev env {name})"   # run ovid2 CLI against this instance')
     if warning:
         print(f"[ovid2 dev] WARNING: {warning}")
-    if not host.startswith("127."):
+    if not is_loopback_host(host):
         print(
-            f"[ovid2 dev] NOTE: bound to {host} with auth off — anyone on the network can "
-            "use this panel. Use --host 127.0.0.1 or enable auth for sensitive connections."
+            f"[ovid2 dev] NOTE: '{name}' is reachable from the network at {host}. "
+            "Make sure sign-in is enabled for this instance."
         )
     return 0
 
@@ -882,7 +952,20 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         sub = action.add_parser(verb, help=help_text)
         _named(sub)
         sub.add_argument("--port", type=int, default=None, help="Exact web port (MCP = +1).")
-        sub.add_argument("--host", default=None, help="Bind address (default: host LAN IP).")
+        sub.add_argument(
+            "--host",
+            default=None,
+            help=(
+                "Bind address (default: 127.0.0.1). A LAN address needs sign-in enabled "
+                "for the instance, or --insecure-allow-network-without-auth."
+            ),
+        )
+        sub.add_argument(
+            "--insecure-allow-network-without-auth",
+            action="store_true",
+            dest="insecure_network",
+            help="Allow a non-loopback --host while sign-in is off (anyone can admin it).",
+        )
         sub.add_argument("--image", default=None, help="Docker image tag for runs.")
         sub.add_argument("--no-worker", action="store_true", help="Do not start web-worker.")
         sub.add_argument("--mcp", action="store_true", help="Also start the MCP HTTP server.")

@@ -22,17 +22,21 @@
   <span class="mono small">submitted by {{ job.submitted_by }} at {{ job.submitted_at | localtime }}</span>
   {% if job.status == "draft" %}
     <form method="post" action="/jobs/{{ job.job_id }}/launch" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="primary small" type="submit">Run</button>
     </form>
     <form method="post" action="/jobs/{{ job.job_id }}/discard" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="secondary small" type="submit">Discard</button>
     </form>
   {% elif job.status in ["queued", "running"] %}
     <form method="post" action="/jobs/{{ job.job_id }}/cancel" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="secondary small" type="submit">Cancel</button>
     </form>
   {% elif job.extra_args.get("kind") != "export" %}
     <form method="post" action="/jobs/{{ job.job_id }}/rerun" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="secondary small" type="submit">Rerun</button>
     </form>
   {% endif %}

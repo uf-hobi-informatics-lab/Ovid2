@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import json
 import logging
 import os
 import re
@@ -38,7 +39,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import IO
+from typing import IO, Any
 
 from ovid2.config.executor_env import ScopedSecrets, env_key_allowed, prepare_scoped_secrets
 from ovid2.config.executor_env import build_minimal_env as _build_minimal_env
@@ -180,6 +181,8 @@ class Worker:
         self._handle_cancel_requests()
         self._dispatch_due_pipelines()
         self._dispatch_watch_pipelines()
+        self._dispatch_workflows()
+        self._advance_workflows()
         while len(self._running) < self.max_parallel:
             job = jobs_svc.claim_next_queued()
             if job is None:
@@ -284,6 +287,107 @@ class Worker:
                         detail.name,
                         batch_id,
                     )
+
+    # ------------------------------------------------------------ workflows
+
+    def _dispatch_workflows(self) -> None:
+        """Start runs of due clock-triggered and watch-triggered workflows.
+
+        Gated on the same ``worker.route_dispatch_enabled`` flag as
+        pipeline dispatch. A workflow with a run in progress is skipped —
+        a workflow has at most one active run (new watch batches wait;
+        the cursor only advances when a run is actually started).
+        """
+        from ovid2.web.services import workflow_runner_svc, workflows_svc
+
+        try:
+            if not settings_svc.get_settings().worker.route_dispatch_enabled:
+                return
+        except Exception:
+            logger.exception("settings_svc.get_settings failed; skipping workflow dispatch.")
+            return
+        try:
+            due = workflows_svc.due_workflows()
+        except Exception:
+            logger.exception("workflows_svc.due_workflows failed.")
+            due = []
+        for wf in due:
+            if workflow_runner_svc.active_run(wf.name) is not None:
+                continue
+            try:
+                run_id = workflow_runner_svc.start_run(wf, trigger=wf.trigger.type, actor="worker")
+                logger.info(
+                    "Workflow %s fired run %s (trigger=%s)", wf.name, run_id, wf.trigger.type
+                )
+            except workflow_runner_svc.WorkflowRunError:
+                logger.exception("Workflow %s failed to fire.", wf.name)
+                workflows_svc.record_fire(wf.name, run_id="")
+        try:
+            summaries = workflows_svc.list_workflows()
+        except Exception:
+            logger.exception("workflows_svc.list_workflows failed.")
+            return
+        for summary in summaries:
+            if summary.trigger_type != "watch" or not summary.enabled:
+                continue
+            if workflow_runner_svc.active_run(summary.name) is not None:
+                continue
+            wf_detail = workflows_svc.get_workflow(summary.name)
+            if wf_detail is None or len(wf_detail.root_steps) != 1:
+                continue
+            root = next(s for s in wf_detail.steps if s.id == wf_detail.root_steps[0])
+            pipe = pipelines_svc.get_pipeline(root.pipeline)
+            watched = root.overrides.input_address or (pipe.input_address if pipe else "")
+            if not watched:
+                continue
+            key = f"workflow:{wf_detail.name}"
+            if self._watch_debounced_key(key, watched, wf_detail.trigger.watch_min_wait_minutes):
+                continue
+            try:
+                new_batches = watch_svc.scan_location(key, watched)
+            except Exception:
+                logger.exception("watch scan failed for workflow %s.", wf_detail.name)
+                continue
+            if not new_batches:
+                continue
+            batch = new_batches[0]  # one run at a time; the rest wait for the next tick
+            try:
+                child = watch_svc.child_address(watched, batch, actor="worker")
+                run_id = workflow_runner_svc.start_run(
+                    wf_detail, trigger="watch", actor="worker", root_input=child, batch_id=batch
+                )
+                watch_svc.record_seen(key, watched, batch)
+                logger.info(
+                    "Watch workflow %s started run %s for batch %s", wf_detail.name, run_id, batch
+                )
+            except (workflow_runner_svc.WorkflowRunError, addresses_svc.AddressError):
+                logger.exception("Watch workflow %s failed on batch %s.", wf_detail.name, batch)
+                watch_svc.record_seen(key, watched, batch)
+
+    def _advance_workflows(self) -> None:
+        """Move every active workflow run forward (never raises)."""
+        try:
+            from ovid2.web.services import workflow_runner_svc
+
+            workflow_runner_svc.advance_all()
+        except Exception:
+            logger.exception("workflow advance failed.")
+
+    @staticmethod
+    def _watch_debounced_key(key: str, address: str, wait: int | None) -> bool:
+        """Return True when ``key`` / ``address`` was scanned within ``wait`` minutes."""
+        if not wait or wait <= 0:
+            return False
+        checked = watch_svc.last_checked_at(key, address)
+        if not checked:
+            return False
+        try:
+            last = datetime.fromisoformat(checked)
+        except ValueError:
+            return False
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=UTC)
+        return datetime.now(UTC) - last < timedelta(minutes=int(wait))
 
     def _watch_debounced(self, detail: object) -> bool:
         """Return True when a watch pipeline was scanned too recently.
@@ -433,6 +537,10 @@ class Worker:
             argv = self._build_argv_health(job, kind)
         elif builder == "export":
             return self._build_argv_export(job)
+        elif builder == "workflow_storage":
+            return self._build_argv_workflow_storage(job)
+        elif builder == "workflow_probe":
+            return self._build_argv_workflow_probe(job)
         else:
             argv = self._build_argv_etl(job, kind)
         # The output address is the exact write location: forward an
@@ -668,6 +776,53 @@ class Worker:
             artifact,
         ]
 
+    def _build_argv_workflow_probe(self, job: JobDetail) -> list[str]:
+        """Build the argv for a ``workflow_probe`` job (branch-condition counts).
+
+        ``ovid2 tools workflow-probe --address <addr> --spec <json>``. Runs on
+        the host (in-process DuckDB) with the scoped secrets of that one
+        address; ``_finalize`` stores the tool's last JSON line as the job
+        result. See adr-workflows.md.
+        """
+        probes = job.extra_args.get("probes")
+        if not isinstance(probes, list) or not probes:
+            raise ValueError("workflow_probe job has no probes.")
+        return list(self.ovid2_bin) + [
+            "tools",
+            "workflow-probe",
+            "--address",
+            job.output_address,
+            "--spec",
+            json.dumps(probes, separators=(",", ":")),
+            "--engine",
+            str(job.extra_args.get("engine") or "duckdb"),
+        ]
+
+    def _build_argv_workflow_storage(self, job: JobDetail) -> list[str]:
+        """Build the argv for a ``workflow_storage`` job (workflow rollback).
+
+        ``ovid2 tools workflow-storage <action> --address <addr> --key <run>
+        --tables …``. Runs on the host with the scoped secrets of that one
+        address (``job.output_address``); see adr-workflows.md.
+        """
+        extra = job.extra_args
+        action = str(extra.get("action") or "")
+        if action not in ("snapshot", "restore", "drop", "drop-backup"):
+            raise ValueError(f"workflow_storage job has an invalid action {action!r}.")
+        argv = list(self.ovid2_bin) + [
+            "tools",
+            "workflow-storage",
+            action,
+            "--address",
+            job.output_address,
+            "--key",
+            str(extra.get("key") or ""),
+        ]
+        if job.tables:
+            argv.append("--tables")
+            argv.extend(job.tables)
+        return argv
+
     def _build_env(self, job: JobDetail) -> dict[str, str]:
         """Return a least-privilege environment for the executor.
 
@@ -841,6 +996,10 @@ class Worker:
         # SIGTERM and the exit is still attributed correctly.
         detail = jobs_svc.get_job(record.job_id)
         was_cancel = cancelled or (detail is not None and detail.cancel_requested)
+        if detail is not None and _RESULT_KINDS & {str(detail.extra_args.get("kind") or "")}:
+            jobs_svc.record_result(
+                record.job_id, _last_json_line(jobs_svc.worker_log_path(record.job_id))
+            )
         if was_cancel and returncode != 0:
             jobs_svc.mark_terminal(record.job_id, status=jobs_svc.STATUS_CANCELLED, error=None)
         elif returncode == 0:
@@ -939,6 +1098,32 @@ _EXCEPTION_LINE_RE = re.compile(
     r"(?:Error|Exception|Warning|NotImplementedError|Interrupt|Failure)"
     r"(?:\s*:\s*.*)?$",
 )
+
+
+#: Job-only kinds whose tool prints a JSON result line the web tier keeps.
+_RESULT_KINDS: frozenset[str] = frozenset({"workflow_probe"})
+
+
+def _last_json_line(log_path: Path) -> dict[str, Any] | None:
+    """Return the last JSON-object line of a worker log (bounded tail read)."""
+    try:
+        size = log_path.stat().st_size
+        with log_path.open("rb") as fh:
+            fh.seek(max(0, size - _LOG_TAIL_BYTES))
+            tail = fh.read().decode("utf-8", errors="replace")
+    except OSError:
+        return None
+    for line in reversed(tail.splitlines()):
+        text = line.strip()
+        if not (text.startswith("{") and text.endswith("}")):
+            continue
+        try:
+            value = json.loads(text)
+        except ValueError:
+            continue
+        if isinstance(value, dict):
+            return value
+    return None
 
 
 def _extract_error_from_log(log_path: Path) -> str | None:

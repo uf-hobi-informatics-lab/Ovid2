@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import getpass
 import logging
+import sys
 
 from ovid2.web import db as web_db
 from ovid2.web.auth import breakglass
@@ -59,6 +60,15 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "--reload",
         action="store_true",
         help="Enable uvicorn auto-reload (dev only).",
+    )
+    parser.add_argument(
+        "--insecure-allow-network-without-auth",
+        action="store_true",
+        dest="insecure_network",
+        help=(
+            "Allow binding a non-loopback address while sign-in is off. "
+            "Anyone who can reach the port gets full admin. Never use on a shared network."
+        ),
     )
     parser.add_argument(
         "--log-level",
@@ -268,6 +278,43 @@ def reset_break_glass(args: argparse.Namespace) -> int:
     return 0
 
 
+def network_bind_refusal(host: str, *, insecure: bool = False) -> str | None:
+    """Return an error message when ``host`` must not be bound, else ``None``.
+
+    With sign-in off every caller is the synthetic system admin (full
+    read / write / delete, no CSRF). Binding such a panel to a non-loopback
+    address hands that to anyone on the network — so it is refused unless
+    the operator passes ``--insecure-allow-network-without-auth``.
+
+    Args:
+        host: The bind host.
+        insecure: The explicit operator override.
+
+    Returns:
+        The refusal message, or ``None`` when the bind is allowed.
+    """
+    from ovid2.config.deployment import is_loopback_host
+    from ovid2.web.services import settings_svc
+
+    if is_loopback_host(host):
+        return None
+    if settings_svc.get_settings().auth.effective_enabled():
+        return None
+    if insecure:
+        print(
+            f"[ovid2 web] WARNING: serving on {host} with sign-in OFF — anyone who can "
+            "reach this port is a full admin (--insecure-allow-network-without-auth).",
+            file=sys.stderr,
+        )
+        return None
+    return (
+        f"[ovid2 web] refusing to bind {host}: sign-in (settings.auth) is off, so anyone on "
+        "the network would be a full admin. Bind 127.0.0.1, enable auth (ovid2 web "
+        "reset-break-glass + auth.enabled=true), or pass "
+        "--insecure-allow-network-without-auth."
+    )
+
+
 def main(args: argparse.Namespace) -> int:
     """Boot uvicorn against :data:`ovid2.web.app.app`.
 
@@ -294,6 +341,11 @@ def main(args: argparse.Namespace) -> int:
         port = int(port_str)
     except ValueError:
         print(f"[ovid2 web] invalid port '{port_str}'.")
+        return 2
+
+    refusal = network_bind_refusal(host, insecure=bool(getattr(args, "insecure_network", False)))
+    if refusal:
+        print(refusal, file=sys.stderr)
         return 2
 
     print(f"[ovid2 web] Starting FastAPI on http://{args.bind}")

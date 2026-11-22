@@ -15,10 +15,13 @@ Concretely:
   generic code. Test-only string literals inside docstrings are
   ignored.
 
-This test is deliberately conservative — it walks Python AST and only
-inspects import statements. String-literal scanning is left to
-per-fixer contract tests, which have the context to distinguish a
-column reference in a docstring from one in executable code.
+Imports are checked with the shared evasion-resistant walker
+(``tests/contract/_ast_utils``: multi-name imports, ``from ovid2.cdm import
+pcornet_7_0``, literal ``importlib.import_module``). The literal ban is a
+**shrink-only ratchet**: PCORnet table / column names (from the CDM YAML,
+≥ 4 chars) in executable code (docstrings excluded) are counted per file
+and may never exceed ``data/shrink_only.json["pcornet_literals"]``. Fixers
+whose ``FIXER_SCOPES`` entry names ``pcornet_7_0`` are exempt.
 """
 
 from __future__ import annotations
@@ -50,12 +53,13 @@ _FORBIDDEN_IMPORTS: tuple[str, ...] = (
 )
 
 
-def _module_target(node: ast.AST) -> str | None:
-    if isinstance(node, ast.Import):
-        return node.names[0].name if node.names else None
-    if isinstance(node, ast.ImportFrom):
-        return node.module
-    return None
+def _targets(tree: ast.AST) -> list[tuple[int, str]]:
+    """Return ``(line, module)`` for static and literal dynamic imports."""
+    from tests.contract._ast_utils import dynamic_imports, iter_imports
+
+    out = [(r.lineno, r.module) for r in iter_imports(tree)]
+    out += [(d.lineno, d.module) for d in dynamic_imports(tree) if d.module]
+    return out
 
 
 @pytest.mark.contract
@@ -77,15 +81,84 @@ def test_no_direct_cdm_module_imports_in_generic_code(src_root: Path) -> None:
             if rel in _EXEMPT_RELATIVE_PATHS:
                 continue
             tree = ast.parse(py.read_text(encoding="utf-8"), filename=str(py))
-            for node in ast.walk(tree):
-                if not isinstance(node, (ast.Import, ast.ImportFrom)):
-                    continue
-                target = _module_target(node) or ""
+            for lineno, target in _targets(tree):
                 for forbidden in _FORBIDDEN_IMPORTS:
                     if target == forbidden or target.startswith(forbidden + "."):
-                        offenders.append(f"{rel}:{node.lineno} imports {target}")
+                        offenders.append(f"{rel}:{lineno} imports {target}")
 
     assert not offenders, (
         "Generic engine code must reach CDM state through ovid2.cdm.registry "
         "(P10 CDM/ETL independence):\n" + "\n".join(offenders)
     )
+
+
+def _pcornet_names(src_root: Path) -> frozenset[str]:
+    """Return PCORnet table + column names (upper-case, ≥ 4 chars) from the CDM YAML."""
+    import yaml
+
+    names: set[str] = set()
+    for table in (src_root / "resources" / "cdms" / "pcornet_7_0" / "tables").glob("*.yaml"):
+        names.add(table.stem.upper())
+        doc = yaml.safe_load(table.read_text(encoding="utf-8")) or {}
+        for field in doc.get("fields") or []:
+            if isinstance(field, dict) and field.get("name"):
+                names.add(str(field["name"]).upper())
+    return frozenset(n for n in names if len(n) >= 4)
+
+
+def _docstring_nodes(tree: ast.AST) -> set[int]:
+    ids: set[int] = set()
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if isinstance(body, list) and body:
+            first = body[0]
+            if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
+                ids.add(id(first.value))
+    return ids
+
+
+def pcornet_literal_counts(src_root: Path) -> dict[str, int]:
+    """Return ``{relative_path: count}`` of PCORnet name literals in generic code."""
+    from ovid2.transformations.fixers.common.registry import FIXER_SCOPES
+
+    names = _pcornet_names(src_root)
+    scoped = {k for k, v in FIXER_SCOPES.items() if v != "generic"}
+    counts: dict[str, int] = {}
+    for subdir in _SCANNED_DIRS:
+        for py in (src_root / subdir).rglob("*.py"):
+            rel = py.relative_to(src_root).as_posix()
+            if rel in _EXEMPT_RELATIVE_PATHS or ("fixers/common/" in rel and py.stem in scoped):
+                continue
+            tree = ast.parse(py.read_text(encoding="utf-8"), filename=str(py))
+            docs = _docstring_nodes(tree)
+            n = sum(
+                1
+                for node in ast.walk(tree)
+                if isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and node.value in names
+                and id(node) not in docs
+            )
+            if n:
+                counts[f"src/ovid2/{rel}"] = n
+    return counts
+
+
+@pytest.mark.contract
+def test_pcornet_literals_only_shrink(src_root: Path) -> None:
+    """PCORnet schema literals in generic code may only decrease (ratchet)."""
+    from tests.contract._ratchet import check_ratchet
+
+    check_ratchet("pcornet_literals", pcornet_literal_counts(src_root))
+
+
+@pytest.mark.contract
+def test_import_detector_catches_from_cdm_import() -> None:
+    """Negative control: ``from ovid2.cdm import pcornet_7_0`` is seen."""
+    tree = ast.parse("import os, ovid2.cdm.omop_5_3\nfrom ovid2.cdm import pcornet_7_0\n")
+    targets = {t for _l, t in _targets(tree)}
+    assert {"ovid2.cdm.pcornet_7_0", "ovid2.cdm.omop_5_3"} <= targets
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit("Run through pytest.")

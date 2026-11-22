@@ -12,7 +12,10 @@ from ovid2.web.models import AuthProviderConfig, GlobalSettings, SettingsAuth
 def test_global_settings_auth_defaults() -> None:
     """GlobalSettings should have auth sub-model with correct defaults."""
     settings = GlobalSettings()
-    assert settings.auth.enabled is False
+    # Unset by default; the effective value follows OVID2_DEPLOYMENT (the
+    # suite runs as ``dev`` — see tests/conftest.py and test_secure_defaults).
+    assert settings.auth.enabled is None
+    assert settings.auth.effective_enabled() is False
     assert settings.auth.idle_ttl_minutes == 45
     assert settings.auth.absolute_ttl_minutes == 480
 

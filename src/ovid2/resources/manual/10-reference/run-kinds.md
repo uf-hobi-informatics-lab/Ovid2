@@ -20,5 +20,7 @@ A pipeline config's *kind* decides which executor command runs, whether a pipeli
 | `copy` | Copy | One-shot address-to-address copy that bypasses the formatter / mapper / fixer stages. | `ovid2 tools copy` | no | no | pipeline |
 | `move` | Move | Driver-native successor to copy — same shape, routes I/O through native drivers and supports strict CDM type checks. | `ovid2 tools move` | no | no | pipeline |
 | `export` | Export | Full-table export of one Data Space table to csv / xlsx, run in the background. Created from the Data Space table page only. | `ovid2 tools export-table` | no | no | job only |
+| `workflow_storage` | Workflow rollback | Whole-table snapshot / restore / drop at one address, queued by a workflow run to back up an occupied output before a step and to roll it back when the workflow fails. | `ovid2 tools workflow-storage` | no | no | job only |
+| `workflow_probe` | Workflow data probe | Aggregate counts (optionally filtered) over a finished workflow step's output, queued by a workflow run so a branch condition can test them. Returns numbers only, never row values. | `ovid2 tools workflow-probe` | no | no | job only |
 
 Deprecated aliases accepted on input: `cdm` → `etl`.

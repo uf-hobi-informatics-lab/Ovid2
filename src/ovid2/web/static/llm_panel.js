@@ -34,7 +34,10 @@
  *             Ovid2Appearance.ALLOWED_VARS, typed value patterns), applied
  *             immediately as the event arrives, and rendered as a chip with
  *             Undo (restores the snapshot taken just before). Replayed
- *             history never re-applies an action.
+ *             history never re-applies an action. open_workflow_canvas
+ *             stores an unsaved workflow working copy in sessionStorage and
+ *             opens /workflows/new?prefill=1 once the stream ends (no HTTP
+ *             call; the canvas re-checks every name); Undo goes back.
  * - Context:  every turn sends ui_context (current theme, overrides, saved
  *             theme names) so the model can answer "make it darker".
  *
@@ -59,6 +62,7 @@
     controller: null,
     busy: false,
     pendingDrafts: [], // open_draft events to execute once the stream ends
+    pendingNav: null,  // same-origin path a UI action asked to open after the stream
     sessionId: null,   // open session (server-side)
     session: null,     // its summary: title, title_source, token counters
     contextWindow: null,
@@ -486,7 +490,17 @@
    * profile by the theme.js store (its write* accessors PUT
    * /api/v1/me/appearance), so applyUiAction itself never fetches. */
 
-  var UI_ACTIONS = ["set_appearance", "save_appearance", "apply_saved_appearance", "edit_report_layout"];
+  var UI_ACTIONS = ["set_appearance", "save_appearance", "apply_saved_appearance", "edit_report_layout",
+                    "open_workflow_canvas"];
+  // open_workflow_canvas: the unsaved working copy travels to /workflows/new
+  // through this sessionStorage key (read + removed by workflow_canvas.js).
+  var WF_PREFILL_KEY = "ovid2WorkflowPrefill";
+  var WF_PREFILL_URL = "/workflows/new?prefill=1";
+  var WF_STEP_ID = /^[a-z0-9][a-z0-9_-]{0,39}$/;
+  var WF_NAME = /^[A-Za-z0-9_.-]{1,64}$/;
+  var WF_ADDR = /^[A-Za-z0-9_.:-]{1,128}$/;
+  var WF_TABLE = /^[A-Za-z0-9_*]{1,64}$/;
+  var WF_TEXT = /^[^<>]*$/;
   // Report Studio ops (pinned against ovid2.reports.layout.OPS and the
   // edit_report_layout catalogue enum by test_agent_tools_catalogue.py).
   var REPORT_OPS = ["set_report", "add_section", "update_section", "move_section", "remove_section",
@@ -554,8 +568,69 @@
     return "";
   }
 
+  function onlyKeys(obj, allowed) {
+    var keys = Object.keys(obj);
+    for (var i = 0; i < keys.length; i++) if (allowed.indexOf(keys[i]) === -1) return keys[i];
+    return "";
+  }
+
+  function isObj(v) { return !!v && typeof v === "object" && !Array.isArray(v); }
+
+  // Structure-only check; workflow_canvas.js re-checks every pipeline /
+  // address name against what the page actually lists before using it.
+  function checkCanvasArgs(args) {
+    if (!isObj(args)) return "arguments must be an object";
+    var bad = onlyKeys(args, ["name", "description", "steps", "edges", "missing"]);
+    if (bad) return "unknown argument " + bad;
+    if (args.name !== undefined && (typeof args.name !== "string" || !WF_NAME.test(args.name))) return "bad workflow name";
+    if (args.description !== undefined && (typeof args.description !== "string" || args.description.length > 500 ||
+        !WF_TEXT.test(args.description))) return "bad description";
+    if (!Array.isArray(args.steps) || !args.steps.length || args.steps.length > 20) return "steps must be a list of 1-20 steps";
+    var ids = {};
+    for (var i = 0; i < args.steps.length; i++) {
+      var st = args.steps[i];
+      if (!isObj(st)) return "step " + i + " must be an object";
+      bad = onlyKeys(st, ["id", "pipeline", "label", "overrides"]);
+      if (bad) return "step " + i + ": unknown field " + bad;
+      if (typeof st.id !== "string" || !WF_STEP_ID.test(st.id) || ids[st.id]) return "step " + i + ": bad or duplicate id";
+      ids[st.id] = true;
+      if (typeof st.pipeline !== "string" || !WF_NAME.test(st.pipeline)) return "step " + i + ": bad pipeline name";
+      if (st.label !== undefined && (typeof st.label !== "string" || st.label.length > 80 || !WF_TEXT.test(st.label))) return "step " + i + ": bad label";
+      if (st.overrides !== undefined) {
+        if (!isObj(st.overrides)) return "step " + i + ": overrides must be an object";
+        bad = onlyKeys(st.overrides, ["input_address", "output_address", "tables"]);
+        if (bad) return "step " + i + ": unknown override " + bad;
+        var o = st.overrides;
+        if (o.input_address !== undefined && (typeof o.input_address !== "string" || !WF_ADDR.test(o.input_address))) return "step " + i + ": bad input address";
+        if (o.output_address !== undefined && (typeof o.output_address !== "string" || !WF_ADDR.test(o.output_address))) return "step " + i + ": bad output address";
+        if (o.tables !== undefined) {
+          if (!Array.isArray(o.tables) || o.tables.length > 100) return "step " + i + ": bad tables";
+          for (var t = 0; t < o.tables.length; t++) if (typeof o.tables[t] !== "string" || !WF_TABLE.test(o.tables[t])) return "step " + i + ": bad table name";
+        }
+      }
+    }
+    var edges = args.edges === undefined ? [] : args.edges;
+    if (!Array.isArray(edges) || edges.length > 40) return "edges must be a list";
+    for (var j = 0; j < edges.length; j++) {
+      var e = edges[j];
+      if (!isObj(e)) return "link " + j + " must be an object";
+      bad = onlyKeys(e, ["from", "to", "type", "on"]);
+      if (bad) return "link " + j + ": unknown field " + bad;
+      if (!ids[e.from] || !ids[e.to] || e.from === e.to) return "link " + j + " must join two different steps";
+      if (e.type !== undefined && e.type !== "data" && e.type !== "after") return "link " + j + ": bad type";
+      if (e.on !== undefined && ["success", "failure", "always", "otherwise"].indexOf(e.on) === -1) return "link " + j + ": bad outcome";
+    }
+    var miss = args.missing === undefined ? [] : args.missing;
+    if (!Array.isArray(miss) || miss.length > 10) return "missing must be a short list";
+    for (var k = 0; k < miss.length; k++) {
+      if (typeof miss[k] !== "string" || miss[k].length > 160 || !WF_TEXT.test(miss[k])) return "bad missing note";
+    }
+    return "";
+  }
+
   function checkUiArgs(name, args) {
     if (name === "edit_report_layout") return checkReportArgs(args);
+    if (name === "open_workflow_canvas") return checkCanvasArgs(args);
     var t = themeLib(), a = appLib();
     if (!t || !a || !a.repaint) return "appearance controls are not loaded on this page";
     if (UI_ACTIONS.indexOf(name) === -1) return "unknown UI action " + name;
@@ -618,6 +693,10 @@
   function foldedOverrides() { return appLib().foldedOverrides(); }
 
   function describeUi(name, args) {
+    if (name === "open_workflow_canvas") {
+      var n = (args.steps || []).length;
+      return "Workflow canvas: " + n + " step" + (n === 1 ? "" : "s") + " pre-filled (unsaved)";
+    }
     if (name === "save_appearance") return "Saved the current look as \u201c" + args.name + "\u201d";
     if (name === "apply_saved_appearance") return "Applied saved theme \u201c" + args.name + "\u201d";
     var bits = [];
@@ -636,6 +715,7 @@
     var err = checkUiArgs(u.name, u.args);
     if (err) { u.state = "refused"; u.outcome = "Refused: " + err + "."; return; }
     if (u.name === "edit_report_layout") { applyReportEdit(u); return; }
+    if (u.name === "open_workflow_canvas") { applyCanvasPrefill(u); return; }
     var t = themeLib(), a = appLib(), args = u.args;
     var before = snapshot(u.name === "save_appearance");
     try {
@@ -707,8 +787,35 @@
     }).then(function () { save(); renderAll(); });
   }
 
+  // Hand the working copy to the canvas page; navigation waits for the end
+  // of the stream (like a draft) so the assistant's explanation still lands.
+  function applyCanvasPrefill(u) {
+    try {
+      sessionStorage.setItem(WF_PREFILL_KEY, JSON.stringify(u.args));
+    } catch (e) {
+      u.state = "refused";
+      u.outcome = "Refused: this browser blocks session storage.";
+      return;
+    }
+    u.before = { url: window.location.pathname + window.location.search };
+    u.state = "applied";
+    u.outcome = describeUi(u.name, u.args) + " — opening it now; bind what is missing and press Save.";
+    state.pendingNav = WF_PREFILL_URL;
+  }
+
   function undoUiAction(u) {
     if (u.state !== "applied" || !u.before) return;
+    if (u.name === "open_workflow_canvas") {
+      try { sessionStorage.removeItem(WF_PREFILL_KEY); } catch (e) { /* ignore */ }
+      if (state.pendingNav === WF_PREFILL_URL) state.pendingNav = null;
+      u.state = "undone";
+      u.outcome = describeUi(u.name, u.args) + " — undone.";
+      save(); renderAll();
+      var back = u.before.url || "/workflows";
+      if (back.charAt(0) !== "/" || back.charAt(1) === "/") back = "/workflows";
+      if (window.location.pathname + window.location.search !== back) window.location.assign(back);
+      return;
+    }
     if (u.name === "edit_report_layout") {
       var st = studioLib(), info = st && st.info ? st.info() : null;
       if (!info || info.report_id !== u.before.report_id) {
@@ -774,6 +881,14 @@
   }
 
   function toolChip(t) {
+    if (t.result && t.result.duplicate) {
+      var dup = el("details", "llm-tool");
+      var dsum = el("summary");
+      dsum.innerHTML = '<span class="badge severity-ok">already applied</span> <code>' + esc(t.name) +
+        "</code> " + '<span class="small muted">' + esc(t.result.summary || "") + "</span>";
+      dup.appendChild(dsum);
+      return dup;
+    }
     var rejected = t.result && (t.result.rejected || !t.result.status);
     var det = el("details", "llm-tool" + (t.result && !t.result.ok ? " failed" : "") +
                  (rejected ? " rejected" : ""));
@@ -807,7 +922,9 @@
     if (p.draft) {
       var dc = el("div", "llm-block llm-proposal llm-draft " + (p.state || "running"));
       var dh = el("div", "llm-block-title");
-      dh.innerHTML = "Draft job <code>" + esc((p.body && p.body.pipeline) || p.name) + "</code>" +
+      var isWf = p.path === "/api/v1/workflow-drafts";
+      dh.innerHTML = (isWf ? "Draft workflow <code>" + esc((p.body && p.body.name) || p.name)
+                           : "Draft job <code>" + esc((p.body && p.body.pipeline) || p.name)) + "</code>" +
         (p.state === "done" ? ' <span class="badge severity-ok">created</span>' :
          p.state === "failed" ? ' <span class="badge severity-error">failed</span>' :
          ' <span class="badge severity-warning">creating…</span>');
@@ -819,7 +936,7 @@
       }
       if (p.outcome) dc.appendChild(el("div", "small muted", p.outcome));
       if (p.url) {
-        var a = el("a", "button primary small", "Open run page");
+        var a = el("a", "button primary small", isWf ? "Open on the canvas" : "Open run page");
         a.href = p.url;
         dc.appendChild(a);
       }
@@ -1093,7 +1210,7 @@
           if (!hit) { hit = { id: ev.id, name: ev.name }; m.tools.push(hit); }
           hit.result = { status: ev.status, ok: ev.ok, elapsed_ms: ev.elapsed_ms,
                          summary: ev.summary, preview: (ev.preview || "").slice(0, 4000),
-                         rejected: !!ev.rejected };
+                         rejected: !!ev.rejected, duplicate: !!ev.duplicate };
           break;
         case "proposal":
           m.proposals.push({ id: ev.id, name: ev.name, method: ev.method, path: ev.path,
@@ -1172,7 +1289,10 @@
       save();
       repaint();
       var drafts = state.pendingDrafts.splice(0);
-      if (drafts.length) { openDraft(drafts[0]); return; }
+      if (drafts.length) { state.pendingNav = null; openDraft(drafts[0]); return; }
+      var nav = state.pendingNav;
+      state.pendingNav = null;
+      if (nav === WF_PREFILL_URL) { window.location.assign(nav); return; }
       var input = $("llm-input");
       if (input) input.focus();
     });
@@ -1182,7 +1302,7 @@
      open its run page. A draft is never executed by the worker — the human
      presses the (breathing) ▶ on the run page to launch it. */
   function openDraft(p) {
-    if (!/^\/api\/v1\/(job-drafts|report-drafts|pipelines\/[A-Za-z0-9_\-%.]+\/draft)$/.test(p.path || "") ||
+    if (!/^\/api\/v1\/(job-drafts|report-drafts|workflow-drafts|pipelines\/[A-Za-z0-9_\-%.]+\/draft)$/.test(p.path || "") ||
         p.method !== "POST") {
       p.state = "failed";
       p.outcome = "Refused: not a draft-job route.";
@@ -1207,6 +1327,15 @@
         p.outcome = "Draft report created — review it in the Report Studio and press Save to keep it.";
         save(); renderAll();
         window.location.assign(rurl);
+        return;
+      }
+      if (r.ok && r.data && r.data.name && p.path === "/api/v1/workflow-drafts") {
+        var wurl = "/workflows/" + encodeURIComponent(r.data.name) + "?draft=1";
+        p.state = "done";
+        p.url = wurl;
+        p.outcome = "Draft workflow saved (disabled) — review it on the canvas, then Save and enable or Run it.";
+        save(); renderAll();
+        window.location.assign(wurl);
         return;
       }
       if (r.ok && r.data && r.data.instance_id) {

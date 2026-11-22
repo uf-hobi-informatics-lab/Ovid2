@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import pytest
 
-# The seven shipped themes (movie/game pass + Spaceship).
+# The eight shipped themes (movie/game pass + Spaceship + Data Factory).
 _SLUGS = [
     "clinical",
     "matrix",
@@ -29,6 +29,7 @@ _SLUGS = [
     "financial",
     "lego",
     "spaceship",
+    "data-factory",
 ]
 _LABELS = [
     "Clinical",
@@ -38,9 +39,10 @@ _LABELS = [
     "Financial",
     "LEGO",
     "Spaceship",
+    "Data Factory",
 ]
 # Named themes that are not also the light/dark baseline aliases.
-_PALETTE_SLUGS = ["super-mario-world", "tatooine", "financial", "lego", "spaceship"]
+_PALETTE_SLUGS = ["super-mario-world", "tatooine", "financial", "lego", "spaceship", "data-factory"]
 # Retired slugs remapped to their replacements (both in theme.js and
 # the base.html pre-paint snippet).
 _RETIRED_ALIASES = {"dune": "tatooine", "industry": "lego"}
@@ -188,3 +190,59 @@ def test_bundled_font_files_are_served(web_client: object) -> None:
     for url in sorted(urls):
         r = web_client.get(url)  # type: ignore[attr-defined]
         assert r.status_code == 200 and len(r.content) > 1000, url
+
+
+@pytest.mark.unit
+def test_prepaint_knows_data_factory(web_client: object) -> None:
+    """A saved ``data-factory`` slug survives the pre-paint allow-list."""
+    body = web_client.get("/").text  # type: ignore[attr-defined]
+    assert '"data-factory"' in body
+
+
+@pytest.mark.unit
+def test_data_factory_signatures_never_block_clicks(web_client: object) -> None:
+    """The line rail, title index and flow sweep are click-through decorations."""
+    body = web_client.get("/static/ovid2.css").text  # type: ignore[attr-defined]
+    for selector in (
+        'html[data-theme="data-factory"] .topbar::after',
+        'html[data-theme="data-factory"] .page-header h1::after',
+        'html[data-theme="data-factory"] .cooking-now .cooking-now-label::after',
+        'html[data-theme="data-factory"] .login-card::after',
+    ):
+        assert "pointer-events: none" in _rule_body(body, selector), selector
+
+
+@pytest.mark.unit
+def test_data_factory_effects_follow_the_accent(web_client: object) -> None:
+    """Sweep / focus helpers derive from ``--accent`` so user overrides recolour them."""
+    body = web_client.get("/static/ovid2.css").text  # type: ignore[attr-defined]
+    assert "--df-sweep: color-mix(in srgb, var(--accent) 70%, #ffffff);" in body
+    assert "--df-focus-on-dark: color-mix(in srgb, var(--accent) 45%, #ffffff);" in body
+
+
+@pytest.mark.unit
+def test_data_factory_animations_have_reduced_motion_off_switch(web_client: object) -> None:
+    """Every Data Factory keyframe animation is switched off under reduced motion."""
+    body = web_client.get("/static/ovid2.css").text  # type: ignore[attr-defined]
+    start = body.index("15.z  Reduced motion")
+    block = body[start : body.index("Flow graph", start)]
+    for selector in (
+        ".cooking-now .cooking-now-label::after",
+        ".login-card::after",
+        ".badge.status-stopping::before",
+    ):
+        assert selector in block, selector
+
+
+@pytest.mark.unit
+def test_data_factory_is_the_default_theme(web_client: object) -> None:
+    """Without a saved theme, both pre-paint and theme.js fall back to Data Factory."""
+    page = web_client.get("/").text  # type: ignore[attr-defined]
+    prepaint = page[page.index("window.OVID2_APPEARANCE") : page.index("/static/ovid2.css")]
+    assert 'slug = "data-factory";' in prepaint
+    assert "prefers-color-scheme" not in prepaint
+    js = web_client.get("/static/theme.js").text  # type: ignore[attr-defined]
+    assert 'var DEFAULT_THEME = "data-factory";' in js
+    assert "return DEFAULT_THEME;" in js
+    themes = js[js.index("var THEMES = [") :]
+    assert themes.index('"data-factory"') < themes.index('"clinical"'), "default listed first"

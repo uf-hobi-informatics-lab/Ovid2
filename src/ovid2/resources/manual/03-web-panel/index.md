@@ -12,13 +12,34 @@ the MCP server and scripts use, so nothing is possible only in the browser.
 
 | Region | Contents |
 | --- | --- |
-| **Top bar** | the Ovid2 wordmark (home), the page title on narrow screens, the light/dark toggle |
-| **Left drawer** | navigation in five groups (*Operate*, *Explore*, *Configure*, *Access*, *System*), collapsible to an icon rail |
+| **Top bar** | the animated Ovid2 mark and wordmark (home link), your user chip and *Logout* |
+| **Left drawer** | the menu button, then navigation in five groups (*Operate*, *Explore*, *Configure*, *Access*, *System*); collapsible to an icon rail |
 | **Main area** | the current page |
 | **Right rail** | the command palette, the *Appearance* panel, and the *Agent Ovid* assistant |
 
-The drawer adapts to the screen: it shows full labels on wide screens, an
-icon rail on medium ones, and a hamburger menu on phones.
+The drawer adapts to the screen. On wide and medium screens the **menu
+button** (☰) sits at the top of the drawer and switches between full labels
+and a compact icon rail. The button stays in the same place either way, and
+the choice is remembered. On phones the drawer is hidden, and the menu
+button is in the top bar.
+
+### The Ovid2 mark
+
+The leaf mark next to *Ovid2* shows pipeline activity:
+
+| Mark | Meaning |
+| --- | --- |
+| breathing gently, blue gradient | nothing is running |
+| leaves lighting up in turn (O → I → D) | a job is running or queued |
+| left / centre / right leaf highlighted | the job on this page is reading, transforming or writing |
+| green rustle | the job on this page finished |
+| amber stem | a data-quality check on this job reported exceptions |
+| red, drooping | the job on this page failed |
+
+On a job page the mark follows that job. On every other page it shows
+whether *any* job you can see is running. The browser-tab icon follows the
+same colours. If your operating system asks for reduced motion, the mark
+changes colour but does not move.
 
 ### The left menu
 
@@ -54,6 +75,7 @@ Which links you see depends on your [role](../08-operations/auth.md).
 | Operate | Dashboard | queue, recent runs, environment checks | [Dashboard](dashboard.md) |
 | | Submit | the graphical job builder | [Submit](submit.md) |
 | | Pipelines | saved pipeline configs: run, edit, schedule | [Pipelines](pipelines.md) |
+| | Workflows | chain pipelines on a canvas; triggers, runs, rollback | [Workflows](workflows.md) |
 | | Packages | installed pipeline packages, the pipeline builder, **Delete package** | [Pipeline packages](pipelines.md#pipeline-packages) |
 | | Navigator | every pipeline → table → field → function, and UDFs | [Pipeline navigator](navigator.md) |
 | | Transforms | the reusable transform library (UDFs) | [Transform library](pipelines.md#transform-library) |
@@ -97,6 +119,7 @@ role or secret file), it is a drop-down list rather than a text box.
   <a class="card" href="dashboard.md"><strong>Dashboard</strong><span>The at-a-glance view.</span></a>
   <a class="card" href="submit.md"><strong>Submit</strong><span>Build and launch a job visually.</span></a>
   <a class="card" href="pipelines.md"><strong>Pipelines</strong><span>Saved configs and pipeline packages.</span></a>
+  <a class="card" href="workflows.md"><strong>Workflows</strong><span>Chain pipelines on a canvas.</span></a>
   <a class="card" href="navigator.md"><strong>Navigator</strong><span>Field-level lineage and UDFs.</span></a>
   <a class="card" href="jobs.md"><strong>Jobs & runs</strong><span>History, live canvas, reports.</span></a>
   <a class="card" href="dataspace.md"><strong>Data Space</strong><span>Browse, inspect and export tables.</span></a>

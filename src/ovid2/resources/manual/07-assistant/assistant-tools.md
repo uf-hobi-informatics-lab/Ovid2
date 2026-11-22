@@ -46,10 +46,33 @@ a **report** instead (`create_report_draft`). It reads the source's columns
 and the chart library first, then opens the private draft in the
 [Report Studio](../05-data/report-studio.md). Nothing is shared or exported.
 
+Ask *"every night run site_x, then copy its output to the warehouse"* and
+the assistant drafts a **workflow** (`draft_workflow`). It reads your
+pipeline configs and addresses first, links the steps (*data* when a step
+reads the previous output, *after* when it only waits), saves the workflow
+**disabled** and opens it on the [workflow canvas](../03-web-panel/workflows.md).
+You review it, then save and enable or run it.
+
+If the workflow can't be saved yet because an address is unknown or you still
+have to choose a pipeline, the assistant opens the canvas instead
+(`open_workflow_canvas`). It fills in the steps and links it knows and lists
+what you still have to pick. Nothing is saved until you press **Save**.
+For example, *"convert our OMOP data to PCORnet, back up the OMOP data first
+and run the EDC checks on the output"* becomes three steps:
+
+- a copy step (backup);
+- the OMOP → PCORnet ETL, linked *after* the copy;
+- the checks, linked by *data* to the ETL.
+
+The assistant finds the conversion through each config's **input CDM**
+(`input_cdm`, shown as `omop_5_3 → pcornet_7_0` on the Pipelines page). If
+several configs match, it asks which one to use.
+
 ## Proposals
 
-For `submit_run`, `cancel_job`, `rerun_job`, and enabling or disabling
-configs, the assistant shows a card with the method, path and body.
+For `submit_run`, `cancel_job`, `rerun_job`, enabling or disabling
+configs, and running, duplicating, enabling or cancelling
+[workflows](../03-web-panel/workflows.md), the assistant shows a card with the method, path and body.
 **Run** sends the request from **your** browser session, with your
 permissions and any approval gate. **Dismiss** discards it.
 
@@ -71,6 +94,14 @@ system prompt carries the report outline (ids only, sanitised). Your browser
 sends the ops to the same server validator the editor uses, applies them to
 your **unsaved** working copy, and shows **Undo**. Only you can **Save**.
 
+`open_workflow_canvas` opens `/workflows/new` with an **unsaved** workflow.
+It makes no API call. Your browser checks every step and link, and the canvas
+drops any pipeline or address that does not exist and tells you about it.
+**Undo** takes you back to the page you were on.
+
+To undo a UI change, press **Undo** on its chip. Typing *"undo"* only asks
+the assistant, which will point you to the button.
+
 ## Never exposed
 
 Secrets, settings, install, users, approvals, LLM connections, storage
@@ -81,6 +112,6 @@ test checks the catalogue against this list on every commit.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `max_tool_iterations` | 6 | model round-trips per turn. The last one runs without tools. |
+| `max_tool_iterations` | 6 | model round-trips per turn. The last one offers only draft / proposal / UI tools and tells the model it is the last. If the budget runs out mid-look-up, one tool-free call makes the model answer, so a turn never ends empty. |
 | `tool_result_max_chars` | 8000 | cap on each tool result; job logs keep the tail |
 | `OVID2_LLM_TOOLS_API_URL` | the server's own socket | where the executor calls back |

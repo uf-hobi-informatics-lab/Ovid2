@@ -201,10 +201,15 @@ class AuthRedirectMiddleware(BaseHTTPMiddleware):
             pending-approval page when the principal is pending / disabled.
         """
         try:
-            enabled = settings_svc.get_settings().auth.enabled
-        except Exception:  # a settings read failure must fail safe.
-            logger.warning("Failed to read auth settings; treating as disabled.")
-            enabled = False
+            enabled = settings_svc.get_settings().auth.effective_enabled()
+        except Exception:  # a settings read failure must fail *closed*.
+            from ovid2.config.deployment import is_dev
+
+            enabled = not is_dev()
+            logger.warning(
+                "Failed to read auth settings; treating auth as %s.",
+                "enabled" if enabled else "disabled (dev instance)",
+            )
 
         if not enabled:
             return await call_next(request)

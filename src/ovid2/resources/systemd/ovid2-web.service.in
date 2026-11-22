@@ -13,6 +13,8 @@ Wants=docker.service
 Type=simple
 User=@USER@
 Environment=PYTHONUNBUFFERED=1
+# Secure defaults: sign-in on, secrets scope enforced (see adr-secure-defaults).
+Environment=OVID2_DEPLOYMENT=production
 Environment=XDG_CONFIG_HOME=/etc
 Environment=XDG_STATE_HOME=/var/lib
 Environment=XDG_RUNTIME_DIR=/var/run

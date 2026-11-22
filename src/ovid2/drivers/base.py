@@ -765,6 +765,74 @@ class Driver(ABC):
         return {}
 
     # ------------------------------------------------------------------
+    # Storage admin (workflow rollback — adr-workflows.md)
+    # ------------------------------------------------------------------
+    #
+    # A workflow snapshots each step's occupied output before the step
+    # runs and, when the workflow fails, puts the output back the way it
+    # was: tables the run created are dropped, tables it overwrote are
+    # restored from the snapshot. These run only in the executor tier
+    # (``ovid2 tools workflow-storage``), never in the web process, and
+    # operate on whole tables at the address's exact location. ``key``
+    # names one backup (the workflow run id); the driver decides where
+    # it lives (a hidden ``.ovid2_wf_backup/<key>/`` folder for file and
+    # object stores, a sibling ``<SCHEMA>_OVID2BK_<key>`` schema for
+    # warehouses) so it never shows up as a table of the address.
+
+    @classmethod
+    def supports_workflow_rollback(cls) -> bool:
+        """Return ``True`` when this driver implements the storage-admin methods.
+
+        A static flag (no config / I/O) the web tier reads when it
+        validates a workflow: a step that wants rollback must write to
+        an address whose driver returns ``True`` here.
+        """
+        return False
+
+    def snapshot_tables(self, tables: list[str], key: str) -> list[str]:
+        """Copy ``tables`` at this address into the backup named ``key``.
+
+        Any previous backup with the same key is replaced. Returns the
+        tables actually copied (names absent from the address are skipped).
+
+        Raises:
+            NotImplementedError: When the driver has no storage-admin support.
+        """
+        del tables, key
+        raise NotImplementedError(f"Driver '{self.type_name}' cannot snapshot tables.")
+
+    def restore_tables(self, tables: list[str], key: str) -> list[str]:
+        """Replace ``tables`` at this address with their copies in backup ``key``.
+
+        Returns the tables restored.
+
+        Raises:
+            NotImplementedError: When the driver has no storage-admin support.
+        """
+        del tables, key
+        raise NotImplementedError(f"Driver '{self.type_name}' cannot restore tables.")
+
+    def drop_tables(self, tables: list[str]) -> list[str]:
+        """Delete ``tables`` at this address. Missing tables are ignored.
+
+        Returns the tables dropped.
+
+        Raises:
+            NotImplementedError: When the driver has no storage-admin support.
+        """
+        del tables
+        raise NotImplementedError(f"Driver '{self.type_name}' has no table-drop support.")
+
+    def drop_backup(self, key: str) -> None:
+        """Remove the backup named ``key`` (no-op when it does not exist).
+
+        Raises:
+            NotImplementedError: When the driver has no storage-admin support.
+        """
+        del key
+        raise NotImplementedError(f"Driver '{self.type_name}' has no backup-removal support.")
+
+    # ------------------------------------------------------------------
     # Table introspection (Data Space explorer)
     # ------------------------------------------------------------------
     #
@@ -1018,12 +1086,18 @@ CONTROL_METHODS: frozenset[str] = frozenset(
 )
 ROW_ACCESS_METHODS: frozenset[str] = frozenset({"sample_rows", "iter_rows", "count_rows"})
 DATA_PLANE_METHODS: frozenset[str] = frozenset({"read", "write", "create_complementary_tables"})
+#: Destructive whole-table operations used by workflow rollback. Only the
+#: ``workflow-storage`` executor tool may call them.
+STORAGE_ADMIN_METHODS: frozenset[str] = frozenset(
+    {"snapshot_tables", "restore_tables", "drop_tables", "drop_backup"}
+)
 
 
 __all__ = [
     "CONTROL_METHODS",
     "DATA_PLANE_METHODS",
     "ROW_ACCESS_METHODS",
+    "STORAGE_ADMIN_METHODS",
     "ColumnInfo",
     "ConnectionFieldSpec",
     "Driver",

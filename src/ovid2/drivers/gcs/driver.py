@@ -40,7 +40,7 @@ class GcsDriver(TabularIntrospectionMixin, build_legacy_driver_class("gcs")):  #
         if not sa:
             raise ValueError("The GCS storage account has no service_account_json secret.")
         info = json.loads(sa) if isinstance(sa, str) else dict(sa)
-        creds = service_account.Credentials.from_service_account_info(info)
+        creds = service_account.Credentials.from_service_account_info(info)  # type: ignore[no-untyped-call, unused-ignore]
         client = storage.Client(project=str(self.args.get("project_id") or ""), credentials=creds)
         return client, client.bucket(bucket_name), bucket_name
 

@@ -32,6 +32,7 @@ not listed here are internal; don't rely on them.
 | `OVID2_DATA_DIR` | `$XDG_DATA_HOME/ovid2/data` | raw batches (legacy layout) |
 | `OVID2_PIPELINE_PACKAGES_DIR` | auto-detected `pipelines/` in a checkout | directory holding `ovid2_pipelines/` (CLI and web) |
 | `OVID2_PIPELINES_DIR` | XDG `pipelines/` | saved pipeline-config JSONs; also accepted as the packages dir when it contains `ovid2_pipelines/` |
+| `OVID2_WORKFLOWS_DIR` | XDG `workflows/` | saved workflow JSONs (chains of pipeline configs) |
 | `OVID2_WEB_LOG_DIR` | under the state dir | job console logs |
 | `OVID2_WEB_EXPORT_DIR` | `$XDG_STATE_HOME/ovid2/web_exports` | Data Space export files |
 | `OVID2_REPORTS_DIR` | `$XDG_STATE_HOME/ovid2/reports` | Report Studio sources (durable, aggregated run datasets) |
@@ -140,7 +141,9 @@ See [Engines → DuckDB tuning](../02-concepts/engines.md#duckdb-tuning).
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `OVID2_SECRETS_SCOPE_MODE` | `warn` | `enforce` makes executor secret scopes exclusive |
+| `OVID2_DEPLOYMENT` | `production` | `dev` (set by `ovid2 dev`) turns off the secure defaults: sign-in off unless configured, secret scopes `warn`. Unset or any other value means production. |
+| `OVID2_SECRETS_SCOPE_MODE` | `enforce` (`warn` in dev instances) | `enforce` makes executor secret scopes exclusive; `warn` only logs out-of-scope reads |
+| `OVID2_BREAKGLASS_PASSWORD_FILE` | — | file whose first line `ovid2 init` uses as the break-glass admin password (unattended installs) |
 | `OVID2_SECRETS_DIR` | set by Ovid2 | the scoped secret directory of an executor. Don't set it yourself (see [below](#set-by-ovid2-do-not-set)). |
 | `OVID2_SECRETS_FILE` | — | single-file override for CI. Never forwarded; ignored under `enforce`. |
 | `OVID2_WORKER_ENV_ALLOWLIST` | built-in list | extra variables forwarded to executor subprocesses |

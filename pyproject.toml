@@ -190,6 +190,7 @@ packages = ["src/ovid2"]
 "src/ovid2/resources/branding/ovid_logo_32.png" = "ovid2/resources/branding/ovid_logo_32.png"
 "src/ovid2/resources/branding/ovid_logo_64.png" = "ovid2/resources/branding/ovid_logo_64.png"
 "src/ovid2/resources/branding/ovid_logo_128.png" = "ovid2/resources/branding/ovid_logo_128.png"
+"src/ovid2/resources/branding/ovid_sprout.svg" = "ovid2/resources/branding/ovid_sprout.svg"
 # Web-tier templates + static assets are already picked up by the
 # ``packages = ["src/ovid2"]`` glob above (Hatchling walks the tree
 # and includes every file that lives under a package). Do NOT list

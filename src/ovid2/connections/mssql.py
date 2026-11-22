@@ -15,7 +15,7 @@ class MssqlConnection(BaseConnection):
     def test(self) -> ConnectionTestResult:
         """Probe with a ``SELECT 1`` via ``pymssql`` or ``pyodbc``."""
         try:
-            import pymssql  # type: ignore[import-not-found]
+            import pymssql  # type: ignore[import-not-found, unused-ignore]
 
             return self._probe_pymssql(pymssql)
         except ImportError:

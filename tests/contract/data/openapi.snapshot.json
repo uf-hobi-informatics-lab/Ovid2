@@ -1881,6 +1881,19 @@
             "title": "Pipeline",
             "type": "string"
           },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Structured result of a job-only tool (``workflow_probe`` numbers); null for pipeline jobs.",
+            "title": "Result"
+          },
           "started_at": {
             "anyOf": [
               {
@@ -1917,6 +1930,29 @@
             },
             "title": "Transformations",
             "type": "array"
+          },
+          "workflow_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Workflow run this job belongs to (null for standalone jobs).",
+            "title": "Workflow Run Id"
+          },
+          "workflow_step_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Step Id"
           }
         },
         "required": [
@@ -3607,6 +3643,18 @@
             "title": "Input Address",
             "type": "string"
           },
+          "input_cdm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Data model the pipeline *reads* (e.g. `omop_5_3` for an OMOP \u2192 PCORnet conversion). Stored on the config, else taken from the package's `INPUT_CDM` setting; null when unknown or the same as `cdm`.",
+            "title": "Input Cdm"
+          },
           "kind": {
             "default": "etl",
             "description": "Pipeline kind. One of `etl`, `analysis`, `dq_checks`, `copy`, `move`. Determines which pipeline the worker invokes on dispatch. `copy` is a one-shot address-to-address move that bypasses the formatter/mapper/fixer stages. `move` is the driver-native successor to `copy` \u2014 same semantics, routes I/O through the D3 native drivers, and honours a `strict_types` flag on the D6.0 advisory CDM type check. The deprecated alias `cdm` is accepted and normalised to `etl`.",
@@ -3795,6 +3843,18 @@
           "input_address": {
             "title": "Input Address",
             "type": "string"
+          },
+          "input_cdm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Data model the pipeline reads (see PipelineConfigDetail.input_cdm).",
+            "title": "Input Cdm"
           },
           "kind": {
             "default": "etl",
@@ -4361,6 +4421,18 @@
           "input_address": {
             "title": "Input Address",
             "type": "string"
+          },
+          "input_cdm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Data model the pipeline reads (`kind=etl` only). Leave empty to use the package's `INPUT_CDM` setting.",
+            "title": "Input Cdm"
           },
           "kind": {
             "default": "etl",
@@ -5685,7 +5757,7 @@
         "type": "object"
       },
       "SettingsAuth": {
-        "description": "Authentication settings.",
+        "description": "Authentication settings.\n\n``enabled`` is tri-state: ``True`` / ``False`` when set explicitly in\n``settings.json``, ``None`` (the default) when unset \u2014 then\n:meth:`effective_enabled` applies the deployment default (**on**\nunless ``OVID2_DEPLOYMENT=dev``; see :mod:`ovid2.config.deployment`).\nAlways read ``effective_enabled()``, never ``enabled`` directly.",
         "properties": {
           "absolute_ttl_minutes": {
             "default": 480,
@@ -5708,10 +5780,16 @@
             "type": "string"
           },
           "enabled": {
-            "default": false,
-            "description": "Whether authentication is enabled",
-            "title": "Enabled",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether authentication is enabled. Unset = on, except in OVID2_DEPLOYMENT=dev instances.",
+            "title": "Enabled"
           },
           "idle_ttl_minutes": {
             "default": 45,
@@ -6623,6 +6701,1031 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "WorkflowDetail": {
+        "description": "A stored workflow plus its runtime state.",
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "description": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Description",
+            "type": "string"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowEdge"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "last_fired_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Fired At"
+          },
+          "last_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run Id"
+          },
+          "last_run_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run Status"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "next_fire_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Fire At"
+          },
+          "path": {
+            "default": "",
+            "title": "Path",
+            "type": "string"
+          },
+          "root_steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Root Steps",
+            "type": "array"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/PipelineTrigger"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "WorkflowDetail",
+        "type": "object"
+      },
+      "WorkflowDraftRequest": {
+        "description": "Body for ``POST /workflow-drafts`` \u2014 a workflow the human reviews on the canvas.",
+        "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Description",
+            "type": "string"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowEdge"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "name": {
+            "description": "Workflow name (letters, digits, '-', '_', '.').",
+            "title": "Name",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/PipelineTrigger"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "WorkflowDraftRequest",
+        "type": "object"
+      },
+      "WorkflowDuplicateRequest": {
+        "description": "Body for ``POST /workflows/{name}/duplicate``.",
+        "properties": {
+          "new_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Name of the copy; defaults to `<name>_copy` (first free).",
+            "title": "New Name"
+          }
+        },
+        "title": "WorkflowDuplicateRequest",
+        "type": "object"
+      },
+      "WorkflowEdge": {
+        "description": "A dependency between two steps, optionally conditional.\n\n``data`` \u2014 the upstream step's output address becomes the downstream\nstep's input. ``after`` \u2014 ordering only; the downstream step keeps its\nown input and output.\n\n``on`` picks the upstream outcome that follows the link (``success`` /\n``failure`` / ``always`` / ``otherwise`` \u2014 the else branch) and\n``when`` is an optional condition over the upstream step's facts\n(:mod:`ovid2.config.workflow_conditions`).",
+        "properties": {
+          "from": {
+            "description": "Upstream step id.",
+            "title": "From",
+            "type": "string"
+          },
+          "label": {
+            "default": "",
+            "description": "Optional branch label.",
+            "maxLength": 80,
+            "title": "Label",
+            "type": "string"
+          },
+          "on": {
+            "default": "success",
+            "description": "Upstream outcome that follows this link: `success` (default), `failure` (a recovery path \u2014 the failure no longer aborts the workflow), `always`, or `otherwise` (taken when no other conditional success link matched).",
+            "enum": [
+              "success",
+              "failure",
+              "always",
+              "otherwise"
+            ],
+            "title": "On",
+            "type": "string"
+          },
+          "to": {
+            "description": "Downstream step id.",
+            "title": "To",
+            "type": "string"
+          },
+          "type": {
+            "default": "data",
+            "enum": [
+              "data",
+              "after"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "when": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Condition tree: {all:[...]}, {any:[...]}, {not:{...}} or a leaf {field, op, value?, case_sensitive?}. Fields and operators: GET /workflow-conditions.",
+            "title": "When"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "title": "WorkflowEdge",
+        "type": "object"
+      },
+      "WorkflowEdgeDecision": {
+        "description": "Whether one link was taken in a run, and why.",
+        "properties": {
+          "from": {
+            "title": "From",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "taken": {
+            "title": "Taken",
+            "type": "boolean"
+          },
+          "to": {
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "taken"
+        ],
+        "title": "WorkflowEdgeDecision",
+        "type": "object"
+      },
+      "WorkflowProbe": {
+        "description": "An aggregate computed on a step's output for branch conditions.\n\nRuns in the executor (``ovid2 tools workflow-probe``) after the step\nsucceeds and returns one number \u2014 never row values. ``where`` is a\nrow filter checked by :mod:`ovid2.config.sql_expr_guard`.",
+        "properties": {
+          "agg": {
+            "default": "count",
+            "enum": [
+              "count",
+              "count_distinct",
+              "null_count",
+              "non_null_count"
+            ],
+            "title": "Agg",
+            "type": "string"
+          },
+          "column": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Column for count_distinct / null counts.",
+            "title": "Column"
+          },
+          "name": {
+            "description": "Probe name, read by conditions as `query.<name>`.",
+            "title": "Name",
+            "type": "string"
+          },
+          "table": {
+            "description": "Table at the step's output address.",
+            "title": "Table",
+            "type": "string"
+          },
+          "where": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional row filter (Spark SQL predicate).",
+            "title": "Where"
+          }
+        },
+        "required": [
+          "name",
+          "table"
+        ],
+        "title": "WorkflowProbe",
+        "type": "object"
+      },
+      "WorkflowRunDetail": {
+        "description": "One execution of a workflow.",
+        "properties": {
+          "batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Id"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "default": "web",
+            "title": "Created By",
+            "type": "string"
+          },
+          "definition": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowWrite"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "edges": {
+            "description": "Decided links (taken / not taken).",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowEdgeDecision"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "handled_failures": {
+            "default": 0,
+            "description": "Failed steps routed to a failure path.",
+            "title": "Handled Failures",
+            "type": "integer"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "skipped": {
+            "default": 0,
+            "description": "Steps on branches that were not taken.",
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowStepRun"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "trigger": {
+            "title": "Trigger",
+            "type": "string"
+          },
+          "workflow": {
+            "title": "Workflow",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "workflow",
+          "trigger",
+          "status",
+          "created_at"
+        ],
+        "title": "WorkflowRunDetail",
+        "type": "object"
+      },
+      "WorkflowRunListResponse": {
+        "description": "Paginated workflow runs.",
+        "properties": {
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRunDetail"
+            },
+            "title": "Runs",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total"
+        ],
+        "title": "WorkflowRunListResponse",
+        "type": "object"
+      },
+      "WorkflowRunRequest": {
+        "description": "Optional body for ``POST /workflows/{name}/run``.",
+        "properties": {
+          "input_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Bind the root step(s) input for this run (address name).",
+            "title": "Input Address"
+          }
+        },
+        "title": "WorkflowRunRequest",
+        "type": "object"
+      },
+      "WorkflowStep": {
+        "description": "One node of a workflow: a saved pipeline config plus overrides.",
+        "properties": {
+          "id": {
+            "description": "Step id, unique within the workflow (`[a-z0-9_-]`).",
+            "title": "Id",
+            "type": "string"
+          },
+          "join": {
+            "default": "all",
+            "description": "With several incoming links: `all` runs only when every incoming link is taken (one branch not taken skips this step); `any` waits for every upstream step to settle and runs when at least one link was taken.",
+            "enum": [
+              "all",
+              "any"
+            ],
+            "title": "Join",
+            "type": "string"
+          },
+          "label": {
+            "default": "",
+            "description": "Optional display label.",
+            "maxLength": 80,
+            "title": "Label",
+            "type": "string"
+          },
+          "overrides": {
+            "$ref": "#/components/schemas/WorkflowStepOverrides"
+          },
+          "pipeline": {
+            "description": "Saved pipeline config name (from GET /pipelines).",
+            "title": "Pipeline",
+            "type": "string"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowStepPosition"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "probes": {
+            "description": "Data probes computed on this step's output after it succeeds (numbers only); outgoing link conditions read them as `query.<name>`.",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowProbe"
+            },
+            "title": "Probes",
+            "type": "array"
+          },
+          "rollback": {
+            "default": true,
+            "description": "Undo this step's output when the workflow fails. A step whose output driver cannot drop tables must set this to false.",
+            "title": "Rollback",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "pipeline"
+        ],
+        "title": "WorkflowStep",
+        "type": "object"
+      },
+      "WorkflowStepOverrides": {
+        "description": "Per-step overrides applied on top of the referenced pipeline config.\n\nEvery field is optional; ``None`` keeps the pipeline's own value. An\ninput that arrives over a ``data`` edge always wins over\n``input_address``.",
+        "properties": {
+          "allow_overwrite": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Standing permission for this step to overwrite an occupied output; `null` falls back to the pipeline's `allow_overwrite`.",
+            "title": "Allow Overwrite"
+          },
+          "input_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Address name to read from (ignored when a data edge feeds this step).",
+            "title": "Input Address"
+          },
+          "output_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Address name to write to.",
+            "title": "Output Address"
+          },
+          "tables": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Table list for this step (copy / move); `null` keeps the pipeline's.",
+            "title": "Tables"
+          }
+        },
+        "title": "WorkflowStepOverrides",
+        "type": "object"
+      },
+      "WorkflowStepPosition": {
+        "description": "Canvas coordinates of a step node (cosmetic).",
+        "properties": {
+          "x": {
+            "default": 0.0,
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "default": 0.0,
+            "title": "Y",
+            "type": "number"
+          }
+        },
+        "title": "WorkflowStepPosition",
+        "type": "object"
+      },
+      "WorkflowStepRun": {
+        "description": "Runtime state of one step inside a workflow run.",
+        "properties": {
+          "backup_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backup Address"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "facts": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Facts gathered for its outgoing conditions (no row values).",
+            "title": "Facts"
+          },
+          "input_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Address"
+          },
+          "instance_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instance Id"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`succeeded` / `failed` once the step settled (before rollback).",
+            "title": "Outcome"
+          },
+          "output_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Address"
+          },
+          "pipeline": {
+            "title": "Pipeline",
+            "type": "string"
+          },
+          "pre_existing_tables": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pre Existing Tables"
+          },
+          "probe_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Job Id"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the step was skipped, or how its failure was handled.",
+            "title": "Reason"
+          },
+          "rollback_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rollback Action"
+          },
+          "rollback_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rollback Job Id"
+          },
+          "snapshot_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Job Id"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "step_id": {
+            "title": "Step Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step_id",
+          "pipeline",
+          "status"
+        ],
+        "title": "WorkflowStepRun",
+        "type": "object"
+      },
+      "WorkflowSummary": {
+        "description": "Listing entry for the workflows index page.",
+        "properties": {
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "edge_count": {
+            "default": 0,
+            "title": "Edge Count",
+            "type": "integer"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowEdge"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "last_fired_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Fired At"
+          },
+          "last_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run Id"
+          },
+          "last_run_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run Status"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "next_fire_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Fire At"
+          },
+          "step_count": {
+            "default": 0,
+            "title": "Step Count",
+            "type": "integer"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "trigger_type": {
+            "default": "manual",
+            "title": "Trigger Type",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "WorkflowSummary",
+        "type": "object"
+      },
+      "WorkflowValidation": {
+        "description": "Outcome of validating a workflow definition.",
+        "properties": {
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "order": {
+            "description": "A topological step order.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Order",
+            "type": "array"
+          },
+          "step_errors": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Step Errors",
+            "type": "object"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "WorkflowValidation",
+        "type": "object"
+      },
+      "WorkflowWrite": {
+        "description": "Payload for creating or updating a workflow definition.",
+        "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Description",
+            "type": "string"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowEdge"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/PipelineTrigger"
+          }
+        },
+        "title": "WorkflowWrite",
         "type": "object"
       },
       "WriteResult": {
@@ -9479,7 +10582,8 @@
         "summary": "Delete one of the current user's assistant sessions",
         "tags": [
           "v1"
-        ]
+        ],
+        "x-ovid2-owner-scoped": "Deletes only the caller's own assistant conversation."
       },
       "get": {
         "description": "Return the session and its messages (404 when it is not the caller's).",
@@ -10663,7 +11767,7 @@
     },
     "/api/v1/pipeline-packages/{pipeline}/formatters/{table}": {
       "delete": {
-        "description": "Remove a formatter YAML spec (Python-dict specs are never touched).",
+        "description": "Remove a formatter YAML spec (Python-dict specs are never touched).\n\nGated: destructive pipeline code, so it requires a prior human\napproval (``formatter.delete``); HTTP 202 until approved.",
         "operationId": "api_delete_formatter_api_v1_pipeline_packages__pipeline__formatters__table__delete",
         "parameters": [
           {
@@ -11098,7 +12202,7 @@
     },
     "/api/v1/pipeline-packages/{pipeline}/mappers/{table}": {
       "delete": {
-        "description": "Remove a mapper YAML spec (Python ``SPEC`` modules are never touched).",
+        "description": "Remove a mapper YAML spec (Python ``SPEC`` modules are never touched).\n\nGated: destructive pipeline code, so it requires a prior human\napproval (``mapper.delete``); HTTP 202 until approved.",
         "operationId": "api_delete_mapper_api_v1_pipeline_packages__pipeline__mappers__table__delete",
         "parameters": [
           {
@@ -11586,7 +12690,7 @@
     },
     "/api/v1/pipeline-packages/{pipeline}/transforms/{name}": {
       "delete": {
-        "description": "Delete ``<pkg>/transforms/<name>.yaml``.",
+        "description": "Delete ``<pkg>/transforms/<name>.yaml``.\n\nGated: destructive pipeline code (``pipeline_transform.delete``);\nHTTP 202 until a human approves.",
         "operationId": "api_delete_pipeline_transform_api_v1_pipeline_packages__pipeline__transforms__name__delete",
         "parameters": [
           {
@@ -12787,7 +13891,8 @@
         "summary": "Delete one of your report templates",
         "tags": [
           "v1"
-        ]
+        ],
+        "x-ovid2-owner-scoped": "Deletes a template owned by the caller; built-ins are read-only."
       },
       "get": {
         "description": "Return a template (layout included).",
@@ -13454,7 +14559,8 @@
         "summary": "Delete one of your private notes",
         "tags": [
           "v1"
-        ]
+        ],
+        "x-ovid2-owner-scoped": "Deletes the caller's own private (unshared) report note."
       },
       "put": {
         "description": "Merge ``block`` fields; with ``move`` re-anchor the note.",
@@ -13955,7 +15061,8 @@
         "summary": "Stop sharing a report with a user or role (owner; audited)",
         "tags": [
           "v1"
-        ]
+        ],
+        "x-ovid2-owner-scoped": "Revokes a share the report owner granted; the report itself is untouched."
       }
     },
     "/api/v1/reports/{report_id}/versions": {
@@ -15628,6 +16735,745 @@
           }
         },
         "summary": "Change a user's role",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/workflow-conditions": {
+      "get": {
+        "description": "Return the fields, operators, link outcomes, join modes and probe aggregates.\n\nConditions on workflow links (``edges[].when``) may only use these\nfields and operators; see adr-workflows.md (\"Branching\").",
+        "operationId": "api_workflow_conditions_api_v1_workflow_conditions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Workflow Conditions Api V1 Workflow Conditions Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Workflow branch-condition catalogue",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/workflow-drafts": {
+      "post": {
+        "description": "Store a workflow with ``enabled=False`` so nothing ever fires.\n\nUsed by the assistant's ``draft_workflow`` tool: the browser opens the\ndraft on the workflow canvas, where the human reviews, edits, saves and\nenables (or runs) it. Never starts a run.",
+        "operationId": "api_create_workflow_draft_api_v1_workflow_drafts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save a disabled workflow draft for review on the canvas",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/workflow-runs": {
+      "get": {
+        "description": "Return workflow runs, newest first (optionally for one workflow).",
+        "operationId": "api_list_workflow_runs_api_v1_workflow_runs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workflow",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workflow"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List workflow runs",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/workflow-runs/{run_id}": {
+      "get": {
+        "description": "Return one workflow run.",
+        "operationId": "api_get_workflow_run_api_v1_workflow_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get one workflow run with its step states",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/workflow-runs/{run_id}/cancel": {
+      "post": {
+        "description": "Stop the run; completed steps are rolled back.",
+        "operationId": "api_cancel_workflow_run_api_v1_workflow_runs__run_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel a workflow run (finished steps are rolled back)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/workflow-runs/{run_id}/rollback": {
+      "post": {
+        "description": "Re-run the failed rollback actions of a ``rollback_failed`` run.",
+        "operationId": "api_retry_workflow_rollback_api_v1_workflow_runs__run_id__rollback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry a failed rollback",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/workflows": {
+      "get": {
+        "description": "Return every workflow (DAG of saved pipelines) with its runtime state.",
+        "operationId": "api_list_workflows_api_v1_workflows_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowSummary"
+                  },
+                  "title": "Response Api List Workflows Api V1 Workflows Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List workflows",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/workflows/{name}": {
+      "delete": {
+        "description": "Remove a workflow definition (run history is kept). Approval-gated.",
+        "operationId": "api_delete_workflow_api_v1_workflows__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete a workflow",
+        "tags": [
+          "v1"
+        ]
+      },
+      "get": {
+        "description": "Return one workflow definition plus next fire / last run.",
+        "operationId": "api_get_workflow_api_v1_workflows__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get one workflow",
+        "tags": [
+          "v1"
+        ]
+      },
+      "post": {
+        "description": "Create a new workflow; fails with 400 when the name exists or the DAG is invalid.",
+        "operationId": "api_create_workflow_api_v1_workflows__name__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create a workflow",
+        "tags": [
+          "v1"
+        ]
+      },
+      "put": {
+        "description": "Idempotent create-or-update of a workflow.",
+        "operationId": "api_put_workflow_api_v1_workflows__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create or update a workflow",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/workflows/{name}/disable": {
+      "post": {
+        "description": "Set enabled=false on the named workflow.",
+        "operationId": "api_disable_workflow_api_v1_workflows__name__disable_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Disable a workflow (its trigger will not fire)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/workflows/{name}/duplicate": {
+      "post": {
+        "description": "Copy a workflow under a new name; the copy starts disabled.",
+        "operationId": "api_duplicate_workflow_api_v1_workflows__name__duplicate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/WorkflowDuplicateRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Duplicate a workflow",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/workflows/{name}/enable": {
+      "post": {
+        "description": "Set enabled=true on the named workflow.",
+        "operationId": "api_enable_workflow_api_v1_workflows__name__enable_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Enable a workflow (its trigger will fire)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/workflows/{name}/run": {
+      "post": {
+        "description": "Start a workflow run regardless of its trigger.",
+        "operationId": "api_run_workflow_api_v1_workflows__name__run_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/WorkflowRunRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run a workflow now",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/workflows/{name}/validate": {
+      "post": {
+        "description": "Return errors / warnings / a topological order for ``payload``.",
+        "operationId": "api_validate_workflow_api_v1_workflows__name__validate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowValidation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate a workflow definition without saving it",
         "tags": [
           "v1"
         ]

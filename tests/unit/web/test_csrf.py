@@ -83,10 +83,22 @@ def test_validate_rejects_absent_and_tampered(isolated_xdg: Path) -> None:
 
 @pytest.mark.unit
 def test_template_global_registered(isolated_xdg: Path) -> None:
-    """``csrf_token`` is a Jinja global producing a valid token."""
+    """``csrf_token`` is a Jinja global producing a valid (anonymous) token."""
     assert "csrf_token" in templates.env.globals
-    rendered = templates.env.globals["csrf_token"]()
+    rendered = templates.env.from_string("{{ csrf_token() }}").render(request=None)
     assert csrf.validate_token(rendered) is True
+
+
+@pytest.mark.unit
+def test_token_is_bound_to_session(isolated_xdg: Path) -> None:
+    """A token minted for one session is refused for another / for anon."""
+    mine = csrf.issue_token("session-a")
+    assert csrf.validate_token(mine, "session-a") is True
+    assert csrf.validate_token(mine, "session-b") is False
+    assert csrf.validate_token(mine, None) is False
+    anon = csrf.issue_token()
+    assert csrf.validate_token(anon, "session-a") is False
+    assert "session-a" not in mine  # the id is digested, never embedded
 
 
 @pytest.mark.unit
@@ -181,16 +193,56 @@ def test_settings_form_post_gated_end_to_end(
     importlib.reload(_app_module)
 
     _use_auth(monkeypatch, enabled=True)
+    from ovid2.web import db as web_db
+    from ovid2.web.auth.roles import Role
+    from ovid2.web.services import sessions_svc, users_svc
+    from tests.helpers.csrf import csrf_headers_for
+
+    web_db.ensure_schema()
+    record = users_svc.upsert_from_idp(
+        issuer="https://accounts.google.com",
+        subject="csrf-admin",
+        email="csrf-admin@example.org",
+        name="csrf-admin",
+    )
+    users_svc.activate(user_id=record["user_id"], role=Role.SYSTEM_ADMIN, actor="test")
+    session = sessions_svc.create(
+        user_id=str(record["user_id"]), idp_sid=None, absolute_ttl_min=60, idle_ttl_min=45
+    )
     with TestClient(_app_module.app) as client:
+        from starlette.responses import Response
+
+        response = Response()
+        cookie_mod.issue_cookie(response, session.session_id)
+        raw = next(v.decode("latin-1") for k, v in response.raw_headers if k == b"set-cookie")
+        client.cookies.set("ovid2_session", raw.split(";", 1)[0].split("=", 1)[1])
+
+        anonymous = TestClient(_app_module.app)
+        assert (
+            anonymous.post(
+                "/settings", data={"defaults_engine": "pyspark"}, follow_redirects=False
+            ).status_code
+            == 401
+        )
+
         no_token = client.post(
             "/settings", data={"defaults_engine": "pyspark"}, follow_redirects=False
         )
         assert no_token.status_code == 403
 
-        token = csrf.issue_token()
+        # An anonymous (pre-auth) token is refused for a signed-in session.
+        anon_token = csrf.issue_token()
+        wrong = client.post(
+            "/settings",
+            data={"defaults_engine": "pyspark", "csrf_token": anon_token},
+            follow_redirects=False,
+        )
+        assert wrong.status_code == 403
+
         with_token = client.post(
             "/settings",
-            data={"defaults_engine": "pyspark", "csrf_token": token},
+            data={"defaults_engine": "pyspark"},
+            headers=csrf_headers_for(client),
             follow_redirects=False,
         )
         assert with_token.status_code == 303

@@ -53,6 +53,8 @@ DESTRUCTIVE_ACTIONS: frozenset[str] = frozenset(
         "connection.delete",
         "engine.delete",
         "pipeline.delete",
+        # Deleting a workflow definition (its run history is kept).
+        "workflow.delete",
         # Deleting a pipeline *package* (the code folder; moved to the
         # XDG trash). Also removes it from the navigator / submit pages.
         "pipeline_package.delete",
@@ -61,6 +63,12 @@ DESTRUCTIVE_ACTIONS: frozenset[str] = frozenset(
         # Deleting a user transform-library chain: pipelines may have it
         # assigned (transforms/assignments.yaml), so their next run fails.
         "transform.delete",
+        # Deleting pipeline code: a formatter / mapper YAML spec or a
+        # pipeline-private transform chain. The next run of that
+        # pipeline silently loses the table / step.
+        "formatter.delete",
+        "mapper.delete",
+        "pipeline_transform.delete",
         # An agent (MCP / assistant) confirming that a run may overwrite an
         # occupied output location. The address is the exact write
         # location, so this replaces existing data — a human must approve.
@@ -70,6 +78,9 @@ DESTRUCTIVE_ACTIONS: frozenset[str] = frozenset(
         # plane and may be PHI; the untrusted planner gets them only after
         # a human approves this specific table, once.
         "dataspace.agent_row_access",
+        # An agent adding a workflow data probe with a row filter: a count
+        # under an arbitrary filter can reveal row values bit by bit.
+        "workflow.data_probe",
     }
 )
 

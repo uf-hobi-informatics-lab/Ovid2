@@ -15,10 +15,14 @@ The token is a timed, signed payload produced by
 :class:`itsdangerous.URLSafeTimedSerializer` keyed by the **same** signing
 key as the session cookie (:func:`ovid2.web.auth.cookie._resolve_signing_key`).
 A distinct salt (:data:`CSRF_SALT`) namespaces CSRF signatures so a session
-cookie value can never be replayed as a CSRF token, and vice versa. Because
-the token carries only an opaque nonce (not per-request server state), it is
-verifiable statelessly: any process holding the signing key can validate a
-token another process issued, and tokens survive a restart. Tokens expire
+cookie value can never be replayed as a CSRF token, and vice versa.
+
+The payload is **bound to the session**: it is a SHA-256 digest of the
+caller's session id (or the constant :data:`_ANON_BINDING` before sign-in).
+A token minted for one session never validates for another, so a
+logged-in attacker cannot hand a victim their own token. Validation is still
+stateless — any process holding the signing key re-derives the binding from
+the request's session cookie — and tokens survive a restart. Tokens expire
 after :data:`CSRF_MAX_AGE_SECONDS`.
 
 Scope of enforcement
@@ -52,11 +56,13 @@ HTMX ``hx-post`` requests can carry the token two ways, both accepted by
 
 from __future__ import annotations
 
+import hashlib
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+from jinja2 import pass_context
 from starlette.requests import Request
 
 from ovid2.web.auth import cookie
@@ -73,6 +79,7 @@ __all__ = [
     "CSRF_MAX_AGE_SECONDS",
     "CSRF_SALT",
     "issue_token",
+    "issue_token_for",
     "register_csrf",
     "require_csrf",
     "require_json_content_type",
@@ -83,10 +90,10 @@ __all__ = [
 #: which is keyed by the same signing key.
 CSRF_SALT: str = "ovid2.web.auth.csrf.v1"
 
-#: Opaque payload signed into every token. The value is irrelevant — only the
-#: signature and freshness matter for a double-submit token — so a constant
-#: keeps the tokens compact.
-_CSRF_PAYLOAD: str = "csrf"
+#: Binding used when the caller has no (valid) session — the login page and
+#: the auth-disabled panel. Pre-auth tokens can only satisfy pre-auth routes,
+#: because any request that carries a session binds to that session instead.
+_ANON_BINDING: str = "anon"
 
 #: How long an issued token stays valid. Long enough to fill in and submit a
 #: form (including a slow multi-field settings page), short enough to bound
@@ -116,31 +123,51 @@ def _serializer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(cookie._resolve_signing_key(), salt=CSRF_SALT)
 
 
-def issue_token() -> str:
-    """Return a fresh, signed CSRF token.
+def _binding(session_id: str | None) -> str:
+    """Return the CSRF binding for ``session_id`` (a digest, never the id)."""
+    if not session_id:
+        return _ANON_BINDING
+    return "s:" + hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:32]
 
-    The token is a timed, signed opaque payload. It is verifiable by
-    :func:`validate_token` without any server-side per-request state, so a
-    template can render one at page-render time and a later request can
-    validate it in a different worker process.
+
+def _request_session_id(request: Request | None) -> str | None:
+    """Return the verified session id carried by ``request``, if any."""
+    if request is None:
+        return None
+    return cookie.read_session_id(request)
+
+
+def issue_token(session_id: str | None = None) -> str:
+    """Return a fresh, signed CSRF token bound to ``session_id``.
+
+    Args:
+        session_id: The session the token is for; ``None`` for a pre-auth
+            (anonymous) token.
 
     Returns:
         A URL-safe CSRF token string suitable for a hidden form field or the
         ``X-CSRF-Token`` header.
     """
-    return _serializer().dumps(_CSRF_PAYLOAD)
+    return _serializer().dumps(_binding(session_id))
 
 
-def validate_token(token: str | None) -> bool:
-    """Return whether ``token`` is a valid, unexpired token from :func:`issue_token`.
+def issue_token_for(request: Request | None) -> str:
+    """Return a token bound to the session carried by ``request``."""
+    return issue_token(_request_session_id(request))
+
+
+def validate_token(token: str | None, session_id: str | None = None) -> bool:
+    """Return whether ``token`` is valid, unexpired and bound to ``session_id``.
 
     Args:
         token: The candidate token, or ``None`` when absent.
+        session_id: The session of the request being checked (``None`` for
+            a request without a valid session).
 
     Returns:
-        ``True`` iff the token verifies against the session signing key and is
-        no older than :data:`CSRF_MAX_AGE_SECONDS`; ``False`` otherwise
-        (absent, tampered, expired, or malformed).
+        ``True`` iff the token verifies against the session signing key, is
+        no older than :data:`CSRF_MAX_AGE_SECONDS`, and was issued for the
+        same session; ``False`` otherwise.
     """
     if not token:
         return False
@@ -152,12 +179,12 @@ def validate_token(token: str | None) -> bool:
     except BadSignature:
         logger.debug("CSRF token failed signature verification.")
         return False
-    return bool(value == _CSRF_PAYLOAD)
+    return bool(value == _binding(session_id))
 
 
 def _auth_enabled() -> bool:
     """Return whether auth (and therefore CSRF enforcement) is enabled."""
-    return bool(settings_svc.get_settings().auth.enabled)
+    return bool(settings_svc.get_settings().auth.effective_enabled())
 
 
 async def _read_token(request: Request) -> str | None:
@@ -210,7 +237,7 @@ async def require_csrf(request: Request) -> None:
     if request.url.path.startswith("/api/v1/"):
         return
     token = await _read_token(request)
-    if not validate_token(token):
+    if not validate_token(token, _request_session_id(request)):
         logger.warning(
             "Rejected %s %s: missing or invalid CSRF token.",
             request.method,
@@ -262,9 +289,15 @@ def register_csrf(templates: Jinja2Templates) -> None:
 
     After this call, templates can render ``{{ csrf_token() }}`` into a
     hidden form field or an ``hx-headers`` attribute. The callable returns a
-    freshly-issued token on every render.
+    freshly-issued token bound to the session of the ``request`` in the
+    template context (anonymous when there is none).
 
     Args:
         templates: The Jinja2 templates environment to augment.
     """
-    templates.env.globals[CSRF_FIELD_NAME] = issue_token
+
+    @pass_context
+    def _csrf_token(context: Any) -> str:
+        return issue_token_for(context.get("request"))
+
+    templates.env.globals[CSRF_FIELD_NAME] = _csrf_token

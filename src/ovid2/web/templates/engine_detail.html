@@ -50,10 +50,12 @@
   <div class="page-actions">
     <a href="/engines/{{ engine.name }}/edit" class="button primary">Edit</a>
     <form action="/engines/{{ engine.name }}/test" method="post" style="display: inline;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="button">Test warehouse</button>
     </form>
     <form action="/engines/{{ engine.name }}/delete" method="post" style="display: inline;"
           onsubmit="return confirm('Delete warehouse {{ engine.name }}?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="button danger">Delete</button>
     </form>
   </div>

@@ -28,14 +28,18 @@ from pathlib import Path
 from typing import Any
 
 __all__ = [
+    "PLACEHOLDER_VALUES",
     "SCOPED_SECRETS_DIR_ENV",
     "SCOPE_MODE_ENV",
     "SecretNotFoundError",
     "SecretPermissionError",
     "load_secret",
     "scope_enforced",
+    "scope_mode",
     "scoped_file",
     "scoped_secrets_dir",
+    "secret_fields_filled",
+    "secret_status",
 ]
 
 
@@ -53,10 +57,11 @@ class SecretPermissionError(PermissionError):
 #: Environment variable naming an exclusive, scoped secrets directory.
 SCOPED_SECRETS_DIR_ENV: str = "OVID2_SECRETS_DIR"
 
-#: ``warn`` (default during roll-out) or ``enforce``. Under ``warn`` a
-#: secret missing from :data:`SCOPED_SECRETS_DIR_ENV` is still resolved
-#: from the unscoped search path, with a warning naming it, so operators
-#: can find under-declared scopes before switching to ``enforce``.
+#: ``warn`` or ``enforce``. Under ``warn`` a secret missing from
+#: :data:`SCOPED_SECRETS_DIR_ENV` is still resolved from the unscoped
+#: search path, with a warning naming it. When unset the default follows
+#: the deployment mode: ``enforce`` in production, ``warn`` only for an
+#: explicit ``OVID2_DEPLOYMENT=dev`` (:mod:`ovid2.config.deployment`).
 SCOPE_MODE_ENV: str = "OVID2_SECRETS_SCOPE_MODE"
 
 
@@ -66,9 +71,24 @@ def scoped_secrets_dir() -> Path | None:
     return Path(scoped) if scoped else None
 
 
+def scope_mode() -> str:
+    """Return the effective scope mode, ``"enforce"`` or ``"warn"``.
+
+    An explicit :data:`SCOPE_MODE_ENV` wins (``warn`` / ``enforce``); when
+    unset or unrecognised the deployment default applies — ``enforce``
+    unless ``OVID2_DEPLOYMENT=dev``.
+    """
+    raw = os.environ.get(SCOPE_MODE_ENV, "").strip().lower()
+    if raw in {"warn", "enforce"}:
+        return raw
+    from ovid2.config.deployment import is_dev
+
+    return "warn" if is_dev() else "enforce"
+
+
 def scope_enforced() -> bool:
     """Return ``True`` when a scope miss must fail instead of falling back."""
-    return os.environ.get(SCOPE_MODE_ENV, "warn").strip().lower() == "enforce"
+    return scope_mode() == "enforce"
 
 
 def scoped_file(file_name: str) -> Path | None:
@@ -190,3 +210,79 @@ def load_secret(name: str) -> dict[str, Any]:
         f"Secret '{name}' not found in any of: {tried}. "
         f"See docs/installer.md for the secrets layout."
     )
+
+
+#: Values treated as an unfilled template slot by :func:`secret_status`.
+PLACEHOLDER_VALUES: frozenset[str] = frozenset({"", "REPLACE_ME", "CHANGEME"})
+
+
+def secret_fields_filled(
+    data: dict[str, Any],
+    required: tuple[str, ...] | list[str],
+    placeholders: frozenset[str] = PLACEHOLDER_VALUES,
+) -> list[str]:
+    """Return the ``required`` keys of ``data`` that are missing or placeholders.
+
+    Pure function: it inspects values but never returns them.
+
+    Args:
+        data: A parsed secret blob.
+        required: Keys that must carry a real value.
+        placeholders: Values (after ``strip()``) that count as unfilled.
+
+    Returns:
+        The unfilled keys, in ``required`` order (empty when all are filled).
+    """
+    missing: list[str] = []
+    for key in required:
+        value = data.get(key)
+        if not isinstance(value, str) or value.strip() in placeholders:
+            missing.append(key)
+    return missing
+
+
+def secret_status(name: str, required: tuple[str, ...] | list[str] = ()) -> dict[str, Any]:
+    """Return a **value-free** status report for the secret ``name``.
+
+    Executor-tier helper behind ``ovid2 tools secret-status``: it loads
+    the secret (through the scope-aware :func:`load_secret`) and reports
+    only whether it exists, its key names, its file mode, and which
+    ``required`` keys are unfilled. No value ever appears in the result.
+
+    Args:
+        name: Logical secret name.
+        required: Keys that must carry a non-placeholder value.
+
+    Returns:
+        ``{"name", "exists", "path", "keys", "mode_0600", "filled",
+        "missing", "error"}``.
+    """
+    report: dict[str, Any] = {
+        "name": name,
+        "exists": False,
+        "path": None,
+        "keys": [],
+        "mode_0600": False,
+        "filled": False,
+        "missing": list(required),
+        "error": None,
+    }
+    path = next((c for c in _secret_candidates(name) if c.is_file()), None)
+    if path is None:
+        return report
+    report["exists"] = True
+    report["path"] = str(path)
+    report["mode_0600"] = stat.S_IMODE(path.stat().st_mode) == 0o600
+    try:
+        data = load_secret(name)
+    except (SecretPermissionError, ValueError, OSError) as exc:
+        report["error"] = type(exc).__name__
+        return report
+    report["keys"] = sorted(str(k) for k in data)
+    report["missing"] = secret_fields_filled(data, required)
+    report["filled"] = not report["missing"]
+    return report
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit("This module is imported by the ovid2 config layer.")

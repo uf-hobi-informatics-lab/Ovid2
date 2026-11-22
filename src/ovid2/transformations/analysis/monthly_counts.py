@@ -54,7 +54,7 @@ class MonthlyCountsTransformer(BaseTransformer):
             )
             # Analysis pass — deliberate, bounded action: one row per month
             # (capped), persisted as a Report Studio aggregate.
-            rows = monthly.limit(_MAX_MONTHS).collect()  # noqa: OVID2001
+            rows = monthly.limit(_MAX_MONTHS).collect()  # noqa: OVID2001 — bounded monthly buckets
             n_months = len(rows)
             append_analysis_record(
                 instance_id,

@@ -36,32 +36,75 @@ def test_shell_has_drawer_scrim(web_client: object) -> None:
 
 
 @pytest.mark.unit
-def test_shell_has_drawer_collapse_toggle(web_client: object) -> None:
-    """The medium-viewport rail collapse button lives in the drawer."""
-    response = web_client.get("/")  # type: ignore[attr-defined]
-    body = response.text
-    assert 'id="drawer-collapse"' in body
+def test_shell_menu_toggle_lives_in_drawer_head(web_client: object) -> None:
+    """The menu toggle sits in a fixed slot at the top of the drawer.
+
+    ``#drawer-toggle`` lives inside ``<aside class="drawer">`` in a
+    rail-width ``.drawer-head`` slot so it never moves when the drawer
+    switches between the full menu and the icon rail. The phone-only
+    ``#drawer-toggle-mobile`` stays in the topbar (the drawer is
+    off-canvas there). The old medium-only ``#drawer-collapse`` chevron
+    is gone — the toggle does its job at every width.
+    """
+    body = web_client.get("/").text  # type: ignore[attr-defined]
+    drawer = body[body.index('<aside id="site-nav"') : body.index("</aside>")]
+    assert 'class="drawer-head"' in drawer
+    assert 'id="drawer-toggle"' in drawer
+    assert drawer.index('class="drawer-head"') < drawer.index('class="drawer-nav"')
+    topbar = body[body.index('<header class="topbar"') : body.index("</header>")]
+    assert 'id="drawer-toggle-mobile"' in topbar
+    assert 'id="drawer-toggle"' not in topbar.replace('id="drawer-toggle-mobile"', "")
+    assert body.count("data-drawer-toggle") == 2
+    assert 'id="drawer-collapse"' not in body
+
+
+@pytest.mark.unit
+def test_drawer_head_slot_is_rail_width(web_client: object) -> None:
+    """The toggle slot is pinned to the rail width, so it never shifts."""
+    css = web_client.get("/static/ovid2.css").text  # type: ignore[attr-defined]
+    block = css[css.index(".drawer-head {") :]
+    block = block[: block.index("}")]
+    assert "width: var(--drawer-rail-w)" in block
+    assert "html.drawer-rail .drawer { width: var(--drawer-rail-w); }" in css
+    assert "drawer-collapsed" not in css
 
 
 @pytest.mark.unit
 def test_shell_uses_wordmark(web_client: object) -> None:
-    """The topbar renders the ``Ovid2`` text wordmark as the home link.
+    """The topbar renders the animated mark + ``Ovid2`` wordmark as the home link.
 
-    The wordmark is styled with the active theme's display face
-    (``--font-display``). There is deliberately NO planet/orbit glyph:
-    the monochrome ``.brand-mark`` mask was removed permanently, so no
-    raster ``.brand-logo`` image and no masked ``.brand-mark`` span may
-    appear in the shell.
+    The ``<ovid-mark>`` web component (``static/ovid_mark.js``) sits just
+    before the wordmark inside the home link. The retired monochrome
+    ``.brand-mark`` mask and raster ``.brand-logo`` must never return.
     """
     response = web_client.get("/")  # type: ignore[attr-defined]
     body = response.text
     # The wordmark is the home link.
     assert 'class="brand-mark-link" href="/"' in body
     assert '<span class="brand-text">Ovid<span class="brand-accent">2</span>' in body
+    link = body[
+        body.index('class="brand-mark-link"') : body.index(
+            "</a>", body.index('class="brand-mark-link"')
+        )
+    ]
+    assert '<ovid-mark id="brand-sprout"' in link
+    assert link.index("<ovid-mark") < link.index('class="brand-text"')
+    assert "/static/ovid_mark.js" in body
+    assert "/static/ovid_mark_status.js" in body
     # The planet mark and any raster logo are gone forever.
     assert 'class="brand-mark"' not in body
     assert 'class="brand-logo"' not in body
     assert "ovid_mark.svg" not in body
+
+
+@pytest.mark.unit
+def test_brand_mark_polls_only_with_view_runs(web_client: object) -> None:
+    """The header mark polls the global job queue only for ``view_runs`` users."""
+    body = web_client.get("/").text  # type: ignore[attr-defined]
+    tag = body[body.index('<ovid-mark id="brand-sprout"') :]
+    tag = tag[: tag.index(">")]
+    # Auth disabled in the unit env -> synthetic admin -> may view runs.
+    assert 'data-poll-runs="1"' in tag
 
 
 # ---------------------------------------------------------------------------
@@ -134,13 +177,13 @@ def test_dashboard_kpis_include_health(web_client: object) -> None:
 
 @pytest.mark.unit
 def test_nav_js_wires_drawer(web_client: object) -> None:
-    """``nav.js`` toggles the ``drawer-open`` class and listens for ESC."""
+    """``nav.js`` drives ``drawer-open`` (phones) / ``drawer-rail`` (wide) and ESC."""
     response = web_client.get("/static/nav.js")  # type: ignore[attr-defined]
     body = response.text
     assert response.status_code == 200
     assert "drawer-open" in body
+    assert "drawer-rail" in body
     assert "Escape" in body
-    assert "drawer-collapsed" in body
 
 
 @pytest.mark.unit
@@ -149,54 +192,48 @@ def test_nav_js_uses_click_delegation(web_client: object) -> None:
 
     Regression guard: an earlier revision wired the click handler
     directly on ``#drawer-toggle`` via ``element.addEventListener``,
-    which silently broke whenever the topbar was re-rendered (or when
-    the click landed on the inner ``<svg>`` in browsers with
-    idiosyncratic pointer-event resolution). Delegation on
-    ``document`` combined with ``element.closest("#drawer-toggle")``
-    fixes both cases; this test locks the pattern in.
+    which silently broke whenever the shell was re-rendered (or when
+    the click landed on the inner ``<svg>``). Delegation on
+    ``document`` + ``closest("[data-drawer-toggle]")`` covers both
+    toggles (drawer head + phone topbar).
     """
     response = web_client.get("/static/nav.js")  # type: ignore[attr-defined]
     body = response.text
     assert response.status_code == 200
     assert 'document.addEventListener("click"' in body
-    assert '.closest("#drawer-toggle")' in body
-    assert '.closest("#drawer-collapse")' in body
+    assert '.closest("[data-drawer-toggle]")' in body
 
 
 @pytest.mark.unit
 def test_nav_js_persists_wide_collapse(web_client: object) -> None:
-    """``nav.js`` persists the wide-viewport collapse state.
+    """``nav.js`` persists the wide-viewport rail and migrates the old key.
 
-    Regression guard: when the drawer is collapsed on a desktop
-    viewport, clicking a rail nav icon navigates to a new page; without
-    persistence the destination page dropped the ``drawer-open`` class
-    and the rail sprang back open. ``nav.js`` must write the collapse
-    state to ``localStorage`` under ``ovid2DrawerWideCollapsed`` so the
-    pre-paint snippet can restore it.
+    A collapsed rail must survive navigation via a rail icon, so the
+    state is written under ``ovid2DrawerWideCollapsed``. The retired
+    medium-only ``ovid2DrawerCollapsed`` key is migrated once, then
+    removed.
     """
     body = web_client.get("/static/nav.js").text  # type: ignore[attr-defined]
-    assert "ovid2DrawerWideCollapsed" in body, (
-        "nav.js must persist the wide-viewport collapse state so a "
-        "collapsed rail survives navigation via a nav icon"
-    )
+    assert "ovid2DrawerWideCollapsed" in body
+    assert "ovid2DrawerCollapsed" in body
+    assert "removeItem(LEGACY_KEY)" in body
 
 
 @pytest.mark.unit
 def test_prepaint_restores_wide_collapse(web_client: object) -> None:
-    """The base-template pre-paint restores the collapsed rail on desktop.
+    """The base-template pre-paint restores ``drawer-rail`` on wide viewports.
 
-    Mirrors ``ovid2DrawerCollapsed``: the inline pre-paint script must
-    re-apply ``drawer-open`` from ``ovid2DrawerWideCollapsed`` at
-    >= 900px so the collapsed rail does not flash back open after
-    navigating from a collapsed state. Mobile must be excluded.
+    The inline pre-paint script must re-apply ``drawer-rail`` from
+    ``ovid2DrawerWideCollapsed`` at >= 900px so the collapsed rail does
+    not flash back open after navigating. Mobile must be excluded, and
+    ``drawer-open`` is never restored (it is the transient phone state).
     """
     body = web_client.get("/").text  # type: ignore[attr-defined]
-    assert "ovid2DrawerWideCollapsed" in body, (
-        "base.html pre-paint must restore the wide-viewport collapse state"
-    )
-    assert 'matchMedia("(min-width: 900px)")' in body, (
-        "the wide-collapse restore must be gated to non-mobile viewports"
-    )
+    head = body[: body.index("/static/ovid2.css")]
+    assert "ovid2DrawerWideCollapsed" in head
+    assert 'matchMedia("(min-width: 900px)")' in head
+    assert 'classList.add("drawer-rail")' in head
+    assert 'classList.add("drawer-open")' not in head
 
 
 @pytest.mark.unit
@@ -251,3 +288,17 @@ def test_drawer_nav_is_scroll_container(web_client: object) -> None:
     assert "min-height: 0" in block
     assert "--nav-item-py:" in css
     assert ".nav-more" in css
+
+
+@pytest.mark.unit
+def test_mobile_toggle_hidden_on_wide_screens(web_client: object) -> None:
+    """The phone toggle's hide rule outranks the generic ``.icon-button`` display.
+
+    Regression guard: ``.icon-button { display: inline-flex }`` is declared
+    later in the file with the same specificity as a bare
+    ``.drawer-toggle-mobile`` rule, which made the phone burger show on
+    desktop next to the drawer one.
+    """
+    css = web_client.get("/static/ovid2.css").text  # type: ignore[attr-defined]
+    assert ".topbar .drawer-toggle.drawer-toggle-mobile { display: none; }" in css
+    assert ".topbar .drawer-toggle.drawer-toggle-mobile { display: inline-flex; }" in css

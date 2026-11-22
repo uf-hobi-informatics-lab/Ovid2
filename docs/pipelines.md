@@ -418,3 +418,21 @@ directory or `os.pathsep`-separated list); it otherwise falls back to
 browser gracefully stops at the file level (you can still copy the whole file
 with `--tables all`, which enumerates inside the container).
 
+## Workflows: chaining pipelines
+
+A **workflow** (`/workflows`, `src/ovid2/web/services/workflows_svc.py`)
+chains saved pipeline configs into a DAG. A `data` edge feeds the upstream
+step's output address into the downstream step's input; an `after` edge
+only orders the steps (each keeps its own source and destination). The
+workflow owns its trigger (`manual` / `cron` / `interval` / `watch`; a new
+workflow inherits the first pipeline's) and each step runs as an ordinary
+job. On failure, `workflow_runner_svc` cancels what is running, skips what
+is waiting and rolls back every finished step: tables it created are
+dropped and tables it overwrote are restored from a pre-step backup
+(`ovid2 tools workflow-storage`, `Driver.snapshot_tables` /
+`restore_tables` / `drop_tables` / `drop_backup` on disc, s3, azure_blob,
+snowflake). Definitions live in `$XDG_CONFIG_HOME/ovid2/workflows/*.json`
+(`resources/schemas/workflow.v1.json`). Manual:
+*The web control panel → Workflows*; ADR
+the adr-workflows design note.
+

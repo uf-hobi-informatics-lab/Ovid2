@@ -60,11 +60,45 @@ def _enclosing_functions(tree: ast.AST) -> dict[int, str]:
     return out
 
 
-def _is_spawn(call: ast.Call) -> bool:
-    func = call.func
-    if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
-        return func.attr in _SPAWNERS.get(func.value.id, set())
-    return False
+#: Fully-qualified spawners (after alias resolution).
+_SPAWN_NAMES: frozenset[str] = frozenset(
+    f"{mod}.{fn}" for mod, fns in _SPAWNERS.items() for fn in fns
+) | frozenset(f"asyncio.subprocess.{fn}" for fn in _SPAWNERS["asyncio"])
+
+#: Process launchers that can never carry a scoped env — banned outright in
+#: the control plane (use ``subprocess.run(..., env=...)``).
+_BANNED_LAUNCHERS: frozenset[str] = frozenset(
+    {
+        "os.system",
+        "os.popen",
+        "os.posix_spawn",
+        "os.posix_spawnp",
+        "pty.spawn",
+        *(f"os.{n}" for n in ("execv", "execve", "execvp", "execvpe", "execl", "execle")),
+        *(f"os.{n}" for n in ("spawnv", "spawnve", "spawnvp", "spawnvpe", "spawnl", "spawnle")),
+    }
+)
+
+
+def _is_spawn(call: ast.Call, aliases: dict[str, str] | None = None) -> bool:
+    """Return whether ``call`` spawns a child (resolving import aliases)."""
+    from tests.contract._ast_utils import resolved_call_name
+
+    return resolved_call_name(call, aliases or {}) in _SPAWN_NAMES
+
+
+def _inherits_full_env(env: ast.expr) -> bool:
+    """``env=None`` / ``env=os.environ`` / ``env={**os.environ, …}`` / ``os.environ.copy()``."""
+    text = ast.unparse(env)
+    if isinstance(env, ast.Constant) and env.value is None:
+        return True
+    return text in {"os.environ", "os.environ.copy()", "dict(os.environ)"} or (
+        isinstance(env, ast.Dict)
+        and any(
+            k is None and "os.environ" in ast.unparse(v)
+            for k, v in zip(env.keys, env.values, strict=True)
+        )
+    )
 
 
 @pytest.mark.contract
@@ -76,10 +110,21 @@ def test_control_plane_subprocesses_pass_env(src_root: Path) -> None:
             rel = str(py.relative_to(src_root))
             tree = ast.parse(py.read_text(encoding="utf-8"), filename=rel)
             funcs = _enclosing_functions(tree)
+            from tests.contract._ast_utils import alias_map, resolved_call_name
+
+            aliases = alias_map(tree)
             for node in ast.walk(tree):
-                if not (isinstance(node, ast.Call) and _is_spawn(node)):
+                if not isinstance(node, ast.Call):
                     continue
-                if any(kw.arg == "env" for kw in node.keywords):
+                if resolved_call_name(node, aliases) in _BANNED_LAUNCHERS:
+                    offenders.append(f"{rel}:{node.lineno} banned launcher")
+                    continue
+                if not _is_spawn(node, aliases):
+                    continue
+                env_kw = next((kw for kw in node.keywords if kw.arg == "env"), None)
+                if env_kw is not None:
+                    if _inherits_full_env(env_kw.value):
+                        offenders.append(f"{rel}:{node.lineno} env= inherits the full environment")
                     continue
                 if (rel, funcs.get(node.lineno, "")) in _EXEMPT:
                     continue
@@ -91,18 +136,36 @@ def test_control_plane_subprocesses_pass_env(src_root: Path) -> None:
 
 
 @pytest.mark.contract
+def test_spawn_detector_catches_evasions() -> None:
+    """Negative control: aliased spawns, banned launchers and env leaks."""
+    from tests.contract._ast_utils import alias_map, resolved_call_name
+
+    tree = ast.parse(
+        "import subprocess as sp\nfrom subprocess import Popen\nimport os\n"
+        "sp.run(a)\nPopen(b)\nos.system(c)\nsubprocess.run(d, env=os.environ)\n"
+    )
+    aliases = alias_map(tree)
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)]
+    assert sum(_is_spawn(c, aliases) for c in calls) == 3
+    assert any(resolved_call_name(c, aliases) in _BANNED_LAUNCHERS for c in calls)
+    leaky = next(c for c in calls if any(k.arg == "env" for k in c.keywords))
+    assert _inherits_full_env(leaky.keywords[0].value)
+
+
+@pytest.mark.contract
 def test_broker_calls_declare_scope(src_root: Path) -> None:
     """Every ``run_tool_json(...)`` call names its ``scope=``."""
     offenders: list[str] = []
     for py in sorted((src_root / "web").rglob("*.py")):
         rel = str(py.relative_to(src_root))
         tree = ast.parse(py.read_text(encoding="utf-8"), filename=rel)
+        from tests.contract._ast_utils import alias_map, resolved_call_name
+
+        aliases = alias_map(tree)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
-            name = (
-                node.func.id if isinstance(node.func, ast.Name) else getattr(node.func, "attr", "")
-            )
+            name = (resolved_call_name(node, aliases) or "").rsplit(".", 1)[-1]
             if name != "run_tool_json":
                 continue
             if not any(kw.arg == "scope" for kw in node.keywords):

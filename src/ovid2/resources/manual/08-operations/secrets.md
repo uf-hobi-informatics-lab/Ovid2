@@ -47,10 +47,12 @@ leftovers are swept when `ovid2 web` starts.
 
 | `OVID2_SECRETS_SCOPE_MODE` | Behaviour |
 | --- | --- |
-| `warn` (default) | an out-of-scope secret still resolves, with a warning: *"Secret 'x' is outside this executor's declared scope …"* |
-| `enforce` | only the scoped directory is searched. A miss raises `SecretNotFoundError … The run was not granted it.` Containers, including every Spark node, see an empty tmpfs over `secrets.d/`. |
+| `warn` (default in dev instances) | an out-of-scope secret still resolves, with a warning: *"Secret 'x' is outside this executor's declared scope …"* |
+| `enforce` (default otherwise) | only the scoped directory is searched. A miss raises `SecretNotFoundError … The run was not granted it.` Containers, including every Spark node, see an empty tmpfs over `secrets.d/`. |
 
-To roll out:
+`enforce` is the default unless `OVID2_DEPLOYMENT=dev`. An existing
+deployment that has not yet cleaned up its scopes can set
+`OVID2_SECRETS_SCOPE_MODE=warn` explicitly while it rolls out:
 
 1. Run in `warn` for a full cycle of your jobs.
 2. Search the logs: `journalctl -u ovid2-web -u ovid2-web-worker | grep "outside this executor's declared scope"`.

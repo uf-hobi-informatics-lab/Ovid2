@@ -12,10 +12,10 @@
  *                         rest of this file fails to load. See the
  *                         "Reset + safety net" section below.
  *
- *  2. Responsive shell.   One HTML skeleton, three viewport modes:
- *                            ≥ 1200 px  — 240 px expanded drawer.
- *                           900–1199 px — 64 px icon rail.
- *                            < 900 px   — hidden drawer + hamburger.
+ *  2. Responsive shell.   One HTML skeleton, two viewport modes:
+ *                            ≥ 900 px — 240 px drawer, or the 64 px
+ *                                       icon rail (html.drawer-rail).
+ *                            < 900 px — hidden drawer + hamburger.
  *
  *  3. Theming via tokens. Every colour, radius, shadow and z-index is
  *                         a CSS custom property. Day/night is a
@@ -1082,6 +1082,136 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
   }
 }
 
+/* --- Data Factory (light).
+ *     "Line control, always green": the operator screen of a modern
+ *     automated line, after ISA-101 high-performance HMI — calm steel
+ *     surfaces, an ink-dark machine-side drawer, colour held back for
+ *     state. Spec: .opencode/knowledge/delta/data-factory-theme.md.
+ *     Checked tokens are plain #rrggbb (test_theme_contrast.py). ---- */
+[data-theme="data-factory"] {
+  /* Semantic. */
+  --fg: #11161d;
+  --fg-muted: #3d4652;
+  --fg-subtle: #59636f;
+  --bg: #eceff3;
+  --bg-elev: #f6f8fa;
+  --card-bg: #ffffff;
+  --border: #d3d9e1;
+  --border-strong: #808b98;
+  --accent: #1a5ad7;
+  --accent-hover: #154ab0;
+  --accent-fg: #ffffff;
+  --accent-subtle: #e8eefb;
+  --ok: #137049;
+  --warn: #8f5600;
+  --err: #b42318;
+  --info: #1f5fa8;
+
+  /* Chrome — white topbar, ink-dark machine-side drawer. */
+  --topbar-bg: #ffffff;
+  --topbar-fg: #11161d;
+  --topbar-border: #d3d9e1;
+  --drawer-bg: #171c23;
+  --drawer-fg: #d3d9e1;
+  --drawer-fg-muted: #939daa;
+  --drawer-hover-bg: #222933;
+  --drawer-active-bg: #182a4b;
+  --drawer-active-fg: #ffffff;
+  --drawer-active-border: #81a4e9;
+  --drawer-border: #0b0e12;
+  --scrim-bg: rgba(12, 16, 22, 0.45);
+
+  /* Blocks — light code / log (no dark console in a light theme). */
+  --code-bg: #f3f5f8;
+  --code-fg: #1b2430;
+  --log-bg: #f5f7fa;
+
+  /* Overlays. */
+  --overlay-err: rgba(180, 35, 24, 0.07);
+  --overlay-warn: rgba(143, 86, 0, 0.08);
+  --overlay-ok: rgba(19, 112, 73, 0.06);
+  --flash-ok-bg: #e8f1ed;
+  --flash-err-bg: #f8eae9;
+
+  /* Elevation: crisp, low, machined. */
+  --shadow-1: 0 1px 0 rgba(16, 22, 30, 0.05), 0 1px 2px rgba(16, 22, 30, 0.06);
+  --shadow-2: 0 1px 0 rgba(16, 22, 30, 0.05), 0 4px 10px -2px rgba(16, 22, 30, 0.10);
+  --shadow-3: 0 2px 0 rgba(16, 22, 30, 0.04), 0 16px 32px -8px rgba(16, 22, 30, 0.22);
+
+  /* Typography. */
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13.5px;
+  --fs-lg: 16px;
+  --fs-xl: 22px;
+
+  /* Geometry — tight, machined radii. */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-pill: 999px;
+
+  --topbar-h: 52px;
+  --drawer-w: 240px;
+  --drawer-rail-w: 64px;
+  --page-max: 1480px;
+
+  /* Motion — fast-out, precise settle. */
+  --dur-fast: 90ms;
+  --dur-med: 160ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* <ovid-mark> state colours tuned for the white topbar. */
+  --ovid-base: #1e3a6e;
+  --ovid-extract: #2563d9;
+  --ovid-transform: #7444cc;
+  --ovid-load: #0b7f8e;
+  --ovid-success: #16804f;
+  --ovid-warning: #b26f00;
+  --ovid-error: #c8372d;
+  --ovid-sync: #7d8daa;
+  --ovid-rest-1: #a3bdee;
+  --ovid-rest-2: #3a63b8;
+  --ovid-rest-3: #12285a;
+}
+
+/* Data Factory typography + geometry — IBM Plex Sans Condensed for
+ * display / nav / buttons / card titles / KPIs (telemetry-wall
+ * density), IBM Plex Sans body (8-hour legibility), JetBrains Mono for
+ * ids / logs. Condensed ships at 400 / 600 only, so labels use 600 and
+ * nav rows 400. The --df-* helpers feed §15.data-factory. */
+[data-theme="data-factory"] {
+  --font-display: "IBM Plex Sans Condensed", "IBM Plex Sans", var(--font-body-default);
+  --body-ff: "IBM Plex Sans", var(--font-body-default);
+  --body-fs: 13.5px;
+  --body-fw: 400;
+  --nav-ff: "IBM Plex Sans Condensed", "IBM Plex Sans", var(--font-body-default);
+  --nav-fs: 13.5px;
+  --nav-fw: 400;
+  --btn-ff: "IBM Plex Sans Condensed", "IBM Plex Sans", var(--font-body-default);
+  --btn-fs: 13px;
+  --btn-fw: 600;
+  --table-fs: 13px;
+
+  --df-rail-h: 2px;
+  --df-track: rgba(17, 22, 29, 0.10);
+  --df-sweep: #5b88e3;
+  --df-tick: rgba(17, 22, 29, 0.22);
+  --df-lamp: 6px;
+  --df-focus-on-dark: #98b5ed;
+  --df-label-ls: 0.06em;
+  --df-kpi-fs: 30px;
+  --df-sweep-dur: 1.4s;
+}
+@supports (color: color-mix(in srgb, red 50%, transparent)) {
+  /* Accent-derived helpers so a user accent override follows. */
+  [data-theme="data-factory"] {
+    --df-sweep: color-mix(in srgb, var(--accent) 70%, #ffffff);
+    --df-focus-on-dark: color-mix(in srgb, var(--accent) 45%, #ffffff);
+  }
+}
+
 
 /* ------------------------------------------------------------------ *
  * 13.a  Full-width run console (run-detail page)
@@ -2140,10 +2270,80 @@ code, kbd, samp {
 
 .topbar-spacer { flex: 1; }
 
-/* Drawer toggle: shown at all widths so the left menu can be toggled
- * on desktop as well as mobile. */
+/* Drawer toggles. ``#drawer-toggle`` lives in the drawer's fixed
+ * rail-width head slot (>= 900 px) so it never moves when the drawer
+ * switches between the full menu and the icon rail;
+ * ``#drawer-toggle-mobile`` sits in the topbar on phones, where the
+ * drawer is off-canvas. */
 .drawer-toggle { display: inline-flex; }
+/* Specific enough to beat the later generic .icon-button display rule. */
+.topbar .drawer-toggle.drawer-toggle-mobile { display: none; }
 .drawer-toggle-close { display: none; }
+
+/* Animated sprout mark beside the wordmark (static/ovid_mark.js). */
+.brand-mark-link { gap: 0.5rem; }
+.brand-sprout {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 25.6px;
+  transform: translateY(-1px);
+}
+ovid-mark { display: inline-block; }
+.login-mark { width: 64px; height: 51.2px; }
+
+/* Dev demo page (/dev/ovid-mark). */
+.ovm-demo-states { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.6rem; }
+.ovm-demo-sizes { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 2rem; }
+.ovm-demo-size { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 0.4rem; }
+.ovm-demo-auto { display: inline-flex; align-items: center; gap: 0.35rem; }
+.ovm-demo-dark h2 { color: inherit; }
+.ovm-demo-dark {
+  background: #0d1420;
+  color: #e6eefc;
+  --ovid-base: #A9C2F0;
+  --ovid-rest-1: #E6EEFC;
+  --ovid-rest-2: #A9C2F0;
+  --ovid-rest-3: #6A8FD6;
+}
+
+/* <ovid-mark> colour tokens. Theme-independent defaults (the spec's
+ * palette); a theme may override any of them in its own block. Kept in
+ * this separate :root rule so the light/dark token-symmetry contract is
+ * unaffected. --ovid-rest-* is the at-rest line gradient,
+ * --ovid-fav-* the solid favicon colours (legible on light and dark tab
+ * strips), both read by static/ovid_mark_status.js. Zero specificity
+ * (:where) so a theme block earlier in the file still wins. */
+:where(:root) {
+  --ovid-base: #1E3A6E;
+  --ovid-extract: #2F6FD6;
+  --ovid-transform: #7A4FD1;
+  --ovid-load: #1F9A6B;
+  --ovid-success: #1F9A6B;
+  --ovid-warning: #C98A14;
+  --ovid-error: #D2453B;
+  --ovid-sync: #9DB0D3;
+  --ovid-rest-1: #9DB8EC;
+  --ovid-rest-2: #3F64B0;
+  --ovid-rest-3: #142C5C;
+  --ovid-fav-idle: #537FD0;
+  --ovid-fav-extract: #487CE0;
+  --ovid-fav-transform: #916BD7;
+  --ovid-fav-load: #0C8C9C;
+  --ovid-fav-running: #487CE0;
+  --ovid-fav-sync: #7D8DAA;
+  --ovid-fav-success: #199059;
+  --ovid-fav-warning: #B26F00;
+  --ovid-fav-error: #D7554C;
+}
+/* Dark themes: the spec's dark-background rest gradient + a lighter
+ * idle tone so the mark reads on a dark topbar. */
+:where(html:is([data-theme="matrix"], [data-theme="dark"], [data-theme="tatooine"],
+        [data-theme="financial"], [data-theme="spaceship"])) {
+  --ovid-base: #A9C2F0;
+  --ovid-rest-1: #E6EEFC;
+  --ovid-rest-2: #A9C2F0;
+  --ovid-rest-3: #6A8FD6;
+}
 
 .icon-button {
   display: inline-flex;
@@ -2428,17 +2628,27 @@ code, kbd, samp {
 }
 .nav-item.active .nav-icon { opacity: 1; }
 
-/* Rail-collapse toggle (medium breakpoint only). */
-.drawer-collapse {
-  display: none;
+/* Menu-toggle slot at the top of the drawer. Its width is pinned to
+ * the icon-rail width and the button is centred in it, so the button
+ * keeps the exact same screen position in both drawer states. */
+.drawer-head {
   flex: 0 0 auto;
-  margin: 0.2rem 0.5rem;
-  align-self: flex-end;
-  padding: 0.2rem 0.4rem;
-  color: var(--drawer-fg-muted);
-  transition: transform var(--dur-med) var(--ease);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--drawer-rail-w);
+  height: 44px;
 }
-.drawer-collapse:hover { color: var(--fg); }
+.drawer-head .drawer-toggle {
+  width: 40px;
+  height: 36px;
+  padding: 0;
+  color: var(--drawer-fg);
+}
+.drawer-head .drawer-toggle:hover {
+  background: var(--drawer-hover-bg);
+  color: var(--drawer-active-fg);
+}
 
 /* Scrim: only shown when drawer is open on mobile. */
 .drawer-scrim {
@@ -3616,52 +3826,29 @@ td.danger { color: var(--err); font-weight: 600; }
  * Three modes:
  *
  *   ≥ 1200 px   default styles above (full drawer, full main).
- *   900 – 1199  icon rail: drawer collapses to 64 px; labels hidden
- *               unless the drawer is hover-expanded or the user
- *               un-collapses it with the chevron button.
+ *   ≥ 900 px    full drawer, or the 64 px icon rail when the user
+ *               collapses it (html.drawer-rail).
  *   < 900 px    drawer hides off-canvas; a ``.drawer-open`` class on
  *               <html> slides it in with a scrim.
  * ------------------------------------------------------------------ */
 
-/* --- Medium: icon rail --- */
-@media (max-width: 1199.98px) and (min-width: 900px) {
-  html.drawer-collapsed .drawer { width: var(--drawer-rail-w); }
-  html.drawer-collapsed .drawer .nav-label,
-  html.drawer-collapsed .drawer .side-group,
-  html.drawer-collapsed .drawer .drawer-credit,
-  html.drawer-collapsed .drawer .nav-more-label { display: none; }
-  html.drawer-collapsed .drawer .nav-item {
-    justify-content: center;
-    padding: calc(var(--nav-item-py) + 0.1rem) 0;
-    border-left-width: 3px;
-  }
-  html.drawer-collapsed .main,
-  html.drawer-collapsed .site-footer {
-    padding-left: calc(var(--drawer-rail-w) + 1.5rem);
-  }
-  html.drawer-collapsed .drawer-collapse { transform: rotate(180deg); }
-
-  .drawer-collapse { display: inline-flex; }
-}
-
-/* --- Medium & large: the top-left button collapses the drawer to an
- * icon rail. The menu itself STAYS visible; only the text labels and
- * group headings disappear, and the content reflows to reclaim the
- * freed width. ``html.drawer-open`` drives this collapsed state on
- * these widths. --- */
+/* --- Medium & large: the drawer-head toggle collapses the drawer to
+ * an icon rail (``html.drawer-rail``). The menu itself STAYS visible;
+ * only the text labels and group headings disappear, and the content
+ * reflows to reclaim the freed width. --- */
 @media (min-width: 900px) {
-  html.drawer-open .drawer { width: var(--drawer-rail-w); }
-  html.drawer-open .drawer .nav-label,
-  html.drawer-open .drawer .side-group,
-  html.drawer-open .drawer .drawer-credit,
-  html.drawer-open .drawer .nav-more-label { display: none; }
-  html.drawer-open .drawer .nav-item {
+  html.drawer-rail .drawer { width: var(--drawer-rail-w); }
+  html.drawer-rail .drawer .nav-label,
+  html.drawer-rail .drawer .side-group,
+  html.drawer-rail .drawer .drawer-credit,
+  html.drawer-rail .drawer .nav-more-label { display: none; }
+  html.drawer-rail .drawer .nav-item {
     justify-content: center;
     padding: calc(var(--nav-item-py) + 0.1rem) 0;
     border-left-width: 3px;
   }
-  html.drawer-open .main,
-  html.drawer-open .site-footer {
+  html.drawer-rail .main,
+  html.drawer-rail .site-footer {
     padding-left: calc(var(--drawer-rail-w) + 1.5rem);
   }
 }
@@ -3715,13 +3902,10 @@ td.danger { color: var(--err); font-weight: 600; }
   html.llm-panel-open .right-scrim { display: block; opacity: 1; }
   html.llm-panel-open body { overflow: hidden; }
 
-  .drawer-collapse { display: none; }
-  html.drawer-collapsed .drawer { width: min(85vw, 320px); }  /* ignore rail state on mobile */
-  html.drawer-collapsed .drawer .nav-label,
-  html.drawer-collapsed .drawer .side-group,
-  html.drawer-collapsed .drawer .drawer-credit { display: block; }
-  html.drawer-collapsed .drawer .nav-more-label { display: inline; }
-  html.drawer-collapsed .drawer .nav-item { justify-content: flex-start; padding: var(--nav-item-py) var(--nav-item-px); }
+  /* Phones: the drawer is off-canvas, so the toggle lives in the topbar
+   * and the drawer-head slot is not needed. */
+  .topbar .drawer-toggle.drawer-toggle-mobile { display: inline-flex; }
+  .drawer-head { display: none; }
 }
 
 /* --- Very small phones: tighten typography a hair --- */
@@ -6418,7 +6602,7 @@ html[data-theme="spaceship"] .brand-text {
 
 /* Nav: "/ GROUP" headers, glowing active. Items are NOT numbered (the
  * "01 02 …" counter prefix was removed — it renumbered whenever RBAC
- * hid a link). Icons stay (the 900–1199px icon rail and collapsed
+ * hid a link). Icons stay (the >= 900px icon rail and collapsed
  * drawer need them). */
 html[data-theme="spaceship"] .side-group { letter-spacing: 0.2em; }
 html[data-theme="spaceship"] .side-group::before { content: "/ "; }
@@ -6431,10 +6615,7 @@ html[data-theme="spaceship"] .nav-item.active::after { content: "\25C2"; margin-
 /* Icon-rail states: labels are hidden and icons centred, so drop the
  * active marker (it would push the icon off-centre). */
 @media (min-width: 900px) {
-  html[data-theme="spaceship"].drawer-open .drawer .nav-item.active::after { display: none; }
-}
-@media (max-width: 1199.98px) and (min-width: 900px) {
-  html[data-theme="spaceship"].drawer-collapsed .drawer .nav-item.active::after { display: none; }
+  html[data-theme="spaceship"].drawer-rail .drawer .nav-item.active::after { display: none; }
 }
 
 /* Boxed panels with targeting-bracket corners. */
@@ -7028,6 +7209,451 @@ html[data-theme="lego"] .badge.status-queued,
 html[data-theme="lego"] .badge.status-new { background: var(--lg-yellow); color: #1a1a1a; }
 
 /* ------------------------------------------------------------------ *
+ * 15.data-factory  "Line control, always green" (light). Three
+ *              signatures — the line rail under the topbar, the
+ *              calibrated index under page titles, and the flow sweep
+ *              on running indicators. Everything else is quiet craft.
+ *              No background texture, on purpose.
+ * ------------------------------------------------------------------ */
+html[data-theme="data-factory"] body { font-feature-settings: "tnum" 1; }
+html[data-theme="data-factory"] :is(h1, h2, h3) {
+  font-family: var(--font-display);
+  letter-spacing: -0.005em;
+}
+
+/* 1. Topbar + the line rail: a 2px track with a solid accent segment as
+ *    wide as the drawer rail, sitting right above the drawer's toggle
+ *    slot — the drawer reads as the head of the production line. */
+html[data-theme="data-factory"] .topbar {
+  background: var(--topbar-bg);
+  -webkit-backdrop-filter: none;
+          backdrop-filter: none;
+}
+html[data-theme="data-factory"] .topbar::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: var(--df-rail-h);
+  background:
+    linear-gradient(var(--accent), var(--accent)) left / var(--drawer-rail-w) 100% no-repeat,
+    var(--df-track);
+  pointer-events: none;
+}
+html[data-theme="data-factory"] .brand {
+  padding-right: 16px;
+  border-right: 1px solid var(--border);
+}
+html[data-theme="data-factory"] .brand-text { color: var(--fg); letter-spacing: 0.02em; }
+html[data-theme="data-factory"] .user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 3px 10px;
+  font-size: var(--fs-sm);
+  color: var(--fg-muted);
+}
+html[data-theme="data-factory"] .user-chip-role {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--df-label-ls);
+  color: var(--fg-subtle);
+}
+html[data-theme="data-factory"] .nav-logout {
+  font-family: var(--btn-ff);
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--df-label-ls);
+  color: var(--fg-muted);
+}
+html[data-theme="data-factory"] .nav-logout:hover { color: var(--err); }
+
+/* 2. Drawer: machine side panel. The burger slot matches the rail
+ *    width; its three bars stagger to 100/72/44 % in the icon rail
+ *    ("expand" speed lines) — scaleX only. Active item = a 6px status
+ *    lamp + tinted fill. Group headings collapse to a hairline. */
+html[data-theme="data-factory"] .drawer-head {
+  border-bottom: 1px solid rgba(211, 217, 225, 0.10);
+}
+html[data-theme="data-factory"] .drawer-head .icon-menu line {
+  transform-box: fill-box;
+  transform-origin: left center;
+  transition: transform var(--dur-med) var(--ease);
+}
+html[data-theme="data-factory"].drawer-rail .drawer-head .icon-menu line:nth-child(2) { transform: scaleX(0.72); }
+html[data-theme="data-factory"].drawer-rail .drawer-head .icon-menu line:nth-child(3) { transform: scaleX(0.44); }
+html[data-theme="data-factory"] .side-group {
+  font-family: var(--nav-ff);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: var(--df-label-ls);
+  color: var(--drawer-fg-muted);
+  padding-top: 0.9rem;
+}
+html[data-theme="data-factory"] .nav-item {
+  position: relative;
+  margin: 1px 8px;
+  border-left: 0;
+  border-radius: var(--radius-md);
+  padding-left: calc(var(--nav-item-px) - 0.35rem);
+}
+html[data-theme="data-factory"] .nav-item:hover { background: var(--drawer-hover-bg); color: #ffffff; }
+html[data-theme="data-factory"] .nav-item.active {
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px rgba(129, 164, 233, 0.35);
+}
+html[data-theme="data-factory"] .nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: 5px; top: 50%;
+  width: var(--df-lamp); height: var(--df-lamp);
+  border-radius: 1px;
+  background: var(--drawer-active-border);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+@media (min-width: 900px) {
+  html[data-theme="data-factory"].drawer-rail .drawer .side-group {
+    display: block;
+    font-size: 0;
+    height: 1px;
+    width: 16px;
+    margin: 10px auto;
+    padding: 0;
+    background: rgba(211, 217, 225, 0.18);
+  }
+  html[data-theme="data-factory"].drawer-rail .drawer .nav-item { padding-left: 0; }
+  html[data-theme="data-factory"].drawer-rail .drawer .nav-item.active::before {
+    left: 50%; top: auto; bottom: 3px;
+    width: 12px; height: 2px;
+    transform: translateX(-50%);
+  }
+}
+html[data-theme="data-factory"] .drawer :focus-visible { outline-color: var(--df-focus-on-dark); }
+
+/* 3. Page title: the calibrated index — a 24px accent segment, then a
+ *    fading tick scale (a 1px tick every 6px), like a gauge. */
+html[data-theme="data-factory"] .page-header h1 {
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  position: relative;
+  padding-bottom: 12px;
+}
+html[data-theme="data-factory"] .page-header h1::after {
+  content: "";
+  position: absolute;
+  left: 0; bottom: 0;
+  width: 144px; height: 6px;
+  background:
+    linear-gradient(var(--accent), var(--accent)) left bottom / 24px 2px no-repeat,
+    repeating-linear-gradient(90deg, var(--df-tick) 0 1px, transparent 1px 6px) 28px bottom / 116px 6px no-repeat;
+  -webkit-mask: linear-gradient(90deg, #000 60%, transparent);
+          mask: linear-gradient(90deg, #000 60%, transparent);
+  pointer-events: none;
+}
+
+/* 4. Cards: plain white plates; hover pulls the hairline toward the
+ *    accent and lifts the shadow. No coloured edge. */
+html[data-theme="data-factory"] .card {
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-med) var(--ease);
+}
+html[data-theme="data-factory"] .card:is(:hover, :focus-within) {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  box-shadow: var(--shadow-2);
+}
+html[data-theme="data-factory"] .card h2 { font-size: 14px; font-weight: 600; }
+
+/* 5. KPI numbers: telemetry wall. */
+html[data-theme="data-factory"] .kpi-value {
+  font-family: var(--font-display);
+  font-size: var(--df-kpi-fs);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+html[data-theme="data-factory"] .kpi-label {
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--df-label-ls);
+  color: var(--fg-subtle);
+}
+
+/* 6. Tables: strong rule under condensed heads, hairline rows, a 5 %
+ *    accent hover; status rows get the overlay + a 3px lamp bar. */
+html[data-theme="data-factory"] table :is(th) {
+  font-family: var(--font-display);
+  letter-spacing: var(--df-label-ls);
+  border-bottom-color: var(--border-strong);
+}
+html[data-theme="data-factory"] table td { font-variant-numeric: tabular-nums; }
+html[data-theme="data-factory"] table tbody tr { transition: background-color var(--dur-fast) var(--ease); }
+html[data-theme="data-factory"] table.runs-table tbody tr:hover,
+html[data-theme="data-factory"] table.data-table tbody tr:hover {
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+html[data-theme="data-factory"] tr.severity-ok td { background: var(--overlay-ok); }
+html[data-theme="data-factory"] tr.severity-error   > td:first-child { box-shadow: inset 3px 0 0 var(--err); }
+html[data-theme="data-factory"] tr.severity-warning > td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+html[data-theme="data-factory"] tr.severity-ok      > td:first-child { box-shadow: inset 3px 0 0 var(--ok); }
+
+/* 7. Badges: rectangular nameplates with a square status lamp.
+ *    --b carries each status colour (see §9 of the spec). */
+html[data-theme="data-factory"] .badge {
+  --b: var(--fg-muted);
+  gap: 6px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--df-label-ls);
+  line-height: 1;
+  color: var(--b);
+  background: color-mix(in srgb, var(--b) 10%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--b) 22%, transparent);
+}
+html[data-theme="data-factory"] .badge::before {
+  width: var(--df-lamp); height: var(--df-lamp);
+  border-radius: 1px;
+  opacity: 1;
+  flex: none;
+}
+html[data-theme="data-factory"] :is(.badge.severity-ok, .badge.status-processed, .badge.status-completed,
+  .badge.status-done, .badge.status-ok, .badge.status-passed) { --b: var(--ok); }
+html[data-theme="data-factory"] :is(.badge.severity-error, .badge.status-error, .badge.status-failed) { --b: var(--err); }
+html[data-theme="data-factory"] :is(.badge.severity-warning, .badge.status-exception, .badge.status-stopping) { --b: var(--warn); }
+html[data-theme="data-factory"] :is(.badge.status-processing, .badge.status-running) {
+  --b: var(--accent);
+  position: relative;
+  overflow: hidden;
+}
+html[data-theme="data-factory"] :is(.badge.status-processing, .badge.status-running)::before {
+  animation: df-lamp 1.6s ease-in-out infinite;
+}
+html[data-theme="data-factory"] :is(.badge.status-processing, .badge.status-running)::after {
+  content: "";
+  position: absolute;
+  left: 0; bottom: 0;
+  width: 30%; height: 1.5px;
+  background: var(--accent);
+  pointer-events: none;
+  animation: df-sweep-badge var(--df-sweep-dur) var(--ease) infinite;
+}
+html[data-theme="data-factory"] .badge.status-stopping::before { animation: df-lamp 0.8s steps(2, jump-none) infinite; }
+html[data-theme="data-factory"] :is(.badge.status-queued, .badge.status-new, .badge.status-pending) {
+  --b: var(--fg-muted);
+  background: var(--card-bg);
+}
+html[data-theme="data-factory"] :is(.badge.status-queued, .badge.status-new, .badge.status-pending)::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+html[data-theme="data-factory"] .badge.status-cancelled { --b: var(--fg-subtle); }
+html[data-theme="data-factory"] .badge.status-cancelled::before {
+  background: linear-gradient(135deg, transparent 42%, currentColor 42% 58%, transparent 58%);
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+html[data-theme="data-factory"] .badge.status-draft {
+  --b: var(--fg-muted);
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--border-strong);
+}
+html[data-theme="data-factory"] .badge.status-draft::before { display: none; }
+@keyframes df-lamp { 50% { opacity: 0.45; } }
+@keyframes df-sweep-badge { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+
+/* 8. Buttons: a solid Drive-blue plate with 1px mechanical travel. */
+html[data-theme="data-factory"] :is(.button, a.button, button.button) {
+  min-height: 32px;
+  letter-spacing: 0.01em;
+  background: var(--card-bg);
+  border-color: var(--border-strong);
+  transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+              transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+html[data-theme="data-factory"] :is(.button, a.button, button.button):hover {
+  background: var(--bg-elev);
+  border-color: var(--fg-muted);
+}
+html[data-theme="data-factory"] :is(.button, a.button, button.button).small { min-height: 28px; }
+html[data-theme="data-factory"] :is(.button, a.button, button.button).primary {
+  color: var(--accent-fg);
+  background: var(--accent);
+  border-color: var(--accent-hover);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 40%, #000),
+              inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+html[data-theme="data-factory"] :is(.button, a.button, button.button).primary:hover { background: var(--accent-hover); }
+html[data-theme="data-factory"] :is(.button, a.button, button.button).danger {
+  color: #ffffff;
+  background: var(--err);
+  border-color: color-mix(in srgb, var(--err) 80%, #000);
+}
+html[data-theme="data-factory"] :is(.button, a.button, button.button).danger:hover {
+  background: color-mix(in srgb, var(--err) 85%, #000);
+}
+html[data-theme="data-factory"] :is(.button, a.button, button.button, button.secondary):active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+html[data-theme="data-factory"] button.secondary {
+  color: var(--fg);
+  background: var(--card-bg);
+  border-color: var(--border-strong);
+  font-family: var(--btn-ff);
+  font-weight: 600;
+}
+html[data-theme="data-factory"] button.secondary:hover { background: var(--bg-elev); color: var(--fg); border-color: var(--fg-muted); }
+
+/* Forms + focus ring. */
+html[data-theme="data-factory"] :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+html[data-theme="data-factory"] .drawer :focus-visible { outline-color: var(--df-focus-on-dark); }
+html[data-theme="data-factory"] :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  border-color: var(--border-strong);
+  border-radius: var(--radius-md);
+}
+html[data-theme="data-factory"] :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea):focus-visible {
+  outline-offset: 0;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* Flash, code, logs, empty states. */
+html[data-theme="data-factory"] .flash.ok,
+html[data-theme="data-factory"] p.flash-ok { color: var(--ok); border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent); border-left-width: 3px; border-left-color: var(--ok); }
+html[data-theme="data-factory"] .flash.error,
+html[data-theme="data-factory"] p.flash-error { color: var(--err); border: 1px solid color-mix(in srgb, var(--err) 30%, transparent); border-left-width: 3px; border-left-color: var(--err); }
+html[data-theme="data-factory"] .flash :is(strong, .mono) { color: var(--fg); }
+html[data-theme="data-factory"] :is(pre.code-preview, pre.log-block) {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+}
+html[data-theme="data-factory"] .empty {
+  font-style: normal;
+  border-color: var(--border-strong);
+}
+
+/* 9. LIVE / running: the flow sweep — a 10px highlight travelling a
+ *    2px track. transform + opacity only. */
+html[data-theme="data-factory"] .cooking-now {
+  border-radius: var(--radius-md);
+  background: var(--card-bg);
+  border-color: var(--border);
+  box-shadow: var(--shadow-1);
+}
+html[data-theme="data-factory"] .cooking-now .cooking-now-label {
+  position: relative;
+  padding-right: 36px;
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--df-label-ls);
+}
+html[data-theme="data-factory"] .cooking-now .cooking-now-label::before {
+  content: "";
+  position: absolute;
+  right: 0; top: 50%;
+  width: 28px; height: var(--df-rail-h);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  pointer-events: none;
+}
+html[data-theme="data-factory"] .cooking-now .cooking-now-label::after {
+  content: "";
+  position: absolute;
+  right: 18px; top: 50%;
+  width: 10px; height: var(--df-rail-h);
+  background: var(--df-sweep);
+  pointer-events: none;
+  animation: df-sweep-x var(--df-sweep-dur) var(--ease) infinite;
+}
+html[data-theme="data-factory"] .cooking-now .cooking-now-pct { font-family: var(--mono); }
+html[data-theme="data-factory"] .live-banner { border-radius: var(--radius-md); box-shadow: var(--shadow-1); }
+html[data-theme="data-factory"] .live-banner .live-banner-dot { border-radius: 1px; width: var(--df-lamp); height: var(--df-lamp); }
+@keyframes df-sweep-x {
+  0%   { transform: translateX(0);    opacity: 0; }
+  15%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translateX(18px); opacity: 0; }
+}
+
+/* 10. D3 widgets: status-filled plates, a thin accent throughput line,
+ *     butt-capped engineered gauges. */
+html[data-theme="data-factory"] .gantt-bg { fill: var(--border); }
+html[data-theme="data-factory"] .gantt-completed { fill: var(--ok); }
+html[data-theme="data-factory"] .gantt-running { fill: var(--accent); }
+html[data-theme="data-factory"] .throughput-line { stroke: var(--accent); stroke-width: 1.75; stroke-linejoin: round; }
+html[data-theme="data-factory"] .throughput-area { fill: color-mix(in srgb, var(--accent) 10%, transparent); }
+html[data-theme="data-factory"] .arc-bg { stroke: var(--border); stroke-linecap: butt; }
+html[data-theme="data-factory"] .arc-fg { stroke: var(--accent); stroke-linecap: butt; }
+html[data-theme="data-factory"] :is(.widget-number, .ring-number, .elapsed-number) {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+html[data-theme="data-factory"] .widget-label {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: var(--df-label-ls);
+}
+
+/* 12. Login / pending: one white card with the line rail along its
+ *     top edge; the sweep crosses it once on load. */
+html[data-theme="data-factory"] body.login-body {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--bg);
+}
+html[data-theme="data-factory"] .login-shell { width: min(420px, 92vw); }
+html[data-theme="data-factory"] .login-card {
+  position: relative;
+  overflow: hidden;
+  padding: 2rem 2rem 1.5rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+}
+html[data-theme="data-factory"] .login-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: var(--df-rail-h);
+  background: var(--accent);
+  pointer-events: none;
+}
+html[data-theme="data-factory"] .login-card::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0;
+  width: 25%; height: var(--df-rail-h);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+  transform: translateX(-100%);
+  pointer-events: none;
+  animation: df-login-sweep 900ms var(--ease) 200ms 1 both;
+}
+html[data-theme="data-factory"] .login-header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+@keyframes df-login-sweep { to { transform: translateX(400%); } }
+
+/* ------------------------------------------------------------------ *
  * 15.z  Reduced motion — every personality-layer animation off.
  * ------------------------------------------------------------------ */
 @media (prefers-reduced-motion: reduce) {
@@ -7040,6 +7666,15 @@ html[data-theme="lego"] .badge.status-new { background: var(--lg-yellow); color:
   html[data-theme="lego"] .button.primary:active,
   html[data-theme="lego"] a.button.primary:active,
   html[data-theme="lego"] button.button.primary:active { transform: none; }
+  html[data-theme="data-factory"] :is(.badge.status-processing, .badge.status-running)::before,
+  html[data-theme="data-factory"] .badge.status-stopping::before { animation: none; opacity: 1; }
+  html[data-theme="data-factory"] :is(.badge.status-processing, .badge.status-running)::after { animation: none; transform: none; }
+  html[data-theme="data-factory"] .cooking-now .cooking-now-label::after { animation: none; opacity: 1; transform: translateX(9px); }
+  html[data-theme="data-factory"] .login-card::after { display: none; }
+  html[data-theme="data-factory"] .drawer-head .icon-menu line,
+  html[data-theme="data-factory"] .card,
+  html[data-theme="data-factory"] :is(.button, a.button, button.button, button.secondary) { transition: none; }
+  html[data-theme="data-factory"] :is(.button, a.button, button.button, button.secondary):active { transform: none; }
 }
 
 /* ==================================================================
@@ -7788,3 +8423,391 @@ html[data-theme="lego"] .badge.status-new { background: var(--lg-yellow); color:
 .nv-udf-actions { display: flex; align-items: center; gap: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
 .nv-udf-actions .pb-status { flex: 1; }
 .nv-udf-dialog { --st-transform: color-mix(in srgb, var(--accent) 45%, #8b5cf6); }
+
+/* =========================================================================
+   Workflows (adr-workflows.md) — index cards, canvas editor, run view.
+   Theme tokens only; per-kind accents reuse the [data-kind] --pk hues.
+   ========================================================================= */
+[data-kind="missing"] { --pk: var(--err); }
+.wf-page, .wf-editor-page { --pk: var(--accent); }
+
+/* ---- index ---- */
+.wf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 0.9rem;
+  margin-top: 0.8rem;
+}
+.wf-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.85rem 0.95rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(120% 90% at 100% 0%, var(--accent-subtle), transparent 55%),
+    var(--card-bg);
+  box-shadow: var(--shadow-1);
+  transition: box-shadow var(--dur-med) var(--ease), border-color var(--dur-med) var(--ease),
+              transform var(--dur-med) var(--ease);
+}
+.wf-card:hover, .wf-card:focus-within {
+  box-shadow: var(--shadow-2);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  transform: translateY(-1px);
+}
+.wf-card[hidden] { display: none; }
+.wf-card-head { display: flex; align-items: center; gap: 0.7rem; min-width: 0; }
+.wf-card-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  color: var(--accent-fg);
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #000));
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.wf-card-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+.wf-card-name {
+  font-weight: 650; font-size: var(--fs-md); color: var(--fg); text-decoration: none;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.wf-card-name:hover { color: var(--accent); text-decoration: underline; }
+.wf-card-sub { display: flex; gap: 0.3rem; font-size: var(--fs-xs); color: var(--fg-muted); min-width: 0; }
+.wf-card-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wf-mini {
+  display: block;
+  height: 104px;
+  border-radius: var(--radius-md);
+  border: 1px dashed color-mix(in srgb, var(--fg) 12%, transparent);
+  background:
+    radial-gradient(circle, color-mix(in srgb, var(--fg) 9%, transparent) 1px, transparent 1.4px) 0 0 / 14px 14px,
+    color-mix(in srgb, var(--fg) 2.5%, transparent);
+  overflow: hidden;
+  text-decoration: none;
+}
+.wf-mini:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.wf-mini-fallback { display: flex; flex-wrap: wrap; gap: 0.3rem; padding: 0.6rem; }
+.wf-mini-svg { width: 100%; height: 100%; display: block; }
+.wf-mini-edge { fill: none; stroke: color-mix(in srgb, var(--fg) 35%, transparent); stroke-width: 5; }
+.wf-mini-edge.is-after { stroke-dasharray: 14 10; stroke: color-mix(in srgb, var(--fg) 22%, transparent); }
+.wf-mini-edge.is-data { stroke: color-mix(in srgb, var(--accent) 70%, transparent); }
+.wf-mini-node rect:first-child {
+  fill: var(--card-bg);
+  stroke: color-mix(in srgb, var(--pk) 55%, var(--border));
+  stroke-width: 3;
+}
+.wf-mini-accent { fill: var(--pk); }
+.wf-mini-node text { fill: var(--fg); font-size: 30px; font-weight: 600; }
+.wf-chip {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0.12rem 0.5rem; border-radius: var(--radius-pill);
+  font-size: var(--fs-xs); color: var(--fg);
+  background: color-mix(in srgb, var(--pk) 12%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--pk) 35%, var(--border));
+}
+.wf-card-foot { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; }
+.wf-card-foot .pl-actions { margin-left: auto; }
+.wf-run-pill {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.12rem 0.55rem; border-radius: var(--radius-pill);
+  font-size: var(--fs-xs); font-weight: 600; text-decoration: none; text-transform: capitalize;
+  color: var(--fg-muted); background: color-mix(in srgb, var(--fg) 6%, transparent);
+  white-space: nowrap;
+}
+.wf-run-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.wf-run-pill.status-succeeded, .wf-run-pill.status-done { color: var(--ok); background: var(--overlay-ok); }
+.wf-run-pill.status-running, .wf-run-pill.status-queued, .wf-run-pill.status-finishing,
+.wf-run-pill.status-snapshotting, .wf-run-pill.status-cleaning { color: var(--accent); background: var(--accent-subtle); }
+.wf-run-pill.status-running .wf-run-dot, .wf-run-pill.status-rolling_back .wf-run-dot { animation: wf-blink 1.2s var(--ease) infinite; }
+.wf-run-pill.status-failed, .wf-run-pill.status-rollback_failed { color: var(--err); background: var(--overlay-err); }
+.wf-run-pill.status-rolling_back, .wf-run-pill.status-stopping,
+.wf-run-pill.status-rolled_back { color: var(--warn); background: var(--overlay-warn); }
+.wf-run-pill.status-cancelled, .wf-run-pill.status-skipped, .wf-run-pill.status-none { color: var(--fg-subtle); }
+@keyframes wf-blink { 50% { opacity: 0.25; } }
+.wf-recent { margin-top: 1.2rem; }
+.wf-recent .card-title { display: flex; align-items: center; gap: 0.4rem; }
+
+/* ---- editor shell ---- */
+.wf-editor-page { display: flex; flex-direction: column; gap: 0.6rem; min-height: calc(100vh - var(--topbar-h) - 2.5rem); }
+.wf-topbar {
+  display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--card-bg); box-shadow: var(--shadow-1);
+}
+.wf-title-block { display: flex; flex-direction: column; gap: 0.05rem; min-width: 0; }
+.wf-title { margin: 0; font-size: var(--fs-lg); display: flex; align-items: center; gap: 0.4rem; }
+.wf-run-id { font-size: var(--fs-sm); color: var(--fg-muted); font-weight: 500; }
+.wf-save-state { color: var(--fg-subtle); }
+.wf-save-state.is-dirty { color: var(--warn); }
+.wf-tools { display: flex; align-items: center; gap: 0.15rem; }
+.wf-tool-sep { width: 1px; height: 22px; background: var(--border); margin: 0 0.3rem; }
+.wf-minus { font-weight: 700; font-size: 1.05rem; line-height: 1; }
+.wf-layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr) 320px;
+  gap: 0.6rem;
+  min-height: 560px;
+}
+.wf-run-layout { grid-template-columns: minmax(0, 1fr) 340px; }
+.wf-palette, .wf-inspector {
+  display: flex; flex-direction: column; gap: 0.5rem;
+  padding: 0.7rem;
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--card-bg); box-shadow: var(--shadow-1);
+  overflow: auto; max-height: calc(100vh - var(--topbar-h) - 7rem);
+}
+.wf-pane-head { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
+.wf-pane-head h2 { margin: 0; font-size: var(--fs-md); display: flex; align-items: center; gap: 0.35rem; }
+.wf-palette-search { width: 100%; }
+.wf-palette-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.wf-palette-item {
+  display: flex; align-items: stretch; gap: 0.5rem;
+  padding: 0.45rem 0.45rem 0.45rem 0;
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--bg-elev); cursor: grab;
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+.wf-palette-item:hover { border-color: color-mix(in srgb, var(--pk) 50%, var(--border)); box-shadow: var(--shadow-1); }
+.wf-palette-item:active { cursor: grabbing; }
+.wf-palette-accent { width: 4px; border-radius: 0 4px 4px 0; background: var(--pk); flex: none; }
+.wf-palette-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+.wf-palette-name { font-weight: 600; font-size: var(--fs-sm); display: flex; align-items: center; gap: 0.2rem; overflow: hidden; text-overflow: ellipsis; }
+.wf-palette-meta { display: flex; flex-direction: column; gap: 0.1rem; font-size: var(--fs-xs); color: var(--fg-muted); min-width: 0; }
+.wf-palette-meta .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wf-kind-tag {
+  align-self: flex-start; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--pk);
+}
+.wf-palette-add { align-self: center; font-weight: 700; font-size: 1.05rem; }
+
+/* ---- canvas ---- */
+.wf-stage {
+  position: relative;
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--fg) 2%, var(--bg-elev));
+  overflow: hidden; box-shadow: inset 0 1px 3px color-mix(in srgb, var(--fg) 6%, transparent);
+  min-height: 520px;
+}
+.wf-stage.is-drop { outline: 2px dashed var(--accent); outline-offset: -6px; }
+.wf-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+.wf-canvas.is-panning { cursor: grabbing; }
+.wf-canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.wf-grid-dot { fill: color-mix(in srgb, var(--fg) 14%, transparent); }
+.wf-legend {
+  position: absolute; left: 0.7rem; bottom: 0.6rem;
+  display: flex; gap: 0.9rem; padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-pill); font-size: var(--fs-xs); color: var(--fg-muted);
+  background: color-mix(in srgb, var(--card-bg) 88%, transparent); border: 1px solid var(--border);
+  backdrop-filter: blur(4px);
+}
+.wf-legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.wf-legend-line { display: inline-block; width: 22px; height: 0; border-top: 2.5px solid var(--accent); }
+.wf-legend-line.is-after { border-top: 2px dashed var(--fg-subtle); }
+.wf-legend-shield { display: inline-block; width: 9px; height: 11px; border-radius: 2px 2px 6px 6px; background: var(--ok); }
+.wf-legend-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--fg-subtle); }
+.wf-legend-dot.status-running { background: var(--accent); }
+.wf-legend-dot.status-done { background: var(--ok); }
+.wf-legend-dot.status-failed { background: var(--err); }
+.wf-legend-dot.status-rolled_back { background: var(--warn); }
+.wf-zoom-level {
+  position: absolute; right: 0.7rem; bottom: 0.6rem; padding: 0.15rem 0.5rem; border-radius: var(--radius-pill);
+  color: var(--fg-muted); background: color-mix(in srgb, var(--card-bg) 88%, transparent); border: 1px solid var(--border);
+}
+.wf-empty-canvas {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.4rem; color: var(--fg-subtle); pointer-events: none;
+}
+.wf-empty-canvas[hidden] { display: none; }
+
+.wf-edge { fill: none; stroke-width: 2.25; stroke: var(--accent); transition: stroke var(--dur-fast) var(--ease); }
+.wf-edge.is-after { stroke: var(--fg-subtle); stroke-dasharray: 7 6; stroke-width: 2; }
+.wf-edge.is-trigger { stroke: color-mix(in srgb, var(--fg) 30%, transparent); stroke-dasharray: 2 5; stroke-linecap: round; }
+.wf-edge.is-ghost { stroke: var(--accent); stroke-dasharray: 5 5; opacity: 0.8; pointer-events: none; }
+.wf-edge.is-selected { stroke: var(--warn); stroke-width: 3; }
+.wf-edge.from-running { stroke-dasharray: 8 6; animation: wf-flow 0.9s linear infinite; }
+.wf-edge.from-done.is-data { stroke: var(--ok); }
+@keyframes wf-flow { to { stroke-dashoffset: -28; } }
+.wf-edge-hit { fill: none; stroke: transparent; stroke-width: 14; cursor: pointer; }
+.wf-edge-g:hover .wf-edge { stroke-width: 3; }
+.wf-arrow.is-data { fill: var(--accent); }
+.wf-arrow.is-after { fill: var(--fg-subtle); }
+.wf-arrow.is-selected { fill: var(--warn); }
+.wf-arrow.is-trigger { fill: color-mix(in srgb, var(--fg) 30%, transparent); }
+.wf-edge-chip { cursor: pointer; }
+.wf-edge-chip rect { fill: var(--card-bg); stroke: var(--border-strong); }
+.wf-edge-chip.is-data rect { stroke: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+.wf-edge-chip text { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; fill: var(--fg-muted); text-transform: uppercase; }
+.wf-edge-chip.is-data text { fill: var(--accent); }
+
+.wf-trigger-body {
+  fill: color-mix(in srgb, var(--accent) 10%, var(--card-bg));
+  stroke: color-mix(in srgb, var(--accent) 45%, var(--border)); stroke-width: 1.5;
+  filter: drop-shadow(0 2px 4px color-mix(in srgb, var(--fg) 10%, transparent));
+}
+.wf-trigger-icon { color: var(--accent); }
+.wf-trigger-label { font-size: 12px; font-weight: 700; fill: var(--fg); text-transform: capitalize; }
+.wf-trigger-sub { font-size: 10px; fill: var(--fg-muted); font-family: var(--mono); }
+
+.wf-node { cursor: pointer; outline: none; }
+.wf-node-body {
+  fill: var(--card-bg);
+  stroke: color-mix(in srgb, var(--pk) 30%, var(--border)); stroke-width: 1.25;
+  filter: drop-shadow(0 3px 7px color-mix(in srgb, var(--fg) 11%, transparent));
+  transition: stroke var(--dur-fast) var(--ease);
+}
+.wf-node:hover .wf-node-body, .wf-node:focus-visible .wf-node-body { stroke: color-mix(in srgb, var(--pk) 70%, var(--border)); }
+.wf-node.is-selected .wf-node-body { stroke: var(--accent); stroke-width: 2.5; }
+.wf-node.is-target .wf-node-body { stroke: var(--ok); stroke-width: 2.5; stroke-dasharray: 5 3; }
+.wf-node.is-bad-target .wf-node-body { stroke: var(--err); stroke-width: 2.5; stroke-dasharray: 5 3; }
+.wf-node.has-error .wf-node-body, .wf-node.is-missing .wf-node-body { stroke: var(--err); stroke-width: 2; }
+.wf-node-accent { fill: var(--pk); }
+.wf-node-kind rect { fill: color-mix(in srgb, var(--pk) 14%, var(--card-bg)); }
+.wf-node-kind text { font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; fill: var(--pk); }
+.wf-node-title { font-size: 13.5px; font-weight: 650; fill: var(--fg); }
+.wf-node-sub { font-size: 10.5px; fill: var(--fg-muted); font-family: var(--mono); }
+.wf-node-shield { color: var(--ok); }
+.wf-node-warn { color: var(--err); }
+.wf-port { fill: var(--card-bg); stroke: color-mix(in srgb, var(--pk) 60%, var(--border)); stroke-width: 2; }
+.wf-port.is-out { cursor: crosshair; }
+.wf-port.is-out:hover { fill: var(--accent); stroke: var(--accent); }
+.wf-run-page .wf-port { display: none; }
+.wf-node-status circle { fill: var(--fg-subtle); }
+.wf-node-status.status-queued circle, .wf-node-status.status-running circle,
+.wf-node-status.status-snapshotting circle, .wf-node-status.status-cleaning circle { fill: var(--accent); }
+.wf-node-status.status-done circle { fill: var(--ok); }
+.wf-node-status.status-failed circle, .wf-node-status.status-rollback_failed circle,
+.wf-node-status.status-cancelled circle { fill: var(--err); }
+.wf-node-status.status-rolling_back circle, .wf-node-status.status-rolled_back circle { fill: var(--warn); }
+.wf-node-status .wf-pulse { fill: none !important; stroke: currentColor; color: var(--accent); stroke-width: 2; animation: wf-pulse 1.4s var(--ease) infinite; transform-origin: center; }
+.wf-node-status.status-rolling_back .wf-pulse { color: var(--warn); }
+@keyframes wf-pulse { 0% { opacity: 0.8; transform: scale(0.6); } 100% { opacity: 0; transform: scale(1.5); } }
+.wf-node.status-done .wf-node-body { stroke: color-mix(in srgb, var(--ok) 60%, var(--border)); }
+.wf-node.status-failed .wf-node-body, .wf-node.status-rollback_failed .wf-node-body { stroke: var(--err); stroke-width: 2; }
+.wf-node.status-running .wf-node-body, .wf-node.status-queued .wf-node-body { stroke: var(--accent); stroke-width: 2; }
+.wf-node.status-rolled_back .wf-node-body, .wf-node.status-rolling_back .wf-node-body { stroke: var(--warn); stroke-width: 2; }
+.wf-node.status-skipped, .wf-node.status-waiting { opacity: 0.62; }
+
+/* ---- inspector ---- */
+.wf-insp-pane { display: flex; flex-direction: column; gap: 0.55rem; }
+.wf-insp-pane[hidden] { display: none; }
+.wf-insp-pane .form-row { display: flex; flex-direction: column; gap: 0.25rem; margin: 0; }
+.wf-insp-pane .form-row[hidden] { display: none; }
+.wf-insp-pane .form-row label { font-size: var(--fs-sm); font-weight: 600; color: var(--fg); display: flex; align-items: center; gap: 0.25rem; }
+.wf-insp-pane input[type="text"], .wf-insp-pane input[type="number"], .wf-insp-pane select, .wf-insp-pane textarea { width: 100%; }
+.wf-insp-pane .form-row-inline label { font-weight: 500; }
+.wf-io {
+  display: flex; flex-direction: column; gap: 0.5rem; padding: 0.55rem;
+  border-radius: var(--radius-md); background: color-mix(in srgb, var(--fg) 3%, transparent);
+}
+.wf-readonly { font-size: var(--fs-sm); color: var(--fg-muted); display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+.wf-advanced { border-top: 1px solid var(--border); padding-top: 0.45rem; }
+.wf-advanced > summary { cursor: pointer; font-weight: 600; font-size: var(--fs-sm); color: var(--fg-muted); }
+.wf-advanced[open] > summary { margin-bottom: 0.45rem; }
+.wf-step-pipeline { font-size: var(--fs-sm); display: flex; flex-direction: column; gap: 0.3rem; }
+.wf-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 0.35rem; }
+.wf-kpis span {
+  padding: 0.4rem 0.5rem; border-radius: var(--radius-md); font-size: var(--fs-xs); color: var(--fg-muted);
+  background: color-mix(in srgb, var(--fg) 3.5%, transparent);
+}
+.wf-kpis b { display: block; font-size: var(--fs-lg); color: var(--fg); }
+.wf-insp-runs h3 { margin: 0.3rem 0; font-size: var(--fs-sm); display: flex; align-items: center; gap: 0.3rem; }
+.wf-insp-runs ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.wf-insp-runs a { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; text-decoration: none; color: var(--fg); }
+.wf-edge-ends { margin: 0; padding: 0.45rem 0.55rem; border-radius: var(--radius-md); background: color-mix(in srgb, var(--fg) 3.5%, transparent); }
+.wf-edge-type { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.wf-edge-type legend { font-weight: 600; font-size: var(--fs-sm); margin-bottom: 0.3rem; }
+.wf-radio-card {
+  display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 0.65rem; cursor: pointer;
+  border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-elev);
+}
+.wf-radio-card:has(input:checked) { border-color: var(--accent); background: var(--accent-subtle); }
+.wf-radio-card span { display: inline-flex; align-items: center; gap: 0.3rem; }
+
+/* ---- run view ---- */
+.wf-run-meta { display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.7rem; margin: 0; font-size: var(--fs-sm); }
+.wf-run-meta dt { color: var(--fg-muted); }
+.wf-run-meta dd { margin: 0; overflow-wrap: anywhere; }
+.wf-run-steps { list-style: none; margin: 0.3rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0; }
+.wf-run-step { position: relative; display: flex; gap: 0.6rem; padding: 0 0 0.85rem; }
+.wf-run-step::before {
+  content: ""; position: absolute; left: 6px; top: 16px; bottom: 0; width: 2px;
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+}
+.wf-run-step:last-child::before { display: none; }
+.wf-run-step-dot {
+  flex: none; width: 14px; height: 14px; margin-top: 2px; border-radius: 50%;
+  border: 3px solid var(--card-bg); box-shadow: 0 0 0 1.5px var(--fg-subtle); background: var(--fg-subtle); z-index: 1;
+}
+.wf-run-step.status-done .wf-run-step-dot { background: var(--ok); box-shadow: 0 0 0 1.5px var(--ok); }
+.wf-run-step.status-running .wf-run-step-dot, .wf-run-step.status-queued .wf-run-step-dot,
+.wf-run-step.status-snapshotting .wf-run-step-dot { background: var(--accent); box-shadow: 0 0 0 1.5px var(--accent); }
+.wf-run-step.status-failed .wf-run-step-dot, .wf-run-step.status-rollback_failed .wf-run-step-dot { background: var(--err); box-shadow: 0 0 0 1.5px var(--err); }
+.wf-run-step.status-rolled_back .wf-run-step-dot, .wf-run-step.status-rolling_back .wf-run-step-dot { background: var(--warn); box-shadow: 0 0 0 1.5px var(--warn); }
+.wf-run-step-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+.wf-run-step-head { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
+.wf-run-step-body .mono { overflow-wrap: anywhere; color: var(--fg-muted); }
+.wf-step-err { color: var(--err); }
+.wf-step-rb { color: var(--warn); }
+
+@media (max-width: 1100px) {
+  .wf-layout { grid-template-columns: minmax(0, 1fr); }
+  .wf-palette { max-height: 220px; }
+  .wf-stage { min-height: 460px; }
+}
+.wf-topbar [hidden], .wf-editor-page .flash[hidden] { display: none !important; }
+
+/* Workflow branching — conditional / failure / else links, condition builder,
+   data probes, taken / not-taken links in the run view (adr-workflows.md). */
+.wf-legend-line.is-cond { border-top: 2.5px solid var(--warn); }
+.wf-legend-line.is-failure { border-top: 2.5px dashed var(--err); }
+.wf-legend-line.is-not-taken { border-top: 2px dotted var(--fg-subtle); opacity: 0.6; }
+.wf-legend-dot.status-probing { background: var(--accent); }
+.wf-edge.is-cond { stroke: var(--warn); }
+.wf-edge.is-otherwise { stroke: color-mix(in srgb, var(--warn) 55%, var(--fg-subtle)); stroke-dasharray: 10 4 2 4; }
+.wf-edge.is-failure { stroke: var(--err); stroke-dasharray: 6 4; }
+.wf-edge.is-always { stroke: var(--fg-muted); }
+.wf-edge.is-not-taken { stroke: var(--fg-subtle) !important; stroke-dasharray: 2 5 !important; opacity: 0.45; animation: none !important; }
+.wf-edge.is-taken { stroke-width: 2.75; }
+.wf-edge-chip.is-cond rect { stroke: var(--warn); }
+.wf-edge-chip.is-cond text, .wf-edge-chip.is-otherwise text { fill: color-mix(in srgb, var(--warn) 80%, var(--fg)); }
+.wf-edge-chip.is-failure rect { stroke: var(--err); }
+.wf-edge-chip.is-failure text { fill: var(--err); }
+.wf-edge-chip.is-not-taken { opacity: 0.5; }
+.wf-edge-chip text { text-transform: none; letter-spacing: 0.01em; }
+.wf-node-status.status-probing circle { fill: var(--accent); }
+.wf-run-pill.status-probing { color: var(--accent); background: var(--accent-subtle); }
+.wf-run-step.status-probing .wf-run-step-dot { background: var(--accent); box-shadow: 0 0 0 1.5px var(--accent); }
+.wf-cond { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.4rem; }
+.wf-cond[hidden], .wf-insp-pane [hidden] { display: none !important; }
+.wf-cond-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.wf-cond-head h3 { margin: 0; font-size: var(--fs-sm); }
+.wf-cond-group { border: 1px solid var(--border); border-left: 3px solid var(--warn); border-radius: var(--radius-md); padding: 0.4rem; display: flex; flex-direction: column; gap: 0.35rem; background: color-mix(in srgb, var(--fg) 2%, transparent); }
+.wf-cond-group.is-not { border-left-color: var(--err); }
+.wf-cond-group-head { display: flex; align-items: center; gap: 0.4rem; }
+.wf-cond-group-head .icon-button { margin-left: auto; }
+.wf-cond-key { width: auto; }
+.wf-cond-items { display: flex; flex-direction: column; gap: 0.35rem; }
+.wf-cond-leaf { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; padding: 0.3rem; border-radius: var(--radius-sm); background: var(--card-bg); border: 1px solid var(--border); }
+.wf-cond-leaf select, .wf-cond-leaf input[type="text"], .wf-cond-leaf input[type="number"] { flex: 1 1 7rem; min-width: 0; width: auto; font-size: var(--fs-sm); padding: 0.2rem 0.35rem; }
+.wf-cond-leaf .icon-button { flex: 0 0 auto; }
+.wf-cond-add { display: flex; gap: 0.35rem; }
+.wf-cond-summary { margin: 0; color: var(--fg-muted); word-break: break-word; }
+.wf-probes-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin: 0.3rem 0; }
+.wf-probes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.wf-probe { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.35rem; display: flex; flex-direction: column; gap: 0.3rem; }
+.wf-probe-row { display: flex; align-items: center; gap: 0.3rem; }
+.wf-probe-row input, .wf-probe-row select { flex: 1 1 auto; min-width: 0; width: auto; font-size: var(--fs-sm); padding: 0.2rem 0.35rem; }
+.wf-step-reason { color: var(--fg-muted); font-style: italic; }
+.wf-run-branches { list-style: none; margin: 0.25rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+.wf-run-branches li { overflow-wrap: anywhere; }
+.wf-run-branches li.is-taken > span:first-child { color: var(--ok); }
+.wf-run-branches li.is-not-taken { color: var(--fg-subtle); }
+.wf-count { color: var(--fg-muted); font-weight: 400; }

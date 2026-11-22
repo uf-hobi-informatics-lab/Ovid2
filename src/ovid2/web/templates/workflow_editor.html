@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% block title %}{{ name or "New workflow" }} &mdash; Workflows &mdash; Ovid2{% endblock %}
+{% block content %}
+{% import "_help.html" as help %}
+{#
+  Workflow canvas editor (static/workflow_canvas.js).
+
+  Left   — palette of saved pipelines (search; drag onto the canvas or click +).
+  Centre — pan / zoom SVG canvas: trigger pill → steps; drag a node's right
+           port onto another node to link them; click a link to edit it.
+  Right  — inspector: the workflow (name, trigger, description) when nothing
+           is selected, else the selected step (pipeline, overrides, rollback)
+           or link (data / after).
+  Every select is fed from the embedded catalogue (UI rule U2), every
+  explanation sits under a "?" tip (U3), and fields that do not apply to the
+  current selection are hidden (U1, data-show-when + field_visibility.js).
+#}
+<section class="page wf-editor-page" id="wf-editor"
+         data-name="{{ name }}" data-can-write="{{ 'true' if can_write else 'false' }}"
+         data-can-run="{{ 'true' if can_run else 'false' }}"
+         data-draft="{{ 'true' if draft else 'false' }}">
+  <div class="wf-topbar">
+    <a href="/workflows" class="icon-button" title="All workflows" aria-label="Back to workflows">{{ icons.icon("chevron-left", size=18) }}</a>
+    <span class="wf-card-badge">{{ icons.icon("dag", size=18) }}</span>
+    <div class="wf-title-block">
+      <h1 class="wf-title" data-wf-title>{{ name or "New workflow" }}
+        {% call help.tip_block(label="How the canvas works") %}
+          Drag pipelines from the left onto the canvas (or press <kbd>+</kbd> on one).
+          Drag from a step's right-hand port to another step to link them: a
+          <strong>data</strong> link passes the first step's output in as the next
+          step's input; an <strong>after</strong> link only sets the order. A step
+          may have many links out (separate paths) and in (it waits for them);
+          give a link a condition, an <em>otherwise</em> branch or an
+          <em>on failure</em> recovery path in the link inspector.
+          Select a step or a link to edit it on the right. Scroll to zoom, drag the
+          background to pan, <kbd>Del</kbd> removes the selection,
+          <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicates a step and
+          <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd> undo and redo.
+        {% endcall %}
+      </h1>
+      <span class="wf-save-state small" data-wf-dirty aria-live="polite"></span>
+    </div>
+    <span class="pl-flex"></span>
+    <div class="wf-tools" role="toolbar" aria-label="Canvas tools">
+      <button type="button" class="icon-button" data-wf-act="undo" title="Undo (Ctrl+Z)" aria-label="Undo">{{ icons.icon("undo", size=16) }}</button>
+      <button type="button" class="icon-button" data-wf-act="redo" title="Redo (Ctrl+Y)" aria-label="Redo">{{ icons.icon("redo", size=16) }}</button>
+      <span class="wf-tool-sep" aria-hidden="true"></span>
+      <button type="button" class="icon-button" data-wf-act="tidy" title="Tidy layout" aria-label="Tidy layout">{{ icons.icon("layers", size=16) }}</button>
+      <button type="button" class="icon-button" data-wf-act="fit" title="Fit to screen" aria-label="Fit to screen">{{ icons.icon("search", size=16) }}</button>
+      <button type="button" class="icon-button" data-wf-act="zoom-in" title="Zoom in" aria-label="Zoom in">{{ icons.icon("plus", size=16) }}</button>
+      <button type="button" class="icon-button" data-wf-act="zoom-out" title="Zoom out" aria-label="Zoom out"><span aria-hidden="true" class="wf-minus">&minus;</span></button>
+    </div>
+    <span class="wf-tool-sep" aria-hidden="true"></span>
+    <button type="button" class="button small" data-wf-act="validate">{{ icons.icon("shield-check", size=15) }} Validate</button>
+    {% if name and can_write %}
+    <button type="button" class="button small" data-wf-act="duplicate">{{ icons.icon("copy", size=15) }} Duplicate</button>
+    {% endif %}
+    {% if name and can_run %}
+    <button type="button" class="button small" data-wf-act="run">{{ icons.icon("play", size=15) }} Run</button>
+    {% endif %}
+    {% if can_write %}
+    <button type="button" class="button primary" data-wf-act="save">{{ icons.icon("check", size=15) }} Save</button>
+    {% endif %}
+  </div>
+
+  {% if draft %}
+  <div class="flash ok" role="status">Draft from the assistant &mdash; review it, then Save and enable or Run.</div>
+  {% endif %}
+  <div class="flash ok" data-wf-prefill role="status" hidden></div>
+  <div class="flash error" data-wf-error role="alert" hidden></div>
+  <div class="flash ok" data-wf-flash role="status" hidden></div>
+
+  <div class="wf-layout">
+    <aside class="wf-palette" aria-label="Pipelines">
+      <div class="wf-pane-head">
+        <h2>Pipelines {{ help.tip("Saved pipeline configs. Each step of a workflow runs one of them; a step may override its input, output and tables.", label="About the palette") }}</h2>
+      </div>
+      <label class="pl-search wf-palette-search">
+        {{ icons.icon("search", size=14) }}
+        <input type="search" data-wf-palette-filter placeholder="Find a pipeline&hellip;" aria-label="Find a pipeline">
+      </label>
+      <ul class="wf-palette-list" data-wf-palette></ul>
+      {% if not catalog.pipelines %}
+      <p class="empty">No pipelines yet. <a href="/pipelines/new">Create one</a>.</p>
+      {% endif %}
+    </aside>
+
+    <div class="wf-stage">
+      <svg class="wf-canvas" data-wf-canvas role="application" aria-label="Workflow canvas" tabindex="0"></svg>
+      <div class="wf-legend" aria-hidden="true">
+        <span><i class="wf-legend-line is-data"></i>data</span>
+        <span><i class="wf-legend-line is-after"></i>after</span>
+        <span><i class="wf-legend-line is-cond"></i>conditional</span>
+        <span><i class="wf-legend-line is-failure"></i>on failure</span>
+        <span><i class="wf-legend-shield"></i>rollback</span>
+      </div>
+      <div class="wf-zoom-level small" data-wf-zoom aria-hidden="true">100%</div>
+      <div class="wf-empty-canvas" data-wf-empty hidden>
+        {{ icons.icon("dag", size=34) }}
+        <p class="empty">Drag a pipeline here to start.</p>
+      </div>
+    </div>
+
+    <aside class="wf-inspector" aria-label="Inspector" data-wf-inspector>
+      {# --- Workflow --- #}
+      <form class="wf-insp-pane" data-insp="workflow" data-visibility-root onsubmit="return false">
+        <div class="wf-pane-head"><h2>{{ icons.icon("dag", size=16) }} Workflow</h2></div>
+        <div class="form-row">
+          <label for="wf-name">Name {{ help.tip("Letters, digits, '-', '_' and '.'. It names the JSON file and the URL.") }}</label>
+          <input id="wf-name" name="wf_name" type="text" class="mono" maxlength="64"
+                 pattern="[A-Za-z0-9][A-Za-z0-9_.\-]*" value="{{ name }}" {% if name %}readonly{% endif %} required>
+        </div>
+        <div class="form-row">
+          <label for="wf-desc">Description</label>
+          <textarea id="wf-desc" name="description" rows="2" maxlength="500"></textarea>
+        </div>
+        <div class="form-row">
+          <label for="wf-trigger">Trigger {{ help.tip("What starts the workflow. A new workflow inherits the trigger of its first pipeline. 'watch' scans the first step's input for new batch folders and starts one run per folder.") }}</label>
+          <select id="wf-trigger" name="trigger_type">
+            {% for t in triggers %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-row" data-show-when="trigger_type=cron">
+          <label for="wf-cron">Cron expression {{ help.tip("Five fields: minute hour day-of-month month day-of-week, e.g. '0 2 * * *' for 02:00 daily.") }}</label>
+          <input id="wf-cron" name="cron" type="text" class="mono" placeholder="0 2 * * *">
+        </div>
+        <div class="form-row" data-show-when="trigger_type=interval">
+          <label for="wf-interval">Every (minutes)</label>
+          <input id="wf-interval" name="interval_minutes" type="number" min="1" step="1">
+        </div>
+        <div class="form-row" data-show-when="trigger_type=watch">
+          <label for="wf-wait">Re-scan after (minutes) {{ help.tip("Debounce between scans of the watched folder. Empty scans on every worker tick.") }}</label>
+          <input id="wf-wait" name="watch_min_wait_minutes" type="number" min="0" step="1">
+        </div>
+        <div class="form-row form-row-inline">
+          <label class="check"><input type="checkbox" name="enabled" data-wf-enabled> Trigger enabled</label>
+        </div>
+        <div class="wf-insp-summary" data-wf-summary></div>
+        {% if runs %}
+        <div class="wf-insp-runs">
+          <h3>{{ icons.icon("history", size=14) }} Recent runs</h3>
+          <ul>
+          {% for r in runs %}
+            <li><a href="/workflows/{{ name }}/runs/{{ r.run_id }}"><span class="wf-run-pill status-{{ r.status }}"><span class="wf-run-dot" aria-hidden="true"></span>{{ r.status | replace('_',' ') }}</span>
+              <span class="small">{{ r.created_at | localtime }}</span></a></li>
+          {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+      </form>
+
+      {# --- Step --- #}
+      <form class="wf-insp-pane" data-insp="step" data-visibility-root hidden onsubmit="return false">
+        <div class="wf-pane-head">
+          <h2>{{ icons.icon("workflow", size=16) }} Step <span class="mono" data-step-id></span></h2>
+          <button type="button" class="icon-button danger" data-wf-act="delete" title="Remove step (Del)" aria-label="Remove step">{{ icons.icon("trash", size=15) }}</button>
+        </div>
+        <div class="form-row">
+          <label for="st-pipeline">Pipeline</label>
+          <select id="st-pipeline" name="pipeline" data-step-field="pipeline"></select>
+        </div>
+        <div class="form-row">
+          <label for="st-label">Label</label>
+          <input id="st-label" name="label" type="text" maxlength="80" data-step-field="label">
+        </div>
+        <div class="wf-io">
+          <div class="form-row" data-show-when="has_data_input=0">
+            <label for="st-input">Input {{ help.tip("Where this step reads from. 'Pipeline default' keeps the pipeline's own input. A data link from another step replaces it.") }}</label>
+            <select id="st-input" name="input_address" data-step-field="input_address"></select>
+          </div>
+          <div class="form-row" data-show-when="has_data_input=1">
+            <label>Input</label>
+            <div class="wf-readonly" data-step-data-input></div>
+          </div>
+          <div class="form-row">
+            <label for="st-output">Output {{ help.tip("Where this step writes. It is the exact location; two steps may not write to the same output.") }}</label>
+            <select id="st-output" name="output_address" data-step-field="output_address"></select>
+          </div>
+        </div>
+        <input type="hidden" name="has_data_input" value="0" data-step-has-data>
+        <input type="hidden" name="tables_mode" value="" data-step-tables-mode>
+        <div class="form-row" data-show-when="tables_mode=explicit">
+          <label for="st-tables">Tables {{ help.tip("Copy / move steps only. Space-separated table names (LOGICAL or LOGICAL=SOURCE). Empty keeps the pipeline's list.") }}</label>
+          <input id="st-tables" name="tables" type="text" class="mono" data-step-field="tables" data-allow-new>
+        </div>
+        <input type="hidden" name="incoming_links" value="0" data-step-incoming>
+        <div class="form-row" data-show-when="incoming_links=many">
+          <label for="st-join">Run when {{ help.tip("This step has several incoming links. 'all' runs it only when every incoming link is taken; one branch not taken skips it. 'any' waits until every upstream step has finished and runs it when at least one link was taken — use it where branches meet again.") }}</label>
+          <select id="st-join" name="join" data-step-field="join">
+            <option value="all">all incoming links are taken</option>
+            <option value="any">any incoming link is taken</option>
+          </select>
+        </div>
+        <details class="wf-advanced" data-step-probes-box>
+          <summary>Data probes <span class="wf-count small" data-probe-count></span></summary>
+          <div class="wf-probes-head">
+            <span class="small">{{ help.tip("Numbers computed on this step's output after it succeeds (a row count, optionally filtered, a distinct or null count). Links leaving this step can test them as query.<name>. Only the number leaves the executor; no row values are shown.", label="About data probes") }}</span>
+            <button type="button" class="button small" data-probe-add>{{ icons.icon("plus", size=13) }} Add probe</button>
+          </div>
+          <ul class="wf-probes" data-probes></ul>
+        </details>
+        <details class="wf-advanced">
+          <summary>Safety</summary>
+          <div class="form-row">
+            <label for="st-overwrite">Overwrite existing data {{ help.tip("When the output already holds tables. 'Pipeline default' uses the pipeline's allow-overwrite setting; otherwise the step stops before writing anything.") }}</label>
+            <select id="st-overwrite" name="allow_overwrite" data-step-field="allow_overwrite">
+              <option value="">Pipeline default</option>
+              <option value="true">Allow</option>
+              <option value="false">Refuse</option>
+            </select>
+          </div>
+          <div class="form-row form-row-inline">
+            <label class="check"><input type="checkbox" data-step-field="rollback"> Roll back if the workflow fails
+              {{ help.tip("Before the step runs its occupied output is backed up; if any step fails the new tables are dropped and the backed-up ones restored. Turn it off only for storage that cannot be rolled back.") }}</label>
+          </div>
+        </details>
+        <div class="wf-step-pipeline" data-step-pipeline-card></div>
+        <ul class="pb-errors" data-step-errors hidden></ul>
+      </form>
+
+      {# --- Link --- #}
+      <form class="wf-insp-pane" data-insp="edge" data-visibility-root hidden onsubmit="return false">
+        <div class="wf-pane-head">
+          <h2>{{ icons.icon("arrow-right", size=16) }} Link</h2>
+          <button type="button" class="icon-button danger" data-wf-act="delete" title="Remove link (Del)" aria-label="Remove link">{{ icons.icon("trash", size=15) }}</button>
+        </div>
+        <p class="wf-edge-ends mono" data-edge-ends></p>
+        <fieldset class="wf-edge-type">
+          <legend>Type</legend>
+          <label class="wf-radio-card"><input type="radio" name="edge_type" value="data">
+            <span><strong>data</strong>{{ help.tip("The next step reads what this step wrote: its input becomes this step's output.") }}</span></label>
+          <label class="wf-radio-card"><input type="radio" name="edge_type" value="after">
+            <span><strong>after</strong>{{ help.tip("Order only: the next step starts after this one finishes and keeps its own input and output.") }}</span></label>
+        </fieldset>
+        <div class="form-row">
+          <label for="ed-on">Follow when {{ help.tip("Which outcome of the upstream step follows this link. 'failed' makes a recovery path: the failure no longer stops the workflow, the failed step's output is rolled back and this branch runs. 'otherwise' is the else branch: taken when none of this step's other conditional links matched.") }}</label>
+          <select id="ed-on" name="edge_on" data-edge-field="on">
+            <option value="success">the step succeeded</option>
+            <option value="failure">the step failed</option>
+            <option value="always">always (succeeded or failed)</option>
+            <option value="otherwise">otherwise (no other branch matched)</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="ed-label">Branch label</label>
+          <input id="ed-label" name="edge_label" type="text" maxlength="80" data-edge-field="label" data-allow-new>
+        </div>
+        <div class="wf-cond" data-show-when="edge_on!=otherwise">
+          <div class="wf-cond-head">
+            <h3>Condition {{ help.tip("Optional. The link is followed only when the condition holds over what the upstream step produced: its status, tables, warnings, health-check results, output tables, row counts and data probes. Combine tests with ALL (and) / ANY (or) groups; NOT inverts a group. Unknown values fail positive tests.") }}</h3>
+            <label class="check small"><input type="checkbox" data-cond-enable> Only if&hellip;</label>
+          </div>
+          <div class="wf-cond-tree" data-cond-tree></div>
+          <p class="wf-cond-summary mono small" data-cond-summary></p>
+        </div>
+      </form>
+    </aside>
+  </div>
+</section>
+<script type="application/json" id="kind-flags">{{ catalog.kinds | tojson }}</script>
+<script type="application/json" id="wf-catalog">{{ catalog | tojson }}</script>
+<script type="application/json" id="wf-initial">{{ workflow | tojson }}</script>
+<script type="module" src="/static/workflow_canvas.js"></script>
+{% endblock %}

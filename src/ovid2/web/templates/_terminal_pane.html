@@ -116,6 +116,7 @@
       #}
       <form class="term-prompt-form" method="post"
             action="/jobs/{{ job.job_id }}/launch">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit"
                 class="term-prompt-btn term-btn-primary run-ready"
                 data-action="launch"
@@ -129,12 +130,14 @@
       <span class="term-draft-note small muted">draft — ready to run</span>
       <form class="term-draft-discard" method="post"
             action="/jobs/{{ job.job_id }}/discard">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="link small" data-action="discard"
                 title="Discard this draft">discard</button>
       </form>
       {% elif job and job.status in ["queued", "running"] %}
       <form class="term-prompt-form" method="post"
             action="/jobs/{{ job.job_id }}/cancel">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit"
                 class="term-prompt-btn term-btn-primary"
                 data-action="cancel"
@@ -156,6 +159,7 @@
             {% if job.status != "queued" %}hidden{% endif %}>{% if job.status == "queued" %}{% include "_run_queue_note.html" %}{% endif %}</span>
       {% elif job %}
       <form class="term-prompt-form" method="post" action="/jobs/{{ job.job_id }}/rerun">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit"
                 class="term-prompt-btn term-btn-primary"
                 data-action="rerun"

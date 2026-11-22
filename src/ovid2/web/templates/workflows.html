@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% block title %}Workflows &mdash; Ovid2{% endblock %}
+{% block content %}
+{% import "_help.html" as help %}
+{#
+  Workflows index. Each card draws a miniature of the workflow DAG
+  (static/workflows.js renders it from the embedded JSON, layered left to
+  right), the trigger, the last run, and the actions: open on the canvas,
+  run, duplicate, enable / disable, delete. Everything is server-rendered
+  so the list works with JS off; the mini-graphs are an enhancement.
+#}
+{% set trigger_icons = {"manual": "hand", "cron": "clock", "interval": "clock", "watch": "eye"} %}
+{% set n_enabled = workflows | selectattr("enabled") | list | length %}
+{% set n_auto = workflows | rejectattr("trigger_type", "equalto", "manual") | list | length %}
+<section class="page wf-page">
+  <div class="page-header wf-header">
+    <h1>Workflows
+      {% call help.tip_block(label="What is a workflow?") %}
+        <strong>Chain saved pipelines into one automated run.</strong>
+        A workflow is a graph of steps; each step is a saved pipeline.
+        A <em>data</em> link feeds the output of one step into the input of the
+        next. An <em>after</em> link only sets the order, so steps can read and write
+        completely different storage. The workflow is started by its trigger
+        (manual, schedule, interval or a watched folder &mdash; inherited from the
+        first pipeline). If any step fails the run stops and every finished step is
+        rolled back: new tables are removed and overwritten tables are restored.
+      {% endcall %}
+    </h1>
+    <div class="page-actions">
+      <a href="/pipelines" class="button small">{{ icons.icon("workflow", size=15) }} Pipelines</a>
+      {% if can_write %}
+      <a href="/workflows/new" class="button primary">{{ icons.icon("plus", size=16) }} New workflow</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if flash %}<div class="flash ok" role="status">{{ flash }}</div>{% endif %}
+  {% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
+
+  {% if workflows %}
+  <div class="pl-stats wf-stats" role="list" aria-label="Workflow summary">
+    <div class="pl-stat" role="listitem">
+      <span class="pl-stat-icon">{{ icons.icon("dag", size=20) }}</span>
+      <span class="pl-stat-body"><span class="pl-stat-value">{{ workflows | length }}</span><span class="pl-stat-label">workflows</span></span>
+    </div>
+    <div class="pl-stat pl-stat-ok" role="listitem">
+      <span class="pl-stat-icon">{{ icons.icon("zap", size=20) }}</span>
+      <span class="pl-stat-body"><span class="pl-stat-value">{{ n_enabled }}</span><span class="pl-stat-label">enabled</span></span>
+    </div>
+    <div class="pl-stat pl-stat-auto" role="listitem">
+      <span class="pl-stat-icon">{{ icons.icon("clock", size=20) }}</span>
+      <span class="pl-stat-body"><span class="pl-stat-value">{{ n_auto }}</span><span class="pl-stat-label">automated</span></span>
+    </div>
+    <div class="pl-stat" role="listitem">
+      <span class="pl-stat-icon">{{ icons.icon("layers", size=20) }}</span>
+      <span class="pl-stat-body"><span class="pl-stat-value">{{ workflows | sum(attribute="step_count") }}</span><span class="pl-stat-label">steps</span></span>
+    </div>
+  </div>
+
+  <div class="pl-toolbar filter-bar" data-wf-filters>
+    <label class="pl-search">
+      {{ icons.icon("search", size=15) }}
+      <input type="search" data-wf-filter="name" placeholder="Search workflows&hellip;"
+             autocomplete="off" aria-label="Filter by name">
+    </label>
+    <select data-wf-filter="trigger" class="pl-chip-select" aria-label="Trigger">
+      <option value="">All triggers</option>
+      <option value="manual">manual</option>
+      <option value="cron">cron</option>
+      <option value="interval">interval</option>
+      <option value="watch">watch</option>
+    </select>
+    <select data-wf-filter="enabled" class="pl-chip-select" aria-label="Status">
+      <option value="">Any status</option>
+      <option value="yes">Enabled</option>
+      <option value="no">Disabled</option>
+    </select>
+    <span class="pl-toolbar-count small" data-wf-count aria-live="polite"></span>
+  </div>
+
+  <div class="wf-grid">
+    {% for w in workflows %}
+    <article class="wf-card" data-wf-card
+             data-name="{{ w.name | lower }}" data-trigger="{{ w.trigger_type }}"
+             data-enabled="{{ 'yes' if w.enabled else 'no' }}">
+      <header class="wf-card-head">
+        <span class="wf-card-badge">{{ icons.icon("dag", size=18) }}</span>
+        <div class="wf-card-title">
+          <a href="/workflows/{{ w.name }}" class="wf-card-name">{{ w.name }}</a>
+          <span class="wf-card-sub">
+            <span>{{ w.step_count }} step{{ '' if w.step_count == 1 else 's' }}</span>
+            <span aria-hidden="true">&middot;</span>
+            <span>{{ w.edge_count }} link{{ '' if w.edge_count == 1 else 's' }}</span>
+            {% if w.description %}<span aria-hidden="true">&middot;</span><span class="wf-card-desc" title="{{ w.description }}">{{ w.description }}</span>{% endif %}
+          </span>
+        </div>
+        <span class="pl-status {{ 'is-on' if w.enabled else 'is-off' }}">
+          <span class="pl-status-dot" aria-hidden="true"></span>{{ 'enabled' if w.enabled else 'disabled' }}
+        </span>
+      </header>
+
+      <a class="wf-mini" href="/workflows/{{ w.name }}" aria-label="Open {{ w.name }} on the canvas"
+         data-wf-mini='{{ {"steps": w.steps, "edges": w.edges, "kinds": pipeline_kinds} | tojson }}'>
+        <span class="wf-mini-fallback">
+          {% for s in w.steps[:6] %}<span class="wf-chip" data-kind="{{ pipeline_kinds.get(s.pipeline, '') }}">{{ s.label or s.pipeline }}</span>{% endfor %}
+        </span>
+      </a>
+
+      <footer class="wf-card-foot">
+        <span class="pl-pill pl-trigger-{{ w.trigger_type }}">
+          {{ icons.icon(trigger_icons.get(w.trigger_type, "clock"), size=13) }} {{ w.trigger_type }}
+        </span>
+        {% if w.last_run_id %}
+          <a href="/workflows/{{ w.name }}/runs/{{ w.last_run_id }}" class="wf-run-pill status-{{ w.last_run_status }}">
+            <span class="wf-run-dot" aria-hidden="true"></span>{{ (w.last_run_status or 'unknown') | replace('_', ' ') }}
+          </a>
+        {% else %}
+          <span class="wf-run-pill status-none">never run</span>
+        {% endif %}
+        <span class="pl-next small" title="Next fire">{% if w.next_fire_at %}next {{ w.next_fire_at | localtime }}{% endif %}</span>
+        <div class="row-actions pl-actions">
+          {% if can_run %}
+          <form action="/workflows/{{ w.name }}/run" method="post" class="pl-inline-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="icon-button" title="Run now" aria-label="Run {{ w.name }}">{{ icons.icon("play", size=15) }}</button>
+          </form>
+          <form action="/workflows/{{ w.name }}/toggle" method="post" class="pl-inline-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="enabled" value="{{ '0' if w.enabled else '1' }}">
+            <button type="submit" class="icon-button" title="{{ 'Disable' if w.enabled else 'Enable' }} trigger"
+                    aria-label="{{ 'Disable' if w.enabled else 'Enable' }} {{ w.name }}">{{ icons.icon("stop" if w.enabled else "zap", size=15) }}</button>
+          </form>
+          {% endif %}
+          <a href="/workflows/{{ w.name }}" class="icon-button" title="Edit on the canvas" aria-label="Edit {{ w.name }}">{{ icons.icon("edit", size=15) }}</a>
+          {% if can_write %}
+          <form action="/workflows/{{ w.name }}/duplicate" method="post" class="pl-inline-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="icon-button" title="Duplicate" aria-label="Duplicate {{ w.name }}">{{ icons.icon("copy", size=15) }}</button>
+          </form>
+          <form action="/workflows/{{ w.name }}/delete" method="post" class="pl-inline-form"
+                onsubmit="return confirm('Delete workflow {{ w.name }}? Its run history is kept.')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="icon-button danger" title="Delete" aria-label="Delete {{ w.name }}">{{ icons.icon("trash", size=15) }}</button>
+          </form>
+          {% endif %}
+        </div>
+      </footer>
+    </article>
+    {% endfor %}
+  </div>
+  <p class="empty" data-wf-no-match hidden>No workflows match the current filters.</p>
+
+  {% if recent_runs %}
+  <section class="card wf-recent">
+    <h2 class="card-title">{{ icons.icon("history", size=16) }} Recent runs</h2>
+    <table class="data-table">
+      <thead><tr><th>Workflow</th><th>Status</th><th>Trigger</th><th>Batch</th><th>Started</th><th>Ended</th></tr></thead>
+      <tbody>
+      {% for r in recent_runs %}
+        <tr>
+          <td><a href="/workflows/{{ r.workflow }}/runs/{{ r.run_id }}">{{ r.workflow }}</a></td>
+          <td><span class="wf-run-pill status-{{ r.status }}"><span class="wf-run-dot" aria-hidden="true"></span>{{ r.status | replace('_', ' ') }}</span></td>
+          <td>{{ r.trigger }}</td>
+          <td class="mono">{{ r.batch_id or '' }}</td>
+          <td>{{ r.started_at | localtime if r.started_at else '' }}</td>
+          <td>{{ r.ended_at | localtime if r.ended_at else '' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  {% else %}
+  <div class="pl-empty wf-empty">
+    <div class="pl-empty-art" aria-hidden="true">
+      <span class="pl-empty-node">{{ icons.icon("workflow", size=22) }}</span>
+      <span class="pl-empty-link"></span>
+      <span class="pl-empty-node pl-empty-core">{{ icons.icon("dag", size=26) }}</span>
+      <span class="pl-empty-link"></span>
+      <span class="pl-empty-node">{{ icons.icon("workflow", size=22) }}</span>
+    </div>
+    <h2>No workflows yet
+      {% call help.tip_block(label="Where are workflows stored?") %}
+        Workflows chain saved pipelines. They are stored as JSON under
+        <code>$XDG_CONFIG_HOME/ovid2/workflows/</code>. You can also ask the
+        assistant to draft one for you.
+      {% endcall %}
+    </h2>
+    {% if can_write %}
+    <a href="/workflows/new" class="button primary">{{ icons.icon("plus", size=16) }} Create your first workflow</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+<script type="module" src="/static/workflows.js"></script>
+{% endblock %}

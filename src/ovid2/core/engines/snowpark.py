@@ -559,7 +559,7 @@ class SnowparkEngine(BaseEngine):
             # statement by concatenating the validated int (never
             # operator input) — no f-string SQL, no injection surface.
             cancel_sql = "SELECT SYSTEM$CANCEL_ALL_QUERIES(" + str(int(session_id)) + ")"
-            native.sql(cancel_sql).collect()  # noqa: OVID2001
+            native.sql(cancel_sql).collect()  # noqa: OVID2001 — cancels running queries
             _log.info(
                 "Issued SYSTEM$CANCEL_ALL_QUERIES for Snowflake session %s",
                 session_id,
@@ -639,8 +639,8 @@ class SnowparkEngine(BaseEngine):
             native, fallback_databases=self._workspace_fallbacks
         )
         database = staging_schema.partition(".")[0]
-        native.sql(f"USE DATABASE {database}").collect()  # noqa: OVID2001 session state
-        native.sql(f"USE SCHEMA {staging_schema}").collect()  # noqa: OVID2001 session state
+        native.sql(f"USE DATABASE {database}").collect()  # noqa: OVID2001 — sets session state
+        native.sql(f"USE SCHEMA {staging_schema}").collect()  # noqa: OVID2001 — sets session state
 
     def create_typed_dataframe(
         self,
@@ -773,7 +773,7 @@ class SnowparkEngine(BaseEngine):
             )
         try:
             session = self.get_session()
-            rows = session.sql("SELECT 1 AS ok").collect()  # noqa: OVID2001
+            rows = session.sql("SELECT 1 AS ok").collect()  # noqa: OVID2001 — engine liveness probe
             if rows and rows[0][0] == 1:
                 # Prefer the account the session was actually built with
                 # (may have come from a referenced connection); fall

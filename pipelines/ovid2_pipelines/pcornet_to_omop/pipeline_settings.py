@@ -8,6 +8,8 @@ from __future__ import annotations
 
 # Target CDM: the pipeline reads PCORnet input and writes OMOP tables.
 cdm = "omop_5_3"
+#: Source data model this pipeline reads (it converts PCORnet into OMOP).
+INPUT_CDM = "pcornet_7_0"
 
 # CDM_SOURCE metadata (populates the OMOP cdm_source table in M3).
 CDM_SOURCE_NAME = "PCORnet-to-OMOP conversion"

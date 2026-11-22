@@ -270,6 +270,10 @@ tools:
       "copy / move A to B [using <engine>]" request and pick the config
       whose kind matches (copy or move) and whose engine_type equals the
       requested engine (e.g. "using snowpark" -> engine_type snowpark).
+      cdm is the model an etl config WRITES and input_cdm the model it READS
+      (null = same as cdm): "convert OMOP to PCORnet" means input_cdm
+      omop_5_3 and cdm pcornet_7_0; if several match, ask which one. Takes
+      no arguments (no limit / offset) - it returns every config.
     method: GET
     path: /api/v1/pipelines
     capability: view_pipeline_data
@@ -694,6 +698,215 @@ tools:
       properties:
         name: {type: string}
 
+  # -------------------------------------------------------------- workflows
+  # A workflow chains saved pipeline configs into a DAG. The assistant
+  # reads them, and DRAFTS new ones (saved disabled and opened on the
+  # workflow canvas for the human to review / save / enable / run).
+
+  - name: list_workflows
+    description: >-
+      List workflows (chains of saved pipeline configs) with their trigger,
+      enabled flag, step / link counts and last run status.
+    method: GET
+    path: /api/v1/workflows
+    capability: view_pipeline_data
+
+  - name: get_workflow
+    description: >-
+      One workflow by name - its steps (id, pipeline config name, overrides
+      for input_address / output_address / tables / allow_overwrite,
+      rollback flag), links (from, to, type data|after) and trigger.
+    method: GET
+    path: /api/v1/workflows/{name}
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+
+  - name: list_workflow_runs
+    description: >-
+      Recent workflow runs (newest first), optionally for one workflow: run
+      status (running, succeeded, rolled_back, rollback_failed, cancelled),
+      trigger, batch and per-step state.
+    method: GET
+    path: /api/v1/workflow-runs
+    capability: view_runs
+    params:
+      type: object
+      properties:
+        workflow: {type: string}
+        limit: {type: integer, minimum: 1, maximum: 100, default: 20}
+
+  - name: get_workflow_run
+    description: >-
+      One workflow run: each step's status, job id, input / output address,
+      error and rollback action.
+    method: GET
+    path: /api/v1/workflow-runs/{run_id}
+    capability: view_runs
+    params:
+      type: object
+      required: [run_id]
+      properties:
+        run_id: {type: string}
+
+  - name: draft_workflow
+    description: >-
+      DRAFT a new workflow and open it on the workflow canvas for the user
+      (saved DISABLED; nothing runs - the user reviews, saves, enables or runs
+      it). Each step names a saved pipeline config from list_pipeline_configs
+      (never a package) and gets a short lower-case id. Links: type "data"
+      when the next step must read what the previous one wrote (its input
+      becomes the previous output - use for "then copy the result to ...");
+      type "after" when the next step only has to wait and keeps its own
+      source and destination. Steps whose config keeps an input / output open need
+      overrides.input_address / output_address (address NAMES from
+      list_addresses). trigger defaults to the first config's trigger
+      (manual / cron + cron / interval + interval_minutes / watch). Leave
+      allow_overwrite unset unless the user asked to replace existing data.
+      Branch with link "on" (failure = recovery, otherwise = else) and
+      "when"; a step joining branches sets join "any" (else one data link).
+    method: POST
+    path: /api/v1/workflow-drafts
+    capability: manage_config
+    opens_draft: true
+    params:
+      type: object
+      required: [name, steps]
+      properties:
+        name: {type: string, description: "Workflow name: letters, digits, '-', '_', '.'."}
+        description: {type: string, maxLength: 500}
+        trigger:
+          type: object
+          properties:
+            type: {type: string, enum: [manual, cron, interval, watch]}
+            cron: {type: string}
+            interval_minutes: {type: integer, minimum: 1}
+            watch_min_wait_minutes: {type: integer, minimum: 0}
+        steps:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: object
+            required: [id, pipeline]
+            properties:
+              id: {type: string, description: "Lower-case step id, unique."}
+              pipeline: {type: string, description: "Saved pipeline config name."}
+              label: {type: string}
+              rollback: {type: boolean, default: true}
+              join: {type: string, enum: [all, any], default: all}
+              overrides:
+                type: object
+                properties:
+                  input_address: {type: string}
+                  output_address: {type: string}
+                  tables: {type: array, items: {type: string}}
+                  allow_overwrite: {type: boolean}
+              probes:
+                type: array
+                maxItems: 10
+                description: >-
+                  Numbers computed on this step's output for query.<name>
+                  conditions. A probe with "where" needs human approval; add one
+                  only when the user asked for a data-based condition.
+                items:
+                  type: object
+                  required: [name, table]
+                  properties:
+                    name: {type: string}
+                    table: {type: string}
+                    agg: {type: string, enum: [count, count_distinct, null_count, non_null_count]}
+                    column: {type: string}
+                    where: {type: string}
+        edges:
+          type: array
+          items:
+            type: object
+            required: [from, to]
+            properties:
+              from: {type: string}
+              to: {type: string}
+              type: {type: string, enum: [data, after], default: data}
+              on: {type: string, enum: [success, failure, always, otherwise], default: success}
+              when:
+                type: object
+                description: >-
+                  Condition over the upstream step's facts: {all:[...]} / {any:[...]} /
+                  {not:{...}} / {field, op, value}. E.g. {"all": [{"field":
+                  "health.blockers", "op": "eq", "value": 0}, {"field":
+                  "tables_completed", "op": "contains", "value": "DEMOGRAPHIC"}]}.
+                  Fields: status, error, duration_s, batch_id, root_input,
+                  tables_completed, tables_failed, warnings, table.<T>.status,
+                  health.blockers, health.pass_rate, health.check.<id>.status,
+                  output.tables, rows.<T>, query.<probe>. Ops: eq ne gt gte lt lte
+                  between in not_in contains not_contains starts_with ends_with
+                  matches contains_any contains_all is_empty is_not_empty exists
+                  not_exists is_true is_false.
+              label: {type: string}
+
+  - name: run_workflow
+    description: >-
+      PROPOSE running a saved workflow now (its trigger is ignored). Steps run
+      as jobs; if one fails the finished steps are rolled back. The user must
+      confirm.
+    method: POST
+    path: /api/v1/workflows/{name}/run
+    capability: submit_jobs
+    params:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+        input_address: {type: string, description: "Optional: address NAME the first step reads for this run."}
+
+  - name: duplicate_workflow
+    description: PROPOSE copying a workflow under a new name (the copy starts disabled). The user must confirm.
+    method: POST
+    path: /api/v1/workflows/{name}/duplicate
+    capability: manage_config
+    params:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+        new_name: {type: string}
+
+  - name: enable_workflow
+    description: PROPOSE enabling a workflow's trigger (schedule / watch). The user must confirm.
+    method: POST
+    path: /api/v1/workflows/{name}/enable
+    capability: submit_jobs
+    params:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+
+  - name: disable_workflow
+    description: PROPOSE disabling a workflow's trigger. The user must confirm.
+    method: POST
+    path: /api/v1/workflows/{name}/disable
+    capability: submit_jobs
+    params:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+
+  - name: cancel_workflow_run
+    description: PROPOSE cancelling a running workflow; its finished steps are rolled back. The user must confirm.
+    method: POST
+    path: /api/v1/workflow-runs/{run_id}/cancel
+    capability: submit_jobs
+    params:
+      type: object
+      required: [run_id]
+      properties:
+        run_id: {type: string}
+
   # ------------------------------------------------------- Report Studio
   # The assistant is the primary planner of reports: it reads sources
   # (schema + aggregates only; row_values columns are masked for agents),
@@ -874,8 +1087,8 @@ tools:
       properties:
         theme:
           type: string
-          description: "Base theme: clinical (light, calm hospital teal, IBM Plex), matrix (black CRT, phosphor-green digital rain), super-mario-world (16-bit sky blue, cream boxes, brick red + coin gold), tatooine (dark desert dusk, sunset orange + twin suns, cut-corner panels), financial (dark trading terminal, amber + green/red tickers, dense), lego (light toy bricks, primary red/blue/yellow/green, studded cards), spaceship (dark, sci-fi terminal, teal glow)."
-          enum: [clinical, matrix, super-mario-world, tatooine, financial, lego, spaceship]
+          description: "Base theme (default data-factory): clinical (light, calm hospital teal, IBM Plex), matrix (black CRT, phosphor-green digital rain), super-mario-world (16-bit sky blue, cream boxes, brick red + coin gold), tatooine (dark desert dusk, sunset orange + twin suns, cut-corner panels), financial (dark trading terminal, amber + green/red tickers, dense), lego (light toy bricks, primary red/blue/yellow/green, studded cards), spaceship (dark, sci-fi terminal, teal glow), data-factory (light industrial line control: steel-grey, ink-dark drawer, drive-blue accent, condensed telemetry type)."
+          enum: [data-factory, clinical, matrix, super-mario-world, tatooine, financial, lego, spaceship]
         colors:
           type: object
           description: "Quick colour overrides as #rrggbb. surface = cards and raised panels."
@@ -943,6 +1156,72 @@ tools:
       required: [name]
       properties:
         name: {type: string, minLength: 1, maxLength: 60}
+
+  # Workflow canvas hand-off: opens /workflows/new in the user's browser with
+  # an UNSAVED working copy pre-filled from these steps / links. Nothing is
+  # stored on the server - the human binds what is missing and presses Save
+  # (the canvas validates against the live API as usual). The browser
+  # re-checks every name against the configs / addresses the page lists and
+  # drops anything unknown; Undo returns to the previous page.
+  # Amendment to adr-llm-dual-system.md ("UI actions").
+  - name: open_workflow_canvas
+    description: >-
+      UI: open the workflow canvas (/workflows/new) in the user's browser with an
+      UNSAVED draft built from these steps and links, for the user to finish and Save.
+      Use it instead of draft_workflow when the workflow cannot be saved yet - an
+      input / output address is unknown, or the user has to choose a pipeline - and
+      list what is still open in `missing`. Same step / link shape as draft_workflow
+      (step.pipeline = saved config name from list_pipeline_configs; overrides take
+      address NAMES from list_addresses; leave unknown ones out). After calling it,
+      tell the user in plain words what is pre-filled and what they still have to
+      pick. Applies at once; the user can undo it.
+    ui_action: true
+    # Only offered to users who can save a workflow (same as draft_workflow);
+    # a viewer would land on a read-only canvas.
+    capability: manage_config
+    params:
+      type: object
+      additionalProperties: false
+      required: [steps]
+      properties:
+        name: {type: string, pattern: "^[A-Za-z0-9_.-]{1,64}$", description: "Suggested workflow name."}
+        description: {type: string, maxLength: 500}
+        steps:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, pipeline]
+            properties:
+              id: {type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,39}$"}
+              pipeline: {type: string, pattern: "^[A-Za-z0-9_.-]{1,64}$", description: "Saved pipeline config name."}
+              label: {type: string, maxLength: 80, pattern: "^[^<>]*$"}
+              overrides:
+                type: object
+                additionalProperties: false
+                properties:
+                  input_address: {type: string, pattern: "^[A-Za-z0-9_.:-]{1,128}$"}
+                  output_address: {type: string, pattern: "^[A-Za-z0-9_.:-]{1,128}$"}
+                  tables: {type: array, maxItems: 100, items: {type: string, pattern: "^[A-Za-z0-9_*]{1,64}$"}}
+        edges:
+          type: array
+          maxItems: 40
+          items:
+            type: object
+            additionalProperties: false
+            required: [from, to]
+            properties:
+              from: {type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,39}$"}
+              to: {type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,39}$"}
+              type: {type: string, enum: [data, after], default: data}
+              on: {type: string, enum: [success, failure, always, otherwise], default: success}
+        missing:
+          type: array
+          maxItems: 10
+          description: "Short notes on what the user still has to fill in (shown on the canvas)."
+          items: {type: string, maxLength: 160, pattern: "^[^<>]*$"}
 
   # Report Studio: edits the report open in the user's browser (the Studio's
   # working copy). The browser re-validates every op against the same

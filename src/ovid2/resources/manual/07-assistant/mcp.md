@@ -54,6 +54,7 @@ escalate to `system_admin`.
 | --- | --- |
 | Jobs & runs | `submit_run`, `submit_health`, `submit_move`, `list_jobs`, `get_job_log`, `run_timeline`, `cancel_job`, `rerun_job` |
 | Pipeline configs | `list_pipeline_configs`, `create_pipeline_config`, `run_pipeline_config`, `enable_pipeline_config` |
+| Workflows | `list_workflows`, `get_workflow`, `create_workflow`, `update_workflow`, `duplicate_workflow`, `run_workflow`, `get_workflow_run`, `list_workflow_runs`, `cancel_workflow_run` |
 | Packages & specs | `list_pipelines`, `scaffold_pipeline`, `get_formatter`, `save_formatter`, `validate_formatters`, `get_mapper`, `save_mapper`, `inspect_pipeline_lineage` |
 | Templates & bindings | `list_pipeline_templates`, `inspect_pipeline_template` (tables, engines, file patterns a template expects), `check_pipeline_bindings` (does a source match a template before you create the pipeline) |
 | Storage | `list_connections`, `create_connection`, `test_connection`, `list_addresses`, `storage_browse` |

@@ -3,14 +3,15 @@
 
   Layout regions:
 
-  - ``.topbar``    — sticky top-of-viewport bar, holds the brand, a
-                     drawer-toggle button (visible < 900 px), a page
-                     title placeholder for narrow layouts, and the
-                     day/night theme toggle.
-  - ``.drawer``    — left navigation. Three responsive modes:
-                       * ≥ 1200 px : 240 px expanded rail with labels.
-                       * 900–1199 px: 64 px icon rail; labels appear
-                         on hover / focus.
+  - ``.topbar``    — fixed top-of-viewport bar: the animated
+                     ``<ovid-mark>`` + "Ovid2" wordmark (home link), a
+                     phone-only drawer toggle (< 900 px), and the user
+                     chip / logout.
+  - ``.drawer``    — left navigation, with the menu toggle in a fixed
+                     rail-width ``.drawer-head`` slot. Modes:
+                       * ≥ 900 px : 240 px menu with labels, or the
+                         64 px icon rail when ``<html>.drawer-rail``
+                         is set (persisted, restored pre-paint).
                        * < 900 px : hidden by default, overlays the
                          viewport when ``<html>.drawer-open`` is set.
   - ``.main``      — page content. Owns its own scroll.
@@ -59,24 +60,20 @@
         }
       } catch (e) { /* ignore */ }
       try {
-        /* Drawer collapsed state only applies to the medium
-         * breakpoint. Mobile always starts closed. */
-        if (localStorage.getItem("ovid2DrawerCollapsed") === "1") {
-          root.classList.add("drawer-collapsed");
-        }
-      } catch (e) { /* ignore */ }
-      try {
-        /* Wide-viewport (>= 900px) collapse uses ``drawer-open``. Restore
-         * it before first paint so navigating via a collapsed rail icon
-         * keeps the drawer collapsed instead of springing back open.
-         * Never restore on mobile: there ``drawer-open`` is the transient
-         * off-canvas state and must start closed. */
-        var wideCollapse = false;
-        try { wideCollapse = window.matchMedia("(min-width: 900px)").matches; }
-        catch (e2) { wideCollapse = false; }
-        if (wideCollapse &&
-            localStorage.getItem("ovid2DrawerWideCollapsed") === "1") {
-          root.classList.add("drawer-open");
+        /* Wide-viewport (>= 900px) icon-rail state: ``html.drawer-rail``.
+         * Restored before first paint so navigating via a rail icon keeps
+         * the drawer collapsed instead of springing back open. The
+         * retired medium-only key ``ovid2DrawerCollapsed`` is honoured
+         * once when the wide key was never written (nav.js migrates it).
+         * Mobile never restores: there ``drawer-open`` is the transient
+         * off-canvas state and always starts closed. */
+        var wide = false;
+        try { wide = window.matchMedia("(min-width: 900px)").matches; }
+        catch (e2) { wide = false; }
+        var railKey = localStorage.getItem("ovid2DrawerWideCollapsed");
+        if (railKey === null) { railKey = localStorage.getItem("ovid2DrawerCollapsed"); }
+        if (wide && railKey === "1") {
+          root.classList.add("drawer-rail");
         }
       } catch (e) { /* ignore */ }
     })();
@@ -88,6 +85,8 @@
   <script src="/static/appearance.js" defer></script>
   <script src="/static/cmdk.js" defer></script>
   <script src="/static/nav.js" defer></script>
+  <script src="/static/ovid_mark.js" defer></script>
+  <script src="/static/ovid_mark_status.js" defer></script>
   <script src="/static/help_tip.js" defer></script>
   <script src="/static/field_visibility.js" defer></script>
   {# D3 v7 self-hosted; used by /static/live.js and the display bus.
@@ -108,6 +107,7 @@
   {% elif path.startswith('/runs') %}{% set nav_active = 'runs' %}
   {% elif path.startswith('/pipeline-packages') %}{% set nav_active = 'packages' %}
   {% elif path.startswith('/pipelines') %}{% set nav_active = 'pipelines' %}
+  {% elif path.startswith('/workflows') %}{% set nav_active = 'workflows' %}
   {% elif path.startswith('/transforms') %}{% set nav_active = 'transforms' %}
   {% elif path.startswith('/navigator') %}{% set nav_active = 'navigator' %}
   {% elif path.startswith('/dataspace') %}{% set nav_active = 'dataspace' %}
@@ -128,7 +128,10 @@
   <a class="skip-link" href="#main">Skip to main content</a>
 
   <header class="topbar" role="banner">
-    <button id="drawer-toggle" class="drawer-toggle icon-button" type="button"
+    {# Phones (< 900 px) only: the drawer is off-canvas there, so its own
+       toggle (in .drawer-head) cannot open it. Hidden at >= 900 px. #}
+    <button id="drawer-toggle-mobile" class="drawer-toggle drawer-toggle-mobile icon-button"
+            type="button" data-drawer-toggle
             aria-label="Toggle navigation" aria-controls="site-nav"
             aria-expanded="false">
       <span class="drawer-toggle-open"  aria-hidden="true">{{ icons.icon("menu", size=22) }}</span>
@@ -137,6 +140,12 @@
 
     <span class="brand">
       <a class="brand-mark-link" href="/" aria-label="Ovid2 home">
+        {# Animated sprout mark (static/ovid_mark.js). ovid_mark_status.js
+           drives its state from this page's job, else from the global
+           queue (only when the user may view runs). #}
+        <ovid-mark id="brand-sprout" class="brand-sprout" size="32" state="idle"
+                   aria-hidden="true"
+                   data-poll-runs="{{ '1' if has_cap(request, 'view_runs') else '0' }}"></ovid-mark>
         <span class="brand-text">Ovid<span class="brand-accent">2</span></span>
       </a>
     </span>
@@ -160,6 +169,17 @@
   <div class="drawer-scrim" data-drawer-close></div>
 
   <aside id="site-nav" class="drawer" role="navigation" aria-label="Primary">
+    {# Menu toggle (>= 900 px): a fixed rail-width slot at the top of the
+       drawer, so the button never moves when the drawer toggles between
+       the full menu and the icon rail. #}
+    <div class="drawer-head">
+      <button id="drawer-toggle" class="drawer-toggle icon-button" type="button"
+              data-drawer-toggle
+              aria-label="Collapse navigation" aria-controls="site-nav"
+              aria-expanded="true" title="Collapse / expand menu">
+        {{ icons.icon("menu", size=20) }}
+      </button>
+    </div>
     <nav class="drawer-nav">
       <div class="side-group">Operate</div>
       <a href="/" class="nav-item {% if nav_active == 'dashboard' %}active{% endif %}" data-nav="dashboard">
@@ -173,6 +193,9 @@
       {% if has_cap(request, 'view_pipeline_data') %}
       <a href="/pipelines" class="nav-item {% if nav_active == 'pipelines' %}active{% endif %}" data-nav="pipelines">
         {{ icons.icon("workflow", size=18, cls="nav-icon") }}<span class="nav-label">Pipelines</span>
+      </a>
+      <a href="/workflows" class="nav-item {% if nav_active == 'workflows' %}active{% endif %}" data-nav="workflows" title="Chain pipelines into workflows that run one after another">
+        {{ icons.icon("dag", size=18, cls="nav-icon") }}<span class="nav-label">Workflows</span>
       </a>
       <a href="/pipeline-packages" class="nav-item {% if nav_active == 'packages' %}active{% endif %}" data-nav="packages" title="Installed ovid2_pipelines.* code packages">
         {{ icons.icon("package", size=18, cls="nav-icon") }}<span class="nav-label">Packages</span>
@@ -263,11 +286,6 @@
     <button id="nav-more" class="nav-more" type="button" hidden
             aria-controls="site-nav" aria-label="More menu items below">
       <span class="nav-more-chev" aria-hidden="true">&#9662;</span><span class="nav-more-label"></span>
-    </button>
-
-    <button id="drawer-collapse" class="drawer-collapse icon-button" type="button"
-            aria-label="Collapse navigation rail" title="Collapse / expand">
-      {{ icons.icon("chevron-right", size=16) }}
     </button>
 
     {# Always-visible copy of the attribution credit, pinned to the foot of

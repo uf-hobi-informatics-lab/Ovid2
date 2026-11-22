@@ -26,7 +26,7 @@ from typing import Any
 import pytest
 
 from ovid2.web import db as web_db
-from ovid2.web.auth import breakglass, oidc
+from ovid2.web.auth import breakglass, csrf, oidc
 from ovid2.web.auth import cookie as cookie_mod
 from ovid2.web.models import (
     AuthProviderConfig,
@@ -297,7 +297,11 @@ def test_breakglass_correct_password_creates_session(
     breakglass.set_password("correct-horse-battery", actor="test")
     resp = _client().post(
         "/login/breakglass",
-        data={"password": "correct-horse-battery", "next": "/runs"},
+        data={
+            "password": "correct-horse-battery",
+            "next": "/runs",
+            "csrf_token": csrf.issue_token(),
+        },
     )
     assert resp.status_code == 302
     assert resp.headers["location"] == "/runs"
@@ -311,13 +315,32 @@ def test_breakglass_wrong_password_reprompts(monkeypatch: pytest.MonkeyPatch) ->
     breakglass.set_password("correct-horse-battery", actor="test")
     resp = _client().post(
         "/login/breakglass",
-        data={"password": "totally-wrong", "next": "/"},
+        data={"password": "totally-wrong", "next": "/", "csrf_token": csrf.issue_token()},
     )
     assert resp.status_code == 401
     assert "Incorrect break-glass password." in resp.text
     with web_db.connect() as conn:
         count = conn.execute("SELECT COUNT(*) FROM web_sessions").fetchone()[0]
     assert count == 0
+
+
+def test_breakglass_login_requires_csrf(monkeypatch: pytest.MonkeyPatch) -> None:
+    """POST /login/breakglass without the form's CSRF token → 403 (login CSRF)."""
+    _install_auth(monkeypatch)
+    breakglass.set_password("correct-horse-battery", actor="test")
+    resp = _client().post("/login/breakglass", data={"password": "correct-horse-battery"})
+    assert resp.status_code == 403
+
+
+def test_breakglass_session_resolves_to_admin(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A break-glass session authorises admin-gated routes (no web_users row)."""
+    _install_auth(monkeypatch)
+    session = sessions_svc.create(
+        user_id="breakglass", idp_sid=None, absolute_ttl_min=60, idle_ttl_min=60
+    )
+    client = _client()
+    client.cookies.set("ovid2_session", _signed(session.session_id))
+    assert client.get("/api/v1/approvals").status_code == 200
 
 
 # ---------------------------------------------------------------------------

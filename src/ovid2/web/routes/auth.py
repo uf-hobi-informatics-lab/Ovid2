@@ -42,12 +42,13 @@ import logging
 from typing import Any
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from ovid2.web import db as web_db
 from ovid2.web.auth import breakglass, cookie, deps, oidc
+from ovid2.web.auth.csrf import require_csrf
 from ovid2.web.auth.roles import Role
 from ovid2.web.models import SettingsAuth
 from ovid2.web.services import sessions_svc, settings_svc, users_svc
@@ -60,7 +61,7 @@ router = APIRouter()
 __all__ = ["router"]
 
 #: ``user_id`` stamped on the synthetic break-glass principal's session.
-BREAKGLASS_USER_ID: str = "breakglass"
+BREAKGLASS_USER_ID: str = deps.BREAKGLASS_USER_ID
 
 #: Synthetic issuer recorded for the break-glass principal (never an IdP).
 _BREAKGLASS_ISSUER: str = "ovid2:breakglass"
@@ -193,8 +194,8 @@ def _is_authed(request: Request) -> bool:
 
     1. The synthetic **break-glass** principal — a valid session whose
        ``user_id`` is :data:`BREAKGLASS_USER_ID` — counts as authenticated
-       (it has no ``web_users`` row, so :func:`deps.current_user` would
-       reject it; we recognise it here instead).
+       (it has no ``web_users`` row; :func:`deps.current_user` maps it to a
+       synthetic system admin).
     2. Otherwise :func:`deps.current_user`. A
        :data:`~ovid2.web.auth.roles.Role.PENDING` principal is treated as
        *not* usefully authenticated for the login page and the silent-
@@ -374,7 +375,7 @@ def login_page(request: Request, next: str | None = None) -> Response:
     settings = settings_svc.get_settings()
     providers = oidc.list_enabled_providers(settings.auth)
     no_admin_configured = (
-        settings.auth.enabled
+        settings.auth.effective_enabled()
         and not settings.auth.bootstrap_admin_emails
         and users_svc.count_active_admins() == 0
     )
@@ -530,7 +531,13 @@ def _reject_callback(request: Request) -> Response:
     return response
 
 
-@router.post("/login/breakglass", include_in_schema=False)
+@router.post(
+    "/login/breakglass",
+    include_in_schema=False,
+    # Pre-auth: no capability gate (the caller is not signed in yet), but
+    # the form carries an anonymous CSRF token (login-CSRF defence).
+    dependencies=[Depends(require_csrf)],
+)
 def login_breakglass(
     request: Request,
     password: str = Form(...),

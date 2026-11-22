@@ -43,10 +43,18 @@ Rules:
 - `watch_min_wait_minutes` stops the worker re-scanning the same input
   more often than that.
 
+## Chaining pipelines
+
+To run several pipelines one after another (or in parallel branches) from
+a single trigger, put them in a [workflow](../03-web-panel/workflows.md).
+A workflow owns its own trigger (the same four types), passes one step's
+output to the next over *data* links, and rolls back finished steps when
+a later one fails. The pipelines inside it keep their own triggers.
+
 ## Turning scheduling off
 
 *Settings → Worker → route dispatch* (`route_dispatch_enabled`) pauses
-every cron, interval and watch trigger at once. Manual runs still work.
+every cron, interval and watch trigger at once — pipelines and workflows. Manual runs still work.
 To pause one config, **disable** it on the Pipelines page.
 
 ## Running the worker

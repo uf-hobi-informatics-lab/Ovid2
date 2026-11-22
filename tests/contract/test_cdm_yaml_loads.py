@@ -22,6 +22,7 @@ schema-less by design.
 from __future__ import annotations
 
 import json
+import os
 from importlib import resources
 from pathlib import Path
 
@@ -49,6 +50,8 @@ def _validate(payload: dict, schema: dict, source: str) -> None:
     try:
         import jsonschema  # type: ignore[import-not-found]
     except ImportError:
+        if os.environ.get("CI"):
+            pytest.fail("jsonschema missing in CI — install the [dev] extra")
         pytest.skip("jsonschema not installed; skipping full validation")
     try:
         jsonschema.validate(instance=payload, schema=schema)
