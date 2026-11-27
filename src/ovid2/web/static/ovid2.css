@@ -166,7 +166,7 @@
   src: url("/static/fonts/ibm-plex-mono-600.woff2") format("woff2");
 }
 
-/* Exo 2 — techno-geometric body face (Star Wars / Tatooine). */
+/* Exo 2 — techno-geometric body face (Appearance font picker). */
 @font-face {
   font-family: "Exo 2";
   font-style: normal;
@@ -202,7 +202,7 @@
   src: url("/static/fonts/share-tech-mono.woff2") format("woff2");
 }
 
-/* Michroma — wide geometric sci-fi display face (Tatooine). Single
+/* Michroma — wide geometric sci-fi display face (Appearance font picker). Single
  * weight. */
 @font-face {
   font-family: "Michroma";
@@ -229,6 +229,26 @@
   font-weight: 100 800;
   font-display: swap;
   src: url("/static/fonts/jetbrains-mono.woff2") format("woff2");
+}
+
+/* Big Shoulders Stencil — spray-stencil display face (Data Factory).
+ * SIL OFL 1.1. Latin subset, weight 800 only. */
+@font-face {
+  font-family: "Big Shoulders Stencil";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("/static/fonts/big-shoulders-stencil-800.woff2") format("woff2");
+}
+
+/* Cinzel — carved Roman capitals (Dune). SIL OFL 1.1. Latin subset,
+ * variable weight 400-900. */
+@font-face {
+  font-family: "Cinzel";
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url("/static/fonts/cinzel.woff2") format("woff2");
 }
 
 
@@ -319,6 +339,12 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
    * next to the muted UI). The glow alpha is dialled back to match. */
   --matrix-green: #3fae5a;
   --matrix-glow: rgba(63, 174, 90, 0.22);
+  /* Run-console clocks + running-row highlight — the OpenCode peach
+   * orange. The console is always dark (every theme), so one constant
+   * reads well everywhere. */
+  --timer-orange: #fab283;
+  --timer-orange-wash: rgba(250, 178, 131, 0.13);
+  --timer-orange-wash-strong: rgba(250, 178, 131, 0.2);
 
   /* ---------------------------------------------------------------- *
    * Right tools rail + panel geometry.
@@ -329,7 +355,9 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
    * tests/contract/test_web_shell_v2.py). The rail is always visible;
    * the panel width is only consumed when <html>.right-panel-open. */
   --rail-w: 56px;
-  --right-panel-w: 320px;
+  /* One width for every right-rail panel (Search, Appearance, Agent
+   * Ovid) so they all open from the right edge at the same size. */
+  --right-panel-w: min(440px, 40vw);
 
   /* ---------------------------------------------------------------- *
    * Per-component appearance tokens (the "grouped components" the
@@ -380,8 +408,8 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
 /* ------------------------------------------------------------------ *
  * 2.  Shipped themes
  *
- * Seven curated named themes ship by default: Clinical, Matrix,
- * Super Mario World, Star Wars / Tatooine, Financial, LEGO, Spaceship.
+ * Eight curated named themes ship by default: Clinical, Matrix,
+ * Super Mario World, Dune, Financial, LEGO, Spaceship, Data Factory.
  *
  * The ``light`` and ``dark`` selectors are kept as ALIASES on the
  * Clinical (light baseline) and Matrix (dark baseline) blocks. Two
@@ -692,106 +720,148 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
   --radius-pill: 6px;
 }
 
-/* --- Star Wars / Tatooine. Twin suns over the dunes: a desert planet
- *     at dusk — warm night ink, sun-bleached sand text, sunset-orange
- *     accent with a golden second sun, weathered cut-corner panels. -- */
-[data-theme="tatooine"] {
-  --fg: #f6e6c8;
-  --fg-muted: #c8a77a;
-  --fg-subtle: #9c8058;
-  --bg: #170f0a;
-  --bg-elev: #1d130c;
-  --card-bg: #22170f;
-  --border: #3d2a1a;
-  --border-strong: #5c3f22;
-  --accent: #ff8a3d;
-  --accent-hover: #ffa264;
-  --accent-fg: #1a0d04;
-  --accent-subtle: rgba(255, 138, 61, 0.13);
-  --ok: #d9b44a;
-  --warn: #ffc857;
-  --err: #ff5f4a;
-  --info: #ffc857;
+/* --- Dune (light) · "MERIDIAN". Harvest at noon; waste nothing.
+ *     The deep desert at the dangerous hour: bleached-bone ground,
+ *     basalt type, almost no shadow, and one electric blue that reads
+ *     like spice-saturated eyes. Basalt topbar + drawer (the sietch),
+ *     open sand for content. Inspired by the deep-desert genre only —
+ *     no logos, title lettering, names, likenesses or quotations; every
+ *     glyph is original geometry. Claude Design handoff 2026-11-26.
+ *     Replaces Star Wars / Tatooine (2026-11-26). ------------------- */
+[data-theme="dune"] {
+  color-scheme: light;
 
-  --topbar-bg: rgba(20, 13, 8, 0.95);
-  --topbar-fg: #f6e6c8;
-  --topbar-border: #3d2a1a;
-  --drawer-bg: #140d08;
-  --drawer-fg: #c8a77a;
-  --drawer-fg-muted: #9c8058;
-  --drawer-hover-bg: #261a10;
-  --drawer-active-bg: #3a2412;
-  --drawer-active-fg: #ffc857;
-  --drawer-active-border: #ff8a3d;
-  --drawer-border: #2c1e12;
-  --scrim-bg: rgba(0, 0, 0, 0.66);
+  /* the open sand */
+  --fg: #1a1510;
+  --fg-muted: #4b3f31;
+  --fg-subtle: #66553f;
+  --bg: #efe5d2;
+  --bg-elev: #f5eddd;
+  --card-bg: #fbf6ec;
+  --border: #ddcfb4;
+  --border-strong: #a38b66;
 
-  --code-bg: #0f0a06;
-  --code-fg: #f6e6c8;
-  --log-bg: rgba(255, 138, 61, 0.05);
+  /* the eye: blue within blue */
+  --accent: #1d3fce;
+  --accent-hover: #142c99;
+  --accent-fg: #ffffff;
+  --accent-subtle: #e2e7fb;
 
-  --overlay-err: rgba(255, 95, 74, 0.12);
-  --overlay-warn: rgba(255, 200, 87, 0.12);
-  --overlay-ok: rgba(217, 180, 74, 0.12);
-  --flash-ok-bg: rgba(217, 180, 74, 0.16);
-  --flash-err-bg: rgba(255, 95, 74, 0.16);
+  /* signals */
+  --ok: #116a5a;
+  --warn: #8c4a0e;
+  --err: #a02418;
+  --info: #2a5aa8;
 
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5),
-              0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.6),
-              0 2px 4px  rgba(0, 0, 0, 0.45);
-  --shadow-3: 0 10px 28px rgba(0, 0, 0, 0.7),
-              0 4px 12px  rgba(0, 0, 0, 0.5);
+  /* the basalt slab overhead */
+  --topbar-bg: #1a1510;
+  --topbar-fg: #f3eadb;
+  --topbar-border: #1a1510;
 
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
-  --fs-xs: 0.75rem;
-  --fs-sm: 0.85rem;
-  --fs-md: 0.95rem;
-  --fs-lg: 1.15rem;
-  --fs-xl: 1.5rem;
+  /* the sietch */
+  --drawer-bg: #221b14;
+  --drawer-fg: #efe4d0;
+  --drawer-fg-muted: #b3a389;
+  --drawer-hover-bg: #2f261d;
+  --drawer-active-bg: #16224f;
+  --drawer-active-fg: #ffffff;
+  --drawer-active-border: #5b7cff;
+  --drawer-border: #120e0a;
+  --scrim-bg: rgba(26, 21, 16, 0.6);
 
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 10px;
+  --code-bg: #1d1813;
+  --code-fg: #f0e2c6;
+  --log-bg: #17130f;
+
+  --overlay-err: rgba(160, 36, 24, 0.08);
+  --overlay-warn: rgba(180, 83, 29, 0.12);
+  --overlay-ok: rgba(17, 106, 90, 0.07);
+  --flash-ok-bg: #e4efe7;
+  --flash-err-bg: #f6e1d9;
+
+  /* slabs cast a short noon shadow straight down */
+  --shadow-1: 0 1px 0 #d8c8a8;
+  --shadow-2: 0 4px 0 -1px #d8c8a8, 0 18px 28px -22px rgba(60, 35, 10, 0.45);
+  --shadow-3: 0 6px 0 -2px #c9b48e, 0 36px 60px -30px rgba(60, 35, 10, 0.55);
+
+  --mono: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
+  --fs-xs: 11px;
+  --fs-sm: 12.5px;
+  --fs-md: 14px;
+  --fs-lg: 18px;
+  --fs-xl: 40px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
   --radius-pill: 999px;
-
-  --topbar-h: 56px;
-  --drawer-w: 240px;
+  --topbar-h: 60px;
+  --drawer-w: 256px;
   --drawer-rail-w: 64px;
-  --page-max: 1400px;
+  --page-max: 1320px;
+  --dur-fast: 160ms;
+  --dur-med: 420ms;
+  --ease: cubic-bezier(0.3, 0, 0.1, 1);
 
-  --dur-fast: 120ms;
-  --dur-med: 200ms;
-  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  /* logo mark: extract spice -> transform eye-blue -> load ochre (never water-green) */
+  --ovid-base: #f3eadb;
+  --ovid-extract: #e07a3c;
+  --ovid-transform: #7d95ff;
+  --ovid-load: #c9a66b;
+  --ovid-success: #3fb39b;
+  --ovid-warning: #e0a030;
+  --ovid-error: #e0604f;
+  --ovid-sync: #5b7cff;
+  --ovid-rest-1: #f3eadb;
+  --ovid-rest-2: #cdbb98;
+  --ovid-rest-3: #a38b66;
+
+  /* helpers */
+  --dn-spice: #b4531d;
+  --dn-basalt: #1a1510;
+  --dn-eye: var(--accent);
+  --dn-tint: var(--accent);
+  --dn-dune-far: var(--border);
+  --dn-dune-near: var(--border-strong);
+  --dn-ripple: 120px;
 }
 
-/* Tatooine typography + geometry — Michroma (wide geometric sci-fi,
- * uppercase) for display, Exo 2 body. Orbitron is left to Spaceship so
- * the two sci-fi themes stay distinct. Corners are cut (clip-path in
- * §15.tatooine), not rounded, so every radius is 0. */
-[data-theme="tatooine"] {
-  --font-display: "Michroma", "Exo 2", var(--font-body-default);
-  --body-ff: "Exo 2", var(--font-body-default);
-  --nav-ff: "Exo 2", var(--font-body-default);
+/* Dune typography — Cinzel carved capitals for titles (ceremonial,
+ * monumental), IBM Plex Sans Condensed wide-tracked labels, IBM Plex
+ * Sans body, IBM Plex Mono code. */
+[data-theme="dune"] {
+  --font-display: "Cinzel", "IBM Plex Sans Condensed", Georgia, serif;
+  --body-ff: "IBM Plex Sans", system-ui, sans-serif;
+  --body-fs: 14px;
+  --body-fw: 400;
+  --nav-ff: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
+  --nav-fs: 12.5px;
   --nav-fw: 600;
-  --btn-ff: "Michroma", "Exo 2", var(--font-body-default);
-  --btn-fw: 400;
-  --tt-sun2: #ffc857;
-  --tt-sun-glow: 0 0 14px rgba(255, 138, 61, 0.35);
-  --radius-sm: 0;
-  --radius-md: 0;
-  --radius-lg: 0;
-  --radius-pill: 0;
+  --btn-ff: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
+  --btn-fs: 12.5px;
+  --btn-fw: 600;
+  --card-fs: inherit;
+  --card-fw: inherit;
+  --table-fs: 13px;
+
+  --dn-title-ff: var(--font-display);
+  --dn-track-wide: 0.22em;
+  --dn-track-mid: 0.14em;
+  --dn-label-ff: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
+  --dn-num-ff: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
 }
 @supports (color: color-mix(in srgb, red 50%, transparent)) {
-  [data-theme="tatooine"] {
-    --tt-sun-glow: 0 0 14px color-mix(in srgb, var(--accent) 35%, transparent);
+  /* Accent-derived helpers so a user accent override follows. */
+  [data-theme="dune"] {
+    --dn-eye: color-mix(in srgb, var(--accent) 62%, #ffffff);
+    --dn-tint: color-mix(in srgb, var(--accent) 22%, #efe5d2);
+    --dn-dune-far: color-mix(in srgb, var(--accent) 7%, #e2d2b2);
+    --dn-dune-near: color-mix(in srgb, var(--accent) 10%, #c7ab7c);
   }
 }
 
 /* --- Financial. Trading terminal: a dense market-data desk — pitch
  *     black, amber command text, green/red tickers, condensed type and
- *     mono numbers, function-key navigation. Generic terminal idiom
+ *     mono numbers, prompt-marked navigation. Generic terminal idiom
  *     only (no vendor UI). Dark. ------------------------------------ */
 [data-theme="financial"] {
   --fg: #e6edf3;
@@ -1082,133 +1152,149 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
   }
 }
 
-/* --- Data Factory (light).
- *     "Line control, always green": the operator screen of a modern
- *     automated line, after ISA-101 high-performance HMI — calm steel
- *     surfaces, an ink-dark machine-side drawer, colour held back for
- *     state. Spec: .opencode/knowledge/delta/data-factory-theme.md.
+/* --- Data Factory (light) · "LINE ONE".
+ *     Raw data in at Dock A, certified product out at Dock C: a bright
+ *     working factory floor — poured-concrete ground, primer-white
+ *     plates, a safety-yellow gantry topbar, a hammered-enamel control
+ *     cabinet drawer and one safety-orange accent. Claude Design
+ *     handoff 2026-11-26; spec .opencode/knowledge/delta/data-factory-theme.md.
  *     Checked tokens are plain #rrggbb (test_theme_contrast.py). ---- */
 [data-theme="data-factory"] {
-  /* Semantic. */
-  --fg: #11161d;
-  --fg-muted: #3d4652;
-  --fg-subtle: #59636f;
-  --bg: #eceff3;
-  --bg-elev: #f6f8fa;
-  --card-bg: #ffffff;
-  --border: #d3d9e1;
-  --border-strong: #808b98;
-  --accent: #1a5ad7;
-  --accent-hover: #154ab0;
+  color-scheme: light;
+
+  /* ground & surfaces: poured concrete, primer-white plate */
+  --fg: #1c1a16;
+  --fg-muted: #474238;
+  --fg-subtle: #5c574c;
+  --bg: #e8e3d8;
+  --bg-elev: #f2eee5;
+  --card-bg: #fbf9f4;
+  --border: #d2cab9;
+  --border-strong: #8c8472;
+
+  /* accent: safety orange */
+  --accent: #c43e0c;
+  --accent-hover: #a3330a;
   --accent-fg: #ffffff;
-  --accent-subtle: #e8eefb;
-  --ok: #137049;
-  --warn: #8f5600;
-  --err: #b42318;
-  --info: #1f5fa8;
+  --accent-subtle: #fbe4d7;
 
-  /* Chrome — white topbar, ink-dark machine-side drawer. */
-  --topbar-bg: #ffffff;
-  --topbar-fg: #11161d;
-  --topbar-border: #d3d9e1;
-  --drawer-bg: #171c23;
-  --drawer-fg: #d3d9e1;
-  --drawer-fg-muted: #939daa;
-  --drawer-hover-bg: #222933;
-  --drawer-active-bg: #182a4b;
-  --drawer-active-fg: #ffffff;
-  --drawer-active-border: #81a4e9;
-  --drawer-border: #0b0e12;
-  --scrim-bg: rgba(12, 16, 22, 0.45);
+  /* signals */
+  --ok: #1d6b34;
+  --warn: #8a5300;
+  --err: #b3201a;
+  --info: #1f5f9e;
 
-  /* Blocks — light code / log (no dark console in a light theme). */
-  --code-bg: #f3f5f8;
-  --code-fg: #1b2430;
-  --log-bg: #f5f7fa;
+  /* topbar: the yellow gantry beam (dark ink only — never white on yellow) */
+  --topbar-bg: #ffc21a;
+  --topbar-fg: #1c1a16;
+  --topbar-border: #1c1a16;
 
-  /* Overlays. */
-  --overlay-err: rgba(180, 35, 24, 0.07);
-  --overlay-warn: rgba(143, 86, 0, 0.08);
-  --overlay-ok: rgba(19, 112, 73, 0.06);
-  --flash-ok-bg: #e8f1ed;
-  --flash-err-bg: #f8eae9;
+  /* drawer: the control cabinet (hammered enamel green-black) */
+  --drawer-bg: #23332f;
+  --drawer-fg: #eef0ea;
+  --drawer-fg-muted: #a9b5ae;
+  --drawer-hover-bg: #2e433d;
+  --drawer-active-bg: #ffc21a;
+  --drawer-active-fg: #1c1a16;
+  --drawer-active-border: #c43e0c;
+  --drawer-border: #121c19;
+  --scrim-bg: rgba(28, 26, 22, 0.55);
 
-  /* Elevation: crisp, low, machined. */
-  --shadow-1: 0 1px 0 rgba(16, 22, 30, 0.05), 0 1px 2px rgba(16, 22, 30, 0.06);
-  --shadow-2: 0 1px 0 rgba(16, 22, 30, 0.05), 0 4px 10px -2px rgba(16, 22, 30, 0.10);
-  --shadow-3: 0 2px 0 rgba(16, 22, 30, 0.04), 0 16px 32px -8px rgba(16, 22, 30, 0.22);
+  /* code & logs: the line printer */
+  --code-bg: #22201b;
+  --code-fg: #f3ecd8;
+  --log-bg: #1a1916;
 
-  /* Typography. */
-  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* overlays & flashes */
+  --overlay-err: rgba(179, 32, 26, 0.09);
+  --overlay-warn: rgba(255, 176, 0, 0.16);
+  --overlay-ok: rgba(29, 107, 52, 0.08);
+  --flash-ok-bg: #e5f0e3;
+  --flash-err-bg: #f8e1dc;
+
+  /* hard plate shadows, no blur haze */
+  --shadow-1: 0 2px 0 #c9c0ad;
+  --shadow-2: 0 3px 0 #a79e8a, 0 8px 18px -10px rgba(40, 30, 10, 0.35);
+  --shadow-3: 0 4px 0 #8c8472, 0 22px 40px -18px rgba(40, 30, 10, 0.45);
+
+  /* scale & geometry */
+  --mono: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
   --fs-xs: 11px;
-  --fs-sm: 12px;
-  --fs-md: 13.5px;
-  --fs-lg: 16px;
-  --fs-xl: 22px;
-
-  /* Geometry — tight, machined radii. */
+  --fs-sm: 12.5px;
+  --fs-md: 14px;
+  --fs-lg: 18px;
+  --fs-xl: 34px;
   --radius-sm: 2px;
-  --radius-md: 4px;
-  --radius-lg: 6px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
   --radius-pill: 999px;
-
-  --topbar-h: 52px;
-  --drawer-w: 240px;
+  --topbar-h: 56px;
+  --drawer-w: 248px;
   --drawer-rail-w: 64px;
-  --page-max: 1480px;
+  --page-max: 1400px;
+  --dur-fast: 110ms;
+  --dur-med: 220ms;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 
-  /* Motion — fast-out, precise settle. */
-  --dur-fast: 90ms;
-  --dur-med: 160ms;
-  --ease: cubic-bezier(0.2, 0, 0, 1);
+  /* logo mark: extract blue -> transform orange -> load violet (never green) */
+  --ovid-base: #1c1a16;
+  --ovid-extract: #1f5f9e;
+  --ovid-transform: #c43e0c;
+  --ovid-load: #5b4a9e;
+  --ovid-success: #1d6b34;
+  --ovid-warning: #d99a00;
+  --ovid-error: #b3201a;
+  --ovid-sync: #0f7c86;
+  --ovid-rest-1: #8c8472;
+  --ovid-rest-2: #b9b09c;
+  --ovid-rest-3: #d2cab9;
 
-  /* <ovid-mark> state colours tuned for the white topbar. */
-  --ovid-base: #1e3a6e;
-  --ovid-extract: #2563d9;
-  --ovid-transform: #7444cc;
-  --ovid-load: #0b7f8e;
-  --ovid-success: #16804f;
-  --ovid-warning: #b26f00;
-  --ovid-error: #c8372d;
-  --ovid-sync: #7d8daa;
-  --ovid-rest-1: #a3bdee;
-  --ovid-rest-2: #3a63b8;
-  --ovid-rest-3: #12285a;
+  /* helpers (signals, not decoration: hazard + stack-light lamps) */
+  --df-hazard: #ffc21a;
+  --df-ink: #1c1a16;
+  --df-rubber: #2b2823;
+  --df-steel: #8c8472;
+  --df-lamp-red: #ff3b2f;
+  --df-lamp-amber: #ffb000;
+  --df-lamp-green: #2fd165;
+  --df-lamp-off: #57524a;
+  --df-tread: 14px;
+  --df-hazard-step: 22.627px;
+  --df-belt-speed: 700ms;
+  --df-cleat: var(--accent);
+  --df-accent-wash: var(--accent-subtle);
 }
 
-/* Data Factory typography + geometry — IBM Plex Sans Condensed for
- * display / nav / buttons / card titles / KPIs (telemetry-wall
- * density), IBM Plex Sans body (8-hour legibility), JetBrains Mono for
- * ids / logs. Condensed ships at 400 / 600 only, so labels use 600 and
- * nav rows 400. The --df-* helpers feed §15.data-factory. */
+/* Data Factory typography — Big Shoulders Stencil (spray-stencilled
+ * bay titles), IBM Plex Sans Condensed labels / nav / buttons, IBM
+ * Plex Sans body, IBM Plex Mono numbers. The --df-* helpers feed
+ * §15.data-factory. */
 [data-theme="data-factory"] {
-  --font-display: "IBM Plex Sans Condensed", "IBM Plex Sans", var(--font-body-default);
-  --body-ff: "IBM Plex Sans", var(--font-body-default);
-  --body-fs: 13.5px;
+  --font-display: "Big Shoulders Stencil", "IBM Plex Sans Condensed", "Arial Narrow", sans-serif;
+  --body-ff: "IBM Plex Sans", system-ui, sans-serif;
+  --body-fs: 14px;
   --body-fw: 400;
-  --nav-ff: "IBM Plex Sans Condensed", "IBM Plex Sans", var(--font-body-default);
-  --nav-fs: 13.5px;
-  --nav-fw: 400;
-  --btn-ff: "IBM Plex Sans Condensed", "IBM Plex Sans", var(--font-body-default);
+  --nav-ff: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
+  --nav-fs: 13px;
+  --nav-fw: 600;
+  --btn-ff: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
   --btn-fs: 13px;
   --btn-fw: 600;
+  --card-fs: inherit;
+  --card-fw: inherit;
   --table-fs: 13px;
 
-  --df-rail-h: 2px;
-  --df-track: rgba(17, 22, 29, 0.10);
-  --df-sweep: #5b88e3;
-  --df-tick: rgba(17, 22, 29, 0.22);
-  --df-lamp: 6px;
-  --df-focus-on-dark: #98b5ed;
-  --df-label-ls: 0.06em;
-  --df-kpi-fs: 30px;
-  --df-sweep-dur: 1.4s;
+  --df-title-ff: var(--font-display);
+  --df-label-ff: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
+  --df-label-track: 0.08em;
+  --df-stencil-track: 0.04em;
+  --df-kpi-ff: var(--mono);
 }
 @supports (color: color-mix(in srgb, red 50%, transparent)) {
   /* Accent-derived helpers so a user accent override follows. */
   [data-theme="data-factory"] {
-    --df-sweep: color-mix(in srgb, var(--accent) 70%, #ffffff);
-    --df-focus-on-dark: color-mix(in srgb, var(--accent) 45%, #ffffff);
+    --df-steel: color-mix(in srgb, var(--accent) 6%, #8c8472);
+    --df-accent-wash: color-mix(in srgb, var(--accent) 14%, #fbf9f4);
   }
 }
 
@@ -1601,19 +1687,18 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
 
 .term-total-label { color: #7f9db0; }
 
-/* Footer "Total Elapsed Time" clock — the primary run timer. A calm,
- * refined teal-green numeric readout (distinct from the cooler slate of
- * the per-table detail clock) so the two clocks are never confused.
- * Slightly larger than the detail-list clock to read as the headline
+/* Footer "Total Elapsed Time" clock — the primary run timer. OpenCode
+ * orange, bold, while live; recoloured to the outcome once stopped.
+ * Slightly larger than the per-item clocks to read as the headline
  * timer. Format is unchanged (MM:SS.s). */
 .term-total {
-  color: #7fd0b0;
+  color: var(--timer-orange);
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1, "zero" 1;
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: 0.02em;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   min-width: 6ch;
   text-align: right;
   transition: color 0.25s ease;
@@ -2042,12 +2127,20 @@ button.term-prompt-btn.run-ready:focus-visible {
    running/done/failed carry a subtle, static tint. No animation. */
 .table-row.status-pending { opacity: 0.55; }
 .table-row.status-pending .table-row-name { color: #7c8a99; }
-.table-row.status-running {
-  background: var(--accent-subtle);
-  color: #dcefe0;
+/* Running row: a soft orange wash + orange left bar with bright text.
+   Fixed console colours (not the theme's --accent-subtle, which is
+   opaque/pale on light themes and drowned the light row text). */
+.table-row.status-running,
+.table-row.status-running:nth-of-type(even) {
+  background: var(--timer-orange-wash);
+  box-shadow: inset 2px 0 0 var(--timer-orange);
+  color: #f3efe9;
 }
-.table-row.status-running:nth-of-type(even) { background: var(--accent-subtle); }
+.table-row.status-running .run-row-name { color: #f3efe9; }
 .table-row.status-completed .table-row-name { color: #bfe0c8; }
+/* Waiting row: started, paused between stages (multi-phase legacy runs) —
+   its clock is frozen, so no running wash. */
+.table-row.status-waiting .run-row-name { color: #d9cdb8; }
 .table-row.status-failed {
   background: rgba(176, 58, 46, 0.10);
   color: #f0c4bd;
@@ -2055,8 +2148,9 @@ button.term-prompt-btn.run-ready:focus-visible {
 .table-row.status-failed:nth-of-type(even) { background: rgba(176, 58, 46, 0.12); }
 /* Hover / selected still win over the status tint. */
 .table-row.status-running:hover,
+.table-row.status-running.selected { background: var(--timer-orange-wash-strong); }
 .table-row.status-failed:hover { background: rgba(120, 200, 160, 0.12); }
-.table-row.selected { background: rgba(120, 200, 160, 0.14); }
+.table-row.selected:not(.status-running) { background: rgba(120, 200, 160, 0.14); }
 
 /* Status dot — a small, static, pale indicator sized to feel like the
    ▶ transport glyph (soft/muted like the run button, no glow, no
@@ -2083,6 +2177,11 @@ button.term-prompt-btn.run-ready:focus-visible {
 }
 .table-row-dot.status-running,
 .check-row-dot.status-running        { color: var(--matrix-green); }
+.table-row-dot.status-waiting {
+  color: var(--matrix-green);
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
 .table-row-dot.status-completed,
 .table-row-dot.status-done,
 .check-row-dot.status-completed,
@@ -2097,6 +2196,57 @@ button.term-prompt-btn.run-ready:focus-visible {
 .check-row-dot.status-error          { color: var(--err); }
 .table-row-dot.status-cancelled,
 .check-row-dot.status-cancelled      { color: var(--fg-muted); opacity: 0.6; }
+
+/* Errors inside the always-dark run console. The console keeps its own
+   dark palette in every theme, so its error boxes must not take the page
+   theme's light flash colours (pale card + dark red text, or a theme's
+   personality layer — hazard tape, seams). Fixed light-on-dark tones that
+   read on #0b0f14 in every theme; long Spark errors wrap. */
+.terminal-pane .flash,
+.terminal-pane .flash.error,
+html[data-theme] .terminal-pane .flash,
+html[data-theme] .terminal-pane .flash.error {
+  margin: 0.2rem 0 0.35rem 1.1rem;
+  padding: 0.35rem 0.6rem;
+  background: rgba(255, 95, 74, 0.12);
+  color: #ffb4a8;
+  border: 1px solid rgba(255, 120, 100, 0.45);
+  border-left: 3px solid #ff6b57;
+  border-radius: 4px;
+  box-shadow: none;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 400;
+  font-style: normal;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-height: 14rem;
+  overflow-y: auto;
+}
+.terminal-pane .flash::before,
+.terminal-pane .flash::after,
+html[data-theme] .terminal-pane .flash::before,
+html[data-theme] .terminal-pane .flash::after { content: none; display: none; }
+.terminal-pane .flash :is(strong, .mono, span),
+html[data-theme] .terminal-pane .flash :is(strong, .mono, span) { color: inherit; }
+/* "Run ended before this item finished" (closed at the job's end): a
+   quieter amber note, not a red failure. */
+.terminal-pane .flash.run-detail-note,
+html[data-theme] .terminal-pane .flash.run-detail-note {
+  background: rgba(250, 178, 131, 0.08);
+  color: #f3cfae;
+  border-color: rgba(250, 178, 131, 0.35);
+  border-left-color: var(--timer-orange);
+}
+/* A failed table's name in the left list reads red on dark too. */
+.table-row.status-failed .run-row-name,
+.table-row.status-failed .table-row-name { color: #ffb4a8; }
+.table-row.status-cancelled .run-row-name,
+.table-row.status-cancelled .table-row-name { color: #9aa7b3; }
 
 /* Right column: item detail. Sections flow continuously with no
    extra gap between items. Shared by every pipeline type's console. */
@@ -2116,18 +2266,19 @@ button.term-prompt-btn.run-ready:focus-visible {
   color: #8fb8a0;
   letter-spacing: 0.03em;
 }
-/* Live/frozen per-item clock — a calm slate/teal numeric readout,
-   deliberately a *different* hue from the footer total-elapsed clock
-   (teal-green) so the operator never confuses the per-item timer with
-   the run total. Format is MM:SS.s. Only shown for timed panels
-   (tables); checks omit it. */
-.run-detail-dur {
+/* Live/frozen per-item clock — OpenCode orange, a little smaller than
+   the item name but bold so it reads as a numeric readout. Format is
+   MM:SS.s. Its value comes from the server-recorded times (see
+   display/run/panel.js), never from the page-load moment. */
+.run-detail-dur,
+.run-detail-dur.small {
   margin-left: auto;
-  color: #8fb8c8;
+  color: var(--timer-orange);
   font-family: var(--mono);
+  font-size: 0.7rem;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1, "zero" 1;
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: 0.02em;
   text-align: right;
 }
@@ -2270,6 +2421,35 @@ code, kbd, samp {
 
 .topbar-spacer { flex: 1; }
 
+/* Workspace switcher (adr-workspaces.md). */
+.ws-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0 0.5rem;
+  color: var(--topbar-fg);
+  font-size: var(--fs-sm);
+  min-width: 0;
+}
+.ws-switcher-label { display: inline-flex; align-items: center; opacity: 0.8; }
+.ws-switcher select {
+  max-width: 16rem;
+  padding: 0.2rem 0.5rem;
+  font-size: var(--fs-sm);
+  border-radius: var(--radius-sm, 6px);
+}
+.ws-switcher-single .ws-switcher-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 14rem;
+}
+@media (max-width: 600px) {
+  .ws-switcher select { max-width: 9rem; }
+  .ws-switcher-single { display: none; }
+}
+.ws-inline-form { display: inline; margin: 0; }
+
 /* Drawer toggles. ``#drawer-toggle`` lives in the drawer's fixed
  * rail-width head slot (>= 900 px) so it never moves when the drawer
  * switches between the full menu and the icon rail;
@@ -2337,8 +2517,7 @@ ovid-mark { display: inline-block; }
 }
 /* Dark themes: the spec's dark-background rest gradient + a lighter
  * idle tone so the mark reads on a dark topbar. */
-:where(html:is([data-theme="matrix"], [data-theme="dark"], [data-theme="tatooine"],
-        [data-theme="financial"], [data-theme="spaceship"])) {
+:where(html:is([data-theme="matrix"], [data-theme="dark"], [data-theme="financial"], [data-theme="spaceship"])) {
   --ovid-base: #A9C2F0;
   --ovid-rest-1: #E6EEFC;
   --ovid-rest-2: #A9C2F0;
@@ -2389,49 +2568,90 @@ ovid-mark { display: inline-block; }
   box-shadow: var(--shadow-3);
 }
 
+/* Theme picker: a two-column grid of preview tiles — built-in themes,
+ * then the user's saved themes under "Your themes", each sorted A-Z.
+ * Every tile shows a four-band preview (bg / surface / accent / fg). */
 .theme-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.4rem;
 }
-
 .theme-row {
   display: flex;
-  align-items: center;
-  gap: 0.55rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
   width: 100%;
-  padding: 0.4rem 0.5rem;
-  border: 1px solid transparent;
+  min-width: 0;
+  padding: 0.4rem;
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: transparent;
+  background: var(--card-bg);
   color: var(--fg);
+  font: inherit;
   cursor: pointer;
   text-align: left;
-  transition: background var(--dur-fast) var(--ease);
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
-.theme-row:hover { background: var(--accent-subtle); }
+.theme-row:hover { border-color: var(--border-strong); background: var(--accent-subtle); }
 .theme-row.active {
   border-color: var(--accent);
   background: var(--accent-subtle);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
-
 .theme-swatch-strip {
-  display: inline-flex;
+  display: flex;
+  height: 22px;
   border-radius: var(--radius-sm);
   overflow: hidden;
   border: 1px solid var(--border);
   flex: 0 0 auto;
 }
-.theme-swatch {
-  display: block;
-  width: 12px;
-  height: 18px;
-}
-
+.theme-swatch { display: block; flex: 3 1 0; height: 100%; }
+.theme-swatch:nth-child(3) { flex-grow: 2; }
+.theme-swatch:nth-child(4) { flex-grow: 1; }
+.theme-row-text { display: flex; flex-direction: column; min-width: 0; }
 .theme-row-label {
   font-size: var(--fs-sm);
-  flex: 1 1 auto;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+.theme-row-base {
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.theme-list-subhead {
+  margin: 0.85rem 0 0.4rem;
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-muted);
+}
+.theme-saved-empty { margin: 0 0 0.25rem; font-size: var(--fs-xs); color: var(--fg-muted); }
+.theme-row-wrap { position: relative; min-width: 0; }
+.theme-row-wrap .theme-row { height: 100%; padding-right: 1.7rem; }
+.theme-row-delete {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+  width: 1.3rem;
+  height: 1.3rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.theme-row-delete:hover,
+.theme-row-delete:focus-visible { color: var(--err); border-color: var(--err); background: var(--card-bg); }
 
 .theme-custom {
   margin-top: 0.6rem;
@@ -2676,7 +2896,7 @@ ovid-mark { display: inline-block; }
   outline: none;
   transition: padding-right var(--dur-med) var(--ease);
 }
-html.right-panel-open .main {
+html:is(.right-panel-open, .llm-panel-open, .cmdk-open) .main {
   padding-right: calc(var(--rail-w) + var(--right-panel-w) + 1.5rem);
 }
 .main > * { max-width: var(--page-max); }
@@ -2697,7 +2917,7 @@ html.right-panel-open .main {
   background: var(--bg);
   transition: padding-right var(--dur-med) var(--ease);
 }
-html.right-panel-open .site-footer {
+html:is(.right-panel-open, .llm-panel-open, .cmdk-open) .site-footer {
   padding-right: calc(var(--rail-w) + var(--right-panel-w) + 1.5rem);
 }
 
@@ -2841,22 +3061,18 @@ html.right-panel-open .tools-panel { transform: translateX(0); }
 }
 
 /* ------------------------------------------------------------------ *
- * 4c. Assistant (LLM) panel — right rail, wider than the tools panel.
+ * 4c. Assistant (LLM) panel — right rail, same width as the others.
  *
  * Canvas (answer blocks + System 1 decision cards) on top, chat box
  * below. Toggled by #tool-llm via /static/llm_panel.js, state in
  * <html>.llm-panel-open (mutually exclusive with right-panel-open).
  * ------------------------------------------------------------------ */
-html.llm-panel-open .main,
-html.llm-panel-open .site-footer {
-  padding-right: calc(var(--rail-w) + min(520px, 45vw) + 1.5rem);
-}
 .llm-panel {
   position: fixed;
   top: var(--topbar-h);
   right: var(--rail-w);
   bottom: 0;
-  width: min(520px, 45vw);
+  width: var(--right-panel-w);
   max-width: calc(100vw - var(--rail-w));
   background: var(--card-bg);
   color: var(--fg);
@@ -3082,7 +3298,14 @@ html.llm-panel-open .llm-panel { transform: translateX(0); visibility: visible; 
 .llm-proposal.done { border-left-color: var(--ok, var(--accent)); }
 .llm-proposal.failed { border-left-color: var(--error, var(--warn)); }
 .llm-proposal.dismissed { opacity: 0.6; }
-.llm-proposal-actions { display: flex; gap: 0.4rem; margin: 0.4rem 0 0.2rem; }
+.llm-proposal-actions { display: flex; gap: 0.4rem; margin: 0.4rem 0 0.2rem; align-items: center; flex-wrap: wrap; }
+/* Editable proposal forms (llm_proposal_form.js). */
+.llm-form { display: grid; gap: 0.3rem; margin: 0.3rem 0; }
+.llm-form-row { display: grid; grid-template-columns: minmax(6.5rem, 34%) 1fr; gap: 0.4rem; align-items: center; font-size: var(--fs-sm); }
+.llm-form-label { display: inline-flex; align-items: center; gap: 0.25rem; overflow-wrap: anywhere; }
+.llm-form-input { width: 100%; min-width: 0; font-size: var(--fs-sm); }
+.llm-form-row.llm-missing .llm-form-input { outline: 2px solid var(--warn); outline-offset: -1px; }
+.llm-draft.held { border-left-color: var(--border); }
 /* Assistant UI action (set_appearance …): applied in-browser, with Undo. */
 .llm-ui-action { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; font-size: var(--fs-sm); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 4px; padding: 0.25rem 0.45rem; margin: 0.25rem 0; }
 .llm-ui-action.undone { opacity: 0.6; border-left-color: var(--border); }
@@ -3115,58 +3338,75 @@ html.llm-panel-open .llm-panel { transform: translateX(0); visibility: visible; 
 .llm-form-row > .small { flex: 1; }
 
 /* ------------------------------------------------------------------
- * Command palette (Ctrl-K).
+ * Search panel (Ctrl-K).
  *
- * A centred, client-only fuzzy launcher (see /static/cmdk.js). Hidden
- * by default; shown when <html> gains .cmdk-open. Uses the theme
- * custom-properties so it themes automatically across all palettes.
+ * A client-only fuzzy launcher (see /static/cmdk.js) that opens from
+ * the right edge like Appearance and Agent Ovid — same width, same
+ * slide — and shrinks .main instead of covering the page. Shown when
+ * <html> gains .cmdk-open (mutually exclusive with the other panels).
  * ------------------------------------------------------------------ */
 .cmdk {
-  display: none;
   position: fixed;
-  inset: 0;
-  z-index: 60;
-}
-html.cmdk-open .cmdk { display: block; }
-html.cmdk-open { overflow: hidden; }
-
-.cmdk-backdrop {
-  position: absolute;
-  inset: 0;
-  background: var(--scrim-bg);
-}
-.cmdk-box {
-  position: absolute;
-  top: 14vh;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(560px, calc(100vw - 2rem));
-  max-height: 66vh;
-  display: flex;
-  flex-direction: column;
+  top: var(--topbar-h);
+  right: var(--rail-w);
+  bottom: 0;
+  width: var(--right-panel-w);
+  max-width: calc(100vw - var(--rail-w));
   background: var(--card-bg);
   color: var(--fg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-3);
+  border-left: 1px solid var(--drawer-border);
+  box-shadow: var(--shadow-2);
+  transform: translateX(100%);
+  transition: transform var(--dur-med) var(--ease);
+  visibility: hidden;
+  z-index: 24;
+}
+html.cmdk-open .cmdk { transform: translateX(0); visibility: visible; }
+.cmdk-box {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   overflow: hidden;
 }
+.cmdk-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem 0.6rem;
+}
+.cmdk-title { margin: 0; font-size: var(--fs-lg); font-weight: 600; }
+.cmdk-close {
+  width: 1.8rem;
+  height: 1.8rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.cmdk-close:hover { color: var(--fg); border-color: var(--border); }
 .cmdk-input {
-  width: 100%;
+  width: calc(100% - 2rem);
+  margin: 0 1rem 0.5rem;
   box-sizing: border-box;
-  padding: 0.8rem 1rem;
-  font-size: var(--fs-lg);
+  padding: 0.6rem 0.75rem;
+  font-size: var(--fs-md);
   color: var(--fg);
   background: var(--bg-elev);
-  border: none;
-  border-bottom: 1px solid var(--border);
-  outline: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
 }
+.cmdk-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .cmdk-results {
   list-style: none;
   margin: 0;
-  padding: 0.3rem;
+  padding: 0.3rem 0.6rem 1.5rem;
   overflow-y: auto;
+  flex: 1 1 auto;
 }
 .cmdk-row {
   display: flex;
@@ -3195,7 +3435,7 @@ html.cmdk-open { overflow: hidden; }
   font-size: var(--fs-sm);
 }
 @media (prefers-reduced-motion: reduce) {
-  .cmdk-box { transition: none; }
+  .cmdk { transition: none; }
 }
 
 /* Appearance editor internals. */
@@ -3259,33 +3499,6 @@ html.cmdk-open { overflow: hidden; }
   background: var(--card-bg);
   color: var(--fg);
 }
-.appearance-saved-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-.saved-theme-row {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-.saved-theme-row .saved-theme-name {
-  flex: 1;
-  font-size: var(--fs-sm);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.saved-theme-row button {
-  font-size: var(--fs-xs);
-  padding: 0.15rem 0.4rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--fg);
-  cursor: pointer;
-}
-.saved-theme-row button:hover { background: var(--accent-subtle); }
 .appearance-save-row {
   display: flex;
   gap: 0.4rem;
@@ -3881,26 +4094,21 @@ td.danger { color: var(--err); font-weight: 600; }
   /* On mobile there is no room to shrink: the panel overlays with a
    * scrim (like the left drawer) and .main keeps its rail-only right
    * padding regardless of the open state. */
-  html.right-panel-open .main,
-  html.right-panel-open .site-footer {
+  html:is(.right-panel-open, .llm-panel-open, .cmdk-open) .main,
+  html:is(.right-panel-open, .llm-panel-open, .cmdk-open) .site-footer {
     padding-right: calc(var(--rail-w) + 1rem);
   }
-  .tools-panel {
-    width: min(85vw, 320px);
-    max-width: min(85vw, 320px);
+  .tools-panel,
+  .llm-panel,
+  .cmdk {
+    width: calc(100vw - var(--rail-w));
+    max-width: calc(100vw - var(--rail-w));
   }
-  html.right-panel-open .right-scrim {
+  html:is(.right-panel-open, .llm-panel-open, .cmdk-open) .right-scrim {
     display: block;
     opacity: 1;
   }
-  html.right-panel-open body { overflow: hidden; }
-  html.llm-panel-open .main,
-  html.llm-panel-open .site-footer {
-    padding-right: calc(var(--rail-w) + 1rem);
-  }
-  .llm-panel { width: calc(100vw - var(--rail-w)); }
-  html.llm-panel-open .right-scrim { display: block; opacity: 1; }
-  html.llm-panel-open body { overflow: hidden; }
+  html:is(.right-panel-open, .llm-panel-open, .cmdk-open) body { overflow: hidden; }
 
   /* Phones: the drawer is off-canvas, so the toggle lives in the topbar
    * and the drawer-head slot is not needed. */
@@ -4649,11 +4857,13 @@ details.submit-card > summary.card-title::-webkit-details-marker { display: none
    subtle, static tint (no animation). */
 .check-row.status-pending { opacity: 0.55; }
 .check-row.status-pending .run-row-name { color: #7c8a99; }
-.check-row.status-running {
-  background: var(--accent-subtle);
-  color: #dcefe0;
+.check-row.status-running,
+.check-row.status-running:nth-of-type(even) {
+  background: var(--timer-orange-wash);
+  box-shadow: inset 2px 0 0 var(--timer-orange);
+  color: #f3efe9;
 }
-.check-row.status-running:nth-of-type(even) { background: var(--accent-subtle); }
+.check-row.status-running .run-row-name { color: #f3efe9; }
 .check-row.status-completed .run-row-name,
 .check-row.status-passed .run-row-name { color: #bfe0c8; }
 .check-row.status-exception {
@@ -4669,6 +4879,7 @@ details.submit-card > summary.card-title::-webkit-details-marker { display: none
 .check-row.status-failed:nth-of-type(even),
 .check-row.status-error:nth-of-type(even) { background: rgba(176, 58, 46, 0.12); }
 .check-row.status-running:hover,
+.check-row.status-running.selected { background: var(--timer-orange-wash-strong); }
 .check-row.status-exception:hover,
 .check-row.status-failed:hover,
 .check-row.status-error:hover { background: rgba(120, 200, 160, 0.12); }
@@ -6218,6 +6429,11 @@ body.modal-open { overflow: hidden; }
 .logo-mssql      { color: #c73a3a; }
 .logo-disc       { color: #7a8794; }
 .logo-access     { color: #b03a4a; }
+/* Engine-type logo tints. */
+.logo-pyspark          { color: #e25a1c; }
+.logo-duckdb           { color: #d9b400; }
+.logo-snowpark         { color: #29b5e8; }
+.logo-databricks_spark { color: #ef4b30; }
 .logo-folder     { color: var(--accent); }
 .logo-schema     { color: var(--accent); }
 .logo-table      { color: var(--fg-muted); }
@@ -7015,89 +7231,634 @@ html[data-theme="super-mario-world"] .site-credit { color: var(--fg); opacity: 0
 html[data-theme="super-mario-world"] .site-credit:is(:hover, :focus-visible) { opacity: 0.9; }
 
 /* ------------------------------------------------------------------ *
- * 15.tatooine  Twin suns over the dunes. Inspired-by only: palette and
- *              moisture-farm machinery shapes — no logos, characters
- *              or imitation of the franchise lettering.
+ * 15.dune  "MERIDIAN" (light). Six signatures — the erg line under the
+ *          topbar, the sietch-ledger drawer, carved slabs, the thumper
+ *          pulse, the wake on running gantt bars, and the horizon gate
+ *          (login). Motion is slow and only while something harvests.
+ *          Nothing here numbers the menu (no theme does).
  * ------------------------------------------------------------------ */
-html[data-theme="tatooine"] body {
-  /* dusk horizon + sand grain (inline data: SVG — no network request) */
-  background:
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='.05'/></svg>"),
-    linear-gradient(180deg, #170f0a 0%, #170f0a 55%, #2a1710 100%) fixed;
-  background-color: var(--bg);
+:where(html[data-theme="dune"]) :where(.side-group, .nav-item, .page-header, .page-header h1,
+  .card, .card h2, .kpi, .badge, .button, .flash, .empty, .live-banner, .cooking-now-label,
+  pre.code-preview, pre.log-block, .site-footer, .login-card) {
+  position: relative;
 }
-html[data-theme="tatooine"] .card,
-html[data-theme="tatooine"] .button,
-html[data-theme="tatooine"] a.button,
-html[data-theme="tatooine"] button.button {
-  /* cut-corner panels */
-  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px),
-                     calc(100% - 12px) 100%, 0 100%, 0 12px);
+html[data-theme="dune"] :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+html[data-theme="dune"] .topbar :focus-visible,
+html[data-theme="dune"] .drawer :focus-visible { outline-color: var(--drawer-active-border); }
+
+/* 1. THE ERG LINE — wind-carved ripples cut into the basalt topbar;
+ *    they drift very slowly only while something is harvesting. */
+html[data-theme="dune"] .topbar {
+  background: var(--topbar-bg);
+  -webkit-backdrop-filter: none;
+          backdrop-filter: none;
+  color: var(--topbar-fg);
+  border-bottom: 0;
+  padding-bottom: 12px;
+  overflow-x: clip;
 }
-html[data-theme="tatooine"] .button,
-html[data-theme="tatooine"] a.button,
-html[data-theme="tatooine"] button.button {
-  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px),
-                     calc(100% - 8px) 100%, 0 100%, 0 8px);
+html[data-theme="dune"] .topbar::after {
+  content: "";
+  position: absolute;
+  bottom: 1px; height: 11px;
+  left: calc(var(--dn-ripple) * -1);
+  right: 0;
+  background: var(--dn-eye);
+  opacity: 0.55;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 11' fill='none' stroke='black' stroke-width='1.1'%3E%3Cpath d='M0 3.5c20-3 40-3 60 0s40 3 60 0'/%3E%3Cpath d='M0 8c15 2.5 45 2.5 60 0s45-2.5 60 0'/%3E%3C/svg%3E") left center / var(--dn-ripple) 11px repeat-x;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 11' fill='none' stroke='black' stroke-width='1.1'%3E%3Cpath d='M0 3.5c20-3 40-3 60 0s40 3 60 0'/%3E%3Cpath d='M0 8c15 2.5 45 2.5 60 0s45-2.5 60 0'/%3E%3C/svg%3E") left center / var(--dn-ripple) 11px repeat-x;
+  pointer-events: none;
 }
-/* clip-path would shave the focus ring on the diagonals: drop it while
- * the control is keyboard-focused so the ring stays fully visible. */
-html[data-theme="tatooine"] .button:focus-visible,
-html[data-theme="tatooine"] a.button:focus-visible,
-html[data-theme="tatooine"] button.button:focus-visible { clip-path: none; }
-html[data-theme="tatooine"] .card {
-  border-color: transparent;
-  box-shadow: inset 0 0 0 1px var(--border-strong);
+html[data-theme="dune"] body:has(.badge.status-running, .badge.status-processing, .gantt-running, .live-banner) .topbar::after {
+  animation: dn-drift 24s linear infinite;
 }
-html[data-theme="tatooine"] .page-header h1,
-html[data-theme="tatooine"] .card h2,
-html[data-theme="tatooine"] .kpi-value,
-html[data-theme="tatooine"] .button,
-html[data-theme="tatooine"] a.button,
-html[data-theme="tatooine"] button.button {
-  font-family: var(--font-display);
-  font-weight: 400;
+@keyframes dn-drift {
+  from { transform: translateX(0); }
+  to   { transform: translateX(var(--dn-ripple)); }
+}
+html[data-theme="dune"] .brand-text {
+  font-family: var(--dn-title-ff);
+  font-weight: 700;
+  font-size: 19px;
+  letter-spacing: 0.34em;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  color: var(--topbar-fg);
 }
-html[data-theme="tatooine"] .card h2 { font-size: 0.85rem; }
-html[data-theme="tatooine"] .button,
-html[data-theme="tatooine"] a.button,
-html[data-theme="tatooine"] button.button { font-size: 0.72rem; }
-html[data-theme="tatooine"] .kpi-value {
-  color: var(--accent);
-  text-shadow: var(--tt-sun-glow);
+html[data-theme="dune"] .user-chip { color: var(--topbar-fg); }
+html[data-theme="dune"] .nav-logout {
+  font-family: var(--dn-label-ff);
+  font-weight: 600;
+  font-size: var(--fs-xs);
+  letter-spacing: var(--dn-track-wide);
+  text-transform: uppercase;
+  color: var(--topbar-fg);
+  background: transparent;
+  border: 1px solid rgba(243, 234, 219, 0.35);
+  border-radius: 0;
 }
-html[data-theme="tatooine"] .page-header h1::before {
-  /* twin suns */
+html[data-theme="dune"] .nav-logout:hover { color: #ffffff; border-color: var(--drawer-active-border); }
+
+/* 2. THE SIETCH LEDGER — the drawer is carved rock in strata; group
+ *    headings carry an (un-numbered) diamond seal; the active item
+ *    opens a blue-within-blue eye. */
+html[data-theme="dune"] .drawer {
+  background-color: var(--drawer-bg);
+  background-image: repeating-linear-gradient(180deg, transparent 0 27px, rgba(239, 228, 208, 0.035) 27px 28px);
+  border-right: 1px solid var(--drawer-border);
+}
+html[data-theme="dune"] .drawer::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0; right: 0;
+  width: 1px;
+  background: repeating-linear-gradient(180deg, var(--dn-eye) 0 2px, transparent 2px 9px);
+  opacity: 0.45;
+  pointer-events: none;
+}
+html[data-theme="dune"] #drawer-toggle {
+  border: 1px solid rgba(239, 228, 208, 0.25);
+  border-radius: 0;
+  background: transparent;
+  color: var(--drawer-fg);
+}
+html[data-theme="dune"] .side-group {
+  font-family: var(--dn-title-ff);
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--drawer-fg-muted);
+}
+html[data-theme="dune"] .side-group::before {
   content: "";
   display: inline-block;
-  width: 10px;
-  height: 10px;
-  margin-right: 1.1rem;
-  vertical-align: middle;
+  width: 6px;
+  height: 6px;
+  margin-right: 10px;
+  vertical-align: 1px;
+  background: var(--dn-eye);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+html[data-theme="dune"] .nav-item {
+  letter-spacing: var(--dn-track-mid);
+  text-transform: uppercase;
+  border-left: 2px solid transparent;
+}
+html[data-theme="dune"] .nav-item:hover { background: var(--drawer-hover-bg); color: var(--drawer-fg); }
+html[data-theme="dune"] .nav-item::after {
+  content: "";
+  position: absolute;
+  right: 16px; top: 50%;
+  width: 14px; height: 7px;
+  margin-top: -3.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--dn-eye) 0 2px, var(--accent) 2.5px 3.5px, transparent 4px);
+  opacity: 0;
+  transform: scaleY(0.2);
+  transition: transform var(--dur-med) var(--ease), opacity var(--dur-med) var(--ease);
+  pointer-events: none;
+}
+html[data-theme="dune"] .nav-item.active {
+  background: var(--drawer-active-bg);
+  color: var(--drawer-active-fg);
+  border-left-color: var(--drawer-active-border);
+  box-shadow: inset 24px 0 30px -24px var(--dn-eye);
+}
+html[data-theme="dune"] .nav-item.active::after {
+  opacity: 1;
+  transform: scaleY(1);
+  box-shadow: 0 0 10px 2px var(--accent);
+}
+html[data-theme="dune"].drawer-rail .nav-item::after { right: 4px; top: 10px; width: 10px; height: 5px; margin-top: 0; }
+
+/* 3. CARVED SLABS — square slabs with a basalt lintel, a short noon
+ *    shadow, chiselled Cinzel capitals with an incised highlight, an
+ *    original seal glyph and a ritual rule. */
+html[data-theme="dune"] .page-header h1 {
+  flex: 0 1 auto;
+  margin-right: auto;
+  font-family: var(--dn-title-ff);
+  font-weight: 600;
+  font-size: var(--fs-xl);
+  line-height: 1.05;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg);
+  text-shadow: 0 1px 0 #ffffff;
+  padding-bottom: 22px;
+}
+html[data-theme="dune"] .page-header h1::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0.14em; bottom: 0;
+  height: 9px;
+  background: var(--accent);
+  -webkit-mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 9'%3E%3Cpath d='M4.5 0L9 4.5 4.5 9 0 4.5z'/%3E%3C/svg%3E") center / 9px 9px no-repeat,
+    linear-gradient(#000, #000) left center / calc(50% - 10px) 1px no-repeat,
+    linear-gradient(#000, #000) right center / calc(50% - 10px) 1px no-repeat;
+          mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 9'%3E%3Cpath d='M4.5 0L9 4.5 4.5 9 0 4.5z'/%3E%3C/svg%3E") center / 9px 9px no-repeat,
+    linear-gradient(#000, #000) left center / calc(50% - 10px) 1px no-repeat,
+    linear-gradient(#000, #000) right center / calc(50% - 10px) 1px no-repeat;
+  pointer-events: none;
+}
+html[data-theme="dune"] .card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--dn-basalt);
+  border-radius: 0;
+  box-shadow: inset 0 1px 0 #ffffff, var(--shadow-2);
+}
+html[data-theme="dune"] .card h2 {
+  font-family: var(--dn-title-ff);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: var(--dn-track-wide);
+  text-transform: uppercase;
+  text-shadow: 0 1px 0 #ffffff;
+  padding-left: 24px;
+  padding-bottom: 12px;
+}
+html[data-theme="dune"] .card h2::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0.12em;
+  width: 14px; height: 14px;
+  background: var(--accent);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14' fill='none' stroke='black' stroke-width='1.4'%3E%3Cpath d='M7 1l6 6-6 6-6-6z'/%3E%3Ccircle cx='7' cy='7' r='1.6' fill='black' stroke='none'/%3E%3Cpath d='M7 1v3.2M7 9.8V13'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14' fill='none' stroke='black' stroke-width='1.4'%3E%3Cpath d='M7 1l6 6-6 6-6-6z'/%3E%3Ccircle cx='7' cy='7' r='1.6' fill='black' stroke='none'/%3E%3Cpath d='M7 1v3.2M7 9.8V13'/%3E%3C/svg%3E") center / contain no-repeat;
+  pointer-events: none;
+}
+html[data-theme="dune"] .card h2::after {
+  content: "";
+  position: absolute;
+  left: 24px; right: 0; bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--accent) 0 40px, var(--border) 40px);
+  pointer-events: none;
+}
+
+/* KPIs: stillsuit pockets with stitched seams and carved numerals. */
+html[data-theme="dune"] .kpi { padding: 6px 8px; }
+html[data-theme="dune"] .kpi::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px dashed var(--accent);
+  opacity: 0.3;
+  pointer-events: none;
+}
+html[data-theme="dune"] .kpi-label {
+  font-family: var(--dn-label-ff);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: var(--dn-track-wide);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+html[data-theme="dune"] .kpi-value {
+  font-family: var(--dn-num-ff);
+  font-weight: 600;
+  font-size: 40px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--fg);
+  text-shadow: 0 1px 0 #ffffff, 0 -1px 0 rgba(26, 21, 16, 0.18);
+}
+
+/* 4. THUMPER PULSE — a running badge is a thumper planted in the
+ *    sand: a blue core with a ring radiating out (2.8s). Stopping
+ *    rings fall inward. */
+html[data-theme="dune"] .badge {
+  font-family: var(--dn-label-ff);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: var(--dn-track-mid);
+  text-transform: uppercase;
+  color: var(--fg);
+  background: var(--card-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
+}
+html[data-theme="dune"] .badge[class*="status-"],
+html[data-theme="dune"] .badge[class*="severity-"] { padding-left: 20px; }
+html[data-theme="dune"] .badge[class*="status-"]::before,
+html[data-theme="dune"] .badge[class*="severity-"]::before {
+  content: "";
+  position: absolute;
+  left: 7px; top: 50%;
+  width: 7px; height: 7px;
+  margin-top: -3.5px;
+  border-radius: 0;
+  opacity: 1;
+  background: currentColor;
+  pointer-events: none;
+}
+html[data-theme="dune"] :is(.badge.status-running, .badge.status-processing) { color: var(--accent); border-color: var(--accent); }
+html[data-theme="dune"] :is(.badge.status-running, .badge.status-processing)::before { background: var(--accent); border-radius: 50%; box-shadow: 0 0 6px var(--dn-eye); }
+html[data-theme="dune"] :is(.badge.status-queued, .badge.status-new, .badge.status-pending) { color: var(--warn); border-color: var(--warn); }
+html[data-theme="dune"] :is(.badge.status-queued, .badge.status-new, .badge.status-pending)::before { background: transparent; border: 1.5px solid var(--dn-spice); border-radius: 50%; }
+html[data-theme="dune"] :is(.badge.status-completed, .badge.status-processed, .badge.status-done, .badge.status-ok, .badge.status-passed, .badge.severity-ok) { color: var(--ok); border-color: var(--ok); }
+html[data-theme="dune"] :is(.badge.status-completed, .badge.status-processed, .badge.status-done, .badge.status-ok, .badge.status-passed, .badge.severity-ok)::before { background: var(--ok); transform: rotate(45deg) scale(0.85); }
+html[data-theme="dune"] :is(.badge.status-failed, .badge.status-error, .badge.severity-error) { color: var(--err); border-color: var(--err); }
+html[data-theme="dune"] :is(.badge.status-failed, .badge.status-error, .badge.severity-error)::before { background: var(--err); }
+html[data-theme="dune"] :is(.badge.severity-warning, .badge.status-exception) { color: var(--warn); border-color: var(--warn); }
+html[data-theme="dune"] :is(.badge.severity-warning, .badge.status-exception)::before { background: transparent; border: 1.5px solid var(--warn); transform: rotate(45deg) scale(0.85); }
+html[data-theme="dune"] .badge.status-cancelled,
+html[data-theme="dune"] .badge.status-draft { color: var(--fg-subtle); border-color: var(--border-strong); border-style: dashed; }
+html[data-theme="dune"] .badge.status-cancelled::before { background: linear-gradient(135deg, transparent 42%, var(--fg-subtle) 42% 58%, transparent 58%); }
+html[data-theme="dune"] .badge.status-draft::before { background: transparent; border: 1.5px dotted var(--fg-subtle); border-radius: 50%; }
+html[data-theme="dune"] .badge.status-stopping { color: var(--accent); border-color: var(--accent); }
+html[data-theme="dune"] .badge.status-stopping::before { border: 1.5px solid var(--accent); border-radius: 50%; background: linear-gradient(90deg, var(--accent) 50%, transparent 50%); }
+html[data-theme="dune"] :is(.badge.status-running, .badge.status-processing, .badge.status-stopping) { overflow: visible; }
+html[data-theme="dune"] :is(.badge.status-running, .badge.status-processing)::after,
+html[data-theme="dune"] .badge.status-stopping::after,
+html[data-theme="dune"] .cooking-now .cooking-now-label::after {
+  content: "";
+  position: absolute;
+  left: 2.5px; top: 50%;
+  width: 16px; height: 16px;
+  margin-top: -8px;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 0 5px transparent, 0 0 0 6px var(--dn-eye);
+  opacity: 0;
+  transform: scale(0.4);
+  pointer-events: none;
+  animation: dn-thump 2.8s var(--ease) infinite;
+}
+html[data-theme="dune"] .badge.status-stopping::after { animation: dn-thump-in 3.6s var(--ease) infinite; }
+@keyframes dn-thump {
+  0%   { opacity: 0.85; transform: scale(0.4); }
+  70%  { opacity: 0;    transform: scale(2.2); }
+  100% { opacity: 0;    transform: scale(2.2); }
+}
+@keyframes dn-thump-in {
+  0%   { opacity: 0;   transform: scale(2); }
+  80%  { opacity: 0.7; transform: scale(0.5); }
+  100% { opacity: 0;   transform: scale(0.5); }
+}
+html[data-theme="dune"] .cooking-now {
+  border-radius: 0;
+  background: var(--card-bg);
+  border-color: var(--border);
+  border-top: 3px solid var(--accent);
+}
+html[data-theme="dune"] .cooking-now .cooking-now-label {
+  font-family: var(--dn-label-ff);
+  font-weight: 600;
+  letter-spacing: var(--dn-track-wide);
+  text-transform: uppercase;
+  color: var(--accent);
+  padding-left: 26px;
+}
+html[data-theme="dune"] .cooking-now .cooking-now-label::before {
+  content: "";
+  position: absolute;
+  left: 6px; top: 50%;
+  width: 9px; height: 9px;
+  margin-top: -4.5px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 14px -4px 0 -2px var(--tt-sun2);
+  box-shadow: 0 0 8px var(--dn-eye);
+  pointer-events: none;
 }
-html[data-theme="tatooine"] .badge.status-processing,
-html[data-theme="tatooine"] .badge.status-running { color: var(--tt-sun2); border-color: var(--tt-sun2); }
+html[data-theme="dune"] .live-banner {
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+  border-radius: 0;
+  background: var(--card-bg);
+  overflow: hidden;
+}
+html[data-theme="dune"] .live-banner::before {
+  content: "";
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  left: calc(var(--dn-ripple) * -1);
+  background: var(--accent);
+  opacity: 0.08;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 12' fill='none' stroke='black' stroke-width='1'%3E%3Cpath d='M0 6c20-4 40-4 60 0s40 4 60 0'/%3E%3C/svg%3E") left top / var(--dn-ripple) 12px repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 12' fill='none' stroke='black' stroke-width='1'%3E%3Cpath d='M0 6c20-4 40-4 60 0s40 4 60 0'/%3E%3C/svg%3E") left top / var(--dn-ripple) 12px repeat;
+  pointer-events: none;
+  animation: dn-drift 30s linear infinite;
+}
+
+/* 5. THE WAKE — running gantt bars are the ridge pushed up by
+ *    something moving beneath; completed bars are banded strata. */
+html[data-theme="dune"] .gantt-bg { fill: var(--bg-elev); stroke: var(--border); }
+html[data-theme="dune"] .gantt-completed { fill: var(--fg-muted); }
+html[data-theme="dune"] .gantt-running {
+  fill: var(--accent);
+  stroke: var(--dn-eye);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 6;
+  animation: dn-wake-dash 2.6s linear infinite;
+}
+@keyframes dn-wake-dash { to { stroke-dashoffset: -24; } }
+html[data-theme="dune"] .arc-bg { stroke: var(--border); }
+html[data-theme="dune"] .arc-fg { stroke: var(--accent); stroke-linecap: square; }
+html[data-theme="dune"] .throughput-line { stroke: var(--accent); stroke-width: 1.75; fill: none; }
+html[data-theme="dune"] .throughput-area { fill: var(--dn-tint); opacity: 0.5; }
+
+/* Buttons: stone tablets; primary carries the eye. */
+html[data-theme="dune"] :is(.button, a.button, button.button, button.secondary) {
+  font-family: var(--btn-ff);
+  font-size: var(--btn-fs);
+  font-weight: var(--btn-fw);
+  letter-spacing: var(--dn-track-mid);
+  text-transform: uppercase;
+  color: var(--fg);
+  background: var(--card-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
+  box-shadow: 0 2px 0 var(--border-strong);
+  transition: transform var(--dur-fast) var(--ease);
+}
+html[data-theme="dune"] :is(.button, a.button, button.button, button.secondary):hover { background: var(--bg-elev); color: var(--fg); }
+html[data-theme="dune"] :is(.button, a.button, button.button, button.secondary):active { transform: translateY(1px); }
+html[data-theme="dune"] :is(.button, a.button, button.button).primary {
+  color: var(--accent-fg);
+  background: var(--accent);
+  border-color: var(--accent-hover);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2), 0 2px 0 var(--accent-hover), 0 6px 18px -8px var(--accent);
+}
+html[data-theme="dune"] :is(.button, a.button, button.button).primary:hover { background: var(--accent-hover); color: var(--accent-fg); }
+html[data-theme="dune"] :is(.button, a.button, button.button).danger {
+  color: #ffffff;
+  background: var(--err);
+  border-color: #6e180f;
+  box-shadow: 0 2px 0 #6e180f;
+}
+html[data-theme="dune"] :is(.button, a.button, button.button).danger::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border: 1px dashed rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+}
+html[data-theme="dune"] :is(.button, a.button, button.button).danger:hover { background: #861d13; color: #ffffff; }
+html[data-theme="dune"] :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  border-color: var(--border-strong);
+  border-radius: 0;
+}
+
+/* Flashes, empty, tables. */
+html[data-theme="dune"] .flash {
+  border: 1px solid var(--border);
+  border-radius: 0;
+  padding-left: 22px;
+}
+html[data-theme="dune"] .flash::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  background: var(--ok);
+  pointer-events: none;
+}
+html[data-theme="dune"] .flash.error { border-color: var(--err); }
+html[data-theme="dune"] .flash.error::before { background: var(--err); }
+html[data-theme="dune"] .empty {
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--bg-elev);
+  font-family: var(--dn-title-ff);
+  font-style: normal;
+  letter-spacing: var(--dn-track-mid);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+html[data-theme="dune"] :is(div, p).empty { padding-top: 92px; padding-bottom: 48px; }
+html[data-theme="dune"] :is(div, p).empty::before {
+  content: "";
+  position: absolute;
+  left: 50%; top: 30px;
+  width: 96px; height: 40px;
+  margin-left: -48px;
+  background: var(--accent);
+  opacity: 0.75;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 40' fill='none' stroke='black' stroke-width='1.4'%3E%3Ccircle cx='64' cy='12' r='6'/%3E%3Cpath d='M2 36c18-14 34-18 50-10s28 10 42 6'/%3E%3Cpath d='M20 39c14-5 30-5 44-1' stroke-dasharray='2 3'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 40' fill='none' stroke='black' stroke-width='1.4'%3E%3Ccircle cx='64' cy='12' r='6'/%3E%3Cpath d='M2 36c18-14 34-18 50-10s28 10 42 6'/%3E%3Cpath d='M20 39c14-5 30-5 44-1' stroke-dasharray='2 3'/%3E%3C/svg%3E") center / contain no-repeat;
+  pointer-events: none;
+}
+html[data-theme="dune"] table { font-variant-numeric: tabular-nums; }
+html[data-theme="dune"] table th {
+  font-family: var(--dn-label-ff);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: var(--dn-track-wide);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  background: transparent;
+  border-bottom: 2px solid var(--fg);
+}
+html[data-theme="dune"] tr.severity-error td   { background-color: var(--overlay-err); }
+html[data-theme="dune"] tr.severity-warning td { background-color: var(--overlay-warn); }
+html[data-theme="dune"] tr.severity-ok td      { background-color: var(--overlay-ok); }
+html[data-theme="dune"] tr.severity-error   > td:first-child { box-shadow: inset 3px 0 0 var(--err); }
+html[data-theme="dune"] tr.severity-warning > td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+html[data-theme="dune"] tr.severity-ok      > td:first-child { box-shadow: inset 3px 0 0 var(--ok); }
+
+/* Code & logs: basalt tablets. */
+html[data-theme="dune"] pre.code-preview {
+  border: 0;
+  border-top: 3px solid var(--accent);
+  border-radius: 0;
+  background-color: var(--code-bg);
+  color: var(--code-fg);
+}
+html[data-theme="dune"] pre.log-block {
+  border-radius: 0;
+  box-shadow: inset 3px 0 0 var(--accent);
+  padding-left: 20px;
+  background-color: var(--log-bg);
+  color: var(--code-fg);
+}
+
+/* Footer: a ritual rule above the ledger line. */
+html[data-theme="dune"] .site-footer {
+  font-family: var(--dn-label-ff);
+  letter-spacing: var(--dn-track-mid);
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+  border-top: 0;
+  padding-top: 26px;
+}
+html[data-theme="dune"] .site-footer::before {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 9px;
+  background: var(--accent);
+  opacity: 0.6;
+  -webkit-mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 9'%3E%3Cpath d='M4.5 0L9 4.5 4.5 9 0 4.5z'/%3E%3C/svg%3E") center / 9px 9px no-repeat,
+    linear-gradient(#000, #000) left center / calc(50% - 12px) 1px no-repeat,
+    linear-gradient(#000, #000) right center / calc(50% - 12px) 1px no-repeat;
+          mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 9'%3E%3Cpath d='M4.5 0L9 4.5 4.5 9 0 4.5z'/%3E%3C/svg%3E") center / 9px 9px no-repeat,
+    linear-gradient(#000, #000) left center / calc(50% - 12px) 1px no-repeat,
+    linear-gradient(#000, #000) right center / calc(50% - 12px) 1px no-repeat;
+  pointer-events: none;
+}
+
+/* 6. THE HORIZON GATE (login) — a vast bleached sky, two layers of
+ *    dunes, a fine sand drift (60s per pass), and one focal seal above
+ *    a monumental slab. */
+html[data-theme="dune"] body.login-body {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  margin: 0;
+  background-color: var(--bg);
+  background-image: linear-gradient(180deg, #fbf8f1 0%, var(--bg-elev) 46%, var(--bg) 70%);
+  overflow-x: clip;
+}
+html[data-theme="dune"] body.login-body::before {
+  content: "";
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  height: 38vh;
+  background: linear-gradient(180deg, var(--dn-dune-far) 0 46%, var(--dn-dune-near) 46%);
+  -webkit-mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320' preserveAspectRatio='none'%3E%3Cpath d='M0 150C210 70 380 60 560 120s420 40 600-30 220-40 280-20V320H0z'/%3E%3C/svg%3E") center bottom / 100% 100% no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320' preserveAspectRatio='none'%3E%3Cpath d='M0 230c260-70 520-70 760-10s460 50 680-40V320H0z'/%3E%3C/svg%3E") center bottom / 100% 100% no-repeat;
+          mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320' preserveAspectRatio='none'%3E%3Cpath d='M0 150C210 70 380 60 560 120s420 40 600-30 220-40 280-20V320H0z'/%3E%3C/svg%3E") center bottom / 100% 100% no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320' preserveAspectRatio='none'%3E%3Cpath d='M0 230c260-70 520-70 760-10s460 50 680-40V320H0z'/%3E%3C/svg%3E") center bottom / 100% 100% no-repeat;
+  pointer-events: none;
+}
+html[data-theme="dune"] body.login-body::after {
+  content: "";
+  position: fixed;
+  top: 52vh; bottom: 0;
+  left: -240px; right: 0;
+  background: var(--dn-eye);
+  opacity: 0.22;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 60' stroke='black' stroke-width='1' stroke-linecap='round'%3E%3Cpath d='M10 8h26M70 14h12M120 6h34M190 18h16M30 30h18M96 36h28M160 28h10M210 44h22M50 52h14M140 54h20'/%3E%3C/svg%3E") left top / 240px 60px repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 60' stroke='black' stroke-width='1' stroke-linecap='round'%3E%3Cpath d='M10 8h26M70 14h12M120 6h34M190 18h16M30 30h18M96 36h28M160 28h10M210 44h22M50 52h14M140 54h20'/%3E%3C/svg%3E") left top / 240px 60px repeat;
+  pointer-events: none;
+  animation: dn-sand 60s linear infinite;
+}
+@keyframes dn-sand {
+  from { transform: translateX(0); }
+  to   { transform: translateX(240px); }
+}
+html[data-theme="dune"] .login-shell { width: min(440px, 92vw); position: relative; z-index: 1; margin-top: 96px; }
+html[data-theme="dune"] .login-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-top: 4px solid var(--dn-basalt);
+  border-radius: 0;
+  box-shadow: var(--shadow-3);
+  padding: 44px 44px 36px;
+}
+html[data-theme="dune"] .login-card::before {
+  content: "";
+  position: absolute;
+  left: 50%; top: -112px;
+  width: 72px; height: 72px;
+  margin-left: -36px;
+  background: var(--accent);
+  filter: drop-shadow(0 0 10px var(--dn-eye));
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 72' fill='none' stroke='black' stroke-width='2'%3E%3Ccircle cx='36' cy='30' r='14'/%3E%3Ccircle cx='36' cy='30' r='4' fill='black' stroke='none'/%3E%3Cpath d='M6 50h60'/%3E%3Cpath d='M14 58c8-4 14-4 22 0s14 4 22 0' stroke-width='1.5'/%3E%3Cpath d='M22 66c5-2.5 9-2.5 14 0s9 2.5 14 0' stroke-width='1.2'/%3E%3Cpath d='M36 4v8M36 48v2' /%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 72' fill='none' stroke='black' stroke-width='2'%3E%3Ccircle cx='36' cy='30' r='14'/%3E%3Ccircle cx='36' cy='30' r='4' fill='black' stroke='none'/%3E%3Cpath d='M6 50h60'/%3E%3Cpath d='M14 58c8-4 14-4 22 0s14 4 22 0' stroke-width='1.5'/%3E%3Cpath d='M22 66c5-2.5 9-2.5 14 0s9 2.5 14 0' stroke-width='1.2'/%3E%3Cpath d='M36 4v8M36 48v2' /%3E%3C/svg%3E") center / contain no-repeat;
+  pointer-events: none;
+}
+/* The login card is bone, not basalt: give the mark its dark-on-light tones. */
+html[data-theme="dune"] .login-card {
+  --ovid-base: #1a1510;
+  --ovid-extract: #b4531d;
+  --ovid-transform: #1d3fce;
+  --ovid-load: #8a6d3b;
+  --ovid-success: #116a5a;
+  --ovid-warning: #c07a12;
+  --ovid-error: #a02418;
+  --ovid-rest-1: #a38b66;
+  --ovid-rest-2: #5b4a33;
+  --ovid-rest-3: #1a1510;
+}
+html[data-theme="dune"] .login-card::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border: 1px dashed var(--accent);
+  opacity: 0.22;
+  pointer-events: none;
+}
+html[data-theme="dune"] .login-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: center;
+}
+html[data-theme="dune"] .login-header h1 {
+  font-family: var(--dn-title-ff);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
 
 /* ------------------------------------------------------------------ *
- * 15.financial  Trading terminal — F-key nav, amber headers, full-grid
- *               dense tables, solid ticker-chip badges.
+ * 15.financial  Trading terminal — prompt-marked nav, amber headers,
+ *               full-grid dense tables, solid ticker-chip badges. The
+ *               menu is never numbered (no theme numbers it —
+ *               tests/contract/test_no_menu_numbering.py).
  * ------------------------------------------------------------------ */
-html[data-theme="financial"] .drawer-nav { counter-reset: fx-key; }
-html[data-theme="financial"] .nav-item { counter-increment: fx-key; }
 html[data-theme="financial"] .nav-item .nav-label::before {
-  /* F1..Fn function keys */
-  content: "F" counter(fx-key) " ";
+  /* terminal prompt marker, brightens on the active row */
+  content: "\203A";
   display: inline-block;
-  min-width: 2.4em;
+  width: 1.1em;
   font-family: var(--mono);
   color: var(--accent);
-  font-size: 0.7rem;
+  opacity: 0.55;
 }
+html[data-theme="financial"] .nav-item.active .nav-label::before { opacity: 1; }
 html[data-theme="financial"] .page-header h1 {
   font-family: var(--font-display);
   text-transform: uppercase;
@@ -7209,75 +7970,157 @@ html[data-theme="lego"] .badge.status-queued,
 html[data-theme="lego"] .badge.status-new { background: var(--lg-yellow); color: #1a1a1a; }
 
 /* ------------------------------------------------------------------ *
- * 15.data-factory  "Line control, always green" (light). Three
- *              signatures — the line rail under the topbar, the
- *              calibrated index under page titles, and the flow sweep
- *              on running indicators. Everything else is quiet craft.
- *              No background texture, on purpose.
+ * 15.data-factory  "LINE ONE" (light). Six signatures — the gantry &
+ *              main belt, the control cabinet, stencilled bay titles,
+ *              the conveyor gantt, stack-light status + QC stamp, and
+ *              hazard tape. Belts move only while something runs.
+ *              Nothing here numbers the menu (no theme does;
+ *              test_no_menu_numbering.py).
  * ------------------------------------------------------------------ */
-html[data-theme="data-factory"] body { font-feature-settings: "tnum" 1; }
-html[data-theme="data-factory"] :is(h1, h2, h3) {
-  font-family: var(--font-display);
-  letter-spacing: -0.005em;
+
+/* hosts for pseudo-elements: zero specificity, so Ovid2's own
+ * position (fixed topbar / drawer, sticky heads…) always wins. */
+:where(html[data-theme="data-factory"]) :where(.side-group, .nav-item, .page-header,
+  .page-header h1, .card, .card h2, .kpi, .badge, .button, .flash, .empty, .live-banner,
+  .cooking-now-label, pre.code-preview, pre.log-block, .site-footer, .login-card) {
+  position: relative;
 }
 
-/* 1. Topbar + the line rail: a 2px track with a solid accent segment as
- *    wide as the drawer rail, sitting right above the drawer's toggle
- *    slot — the drawer reads as the head of the production line. */
+html[data-theme="data-factory"] body { font-feature-settings: "tnum" 1; }
+html[data-theme="data-factory"] :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+html[data-theme="data-factory"] .topbar :focus-visible { outline-color: var(--topbar-fg); }
+html[data-theme="data-factory"] .drawer :focus-visible { outline-color: var(--df-hazard); }
+
+/* 1. THE GANTRY & MAIN BELT — yellow gantry topbar; a rubber conveyor
+ *    belt runs along its lower edge and moves only while a job runs. */
 html[data-theme="data-factory"] .topbar {
   background: var(--topbar-bg);
   -webkit-backdrop-filter: none;
           backdrop-filter: none;
+  color: var(--topbar-fg);
+  border-bottom: 2px solid var(--topbar-border);
+  padding-bottom: 8px;
+  overflow-x: clip;
 }
 html[data-theme="data-factory"] .topbar::after {
   content: "";
   position: absolute;
-  left: 0; right: 0; bottom: -1px;
-  height: var(--df-rail-h);
+  left: calc(var(--df-tread) * -1);
+  right: 0;
+  bottom: 0;
+  height: 8px;
   background:
-    linear-gradient(var(--accent), var(--accent)) left / var(--drawer-rail-w) 100% no-repeat,
-    var(--df-track);
+    repeating-linear-gradient(90deg, var(--df-cleat) 0 3px, transparent 3px var(--df-tread)),
+    linear-gradient(var(--df-rubber), var(--df-rubber));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
   pointer-events: none;
 }
-html[data-theme="data-factory"] .brand {
-  padding-right: 16px;
-  border-right: 1px solid var(--border);
+html[data-theme="data-factory"] body:has(.badge.status-running, .badge.status-processing, .gantt-running, .live-banner) .topbar::after {
+  animation: df-belt var(--df-belt-speed) linear infinite;
 }
-html[data-theme="data-factory"] .brand-text { color: var(--fg); letter-spacing: 0.02em; }
-html[data-theme="data-factory"] .user-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  padding: 3px 10px;
-  font-size: var(--fs-sm);
-  color: var(--fg-muted);
+@keyframes df-belt {
+  from { transform: translateX(0); }
+  to   { transform: translateX(var(--df-tread)); }
 }
-html[data-theme="data-factory"] .user-chip-role {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: var(--fs-xs);
+html[data-theme="data-factory"] .brand-text {
+  font-family: var(--df-title-ff);
+  font-weight: 800;
+  font-size: 24px;
+  letter-spacing: var(--df-stencil-track);
   text-transform: uppercase;
-  letter-spacing: var(--df-label-ls);
-  color: var(--fg-subtle);
+  line-height: 1;
+  color: var(--topbar-fg);
 }
+html[data-theme="data-factory"] .user-chip { color: var(--topbar-fg); }
 html[data-theme="data-factory"] .nav-logout {
-  font-family: var(--btn-ff);
+  font-family: var(--df-label-ff);
   font-weight: 600;
-  font-size: var(--fs-sm);
   text-transform: uppercase;
-  letter-spacing: var(--df-label-ls);
-  color: var(--fg-muted);
+  letter-spacing: var(--df-label-track);
+  color: var(--topbar-fg);
+  background: transparent;
+  border: 2px solid var(--topbar-fg);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 0 var(--topbar-fg);
+  transition: transform var(--dur-fast) var(--ease);
 }
-html[data-theme="data-factory"] .nav-logout:hover { color: var(--err); }
+html[data-theme="data-factory"] .nav-logout:hover { color: var(--topbar-fg); background: rgba(28, 26, 22, 0.08); }
+html[data-theme="data-factory"] .nav-logout:active { transform: translateY(2px); box-shadow: none; }
 
-/* 2. Drawer: machine side panel. The burger slot matches the rail
- *    width; its three bars stagger to 100/72/44 % in the icon rail
- *    ("expand" speed lines) — scaleX only. Active item = a 6px status
- *    lamp + tinted fill. Group headings collapse to a hairline. */
-html[data-theme="data-factory"] .drawer-head {
-  border-bottom: 1px solid rgba(211, 217, 225, 0.10);
+/* 2. THE CONTROL CABINET — perforated enamel drawer with a piano hinge;
+ *    group headings carry an (un-numbered) hazard tag, each item an
+ *    indicator LED, the active item is lit. */
+html[data-theme="data-factory"] .drawer {
+  background-color: var(--drawer-bg);
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.055) 1.2px, transparent 1.6px);
+  background-size: 9px 9px;
+  border-right: 3px solid var(--drawer-border);
+}
+html[data-theme="data-factory"] .drawer::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0; right: 0;
+  width: 3px;
+  background: repeating-linear-gradient(180deg, var(--df-steel) 0 14px, var(--drawer-border) 14px 16px);
+  pointer-events: none;
+}
+html[data-theme="data-factory"] #drawer-toggle {
+  border: 2px solid var(--drawer-fg-muted);
+  border-radius: var(--radius-sm);
+  background: var(--drawer-hover-bg);
+  color: var(--drawer-fg);
+  box-shadow: 0 3px 0 var(--drawer-border);
+  transition: transform var(--dur-fast) var(--ease);
+}
+html[data-theme="data-factory"] #drawer-toggle:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--drawer-border); }
+html[data-theme="data-factory"] .side-group {
+  font-family: var(--df-label-ff);
+  font-weight: 600;
+  letter-spacing: var(--df-label-track);
+  text-transform: uppercase;
+  color: var(--drawer-fg-muted);
+}
+html[data-theme="data-factory"] .side-group::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 8px;
+  margin-right: 8px;
+  vertical-align: 0;
+  border-radius: 1px;
+  background: repeating-linear-gradient(-45deg, var(--df-hazard) 0 3px, var(--df-ink) 3px 6px);
+  pointer-events: none;
+}
+html[data-theme="data-factory"] .nav-item {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-left: 4px solid transparent;
+}
+html[data-theme="data-factory"] .nav-item:hover { background: var(--drawer-hover-bg); color: var(--drawer-fg); }
+html[data-theme="data-factory"] .nav-item::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  width: 8px; height: 8px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: var(--df-lamp-off);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+html[data-theme="data-factory"] .nav-item.active {
+  background: var(--drawer-active-bg);
+  color: var(--drawer-active-fg);
+  border-left-color: var(--drawer-active-border);
+}
+html[data-theme="data-factory"] .nav-item.active:hover { background: var(--drawer-active-bg); color: var(--drawer-active-fg); }
+html[data-theme="data-factory"] .nav-item.active::after {
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--df-ink), 0 0 8px 2px var(--accent);
+}
+html[data-theme="data-factory"].drawer-rail .nav-item::after {
+  right: 6px; top: 8px; margin-top: 0; width: 6px; height: 6px;
 }
 html[data-theme="data-factory"] .drawer-head .icon-menu line {
   transform-box: fill-box;
@@ -7286,364 +8129,486 @@ html[data-theme="data-factory"] .drawer-head .icon-menu line {
 }
 html[data-theme="data-factory"].drawer-rail .drawer-head .icon-menu line:nth-child(2) { transform: scaleX(0.72); }
 html[data-theme="data-factory"].drawer-rail .drawer-head .icon-menu line:nth-child(3) { transform: scaleX(0.44); }
-html[data-theme="data-factory"] .side-group {
-  font-family: var(--nav-ff);
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  letter-spacing: var(--df-label-ls);
-  color: var(--drawer-fg-muted);
-  padding-top: 0.9rem;
+
+/* 3. STENCILLED BAY TITLES — page titles are spray-stencilled on the
+ *    floor with a hazard floor-mark and an engineering dimension line;
+ *    card titles get an orange plate and a painted lane line. */
+html[data-theme="data-factory"] .page-header h1 {
+  flex: 0 1 auto;
+  margin-right: auto;
+  font-family: var(--df-title-ff);
+  font-weight: 800;
+  font-size: 44px;
+  line-height: 1;
+  letter-spacing: var(--df-stencil-track);
+  text-transform: uppercase;
+  padding: 0 0 14px 22px;
 }
-html[data-theme="data-factory"] .nav-item {
-  position: relative;
-  margin: 1px 8px;
-  border-left: 0;
-  border-radius: var(--radius-md);
-  padding-left: calc(var(--nav-item-px) - 0.35rem);
-}
-html[data-theme="data-factory"] .nav-item:hover { background: var(--drawer-hover-bg); color: #ffffff; }
-html[data-theme="data-factory"] .nav-item.active {
-  font-weight: 600;
-  box-shadow: inset 0 0 0 1px rgba(129, 164, 233, 0.35);
-}
-html[data-theme="data-factory"] .nav-item.active::before {
+html[data-theme="data-factory"] .page-header h1::before {
   content: "";
   position: absolute;
-  left: 5px; top: 50%;
-  width: var(--df-lamp); height: var(--df-lamp);
-  border-radius: 1px;
-  background: var(--drawer-active-border);
-  transform: translateY(-50%);
+  left: 0; top: 2px; bottom: 16px;
+  width: 10px;
+  background: repeating-linear-gradient(-45deg, var(--df-hazard) 0 5px, var(--df-ink) 5px 10px);
   pointer-events: none;
-}
-@media (min-width: 900px) {
-  html[data-theme="data-factory"].drawer-rail .drawer .side-group {
-    display: block;
-    font-size: 0;
-    height: 1px;
-    width: 16px;
-    margin: 10px auto;
-    padding: 0;
-    background: rgba(211, 217, 225, 0.18);
-  }
-  html[data-theme="data-factory"].drawer-rail .drawer .nav-item { padding-left: 0; }
-  html[data-theme="data-factory"].drawer-rail .drawer .nav-item.active::before {
-    left: 50%; top: auto; bottom: 3px;
-    width: 12px; height: 2px;
-    transform: translateX(-50%);
-  }
-}
-html[data-theme="data-factory"] .drawer :focus-visible { outline-color: var(--df-focus-on-dark); }
-
-/* 3. Page title: the calibrated index — a 24px accent segment, then a
- *    fading tick scale (a 1px tick every 6px), like a gauge. */
-html[data-theme="data-factory"] .page-header h1 {
-  font-size: var(--fs-xl);
-  font-weight: 600;
-  position: relative;
-  padding-bottom: 12px;
 }
 html[data-theme="data-factory"] .page-header h1::after {
   content: "";
   position: absolute;
-  left: 0; bottom: 0;
-  width: 144px; height: 6px;
+  left: 22px; right: 0; bottom: 0;
+  height: 9px;
   background:
-    linear-gradient(var(--accent), var(--accent)) left bottom / 24px 2px no-repeat,
-    repeating-linear-gradient(90deg, var(--df-tick) 0 1px, transparent 1px 6px) 28px bottom / 116px 6px no-repeat;
-  -webkit-mask: linear-gradient(90deg, #000 60%, transparent);
-          mask: linear-gradient(90deg, #000 60%, transparent);
+    linear-gradient(var(--accent), var(--accent)) left center / 1px 100% no-repeat,
+    linear-gradient(var(--accent), var(--accent)) right center / 1px 100% no-repeat,
+    linear-gradient(var(--accent), var(--accent)) center / 100% 1px no-repeat,
+    linear-gradient(135deg, transparent 50%, var(--accent) 50%) 1px 1px / 4px 4px no-repeat,
+    linear-gradient(45deg, transparent 50%, var(--accent) 50%) 1px 4px / 4px 4px no-repeat,
+    linear-gradient(-135deg, transparent 50%, var(--accent) 50%) calc(100% - 1px) 1px / 4px 4px no-repeat,
+    linear-gradient(-45deg, transparent 50%, var(--accent) 50%) calc(100% - 1px) 4px / 4px 4px no-repeat;
   pointer-events: none;
 }
-
-/* 4. Cards: plain white plates; hover pulls the hairline toward the
- *    accent and lifts the shadow. No coloured edge. */
 html[data-theme="data-factory"] .card {
-  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-med) var(--ease);
-}
-html[data-theme="data-factory"] .card:is(:hover, :focus-within) {
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: var(--card-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow-2);
 }
-html[data-theme="data-factory"] .card h2 { font-size: 14px; font-weight: 600; }
-
-/* 5. KPI numbers: telemetry wall. */
-html[data-theme="data-factory"] .kpi-value {
-  font-family: var(--font-display);
-  font-size: var(--df-kpi-fs);
-  font-weight: 600;
-  line-height: 1.05;
-  letter-spacing: -0.01em;
-  font-variant-numeric: tabular-nums lining-nums;
-}
-html[data-theme="data-factory"] .kpi-label {
-  font-family: var(--font-display);
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: var(--df-label-ls);
-  color: var(--fg-subtle);
-}
-
-/* 6. Tables: strong rule under condensed heads, hairline rows, a 5 %
- *    accent hover; status rows get the overlay + a 3px lamp bar. */
-html[data-theme="data-factory"] table :is(th) {
-  font-family: var(--font-display);
-  letter-spacing: var(--df-label-ls);
-  border-bottom-color: var(--border-strong);
-}
-html[data-theme="data-factory"] table td { font-variant-numeric: tabular-nums; }
-html[data-theme="data-factory"] table tbody tr { transition: background-color var(--dur-fast) var(--ease); }
-html[data-theme="data-factory"] table.runs-table tbody tr:hover,
-html[data-theme="data-factory"] table.data-table tbody tr:hover {
-  background: color-mix(in srgb, var(--accent) 5%, transparent);
-}
-html[data-theme="data-factory"] tr.severity-ok td { background: var(--overlay-ok); }
-html[data-theme="data-factory"] tr.severity-error   > td:first-child { box-shadow: inset 3px 0 0 var(--err); }
-html[data-theme="data-factory"] tr.severity-warning > td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
-html[data-theme="data-factory"] tr.severity-ok      > td:first-child { box-shadow: inset 3px 0 0 var(--ok); }
-
-/* 7. Badges: rectangular nameplates with a square status lamp.
- *    --b carries each status colour (see §9 of the spec). */
-html[data-theme="data-factory"] .badge {
-  --b: var(--fg-muted);
-  gap: 6px;
-  height: 20px;
-  padding: 0 7px;
-  border-radius: var(--radius-sm);
-  font-family: var(--font-display);
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: var(--df-label-ls);
-  line-height: 1;
-  color: var(--b);
-  background: color-mix(in srgb, var(--b) 10%, var(--card-bg));
-  border: 1px solid color-mix(in srgb, var(--b) 22%, transparent);
-}
-html[data-theme="data-factory"] .badge::before {
-  width: var(--df-lamp); height: var(--df-lamp);
-  border-radius: 1px;
-  opacity: 1;
-  flex: none;
-}
-html[data-theme="data-factory"] :is(.badge.severity-ok, .badge.status-processed, .badge.status-completed,
-  .badge.status-done, .badge.status-ok, .badge.status-passed) { --b: var(--ok); }
-html[data-theme="data-factory"] :is(.badge.severity-error, .badge.status-error, .badge.status-failed) { --b: var(--err); }
-html[data-theme="data-factory"] :is(.badge.severity-warning, .badge.status-exception, .badge.status-stopping) { --b: var(--warn); }
-html[data-theme="data-factory"] :is(.badge.status-processing, .badge.status-running) {
-  --b: var(--accent);
-  position: relative;
-  overflow: hidden;
-}
-html[data-theme="data-factory"] :is(.badge.status-processing, .badge.status-running)::before {
-  animation: df-lamp 1.6s ease-in-out infinite;
-}
-html[data-theme="data-factory"] :is(.badge.status-processing, .badge.status-running)::after {
+html[data-theme="data-factory"] .card::before {
   content: "";
   position: absolute;
-  left: 0; bottom: 0;
-  width: 30%; height: 1.5px;
-  background: var(--accent);
+  inset: 6px;
+  --df-rivet: radial-gradient(circle at 40% 40%, #ffffff 0 0.8px, var(--df-steel) 1.4px 2.6px, rgba(0, 0, 0, 0.25) 2.9px, transparent 3.3px);
+  background: var(--df-rivet) left top / 7px 7px no-repeat, var(--df-rivet) right top / 7px 7px no-repeat,
+              var(--df-rivet) left bottom / 7px 7px no-repeat, var(--df-rivet) right bottom / 7px 7px no-repeat;
   pointer-events: none;
-  animation: df-sweep-badge var(--df-sweep-dur) var(--ease) infinite;
 }
-html[data-theme="data-factory"] .badge.status-stopping::before { animation: df-lamp 0.8s steps(2, jump-none) infinite; }
-html[data-theme="data-factory"] :is(.badge.status-queued, .badge.status-new, .badge.status-pending) {
-  --b: var(--fg-muted);
-  background: var(--card-bg);
+html[data-theme="data-factory"] .card h2 {
+  font-family: var(--df-title-ff);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: var(--df-stencil-track);
+  text-transform: uppercase;
+  line-height: 1.05;
+  padding-bottom: 10px;
 }
-html[data-theme="data-factory"] :is(.badge.status-queued, .badge.status-new, .badge.status-pending)::before {
-  background: transparent;
-  box-shadow: inset 0 0 0 1.5px currentColor;
+html[data-theme="data-factory"] .card h2::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 14px;
+  margin-right: 10px;
+  vertical-align: -1px;
+  border-radius: 1px;
+  background:
+    radial-gradient(circle at 50% 3.5px, var(--card-bg) 0 1.4px, transparent 1.8px),
+    var(--accent);
+  pointer-events: none;
 }
-html[data-theme="data-factory"] .badge.status-cancelled { --b: var(--fg-subtle); }
-html[data-theme="data-factory"] .badge.status-cancelled::before {
-  background: linear-gradient(135deg, transparent 42%, currentColor 42% 58%, transparent 58%);
-  box-shadow: inset 0 0 0 1.5px currentColor;
+html[data-theme="data-factory"] .card h2::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 3px;
+  background: repeating-linear-gradient(90deg, var(--accent) 0 22px, transparent 22px 32px);
+  opacity: 0.85;
+  pointer-events: none;
 }
-html[data-theme="data-factory"] .badge.status-draft {
-  --b: var(--fg-muted);
-  background: transparent;
-  border-style: dashed;
-  border-color: var(--border-strong);
-}
-html[data-theme="data-factory"] .badge.status-draft::before { display: none; }
-@keyframes df-lamp { 50% { opacity: 0.45; } }
-@keyframes df-sweep-badge { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
 
-/* 8. Buttons: a solid Drive-blue plate with 1px mechanical travel. */
-html[data-theme="data-factory"] :is(.button, a.button, button.button) {
-  min-height: 32px;
-  letter-spacing: 0.01em;
+/* KPIs: mono read-outs over a gauge tick scale. */
+html[data-theme="data-factory"] .kpi { padding-bottom: 14px; }
+html[data-theme="data-factory"] .kpi::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 7px;
+  background:
+    repeating-linear-gradient(90deg, var(--accent) 0 1px, transparent 1px 25%) bottom / 100% 7px no-repeat,
+    repeating-linear-gradient(90deg, var(--accent) 0 1px, transparent 1px 5%) bottom / 100% 4px no-repeat;
+  opacity: 0.6;
+  pointer-events: none;
+}
+html[data-theme="data-factory"] .kpi-label {
+  font-family: var(--df-label-ff);
+  font-weight: 600;
+  font-size: var(--fs-xs);
+  letter-spacing: var(--df-label-track);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+html[data-theme="data-factory"] .kpi-value {
+  font-family: var(--df-kpi-ff);
+  font-weight: 600;
+  font-size: 30px;
+  font-variant-numeric: tabular-nums slashed-zero;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+}
+
+/* 4. CONVEYOR GANTT — roller bed, sealed crates, a moving belt. */
+html[data-theme="data-factory"] .gantt-bg { fill: var(--bg-elev); stroke: var(--border); }
+html[data-theme="data-factory"] .gantt-completed { fill: var(--accent); }
+html[data-theme="data-factory"] .gantt-running {
+  fill: var(--df-rubber);
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  animation: df-belt-dash var(--df-belt-speed) linear infinite;
+}
+@keyframes df-belt-dash { to { stroke-dashoffset: -7; } }
+html[data-theme="data-factory"] .arc-bg { stroke: var(--df-steel); stroke-dasharray: 2 3; stroke-linecap: butt; }
+html[data-theme="data-factory"] .arc-fg { stroke: var(--accent); stroke-linecap: butt; }
+html[data-theme="data-factory"] .throughput-line { stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: miter; fill: none; }
+html[data-theme="data-factory"] .throughput-area { fill: var(--df-accent-wash); }
+
+/* 5. STACK-LIGHT STATUS & THE QC STAMP — status badges carry a
+ *    three-lamp signal tower; running gets a mini belt; completed / OK
+ *    is an inked, slightly crooked QC stamp. */
+html[data-theme="data-factory"] .badge {
+  --df-l1: var(--df-lamp-off);
+  --df-l2: var(--df-lamp-off);
+  --df-l3: var(--df-lamp-off);
+  font-family: var(--df-label-ff);
+  font-weight: 600;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg);
   background: var(--card-bg);
-  border-color: var(--border-strong);
-  transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
-              transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
 }
-html[data-theme="data-factory"] :is(.button, a.button, button.button):hover {
-  background: var(--bg-elev);
-  border-color: var(--fg-muted);
+html[data-theme="data-factory"] .badge[class*="status-"],
+html[data-theme="data-factory"] .badge[class*="severity-"] { padding-left: 17px; }
+html[data-theme="data-factory"] .badge[class*="status-"]::before,
+html[data-theme="data-factory"] .badge[class*="severity-"]::before {
+  content: "";
+  position: absolute;
+  left: 4px; top: 50%;
+  width: 7px; height: 15px;
+  margin-top: -7.5px;
+  border-radius: 1.5px;
+  opacity: 1;
+  background:
+    radial-gradient(circle at 50% 2.75px, var(--df-l1) 0 2px, transparent 2.4px),
+    radial-gradient(circle at 50% 7.5px,  var(--df-l2) 0 2px, transparent 2.4px),
+    radial-gradient(circle at 50% 12.25px, var(--df-l3) 0 2px, transparent 2.4px),
+    var(--df-ink);
+  pointer-events: none;
 }
-html[data-theme="data-factory"] :is(.button, a.button, button.button).small { min-height: 28px; }
+html[data-theme="data-factory"] :is(.badge.status-running, .badge.status-processing) { --df-l3: var(--df-lamp-green); color: var(--fg); border-color: var(--border-strong); }
+html[data-theme="data-factory"] :is(.badge.status-queued, .badge.status-new, .badge.status-pending) { --df-l2: var(--df-lamp-amber); color: var(--fg-muted); border-color: var(--border-strong); }
+html[data-theme="data-factory"] :is(.badge.status-failed, .badge.status-error, .badge.severity-error) { --df-l1: var(--df-lamp-red); color: var(--err); border-color: var(--err); }
+html[data-theme="data-factory"] :is(.badge.severity-warning, .badge.status-exception) { --df-l2: var(--df-lamp-amber); color: var(--warn); border-color: var(--warn); }
+html[data-theme="data-factory"] .badge.status-cancelled { color: var(--fg-subtle); border-color: var(--border-strong); text-decoration: line-through; text-decoration-thickness: 1px; }
+html[data-theme="data-factory"] .badge.status-draft { color: var(--fg-subtle); border-color: var(--border-strong); border-style: dashed; }
+html[data-theme="data-factory"] :is(.badge.status-running, .badge.status-processing)::after {
+  content: "";
+  position: absolute;
+  bottom: 0; height: 3px;
+  left: -7px;
+  right: 0;
+  background: repeating-linear-gradient(90deg, var(--df-cleat) 0 3px, var(--df-rubber) 3px 7px);
+  pointer-events: none;
+  animation: df-belt-short var(--df-belt-speed) linear infinite;
+}
+@keyframes df-belt-short {
+  from { transform: translateX(0); }
+  to   { transform: translateX(7px); }
+}
+html[data-theme="data-factory"] .badge.status-stopping { --df-l2: var(--df-lamp-amber); color: var(--df-ink); }
+html[data-theme="data-factory"] .badge.status-stopping::after {
+  content: "";
+  position: absolute;
+  bottom: 0; height: 3px;
+  left: calc(var(--df-hazard-step) * -1);
+  right: 0;
+  background: repeating-linear-gradient(-45deg, var(--df-hazard) 0 4px, var(--df-ink) 4px 8px);
+  pointer-events: none;
+  animation: df-hazard-slide 900ms linear infinite;
+}
+@keyframes df-hazard-slide {
+  from { transform: translateX(0); }
+  to   { transform: translateX(11.314px); }
+}
+html[data-theme="data-factory"] :is(.badge.status-completed, .badge.status-processed, .badge.status-done,
+  .badge.status-ok, .badge.status-passed, .badge.severity-ok) {
+  padding-left: 7px;
+  color: var(--ok);
+  background: transparent;
+  border: 3px double var(--ok);
+  border-radius: 3px;
+  transform: rotate(-2.5deg);
+  letter-spacing: 0.1em;
+}
+html[data-theme="data-factory"] :is(.badge.status-completed, .badge.status-processed, .badge.status-done,
+  .badge.status-ok, .badge.status-passed, .badge.severity-ok)::before {
+  content: "QC\2713\00a0";
+  position: static;
+  width: auto; height: auto; margin: 0;
+  border-radius: 0;
+  background: none;
+}
+
+/* 6. HAZARD TAPE — destructive buttons framed in yellow-and-black
+ *    tape; error flashes carry a tape band; empty states are an empty
+ *    pallet bay. */
+html[data-theme="data-factory"] :is(.button, a.button, button.button, button.secondary) {
+  font-family: var(--btn-ff);
+  font-size: var(--btn-fs);
+  font-weight: var(--btn-fw);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg);
+  background: var(--card-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 3px 0 var(--border-strong);
+  transition: transform var(--dur-fast) var(--ease);
+}
+html[data-theme="data-factory"] :is(.button, a.button, button.button, button.secondary):hover { background: var(--bg-elev); color: var(--fg); }
+html[data-theme="data-factory"] :is(.button, a.button, button.button, button.secondary):active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--border-strong);
+}
 html[data-theme="data-factory"] :is(.button, a.button, button.button).primary {
   color: var(--accent-fg);
   background: var(--accent);
   border-color: var(--accent-hover);
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 40%, #000),
-              inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  box-shadow: 0 3px 0 var(--accent-hover);
 }
-html[data-theme="data-factory"] :is(.button, a.button, button.button).primary:hover { background: var(--accent-hover); }
+html[data-theme="data-factory"] :is(.button, a.button, button.button).primary:hover { background: var(--accent-hover); color: var(--accent-fg); }
+html[data-theme="data-factory"] :is(.button, a.button, button.button).primary:active { box-shadow: 0 1px 0 var(--accent-hover); }
 html[data-theme="data-factory"] :is(.button, a.button, button.button).danger {
   color: #ffffff;
   background: var(--err);
-  border-color: color-mix(in srgb, var(--err) 80%, #000);
+  border: 4px solid var(--df-ink);
+  border-image: repeating-linear-gradient(-45deg, var(--df-hazard) 0 6px, var(--df-ink) 6px 12px) 4;
+  box-shadow: 0 3px 0 var(--df-ink);
 }
-html[data-theme="data-factory"] :is(.button, a.button, button.button).danger:hover {
-  background: color-mix(in srgb, var(--err) 85%, #000);
-}
-html[data-theme="data-factory"] :is(.button, a.button, button.button, button.secondary):active {
-  transform: translateY(1px);
-  box-shadow: none;
-}
-html[data-theme="data-factory"] button.secondary {
-  color: var(--fg);
-  background: var(--card-bg);
-  border-color: var(--border-strong);
-  font-family: var(--btn-ff);
-  font-weight: 600;
-}
-html[data-theme="data-factory"] button.secondary:hover { background: var(--bg-elev); color: var(--fg); border-color: var(--fg-muted); }
-
-/* Forms + focus ring. */
-html[data-theme="data-factory"] :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-html[data-theme="data-factory"] .drawer :focus-visible { outline-color: var(--df-focus-on-dark); }
+html[data-theme="data-factory"] :is(.button, a.button, button.button).danger:hover { background: #961a15; color: #ffffff; }
+html[data-theme="data-factory"] :is(.button, a.button, button.button).danger:active { box-shadow: 0 1px 0 var(--df-ink); }
 html[data-theme="data-factory"] :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
   border-color: var(--border-strong);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
 }
 html[data-theme="data-factory"] :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea):focus-visible {
   outline-offset: 0;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
-
-/* Flash, code, logs, empty states. */
-html[data-theme="data-factory"] .flash.ok,
-html[data-theme="data-factory"] p.flash-ok { color: var(--ok); border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent); border-left-width: 3px; border-left-color: var(--ok); }
-html[data-theme="data-factory"] .flash.error,
-html[data-theme="data-factory"] p.flash-error { color: var(--err); border: 1px solid color-mix(in srgb, var(--err) 30%, transparent); border-left-width: 3px; border-left-color: var(--err); }
-html[data-theme="data-factory"] .flash :is(strong, .mono) { color: var(--fg); }
-html[data-theme="data-factory"] :is(pre.code-preview, pre.log-block) {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  font-size: 12.5px;
+html[data-theme="data-factory"] .flash {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding-left: 22px;
+  box-shadow: var(--shadow-1);
+}
+html[data-theme="data-factory"] .flash::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 10px;
+  background: var(--ok);
+  pointer-events: none;
+}
+html[data-theme="data-factory"] .flash.error { border-color: var(--err); }
+html[data-theme="data-factory"] .flash.error::before {
+  background: repeating-linear-gradient(-45deg, var(--df-hazard) 0 5px, var(--df-ink) 5px 10px);
 }
 html[data-theme="data-factory"] .empty {
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: repeating-linear-gradient(-45deg, transparent 0 14px, rgba(28, 26, 22, 0.03) 14px 28px);
+  font-family: var(--df-label-ff);
   font-style: normal;
-  border-color: var(--border-strong);
+  font-weight: 600;
+  letter-spacing: var(--df-label-track);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+html[data-theme="data-factory"] div.empty,
+html[data-theme="data-factory"] p.empty { padding-top: 76px; }
+html[data-theme="data-factory"] :is(div, p).empty::before {
+  content: "";
+  position: absolute;
+  left: 50%; top: 22px;
+  width: 56px; height: 44px;
+  margin-left: -28px;
+  background: var(--accent);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 56 44' fill='none' stroke='black' stroke-width='2.5'%3E%3Cpath d='M6 6h44v26H6z' stroke-dasharray='5 4'/%3E%3Cpath d='M2 36h52M2 41h52M8 36v5M28 36v5M48 36v5'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 56 44' fill='none' stroke='black' stroke-width='2.5'%3E%3Cpath d='M6 6h44v26H6z' stroke-dasharray='5 4'/%3E%3Cpath d='M2 36h52M2 41h52M8 36v5M28 36v5M48 36v5'/%3E%3C/svg%3E") center / contain no-repeat;
+  pointer-events: none;
 }
 
-/* 9. LIVE / running: the flow sweep — a 10px highlight travelling a
- *    2px track. transform + opacity only. */
+/* Tables: stamped steel header, lamp bars on status rows. */
+html[data-theme="data-factory"] table { font-variant-numeric: tabular-nums; }
+html[data-theme="data-factory"] table th {
+  font-family: var(--df-label-ff);
+  font-weight: 600;
+  font-size: var(--fs-xs);
+  letter-spacing: var(--df-label-track);
+  text-transform: uppercase;
+  color: var(--card-bg);
+  background: var(--fg);
+}
+html[data-theme="data-factory"] tbody tr:nth-child(even) td { background-color: var(--bg-elev); }
+html[data-theme="data-factory"] tr.severity-error td   { background-color: var(--overlay-err); }
+html[data-theme="data-factory"] tr.severity-warning td { background-color: var(--overlay-warn); }
+html[data-theme="data-factory"] tr.severity-ok td      { background-color: var(--overlay-ok); }
+html[data-theme="data-factory"] tr.severity-error   > td:first-child { box-shadow: inset 6px 0 0 var(--err); }
+html[data-theme="data-factory"] tr.severity-warning > td:first-child { box-shadow: inset 6px 0 0 var(--df-hazard), inset 7px 0 0 var(--df-ink); }
+html[data-theme="data-factory"] tr.severity-ok      > td:first-child { box-shadow: inset 6px 0 0 var(--ok); }
+
+/* Code = blueprint sheet; logs = tractor-feed printout. */
+html[data-theme="data-factory"] pre.code-preview {
+  border: 1px solid var(--df-ink);
+  border-radius: var(--radius-sm);
+  background-color: var(--code-bg);
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 16px 16px;
+  color: var(--code-fg);
+}
+html[data-theme="data-factory"] pre.log-block {
+  border-radius: 0;
+  padding-left: 30px;
+  padding-right: 30px;
+  background-color: var(--log-bg);
+  background-image:
+    radial-gradient(circle at 10px 9px, var(--bg) 0 3.2px, transparent 3.6px),
+    radial-gradient(circle at calc(100% - 10px) 9px, var(--bg) 0 3.2px, transparent 3.6px);
+  background-size: 100% 18px, 100% 18px;
+  background-repeat: repeat-y, repeat-y;
+  color: var(--code-fg);
+}
+
+/* LIVE: rotating amber beacon + a belt along the banner top. */
 html[data-theme="data-factory"] .cooking-now {
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: var(--card-bg);
-  border-color: var(--border);
+  border-color: var(--border-strong);
   box-shadow: var(--shadow-1);
 }
 html[data-theme="data-factory"] .cooking-now .cooking-now-label {
-  position: relative;
-  padding-right: 36px;
-  font-family: var(--font-display);
-  font-size: var(--fs-xs);
+  font-family: var(--df-label-ff);
   font-weight: 600;
+  letter-spacing: var(--df-label-track);
   text-transform: uppercase;
-  letter-spacing: var(--df-label-ls);
+  padding-left: 22px;
 }
 html[data-theme="data-factory"] .cooking-now .cooking-now-label::before {
   content: "";
   position: absolute;
-  right: 0; top: 50%;
-  width: 28px; height: var(--df-rail-h);
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  left: 0; top: 50%;
+  width: 14px; height: 14px;
+  margin-top: -7px;
+  border-radius: 50%;
+  border: 2px solid var(--df-ink);
+  background: conic-gradient(from 0deg, var(--accent) 0 90deg, var(--df-accent-wash) 90deg 360deg);
   pointer-events: none;
+  animation: df-beacon 1.1s linear infinite;
 }
-html[data-theme="data-factory"] .cooking-now .cooking-now-label::after {
-  content: "";
-  position: absolute;
-  right: 18px; top: 50%;
-  width: 10px; height: var(--df-rail-h);
-  background: var(--df-sweep);
-  pointer-events: none;
-  animation: df-sweep-x var(--df-sweep-dur) var(--ease) infinite;
+@keyframes df-beacon {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 html[data-theme="data-factory"] .cooking-now .cooking-now-pct { font-family: var(--mono); }
-html[data-theme="data-factory"] .live-banner { border-radius: var(--radius-md); box-shadow: var(--shadow-1); }
-html[data-theme="data-factory"] .live-banner .live-banner-dot { border-radius: 1px; width: var(--df-lamp); height: var(--df-lamp); }
-@keyframes df-sweep-x {
-  0%   { transform: translateX(0);    opacity: 0; }
-  15%  { opacity: 1; }
-  85%  { opacity: 1; }
-  100% { transform: translateX(18px); opacity: 0; }
+html[data-theme="data-factory"] .live-banner {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--df-accent-wash);
+  overflow: hidden;
+  padding-top: 18px;
+}
+html[data-theme="data-factory"] .live-banner::before {
+  content: "";
+  position: absolute;
+  top: 0; height: 6px;
+  left: calc(var(--df-tread) * -1);
+  right: 0;
+  background:
+    repeating-linear-gradient(90deg, var(--df-cleat) 0 3px, transparent 3px var(--df-tread)),
+    linear-gradient(var(--df-rubber), var(--df-rubber));
+  pointer-events: none;
+  animation: df-belt var(--df-belt-speed) linear infinite;
 }
 
-/* 10. D3 widgets: status-filled plates, a thin accent throughput line,
- *     butt-capped engineered gauges. */
-html[data-theme="data-factory"] .gantt-bg { fill: var(--border); }
-html[data-theme="data-factory"] .gantt-completed { fill: var(--ok); }
-html[data-theme="data-factory"] .gantt-running { fill: var(--accent); }
-html[data-theme="data-factory"] .throughput-line { stroke: var(--accent); stroke-width: 1.75; stroke-linejoin: round; }
-html[data-theme="data-factory"] .throughput-area { fill: color-mix(in srgb, var(--accent) 10%, transparent); }
-html[data-theme="data-factory"] .arc-bg { stroke: var(--border); stroke-linecap: butt; }
-html[data-theme="data-factory"] .arc-fg { stroke: var(--accent); stroke-linecap: butt; }
-html[data-theme="data-factory"] :is(.widget-number, .ring-number, .elapsed-number) {
-  font-family: var(--font-display);
+/* Footer = shift log on a punched strip. */
+html[data-theme="data-factory"] .site-footer {
+  font-family: var(--mono);
+  color: var(--fg-subtle);
+  background-image: radial-gradient(circle at 6px 6px, var(--border-strong) 0 2.2px, transparent 2.6px);
+  background-size: 14px 12px;
+  background-repeat: repeat-x;
+  padding-top: 22px;
+}
+html[data-theme="data-factory"] .site-footer::before {
+  content: "SHIFT LOG";
+  margin-right: 12px;
+  padding: 1px 6px;
+  font-family: var(--df-label-ff);
   font-weight: 600;
-  font-variant-numeric: tabular-nums lining-nums;
-}
-html[data-theme="data-factory"] .widget-label {
-  font-family: var(--font-display);
-  text-transform: uppercase;
-  letter-spacing: var(--df-label-ls);
+  letter-spacing: var(--df-label-track);
+  color: var(--df-ink);
+  background: var(--df-hazard);
+  pointer-events: none;
 }
 
-/* 12. Login / pending: one white card with the line rail along its
- *     top edge; the sweep crosses it once on load. */
+/* LOGIN · THE TIME-CLOCK GATE — painted lanes on concrete; the login
+ * card is a time card (cut corner, punched column, orange header tape). */
 html[data-theme="data-factory"] body.login-body {
   display: grid;
   place-items: center;
   min-height: 100vh;
   margin: 0;
-  background: var(--bg);
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(0deg, transparent calc(14% - 6px), var(--accent) calc(14% - 6px) 14%, transparent 14% calc(14% + 14px), var(--accent) calc(14% + 14px) calc(14% + 20px), transparent calc(14% + 20px)),
+    linear-gradient(90deg, rgba(28, 26, 22, 0.06) 1px, transparent 1px),
+    linear-gradient(rgba(28, 26, 22, 0.06) 1px, transparent 1px);
+  background-size: 100% 100%, 180px 180px, 180px 180px;
+  background-attachment: fixed;
 }
-html[data-theme="data-factory"] .login-shell { width: min(420px, 92vw); }
-html[data-theme="data-factory"] .login-card {
-  position: relative;
-  overflow: hidden;
-  padding: 2rem 2rem 1.5rem;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-3);
-}
-html[data-theme="data-factory"] .login-card::before {
+html[data-theme="data-factory"] body.login-body::before {
   content: "";
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  height: 22px;
+  background: repeating-linear-gradient(-45deg, var(--df-hazard) 0 12px, var(--df-ink) 12px 24px);
+  pointer-events: none;
+}
+html[data-theme="data-factory"] .login-shell { width: min(440px, 92vw); }
+html[data-theme="data-factory"] .login-card {
+  padding: 44px 52px 1.5rem 2rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
+  box-shadow: var(--shadow-3);
+  clip-path: polygon(26px 0, 100% 0, 100% 100%, 0 100%, 0 26px);
+}
+html[data-theme="data-factory"] .login-card:focus-within { clip-path: none; }
+html[data-theme="data-factory"] .login-card::before {
+  content: "TIME CARD \00b7 OVID2 WORKS \00b7 SHIFT ACCESS";
   position: absolute;
-  inset: 0 0 auto 0;
-  height: var(--df-rail-h);
+  left: 0; right: 0; top: 0;
+  height: 26px;
+  padding-left: 36px;
+  font: 600 10.5px/26px var(--df-label-ff);
+  letter-spacing: 0.14em;
+  color: var(--accent-fg);
   background: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
   pointer-events: none;
 }
 html[data-theme="data-factory"] .login-card::after {
   content: "";
   position: absolute;
-  top: 0; left: 0;
-  width: 25%; height: var(--df-rail-h);
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
-  transform: translateX(-100%);
+  top: 40px; bottom: 18px; right: 14px;
+  width: 16px;
+  background:
+    radial-gradient(circle, var(--bg) 0 3.4px, var(--border-strong) 3.6px 4.4px, transparent 4.8px) center top / 16px 22px repeat-y;
   pointer-events: none;
-  animation: df-login-sweep 900ms var(--ease) 200ms 1 both;
 }
 html[data-theme="data-factory"] .login-header {
   display: flex;
@@ -7651,7 +8616,12 @@ html[data-theme="data-factory"] .login-header {
   align-items: flex-start;
   gap: 0.75rem;
 }
-@keyframes df-login-sweep { to { transform: translateX(400%); } }
+html[data-theme="data-factory"] .login-header h1 {
+  font-family: var(--df-title-ff);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: var(--df-stencil-track);
+}
 
 /* ------------------------------------------------------------------ *
  * 15.z  Reduced motion — every personality-layer animation off.
@@ -7666,15 +8636,34 @@ html[data-theme="data-factory"] .login-header {
   html[data-theme="lego"] .button.primary:active,
   html[data-theme="lego"] a.button.primary:active,
   html[data-theme="lego"] button.button.primary:active { transform: none; }
-  html[data-theme="data-factory"] :is(.badge.status-processing, .badge.status-running)::before,
-  html[data-theme="data-factory"] .badge.status-stopping::before { animation: none; opacity: 1; }
-  html[data-theme="data-factory"] :is(.badge.status-processing, .badge.status-running)::after { animation: none; transform: none; }
-  html[data-theme="data-factory"] .cooking-now .cooking-now-label::after { animation: none; opacity: 1; transform: translateX(9px); }
-  html[data-theme="data-factory"] .login-card::after { display: none; }
+  /* Data Factory — belts, beacon, hazard slide off; presses don't travel. */
+  html[data-theme="data-factory"] .topbar::after,
+  html[data-theme="data-factory"] body:has(.badge.status-running, .badge.status-processing, .gantt-running, .live-banner) .topbar::after,
+  html[data-theme="data-factory"] .gantt-running,
+  html[data-theme="data-factory"] :is(.badge.status-running, .badge.status-processing)::after,
+  html[data-theme="data-factory"] .badge.status-stopping::after,
+  html[data-theme="data-factory"] .cooking-now .cooking-now-label::before,
+  html[data-theme="data-factory"] .live-banner::before { animation: none; }
   html[data-theme="data-factory"] .drawer-head .icon-menu line,
-  html[data-theme="data-factory"] .card,
-  html[data-theme="data-factory"] :is(.button, a.button, button.button, button.secondary) { transition: none; }
-  html[data-theme="data-factory"] :is(.button, a.button, button.button, button.secondary):active { transform: none; }
+  html[data-theme="data-factory"] :is(.button, a.button, button.button, button.secondary),
+  html[data-theme="data-factory"] .nav-logout,
+  html[data-theme="data-factory"] #drawer-toggle { transition: none; }
+  html[data-theme="data-factory"] :is(.button, a.button, button.button, button.secondary):active,
+  html[data-theme="data-factory"] .nav-logout:active,
+  html[data-theme="data-factory"] #drawer-toggle:active { transform: none; }
+  /* Dune — drift, thumper rings, wake and sand off; rings vanish
+   * instead of freezing mid-pulse. */
+  html[data-theme="dune"] .topbar::after,
+  html[data-theme="dune"] body:has(.badge.status-running, .badge.status-processing, .gantt-running, .live-banner) .topbar::after,
+  html[data-theme="dune"] .live-banner::before,
+  html[data-theme="dune"] .gantt-running,
+  html[data-theme="dune"] body.login-body::after { animation: none; }
+  html[data-theme="dune"] :is(.badge.status-running, .badge.status-processing)::after,
+  html[data-theme="dune"] .badge.status-stopping::after,
+  html[data-theme="dune"] .cooking-now .cooking-now-label::after { animation: none; opacity: 0; }
+  html[data-theme="dune"] :is(.button, a.button, button.button, button.secondary),
+  html[data-theme="dune"] .nav-item::after { transition: none; }
+  html[data-theme="dune"] :is(.button, a.button, button.button, button.secondary):active { transform: none; }
 }
 
 /* ==================================================================
@@ -8811,3 +9800,418 @@ html[data-theme="data-factory"] .login-header {
 .wf-run-branches li.is-taken > span:first-child { color: var(--ok); }
 .wf-run-branches li.is-not-taken { color: var(--fg-subtle); }
 .wf-count { color: var(--fg-muted); font-weight: 400; }
+
+/* ================================================================== *
+ * Ovid Atlas (/navigator) — adr-atlas.md                              *
+ *                                                                     *
+ * The workspace as a lane board in the run-console style: one line   *
+ * per workflow / pipeline, sharing the canvas height exactly; a       *
+ * pipeline line is its beam input → engine → package → output.       *
+ * ================================================================== */
+.main > .atlas-page { max-width: none; }
+/* The Atlas is a full-viewport app: the document never scrolls and the site
+   footer stays out of the way (it would push the page past the fold). */
+html:has(.atlas-page) { overflow: hidden; }
+body:has(.atlas-page) .site-footer { display: none; }
+body:has(.atlas-page) .main { min-height: 0; }
+.atlas-page [hidden] { display: none !important; }
+.atlas-page {
+  --atl-bg: #0b0f14;
+  --atl-fg: #cfe3d5;
+  --atl-dim: #a9c1d1;
+  --atl-line: #34495b;
+  --atl-card: #16202a;
+  --atl-card-2: #1b2733;
+  --atl-alg: #3fae5a;
+  --atl-cmp: #fab283;
+  --atl-sto: #78aadc;
+  display: flex; flex-direction: column; gap: 0.5rem;
+  /* Exactly the viewport below the top bar minus .main's vertical padding
+     (topbar + 1.25rem above, 1.5rem below): the page never scrolls; only
+     the lane list inside the canvas does. */
+  height: calc(100dvh - var(--topbar-h) - 2.75rem);
+  min-height: 420px;
+  overflow: hidden;
+}
+.atlas-page .terminal-pane, .atlas-page .console-fill { margin-top: 0; max-height: none; min-height: 0; height: auto; position: relative; top: auto; flex: none; }
+.atlas-bar {
+  display: flex; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 0.5rem 1rem;
+  padding: 0.45rem 0.75rem; overflow: visible; z-index: 5;
+}
+.atlas-bar > * { position: relative; z-index: 1; }
+.atlas-bar-left, .atlas-bar-mid, .atlas-bar-right { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
+.atlas-bar-mid { flex: 1; justify-content: center; }
+.atlas-title { margin: 0; font: 600 0.95rem var(--font-display); color: var(--atl-fg); letter-spacing: 0.05em; display: inline-flex; align-items: center; gap: 0.35rem; }
+.atlas-sep { color: var(--atl-dim); }
+.atlas-ws { color: var(--atl-dim); border: 1px dashed var(--atl-line); border-radius: 4px; padding: 0 0.35rem; }
+.atlas-wordmark[data-status="running"] { text-shadow: 0 0 6px var(--matrix-glow); }
+.atlas-layer-btn {
+  display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.15rem 0.55rem;
+  border: 1px solid var(--atl-line); border-radius: 999px; background: transparent; color: var(--atl-dim);
+  font: 500 0.75rem var(--mono); cursor: pointer;
+}
+.atlas-layer-btn.is-on { color: var(--atl-fg); border-color: #2c3d4c; background: rgba(255, 255, 255, 0.03); }
+.atlas-layer-swatch { width: 9px; height: 9px; border-radius: 2px; transform: skewX(-20deg); opacity: 0.35; }
+.atlas-layer-btn.is-on .atlas-layer-swatch { opacity: 1; }
+.atlas-layer-swatch.is-algorithm { background: var(--atl-alg); }
+.atlas-layer-swatch.is-compute { background: var(--atl-cmp); }
+.atlas-layer-swatch.is-storage { background: var(--atl-sto); }
+.atlas-select, .atlas-search, .atlas-page .atlas-tool select {
+  background: #0d141b; color: var(--atl-fg); border: 1px solid var(--atl-line); border-radius: 4px;
+  font: 0.75rem var(--mono); padding: 0.15rem 0.4rem;
+}
+.atlas-search { width: 11rem; }
+.atlas-btn { color: #5fbf83 !important; font: 0.74rem var(--mono); gap: 0.25rem; padding: 0.15rem 0.4rem !important; }
+.atlas-btn.is-live { color: var(--timer-orange) !important; }
+.atlas-menu { position: relative; }
+.atlas-menu > summary { list-style: none; cursor: pointer; }
+.atlas-menu > summary::-webkit-details-marker { display: none; }
+.atlas-menu-body {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 16rem;
+  background: var(--atl-bg); color: var(--atl-fg); border: 1px dashed var(--atl-line); border-radius: 8px;
+  padding: 0.6rem 0.7rem; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); font: 0.76rem var(--mono);
+}
+.atlas-overlays { border: 0; margin: 0 0 0.5rem; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.atlas-overlays input { accent-color: var(--matrix-green); }
+.atlas-views { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; border-top: 1px dashed var(--atl-line); padding-top: 0.5rem; }
+.atlas-tool { display: inline-flex; align-items: center; gap: 0.35rem; }
+.atlas-tool-label, .atl-h, .term-split-title { color: var(--atl-dim); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.68rem; font-weight: 700; }
+
+/* Shell: canvas + resizer + dock (bottom or right). */
+.atlas-shell {
+  --dock-size: 340px;
+  flex: 1; min-height: 0; display: grid; gap: 0;
+  grid-template-rows: minmax(160px, 1fr) 6px var(--dock-size);
+  grid-template-columns: 1fr;
+}
+.atlas-shell[data-side="right"] { grid-template-rows: 1fr; grid-template-columns: minmax(260px, 1fr) 6px var(--dock-size); }
+.atlas-shell.dock-min { grid-template-rows: 1fr 6px 2.3rem; }
+.atlas-shell.dock-min[data-side="right"] { grid-template-rows: 1fr; grid-template-columns: 1fr 6px 2.6rem; }
+.atlas-shell.dock-max { grid-template-rows: 2.6rem 6px 1fr; }
+.atlas-shell.dock-max[data-side="right"] { grid-template-rows: 1fr; grid-template-columns: 2.6rem 6px 1fr; }
+.atlas-resizer { cursor: row-resize; background: transparent; position: relative; }
+.atlas-shell[data-side="right"] .atlas-resizer { cursor: col-resize; }
+.atlas-resizer::after { content: ""; position: absolute; inset: 2px 40%; border-radius: 2px; background: var(--atl-line); }
+.atlas-shell[data-side="right"] .atlas-resizer::after { inset: 40% 2px; }
+.atlas-resizer:hover::after, .atlas-resizer:focus-visible::after { background: var(--matrix-green); }
+
+/* The lane board: one line per workflow / pipeline, filling the canvas. */
+.atlas-stage { overflow: hidden; outline: none; display: flex; flex-direction: column; }
+.atlas-stage:focus-visible { box-shadow: inset 0 0 0 1px var(--matrix-green); }
+.atlas-lanes {
+  --lane-head-w: clamp(9rem, 14%, 13rem);
+  flex: 1 1 auto; min-height: 0; position: relative; z-index: 1;
+  display: flex; flex-direction: column; gap: var(--lane-gap, 6px);
+  padding: var(--lane-gap, 6px); overflow: hidden; overscroll-behavior: contain;
+}
+.atlas-lanes.is-scrolling { overflow-y: auto; scrollbar-gutter: stable; }
+/* Group headers: Workflows · Pipelines · Storage accounts · Not used —
+   a wide gap before each group keeps workflows and pipelines apart. */
+.atl-group-head {
+  flex: none; height: var(--group-head, 18px); margin: var(--group-gap, 22px) 0 0; padding: 0 0.2rem;
+  display: flex; align-items: center; gap: 0.45rem;
+  color: var(--atl-dim); font: 700 0.68rem var(--mono); text-transform: uppercase; letter-spacing: 0.1em;
+  border-bottom: 1px solid var(--atl-line);
+}
+.atl-group-head.is-first { margin-top: 0; }
+.atl-group-head[data-group="workflows"] { color: #9fd6ae; border-bottom-color: rgba(159, 214, 174, 0.38); }
+.atl-group-head[data-group="pipelines"] { color: #cfe3d6; }
+.atl-group-count { font-weight: 400; letter-spacing: 0; opacity: 0.8; }
+/* Lanes share the height by weight (a workflow weighs its DAG rows); never
+   below one line per row. */
+.atl-lane {
+  flex: var(--w, 1) 1 0; min-height: calc(var(--lane-min, 32px) * var(--w, 1)); min-width: 0;
+  display: grid; grid-template-columns: var(--lane-head-w) minmax(0, 1fr); align-items: stretch;
+  border: 1px solid var(--atl-line); border-radius: 7px; background: rgba(255, 255, 255, 0.018);
+  overflow: hidden; contain: layout paint;
+}
+.atl-lane.is-pipeline { grid-template-columns: minmax(0, 1fr); border: 0; background: transparent; }
+.atlas-lanes.is-scrolling .atl-lane { flex: 0 0 calc(var(--lane-min, 32px) * var(--w, 1)); }
+.atl-lane.is-workflow { border-color: rgba(159, 214, 174, 0.38); }
+.atl-lane.is-accounts, .atl-lane.is-unused { border-style: dashed; background: transparent; }
+.atl-lane.is-live { border-color: rgba(250, 178, 131, 0.75); background: linear-gradient(90deg, rgba(250, 178, 131, 0.09), rgba(255, 255, 255, 0.015) 40%); box-shadow: inset 3px 0 0 var(--timer-orange); }
+.atl-lane.is-pipeline.is-live { background: transparent; box-shadow: none; }
+.atl-lane.is-match { border-color: var(--timer-orange); }
+.atl-lane-head {
+  display: flex; align-items: center; gap: 0.35rem; min-width: 0; padding: 0 0.5rem;
+  border-right: 1px dashed var(--atl-line); color: #e6f2ea; font: 600 0.76rem var(--mono);
+}
+.atl-lane-head .atl-card { flex: 1; min-width: 0; }
+.atl-lane-glyph { color: #9fd6ae; flex: none; }
+.atl-lane.is-live .atl-lane-glyph { color: var(--timer-orange); }
+.atl-lane-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.atl-lane-count { color: var(--atl-dim); flex: none; font-weight: 400; }
+.atl-lane-body { min-width: 0; min-height: 0; display: flex; align-items: stretch; padding: 0.2rem 0.4rem; overflow: hidden; }
+.atl-lane.is-pipeline > .atl-lane-body { padding: 0; }
+.atl-empty-cell { align-self: center; color: var(--atl-dim); opacity: 0.7; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* A pipeline component: name, then shape · material · input → output. */
+.atl-pipe { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.12rem; }
+.atl-pipe-parts { display: flex; align-items: center; gap: 0.35rem; min-width: 0; overflow: hidden; padding-left: 1.35rem; }
+.atl-pipe.is-wide .atl-pipe-parts:not(.is-mini) { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.7fr) minmax(0, 2fr); }
+/* Compact (one line): the parts follow the name on the same line; a
+   standalone pipeline keeps their text, a DAG cell shows logos only. */
+.atl-pipe-parts.is-mini { flex: 0 1 auto; max-width: 72%; padding-left: 0; gap: 0.25rem; }
+.atl-pipe-parts.is-mini .atl-part { padding: 0 0.3rem; }
+.atl-pipe-parts.is-mini .atl-part-text { max-width: 14rem; }
+.atl-dag .atl-pipe-parts.is-mini { max-width: 45%; gap: 0.15rem; }
+.atl-dag .atl-pipe-parts.is-mini .atl-part-text, .atl-dag .atl-pipe-parts.is-mini .atl-io-arrow { display: none; }
+.atl-dag .atl-pipe-parts.is-mini .atl-part { padding: 0 0.15rem; border: 0; background: none; }
+.atl-pipe.is-wide .atl-name { flex: 0 1 auto; max-width: 28%; }
+.atl-part {
+  display: inline-flex; align-items: center; gap: 0.25rem; min-width: 0; max-width: 100%;
+  padding: 0.02rem 0.35rem; border: 1px solid var(--atl-line); border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03); color: var(--atl-fg); font: 0.7rem/1.35 var(--mono);
+}
+.atl-part:hover { border-color: #5a7487; }
+.atl-part[draggable="true"] { cursor: grab; }
+.atl-part .atl-part-logo { flex: none; }
+.atl-part-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.atl-part.is-shape { border-left: 2px solid rgba(63, 174, 90, 0.9); }
+.atl-part.is-material { border-left: 2px solid rgba(250, 178, 131, 0.9); }
+.atl-part.is-input, .atl-part.is-output { border-left: 2px solid rgba(120, 170, 220, 0.9); flex: 1 1 0; }
+.atl-part.is-empty { font-style: italic; color: var(--atl-dim); border-style: dashed; }
+.atl-part.is-dim { opacity: 0.72; }
+.atl-part.is-selected { border-color: var(--matrix-green); box-shadow: inset 0 0 0 1px var(--matrix-green); }
+.atl-part.is-match { outline: 1px solid var(--timer-orange); }
+.atl-part.is-impact { border-color: #b18cff; }
+.atl-part.is-proposed { outline: 1px dashed #b18cff; }
+.atl-io { display: flex; align-items: center; gap: 0.2rem; min-width: 0; }
+.atl-io-arrow { flex: none; color: var(--atl-dim); font: 700 0.8rem var(--mono); }
+.atl-pipe.st-running .atl-io-arrow, .atl-pipe.st-queued .atl-io-arrow { color: var(--timer-orange); animation: run-ready-breathe 1.6s ease-in-out infinite; }
+.atl-badge.is-join { color: #9fd6ae; border-color: currentColor; }
+
+/* A workflow lane: its pipeline components on the DAG grid + SVG links. */
+.atl-dag {
+  position: relative; flex: 1; min-width: 0; min-height: 0; display: grid;
+  grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); grid-template-rows: repeat(var(--rows, 1), minmax(0, 1fr));
+  column-gap: 2.4rem; row-gap: 6px;
+}
+.atl-dag > .atl-pipe { position: relative; z-index: 1; }
+.atl-links { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 0; }
+.atl-link { fill: none; stroke: #6f9b7f; stroke-width: 1.6; }
+.atl-link.is-head { fill: #6f9b7f; stroke: none; }
+.atl-link.is-after, .atl-link.is-order { stroke-dasharray: 5 4; stroke: #7d8f99; }
+.atl-link.is-after.is-head, .atl-link.is-order.is-head { fill: #7d8f99; stroke: none; }
+.atl-link.on-failure { stroke: var(--err); }
+.atl-link.on-failure.is-head { fill: var(--err); }
+.atl-link.st-running, .atl-link.st-queued { stroke: var(--timer-orange); }
+.atl-link.st-running.is-head, .atl-link.st-queued.is-head { fill: var(--timer-orange); }
+.atl-link-label { font: 700 10px var(--mono); fill: var(--atl-dim); }
+.atl-link-label.on-failure { fill: var(--err); }
+.atl-pool { display: flex; flex-wrap: nowrap; gap: 0.3rem; min-width: 0; width: 100%; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; align-items: center; }
+.atl-pool .atl-card { flex: 0 0 11rem; }
+.atl-card.is-proposed { outline: 2px dashed #b18cff; outline-offset: 1px; }
+.atl-card.is-flash { animation: atl-flash 0.9s ease-out; }
+@keyframes atl-flash { 0% { box-shadow: 0 0 0 3px var(--matrix-green); } 100% { box-shadow: 0 0 0 0 transparent; } }
+
+/* Cards. */
+.atl-card {
+  position: relative; min-width: 0; overflow: hidden;
+  background: linear-gradient(180deg, var(--atl-card-2), var(--atl-card));
+  color: var(--atl-fg); border: 1px solid var(--atl-line); border-radius: 6px;
+  font: 0.74rem/1.3 var(--mono); padding: 0.18rem 0.4rem 0.2rem;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+  transition: box-shadow 160ms ease, opacity 160ms ease, border-color 160ms ease;
+  cursor: pointer;
+}
+.atl-card:hover { border-color: #5a7487; }
+.atl-card:focus-visible { outline: 1px solid var(--matrix-green); outline-offset: 2px; }
+.atl-card.layer-algorithm { border-top: 3px solid rgba(63, 174, 90, 0.9); }
+.atl-card.layer-compute { border-top: 3px solid rgba(250, 178, 131, 0.9); }
+.atl-card.layer-storage { border-top: 3px solid rgba(120, 170, 220, 0.9); }
+.atl-card.is-selected { border-color: var(--matrix-green); box-shadow: inset 0 0 0 1px var(--matrix-green); }
+.atl-card.is-pinned { box-shadow: inset 0 -2px 0 #b18cff; }
+.atl-card.is-dim { opacity: 0.72; }
+.atl-card.st-running { background: linear-gradient(180deg, rgba(250, 178, 131, 0.16), var(--atl-card)); box-shadow: inset 2px 0 0 var(--timer-orange), 0 0 0 1px rgba(250, 178, 131, 0.35); }
+.atl-card.st-paused { box-shadow: inset 2px 0 0 #d9cdb8; }
+.atl-card.st-failed { box-shadow: inset 2px 0 0 var(--err); }
+.atl-card.is-match { outline: 2px solid var(--timer-orange); outline-offset: 2px; }
+.atlas-page.has-search .atl-card:not(.is-match) { opacity: 0.45; }
+.atlas-page.has-impact .atl-card:not(.is-impact) { opacity: 0.35; }
+.atl-card.is-impact { border-color: #b18cff; }
+.atl-card.is-impact-root { box-shadow: inset 0 0 0 2px #b18cff; }
+.atl-card.is-droptarget { border-color: var(--matrix-green); box-shadow: inset 0 0 0 2px var(--matrix-green); }
+.atl-card.is-refused { border-color: var(--err); box-shadow: inset 0 0 0 2px var(--err); animation: atl-shake 0.35s; }
+@keyframes atl-shake { 25% { translate: -4px 0; } 75% { translate: 4px 0; } }
+.atlas-page.is-dragging .atl-card:not(.is-config) { opacity: 0.55; }
+.atl-card[draggable="true"] { cursor: grab; }
+.atl-card-head { display: flex; align-items: center; gap: 0.3rem; min-width: 0; }
+.atl-glyph { flex: none; width: 1.05rem; text-align: center; color: var(--atl-dim); }
+.atl-glyph.is-config { color: var(--matrix-green); }
+.atl-glyph.is-package, .atl-glyph.is-workflow { color: #9fd6ae; }
+.atl-glyph.is-engine { color: var(--timer-orange); }
+.atl-glyph.is-account, .atl-glyph.is-address { color: var(--atl-sto); }
+.atl-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: #e6f2ea; }
+.atl-card-sum { display: flex; align-items: center; gap: 0.35rem; flex-wrap: nowrap; overflow: hidden; padding-left: 1.35rem; margin-top: 0.05rem; }
+.atl-card > .atl-progress, .atl-card > .atl-chain { padding-left: 1.35rem; flex-wrap: nowrap; overflow: hidden; white-space: nowrap; }
+.atl-progress .is-run { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.atl-sub { color: var(--atl-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.atl-status { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; padding: 0 0.3rem; border-radius: 3px; border: 1px solid currentColor; }
+.atl-status.status-running, .atl-status.status-queued { color: var(--timer-orange); }
+.atl-status.status-paused, .atl-status.status-waiting { color: #d9cdb8; }
+.atl-status.status-done, .atl-status.status-completed, .atl-status.status-succeeded { color: var(--matrix-green); }
+.atl-status.status-failed, .atl-status.status-error, .atl-status.status-rolled_back { color: var(--err); }
+.atl-status.status-cancelled { color: var(--atl-dim); }
+.atl-clock { color: var(--timer-orange); font-variant-numeric: tabular-nums; font-weight: 600; }
+.atl-clock:not(.is-live) { opacity: 0.75; }
+.atl-transport { display: inline-flex; gap: 0.15rem; }
+.atl-tbtn { border: 0; background: transparent; color: #5fbf83; font: 0.85rem var(--mono); padding: 0 0.22rem; border-radius: 3px; cursor: pointer; line-height: 1.2; }
+.atl-tbtn:hover { background: rgba(127, 224, 165, 0.12); }
+.atl-tbtn.is-stop { color: #e88a7f; }
+.atl-tbtn.is-resume { color: var(--timer-orange); }
+.atl-badge { font-size: 0.7rem; padding: 0 0.3rem; border-radius: 3px; border: 1px solid var(--atl-line); color: var(--atl-dim); white-space: nowrap; }
+.atl-badge.is-drift { color: #b18cff; border-color: rgba(177, 140, 255, 0.5); }
+.atl-badge.is-warn { color: var(--warn); border-color: currentColor; }
+.atl-badge.is-ok { color: var(--matrix-green); border-color: rgba(63, 174, 90, 0.45); }
+.atl-badge.is-health { color: #ffb4a8; border-color: rgba(255, 140, 120, 0.5); }
+.atl-badge.is-health.sev-blocker, .atl-badge.is-health.sev-error { color: #ff7b6b; }
+.atl-heat { color: var(--atl-dim); font-size: 0.7rem; font-variant-numeric: tabular-nums; }
+.atl-presence { display: inline-flex; gap: 2px; }
+.atl-avatar {
+  display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%;
+  background: #1f3a2a; color: #bfe0c8; font: 700 9px var(--mono); border: 1px solid #2f5a40; font-style: normal; padding: 0; cursor: pointer;
+}
+.atl-avatar.is-edit { background: #4a2f1c; color: var(--timer-orange); border-color: var(--timer-orange); animation: run-ready-breathe 2.4s ease-in-out infinite; }
+.atl-facts { display: flex; flex-wrap: wrap; gap: 0.2rem 0.55rem; color: var(--atl-dim); }
+.atl-progress { display: flex; flex-wrap: wrap; gap: 0.2rem 0.55rem; margin: 0.2rem 0; color: var(--atl-dim); }
+.atl-progress .is-run { color: var(--timer-orange); }
+.atl-progress .is-err { color: var(--err); }
+.atl-progress .is-paused { color: #d9cdb8; }
+.atl-rows { list-style: none; margin: 0.15rem 0 0; padding: 0; max-height: 15rem; overflow: auto; }
+.atl-row {
+  display: flex; align-items: center; gap: 0.4rem; padding: 0.1rem 0.25rem; border-radius: 3px; min-width: 0; cursor: pointer;
+}
+.atl-row:nth-child(even) { background: rgba(255, 255, 255, 0.035); }
+.atl-row:hover { background: rgba(120, 200, 160, 0.1); }
+.atl-row.is-off { opacity: 0.6; }
+.atl-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.atl-row-clock { color: var(--timer-orange); font-variant-numeric: tabular-nums; }
+.atl-row-clock:not(.is-live) { color: #bfe0c8; opacity: 0.8; }
+.atl-row.heat-1 { box-shadow: inset 3px 0 0 rgba(250, 178, 131, 0.25); }
+.atl-row.heat-2 { box-shadow: inset 3px 0 0 rgba(250, 178, 131, 0.55); }
+.atl-row.heat-3 { box-shadow: inset 3px 0 0 rgba(255, 110, 80, 0.9); }
+.atl-loading { color: var(--atl-dim); }
+.atl-loading::after { content: "…"; animation: run-ready-breathe 1.4s ease-in-out infinite; }
+
+/* The transformation chain. */
+.atl-chain { list-style: none; margin: 0.25rem 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.15rem; }
+.atl-step { display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.05rem 0.25rem; border-radius: 3px; border: 1px solid var(--atl-line); color: var(--atl-dim); font-size: 0.7rem; }
+.atl-step-sep { color: var(--atl-dim); font-size: 0.7rem; }
+.atl-step-dot { width: 7px; height: 7px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px currentColor; }
+.atl-step.is-lazy { border-style: dashed; }
+.atl-step.status-completed { color: #bfe0c8; }
+.atl-step.status-completed .atl-step-dot { background: var(--ok); box-shadow: none; }
+.atl-step.status-running { color: #f3efe9; border-color: var(--timer-orange); background: var(--timer-orange-wash); }
+.atl-step.status-running .atl-step-dot { background: var(--timer-orange); box-shadow: 0 0 0 0 rgba(250, 178, 131, 0.6); animation: atl-ping 1.2s ease-out infinite; }
+.atl-step.status-failed { color: var(--err); border-color: currentColor; }
+.atl-step.status-failed .atl-step-dot { background: var(--err); box-shadow: none; }
+.atl-step-clock { color: var(--timer-orange); font-variant-numeric: tabular-nums; }
+.atl-chain.is-wide .atl-step { font-size: 0.74rem; padding: 0.12rem 0.4rem; }
+@keyframes atl-ping { 70% { box-shadow: 0 0 0 6px rgba(250, 178, 131, 0); } 100% { box-shadow: 0 0 0 0 rgba(250, 178, 131, 0); } }
+
+/* HUD, presence, transport, scrubber. */
+.atlas-hud { position: absolute; right: 0.7rem; bottom: 0.4rem; z-index: 4; color: var(--atl-dim); max-width: 60%; pointer-events: none; text-align: right; text-shadow: 0 0 4px var(--atl-bg), 0 0 8px var(--atl-bg); }
+.atlas-hud.is-err { color: #ff9b8f; }
+.atlas-presence { position: absolute; right: 0.6rem; top: 0.25rem; z-index: 4; display: flex; gap: 3px; }
+.atlas-presence .atl-avatar { width: 22px; height: 22px; font-size: 11px; }
+.atlas-transport { display: none !important; } /* running lanes float to the top instead */
+.atl-tchip {
+  display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.15rem 0.5rem; border-radius: 4px;
+  background: rgba(11, 15, 20, 0.9); border: 1px solid var(--atl-line); color: var(--atl-fg); font: 0.72rem var(--mono); cursor: pointer; text-align: left;
+}
+.atl-tchip.st-running { box-shadow: inset 2px 0 0 var(--timer-orange); background: linear-gradient(90deg, var(--timer-orange-wash), rgba(11, 15, 20, 0.92)); }
+.atl-tchip.st-paused { box-shadow: inset 2px 0 0 #d9cdb8; }
+.atlas-scrubber {
+  position: absolute; left: 50%; bottom: 0.6rem; translate: -50% 0; z-index: 4; display: flex; align-items: center; gap: 0.5rem;
+  background: rgba(11, 15, 20, 0.92); border: 1px dashed #4a3a2a; border-radius: 6px; padding: 0.25rem 0.6rem; color: var(--timer-orange);
+}
+.atlas-scrubber input[type="range"] { width: min(40vw, 420px); accent-color: var(--timer-orange); }
+
+/* Dock. */
+.atlas-dock { display: flex; flex-direction: column; overflow: hidden; }
+.atlas-dock > * { position: relative; z-index: 1; }
+.atlas-dock-head { display: flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.5rem; border-bottom: 1px dashed var(--atl-line); }
+.atlas-tabs { display: flex; flex-wrap: wrap; gap: 0.15rem; align-items: center; min-width: 0; }
+.atlas-tab {
+  border: 1px solid transparent; background: none; color: var(--atl-dim); font: 600 0.7rem var(--mono); text-transform: uppercase;
+  letter-spacing: 0.06em; padding: 0.15rem 0.5rem; border-radius: 4px; cursor: pointer;
+}
+.atlas-tab.is-on { color: var(--atl-fg); border-color: var(--atl-line); background: rgba(255, 255, 255, 0.04); box-shadow: inset 0 -2px 0 var(--matrix-green); }
+.atlas-dock-title { margin-left: 0.6rem; color: #e6f2ea; font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.atlas-dock-body { flex: 1; min-height: 0; overflow: auto; padding: 0.5rem 0.75rem; font: 0.78rem/1.45 var(--mono); }
+.atlas-shell.dock-min .atlas-dock-body { display: none; }
+.atl-pane a, .atl-link { color: #8fd3a7; }
+.atl-link { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; text-decoration: underline dotted; }
+.atl-dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.15rem 0.9rem; margin: 0 0 0.5rem; }
+.atl-dl dt { color: var(--atl-dim); text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.06em; padding-top: 0.1rem; }
+.atl-dl dd { margin: 0; overflow-wrap: anywhere; }
+.atl-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.atl-h { margin: 0.6rem 0 0.25rem; }
+.atl-crumbs { margin-bottom: 0.4rem; color: var(--atl-dim); }
+.atl-table { border-collapse: collapse; width: 100%; }
+.atl-table th, .atl-table td { border-bottom: 1px solid var(--atl-line); padding: 0.1rem 0.4rem; text-align: left; white-space: nowrap; }
+.atl-table th { color: var(--atl-dim); position: sticky; top: 0; background: var(--atl-bg); }
+.atl-sample { max-height: 22rem; overflow: auto; border: 1px dashed var(--atl-line); border-radius: 4px; }
+.atl-run-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.35rem; }
+.atl-run-split { display: grid; grid-template-columns: minmax(14rem, 1fr) 1.4fr; gap: 0.8rem; }
+.atl-run-split .atl-rows { max-height: none; }
+.atl-log { max-height: 24rem; overflow: auto; }
+.atl-chain-wide { margin-bottom: 0.4rem; }
+.atl-form .kv-table th { color: var(--atl-dim); font-weight: 500; white-space: nowrap; vertical-align: top; }
+.atl-form input, .atl-form select, .atl-form textarea, .atl-pane textarea {
+  background: #0d141b; color: var(--atl-fg); border: 1px solid var(--atl-line); border-radius: 4px; font: 0.76rem var(--mono); padding: 0.2rem 0.35rem;
+}
+.atl-form .pb-status.is-err, .atl-pane .is-err { color: #ff9b8f; }
+.atl-form .pb-status.is-ok { color: var(--matrix-green); }
+.atl-lanes-shell { display: flex; flex-direction: column; gap: 0.4rem; height: 100%; }
+.atl-lanes-split { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(18rem, 1fr); gap: 0.6rem; min-height: 0; flex: 1; }
+.atl-lanes-host { overflow: auto; min-width: 0; }
+.atl-editor-host { overflow: auto; min-width: 0; }
+.atlas-dock .nv-lanes-wrap, .atlas-dock .atl-editor { color: var(--fg); background: var(--card-bg); border-radius: 6px; padding: 0.35rem; }
+.atlas-dock .nv-lane-field.is-blast { background: rgba(177, 140, 255, 0.14); }
+.atlas-dock .nv-lane-field.is-src { background: rgba(250, 178, 131, 0.18); }
+.atlas-dock .nv-chip.is-blast { outline: 2px solid #b18cff; }
+.atl-health-list { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.3rem 0; }
+.atlas-shell[data-side="right"] .atl-run-split, .atlas-shell[data-side="right"] .atl-lanes-split { grid-template-columns: 1fr; }
+.atlas-toggle { display: inline-flex; align-items: center; gap: 0.3rem; color: var(--atl-fg); font-size: 0.74rem; cursor: pointer; white-space: nowrap; }
+.atlas-toggle input { accent-color: var(--timer-orange); margin: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .atl-card { transition: none; }
+  .atl-step.status-running .atl-step-dot, .atl-avatar.is-edit, .atl-arrow.st-running, .atl-arrow.st-queued, .atl-card.is-flash { animation: none; }
+}
+@media (max-width: 899px) {
+  .atlas-lanes { --lane-head-w: 7rem; }
+}
+
+/* ------------------------------------------------------------------
+ * Full screen (static/fullscreen.js).
+ *
+ * Real browser full screen; the panel itself is unchanged. The outer
+ * page hosts the app in a full-window same-origin frame (#fs-frame) so
+ * link clicks reload only the frame and never drop full screen.
+ * <html>.fs-host   — outer page while it hosts the frame;
+ * <html>.fs-framed — the app running inside the frame.
+ * ------------------------------------------------------------------ */
+#fs-frame {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  z-index: 2147483000;
+  background: var(--bg);
+}
+html.fs-host,
+html.fs-host body { overflow: hidden; }
+.fullscreen-toggle .fs-icon-enter,
+.fullscreen-toggle .fs-icon-exit { display: inline-flex; }
+.fullscreen-toggle .fs-icon-exit { display: none; }
+html.fs-framed .fullscreen-toggle .fs-icon-enter { display: none; }
+html.fs-framed .fullscreen-toggle .fs-icon-exit { display: inline-flex; }
+.topbar .fullscreen-toggle { margin-left: 0.25rem; }
+@media print {
+  .fullscreen-toggle { display: none !important; }
+}

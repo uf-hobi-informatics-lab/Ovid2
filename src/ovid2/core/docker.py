@@ -31,6 +31,7 @@ from ovid2.config.settings import (
     DATA_DIR,
     DOCKER_IMAGE,
     LEGACY_CREDENTIALS_DIR,
+    LEGACY_SCRATCH_ROOT,
     SPARK_CONFIG,
     SPARK_CORES,
     SPARK_LOCAL_DIR_IN_CONTAINER,
@@ -232,7 +233,7 @@ def _granted_secret_files(args: Any) -> list[Path]:
     from ``args`` and resolved against the normal ``secrets.d`` search
     path — names only, values are never read here.
     """
-    from ovid2.config.executor_env import secret_source_dirs
+    from ovid2.config.executor_env import secret_source_dirs, source_for
     from ovid2.config.secret_refs import resolve_scope
 
     scoped = os.environ.get("OVID2_SECRETS_DIR")
@@ -245,10 +246,7 @@ def _granted_secret_files(args: Any) -> list[Path]:
         return []
     files: list[Path] = []
     for name in sorted(wanted):
-        src = next(
-            (d / name for d in secret_source_dirs() if (d / name).is_file()),
-            None,
-        )
+        src = source_for(name, secret_source_dirs())
         if src is None:
             logger.debug("Secret %r referenced by this run has no file; skipping.", name)
             continue
@@ -283,6 +281,51 @@ def _scoped_secret_mounts(args: Any, host_xdg_config: Path) -> list[str]:
     if enforce and (host_xdg_config / "ovid2" / "secrets.d").is_dir():
         flags.extend(["--tmpfs", "/ovid2-user-config/ovid2/secrets.d:ro,size=64k"])
     return flags
+
+
+#: Container path of the mounted host XDG config tree.
+XDG_CONFIG_IN_CONTAINER: str = "/ovid2-user-config"
+
+
+def workspace_isolation(host_xdg_config: Path) -> tuple[list[str], list[str], str]:
+    """Return ``(env_flags, tmpfs_paths, pythonpath)`` isolating the active workspace.
+
+    The whole host XDG tree is bind-mounted read-only; every *other*
+    workspace's sub-tree (``ovid2/workspaces/<slug>``) is shadowed with an
+    empty tmpfs so a job can never read another workspace's configs,
+    secrets or packages (adr-workspaces.md). A non-default job also gets
+    ``OVID2_WORKSPACE`` and its own package root on ``PYTHONPATH``.
+    """
+    from ovid2 import workspaces
+
+    active = workspaces.active_workspace()
+    env = ["-e", f"{workspaces.WORKSPACE_ENV}={active}"]
+    root = host_xdg_config / "ovid2" / workspaces.WORKSPACES_SUBDIR
+    shadows: list[str] = []
+    if root.is_dir():
+        for entry in sorted(root.iterdir()):
+            if entry.is_dir() and entry.name != active:
+                shadows.append(
+                    f"{XDG_CONFIG_IN_CONTAINER}/ovid2/{workspaces.WORKSPACES_SUBDIR}/{entry.name}"
+                )
+    from ovid2.config.secrets import scope_enforced
+
+    own_secrets = root / active / "secrets.d"
+    if scope_enforced() and active != workspaces.DEFAULT_WORKSPACE and own_secrets.is_dir():
+        # Same least-privilege rule as the flat ``secrets.d``: only the
+        # scoped grant (``/ovid2-scoped-secrets``) is reachable.
+        shadows.append(
+            f"{XDG_CONFIG_IN_CONTAINER}/ovid2/{workspaces.WORKSPACES_SUBDIR}/{active}/secrets.d"
+        )
+    pythonpath = "/app/src:/app/pipelines"
+    packages = workspaces.packages_dir(active)
+    if packages is not None and (packages / "ovid2_pipelines").is_dir():
+        in_container = (
+            f"{XDG_CONFIG_IN_CONTAINER}/ovid2/{workspaces.WORKSPACES_SUBDIR}/{active}/packages"
+        )
+        pythonpath = f"{pythonpath}:{in_container}"
+        env += ["-e", f"OVID2_WORKSPACE_PACKAGES_DIR={in_container}"]
+    return env, shadows, pythonpath
 
 
 def effective_spark_config(*, cluster_mode: bool) -> dict[str, str]:
@@ -354,22 +397,19 @@ def build_docker_command(args: Any, instance: OvidInstance) -> list[str]:
 
     # DuckDB runs the whole job in-process in this one container, so it
     # is sized from the host (75% RAM, every CPU), not from Spark's
-    # driver-heap cap, and the job's *Workers* field is its table
-    # concurrency. See :func:`ovid2.config.spark_sizing.duckdb_container_sizing`.
+    # driver-heap cap. Tables run one at a time, so the running table gets
+    # every thread and the whole memory limit. See :func:`ovid2.config.spark_sizing.duckdb_container_sizing`.
     duckdb_env_flags: list[str] = []
     cpu_flags: list[str] = []
     if _is_duckdb_engine(args):
         from ovid2.config import spark_sizing
 
-        sizing = spark_sizing.duckdb_container_sizing(getattr(args, "workers", None))
+        sizing = spark_sizing.duckdb_container_sizing()
         docker_memory_gb = sizing["memory_gb"]
         cpu_flags = [f"--cpus={sizing['cpus']}"]
         duckdb_env_flags = [
             "-e",
             f"OVID2_DUCKDB_THREADS={os.environ.get('OVID2_DUCKDB_THREADS') or sizing['threads']}",
-            "-e",
-            "OVID2_DUCKDB_TABLE_CONCURRENCY="
-            f"{os.environ.get('OVID2_DUCKDB_TABLE_CONCURRENCY') or sizing['table_concurrency']}",
         ]
 
     if cluster_mode:
@@ -405,6 +445,20 @@ def build_docker_command(args: Any, instance: OvidInstance) -> list[str]:
         "-e",
         f"OVID2_DUCKDB_MEMORY_LIMIT={duckdb_memory_limit(docker_memory_gb)}",
     ]
+    if cluster_mode:
+        # Tell the driver how big each worker we start is, so
+        # :class:`PySparkEngine` can shrink an engine's executor request
+        # (e.g. ``spark.executor.cores=32``) that no worker could host.
+        from ovid2.config import spark_sizing as _sizing
+
+        spark_env_flags.extend(
+            [
+                "-e",
+                f"OVID2_SPARK_WORKER_CORES={_sizing.WORKER_CORES}",
+                "-e",
+                f"OVID2_SPARK_WORKER_MEMORY_GB={_sizing.WORKER_MEMORY_GB}",
+            ]
+        )
     for key, value in spark_config.items():
         # Env var names must be shell-safe; keys already contain only
         # ``[a-z0-9.]``, so replace dots with underscores.
@@ -424,11 +478,15 @@ def build_docker_command(args: Any, instance: OvidInstance) -> list[str]:
     # per AGENTS.md). Without it on the PYTHONPATH the driver cannot
     # ``import_module('ovid2_pipelines.<pipeline>.…')`` and every table
     # would fail with ``ModuleNotFoundError: No module named 'ovid2_pipelines'``.
+    host_xdg_config = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
+    ws_env, ws_shadows, ws_pythonpath = workspace_isolation(host_xdg_config)
     pythonpath_env: list[str] = [
         "-e",
         # pyspark + py4j are regular site-packages in the image, so only the
-        # bind-mounted source trees need adding.
-        "PYTHONPATH=/app/src:/app/pipelines",
+        # bind-mounted source trees (and the job's workspace packages) need
+        # adding.
+        f"PYTHONPATH={ws_pythonpath}",
+        *ws_env,
     ]
 
     # Bind-mount the host's XDG config tree so the driver sees the same
@@ -441,7 +499,6 @@ def build_docker_command(args: Any, instance: OvidInstance) -> list[str]:
     # observed before this change was in place. We mount at a fixed
     # container path (``/ovid2-user-config``) so the value of
     # ``XDG_CONFIG_HOME`` is deterministic across hosts.
-    host_xdg_config = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
     xdg_env: list[str] = [
         "-e",
         "XDG_CONFIG_HOME=/ovid2-user-config",
@@ -459,6 +516,8 @@ def build_docker_command(args: Any, instance: OvidInstance) -> list[str]:
         # credentials, not the whole fleet. See
         # the adr-harness-api-executor-trust-model design note.
         secret_scope_mounts = _scoped_secret_mounts(args, host_xdg_config)
+        for shadow in ws_shadows:
+            secret_scope_mounts.extend(["--tmpfs", f"{shadow}:ro,size=64k"])
 
     # Bind-mount the host's per-invocation ``WORK_DIR`` (the JSONL event
     # log's home; ``$XDG_RUNTIME_DIR/ovid2`` by default) at the same
@@ -480,6 +539,13 @@ def build_docker_command(args: Any, instance: OvidInstance) -> list[str]:
     # WORK_DIR so docker doesn't reject the bind source as missing.
     work_env: list[str] = ["-e", f"OVID2_WORK_DIR={WORK_DIR}"]
     work_mount: list[str] = ["-v", f"{WORK_DIR}:{WORK_DIR}:rw"]
+    # ``legacy_ovid`` stage-boundary files (tens of GB on a full feed) go to
+    # real disk at the identical path, never the ``WORK_DIR`` tmpfs: tmpfs
+    # pages written from the container count against its ``--memory`` cap
+    # and OOM-killed the driver mid-run.
+    LEGACY_SCRATCH_ROOT.mkdir(parents=True, exist_ok=True)
+    work_env.extend(["-e", f"OVID2_LEGACY_SCRATCH_DIR={LEGACY_SCRATCH_ROOT}"])
+    work_mount.extend(["-v", f"{LEGACY_SCRATCH_ROOT}:{LEGACY_SCRATCH_ROOT}:rw"])
 
     # Snowflake connections continue to point at the legacy Ovid credential
     # directory (``/usr/include/rsa/``, containing ``rsa_key.p8`` and the

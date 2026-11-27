@@ -474,21 +474,13 @@ def test_stager_supports_every_driver_type() -> None:
     assert DuckDBEngineStager.supported_driver_types() == frozenset(DRIVERS)
 
 
-def test_requires_family_gate(engine: DuckDBEngine) -> None:
-    from ovid2.core.engines.protocols import EngineOperationUnsupported
-    from ovid2.core.pipeline import _assert_formatter_family
+def test_no_formatter_family_gate() -> None:
+    """Every engine runs every formatter: the family gate is gone (engine universality)."""
+    import ovid2.core.pipeline as pipeline
     from ovid2.formatters.base import BaseFormatter
 
-    class _SparkOnly(BaseFormatter):
-        requires_family = "spark"
-        table_name = "t"  # type: ignore[assignment]
-        input_file_name = "t"  # type: ignore[assignment]
-
-        def format(self, df: Any) -> Any:
-            return df
-
-    with pytest.raises(EngineOperationUnsupported):
-        _assert_formatter_family(engine, _SparkOnly())
+    assert not hasattr(pipeline, "_assert_formatter_family")
+    assert not hasattr(BaseFormatter, "requires_family")
 
 
 def test_read_csv_frame_falls_back_when_parallel_scanner_refuses(
@@ -630,10 +622,19 @@ def test_headerless_csv_gets_spark_c_names(engine: DuckDBEngine, tmp_path: Path)
 
 
 def test_header_with_space_before_quote_is_unquoted(engine: DuckDBEngine, tmp_path: Path) -> None:
-    """``"a", "b"`` headers (ACME external_meds) carry no stray quotes."""
+    """``"a", "b"`` headers (ACME external_meds) carry no stray quotes.
+
+    With the disc contract (``ignoreLeading/TrailingWhiteSpace``) the
+    names are unquoted; with Spark's defaults they keep the raw text,
+    exactly as Spark 4.1 reads them.
+    """
     p = tmp_path / "em.csv"
     p.write_text('"externalmedid", "extmed_source" \n"1","OD"\n', encoding="utf-8")
-    df = engine.get_session().read.csv(str(p), header=True)
+    raw = engine.get_session().read.csv(str(p), header=True)
+    assert raw.columns == ["externalmedid", ' "extmed_source" ']
+    df = engine.get_session().read.csv(
+        str(p), header=True, ignoreLeadingWhiteSpace=True, ignoreTrailingWhiteSpace=True
+    )
     assert df.columns == ["externalmedid", "extmed_source"]
     out = df.selectExpr("externalmedid as EXTMEDID", "extmed_source as EXTMED_SOURCE")
     assert _vals(out) == [("1", "OD")]

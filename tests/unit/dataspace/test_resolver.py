@@ -93,3 +93,49 @@ class TestListing:
         _, entries, _ = list_children("/inbox/DB", lister=_lister)
         assert calls == [("inbox", "DB")]
         assert entries[0].path == "/inbox/DB/S1"
+
+
+class TestUnknownAccountSuggestions:
+    @pytest.fixture()
+    def archive(self, isolated_xdg: Path, tmp_path: Path) -> Path:
+        conns = Path(os.environ["OVID2_CONNECTIONS_DIR"])
+        (conns / "inboxarchive_acme.json").write_text(
+            json.dumps({"type": "disc", "args": {"host_path": "/data/inboxarchive/ACME"}}),
+            encoding="utf-8",
+        )
+        (conns / "sf.json").write_text(
+            json.dumps({"type": "snowflake", "args": {"account": "a"}}), encoding="utf-8"
+        )
+        return conns
+
+    def test_close_names_and_sibling_proposal(self, archive: Path) -> None:
+        from ovid2.dataspace.resolver import suggest_accounts
+
+        close, proposals = suggest_accounts("/inboxarchive/NU")
+        assert close == ["inboxarchive_acme"]
+        assert [(p.name, p.type, p.host_path, p.sibling_of) for p in proposals] == [
+            ("inboxarchive_nu", "disc", "/data/inboxarchive/NU", "inboxarchive_acme")
+        ]
+
+    def test_error_message_carries_suggestions(self, archive: Path) -> None:
+        with pytest.raises(OdsResolutionError) as exc:
+            resolve("/inboxarchive/NU")
+        msg = str(exc.value)
+        assert msg.startswith("Storage account 'inboxarchive' does not exist.")
+        assert "inboxarchive_acme" in msg
+        assert "'inboxarchive_nu' with host_path '/data/inboxarchive/NU'" in msg
+
+    def test_no_proposal_when_name_already_taken(self, archive: Path) -> None:
+        from ovid2.dataspace.resolver import suggest_accounts
+
+        (archive / "inboxarchive_nu.json").write_text(
+            json.dumps({"type": "disc", "args": {"host_path": "/data/inboxarchive/NU"}}),
+            encoding="utf-8",
+        )
+        _close, proposals = suggest_accounts("/inboxarchive/NU")
+        assert proposals == []
+
+    def test_unrelated_name_has_no_suggestions(self, archive: Path) -> None:
+        from ovid2.dataspace.resolver import suggest_accounts
+
+        assert suggest_accounts("/zzz/q") == ([], [])

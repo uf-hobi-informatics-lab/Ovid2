@@ -70,8 +70,18 @@ def spark_cast_sql(value_sql: str, spark_type: str) -> str:
 
 
 def _to_string_sql(value_sql: str) -> str:
-    """Cast to VARCHAR rendering doubles like Spark (``1.0`` not ``1``)."""
-    return f"CAST({value_sql} AS VARCHAR)"
+    """Cast to VARCHAR rendering doubles like Spark's Java ``Double.toString``.
+
+    DuckDB prints ``-3.2e+19`` where Spark prints ``-3.2E19``. ``typeof`` is
+    folded at bind time, so non-double operands keep the plain cast and pay
+    nothing; doubles go through ``__ovid2_java_double`` (registered on every
+    engine connection, see :func:`.duckdb_stager._shortest_double_text`).
+    """
+    return (
+        f"CASE WHEN typeof({value_sql}) IN ('DOUBLE', 'FLOAT') "
+        f"THEN __ovid2_java_double(TRY_CAST({value_sql} AS DOUBLE)) "
+        f"ELSE CAST({value_sql} AS VARCHAR) END"
+    )
 
 
 @functools.lru_cache(maxsize=1)

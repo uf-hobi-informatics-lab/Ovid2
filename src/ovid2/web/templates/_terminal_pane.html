@@ -204,10 +204,6 @@
       <dt>Checks</dt>
       <dd class="mono small">{{ check_checks|join(", ") }}</dd>
       {% endif %}
-      {% if job and job.extra_args and job.extra_args.get("workers") %}
-      <dt>Workers</dt>
-      <dd class="mono small">{{ job.extra_args.get("workers") }}</dd>
-      {% endif %}
       {% if job %}
       <dt>Submitted</dt>
       <dd class="mono small">{{ job.submitted_at | localtime_pretty }}</dd>
@@ -285,6 +281,10 @@
     </div>
   </section>
   {% endif %}
+
+  {# Saved per-table / per-check times (run_items_svc), so every clock
+     starts from its real server-recorded start / end on page open. #}
+  <script type="application/json" class="run-item-times">{{ (run_item_times or []) | tojson }}</script>
 
   {# ---- Footer: total elapsed (ovid parity) ---- #}
   <footer class="term-footer" aria-hidden="true">

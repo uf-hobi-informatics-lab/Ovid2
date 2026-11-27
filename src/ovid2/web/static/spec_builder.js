@@ -321,7 +321,7 @@ function stepsEditor(steps, ops, onChange, opts = {}) {
       const sum = document.createElement("span");
       sum.className = "pb-step-summary";
       const meta = byName[step.op];
-      sum.textContent = meta ? meta.summary + (meta.requires_family ? " (" + meta.requires_family + " only)" : "") : "";
+      sum.textContent = meta ? meta.summary : "";
       head.appendChild(sum);
       const tools = document.createElement("span");
       tools.className = "pb-step-tools";
@@ -647,7 +647,7 @@ const DOCS = {
     },
     save(ref, text) { return api("PUT", "/pipeline-packages/" + enc(PIPELINE) + "/formatters/" + enc(ref.table), { raw_text: text }); },
     del(ref) { return api("DELETE", "/pipeline-packages/" + enc(PIPELINE) + "/formatters/" + enc(ref.table)); },
-    async form(data, onChange) {
+    async form(data, onChange, ref) {
       const box = document.createElement("div");
       box.className = "pb-form";
       const schema = {
@@ -1007,7 +1007,7 @@ async function bootPipeline() {
     if (!t) return;
     flowPanel.hidden = false;
     $("[data-flow-title]", flowPanel).textContent = name;
-    $("[data-flow-sub]", flowPanel).textContent = [t.is_reference ? "reference table" : "", t.requires_family ? "needs " + t.requires_family : ""].filter(Boolean).join(" · ");
+    $("[data-flow-sub]", flowPanel).textContent = t.is_reference ? "reference table" : "";
     const errs = ins.bindings.filter((b) => b.status === "error" && (b.where || "").includes(name));
     flow.render({
       caption: ins.cdm + " · " + name,
@@ -1215,7 +1215,7 @@ async function bootLibrary() {
     editor.pathEl.textContent = ops.length + " ops";
     editor.body.innerHTML = '<div class="pb-op-catalogue">' + ops.map((o) =>
       '<div class="pb-op"><strong>' + esc(o.name) + "</strong><span>" + esc(o.summary) + '</span><span class="nw-chip">' + esc(o.category) +
-      "</span>" + (o.requires_family ? '<span class="nw-chip is-warn">' + esc(o.requires_family) + " only</span>" : "") + "</div>").join("") + "</div>";
+      "</span></div>").join("") + "</div>";
   };
 
   $("#pb-tree").addEventListener("click", (e) => {

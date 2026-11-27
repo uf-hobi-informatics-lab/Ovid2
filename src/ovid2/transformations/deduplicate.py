@@ -1,15 +1,18 @@
 """Deduplicate transformer.
 
-Delegates to :class:`ovid2.transformations.deduplicators.base.Deduplicator`,
+Delegates to the ``deduplicator`` algorithm (``composite_key`` —
+:class:`ovid2.transformations.deduplicators.base.Deduplicator`),
 which applies null-key passthrough and salted two-stage dedup for skew relief.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
+from ovid2.algorithms.protocol import AlgorithmKind
+from ovid2.algorithms.registry import DEDUPLICATOR_NAME
+from ovid2.algorithms.registry import registry as algorithms
 from ovid2.transformations.base import BaseTransformer
-from ovid2.transformations.deduplicators.base import Deduplicator
 
 if TYPE_CHECKING:
     from pyspark.sql import DataFrame
@@ -17,6 +20,8 @@ if TYPE_CHECKING:
 
 class DeduplicateTransformer(BaseTransformer):
     """Composite-key deduplication with skew relief."""
+
+    stage_name = "deduplicate"
 
     def transform(self, df: DataFrame, context: dict[str, Any]) -> DataFrame:
         """Remove duplicates based on the table's composite key.
@@ -48,6 +53,5 @@ class DeduplicateTransformer(BaseTransformer):
 
         if table_name is None:
             return df.dropDuplicates()
-        cdm = context.get("cdm")
-        engine = context.get("engine")
-        return Deduplicator(table_name, cdm=cdm, engine=engine).deduplicate(df)
+        dedup = algorithms.get(AlgorithmKind.DEDUPLICATOR, DEDUPLICATOR_NAME)
+        return cast("DataFrame", dedup.apply(df, context))

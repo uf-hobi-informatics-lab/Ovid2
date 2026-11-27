@@ -1,0 +1,26 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  columns:
+  - a
+tables:
+  input:
+    columns:
+    - a
+    rows:
+    - - ''
+    - - ' null '
+    - - N/A
+    - - .
+    - - x
+    - - null
+note: 'null vs empty string: '''' and sentinels (trimmed, case-insensitive) become null'
+expected:
+  columns:
+  - a
+  rows:
+  - - null
+  - - null
+  - - null
+  - - null
+  - - x
+  - - null

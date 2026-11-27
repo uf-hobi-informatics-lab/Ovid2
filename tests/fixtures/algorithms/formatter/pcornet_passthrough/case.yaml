@@ -1,0 +1,30 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+spec:
+  formatter: demographic
+  adapter: pcornet_passthrough
+  input_file_name: '*Demographic*'
+  sources:
+    demographic:
+      glob: '*Demographic_*.txt'
+      lowercase_columns: true
+  projections:
+    PATID: patid
+    SEX: sex
+files:
+  Demographic_1.txt: 'PATID|SEX|BIRTH_DATE
+
+    1|F|2000-01-01
+
+    2|M|
+
+    '
+note: deprecated alias of source_passthrough
+expected:
+  columns:
+  - PATID
+  - SEX
+  rows:
+  - - '1'
+    - F
+  - - '2'
+    - M

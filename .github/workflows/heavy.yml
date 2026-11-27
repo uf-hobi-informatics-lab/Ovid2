@@ -18,6 +18,9 @@ on:
       - "src/ovid2/transformations/**"
       - "src/ovid2/mappers/**"
       - "src/ovid2/formatters/**"
+      - "src/ovid2/transforms/**"
+      - "src/ovid2/algorithms/**"
+      - "tests/fixtures/algorithms/**"
       - "pipelines/ovid2_pipelines/example_pcornet/**"
       - "pipelines/ovid2_pipelines/pcornet_to_omop/**"
       - "tests/integration/**"
@@ -32,6 +35,9 @@ on:
       - "src/ovid2/transformations/**"
       - "src/ovid2/mappers/**"
       - "src/ovid2/formatters/**"
+      - "src/ovid2/transforms/**"
+      - "src/ovid2/algorithms/**"
+      - "tests/fixtures/algorithms/**"
       - "pipelines/ovid2_pipelines/example_pcornet/**"
       - "pipelines/ovid2_pipelines/pcornet_to_omop/**"
       - "tests/integration/**"
@@ -83,3 +89,22 @@ jobs:
           pip install -e ".[dev,spark,web,mcp,azure,s3,gcs,postgres,mssql]"
       - name: io_matrix gate
         run: bash scripts/ci_checks.sh io_matrix
+
+  conformance:
+    name: Algorithm x engine conformance
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install package (engine extras)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,spark,web,mcp,azure]"
+      - name: Conformance gate
+        run: bash scripts/ci_checks.sh conformance

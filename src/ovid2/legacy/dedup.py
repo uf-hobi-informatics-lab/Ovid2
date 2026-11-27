@@ -141,8 +141,8 @@ def legacy_deduplicate(df: DataFrame, table: str, pipeline: str | None) -> DataF
     key = legacy_dedup_key(table, list(df.columns), whole_row_tables=whole_row, skip_tables=skip)
     if key is None:
         return legacy_write_normalise(legacy_round_trip(df))
-    from pyspark.sql import Window
-    from pyspark.sql import functions as sf
+    from ovid2.core.engines import dsl as sf
+    from ovid2.core.engines.dsl import Window
 
     # awk ``!seen[key]++`` keeps the *first* row in file order.
     # ``monotonically_increasing_id`` on the formatter frame is the row
@@ -154,7 +154,8 @@ def legacy_deduplicate(df: DataFrame, table: str, pipeline: str | None) -> DataF
     order = "__legacy_file_order"
     written = legacy_write_normalise(df.withColumn(order, sf.monotonically_increasing_id()))
     written = written.withColumn(order, sf.col(order).cast("long"))
-    cols = [c for c in written.columns if c != order]
+    # Case-insensitive like Spark: Snowpark folds unquoted names to upper.
+    cols = [c for c in written.columns if c.lower() not in (order, "__legacy_rank")]
     keys = cols if key == WHOLE_ROW else list(key)
     first = Window.partitionBy(*[sf.col(f"`{k}`") for k in keys]).orderBy(sf.col(order))
     return (

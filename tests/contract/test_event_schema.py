@@ -81,6 +81,17 @@ def _pairs() -> list[tuple[str, ev.Event]]:
             ),
         ),
         (
+            "table_stage",
+            ev.table_stage(
+                instance_id=_INSTANCE_ID,
+                pipeline="site",
+                batch_id="20260101",
+                table="encounter",
+                stage="fix",
+                state=ev.TABLE_STAGE_WAITING,
+            ),
+        ),
+        (
             "fix_failed",
             ev.fix_failed(
                 instance_id=_INSTANCE_ID,

@@ -9,8 +9,9 @@ Each op rewrites the named columns in place using the portable
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
+from ovid2.config.capabilities import Capability
 from ovid2.transforms.base import BaseTransform, DataFrame, TransformContext
 
 _COLUMNS_SCHEMA: dict[str, Any] = {
@@ -39,6 +40,9 @@ def _columns(params: dict[str, Any]) -> list[str]:
 class ToUpperTransform(BaseTransform):
     """Uppercase one or more string columns."""
 
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset({Capability.FN_COL, Capability.FN_UPPER})
+
     category = "formatting"
 
     @property
@@ -66,6 +70,9 @@ class ToUpperTransform(BaseTransform):
 
 class ToLowerTransform(BaseTransform):
     """Lowercase one or more string columns."""
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset({Capability.FN_COL, Capability.FN_LOWER})
 
     category = "formatting"
 
@@ -98,6 +105,9 @@ class ToTitleTransform(BaseTransform):
     Uses the portable ``expr`` DSL entry to reach ``initcap`` without
     binding to any concrete engine module.
     """
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset({Capability.FN_EXPR})
 
     category = "formatting"
 

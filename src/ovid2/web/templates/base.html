@@ -89,6 +89,8 @@
   <script src="/static/ovid_mark_status.js" defer></script>
   <script src="/static/help_tip.js" defer></script>
   <script src="/static/field_visibility.js" defer></script>
+  <script src="/static/workspace_switcher.js" defer></script>
+  <script src="/static/fullscreen.js" defer></script>
   {# D3 v7 self-hosted; used by /static/live.js and the display bus.
      Loaded before live.js so window.d3 is available when the module
      bootstraps. #}
@@ -123,6 +125,7 @@
   {% elif path.startswith('/install') %}{% set nav_active = 'install' %}
   {% elif path.startswith('/health') %}{% set nav_active = 'health' %}
   {% elif path.startswith('/manual') %}{% set nav_active = 'manual' %}
+  {% elif path.startswith('/workspaces') %}{% set nav_active = 'workspaces' %}
   {% endif %}
 
   <a class="skip-link" href="#main">Skip to main content</a>
@@ -150,6 +153,26 @@
       </a>
     </span>
 
+    {# Workspace switcher (adr-workspaces.md): the workspaces this person
+       may enter. Hidden when there is only one; submitting re-checks
+       membership server-side. #}
+    {% set _ws = workspace_menu(request) %}
+    {% if _ws.entries | length > 1 %}
+      <form class="ws-switcher" action="/workspaces/switch" method="post" data-ws-switcher>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="next" value="{{ request.url.path }}">
+        <label class="ws-switcher-label" for="ws-switcher-select">{{ icons.icon("folder", size=16) }}<span class="sr-only">Workspace</span></label>
+        <select id="ws-switcher-select" name="workspace_id" aria-label="Workspace" data-ws-select>
+          {% for w in _ws.entries %}
+            <option value="{{ w.workspace_id }}" {% if _ws.active and w.workspace_id == _ws.active.workspace_id %}selected{% endif %}>{{ w.display_name }}</option>
+          {% endfor %}
+        </select>
+        <noscript><button type="submit" class="button small">Switch</button></noscript>
+      </form>
+    {% elif _ws.active %}
+      <span class="ws-switcher ws-switcher-single" title="Workspace">{{ icons.icon("folder", size=16) }}<span class="ws-switcher-name">{{ _ws.active.display_name }}</span></span>
+    {% endif %}
+
     <div class="topbar-spacer"></div>
 
     {% set _user_ctx = current_user_ctx(request) %}
@@ -162,6 +185,17 @@
         <span class="nav-label">Logout</span>
       </a>
     {% endif %}
+
+    {# Full screen (static/fullscreen.js): real browser full screen with
+       the whole panel kept. The app runs in a same-origin full-window
+       frame so link clicks never drop it. Ctrl/Cmd+Shift+F toggles; Esc
+       (browser) exits. Hidden where the Fullscreen API is missing. #}
+    <button id="fullscreen-toggle" class="icon-button fullscreen-toggle" type="button"
+            data-fullscreen-toggle aria-pressed="false"
+            aria-label="Enter full screen" title="Full screen (Ctrl+Shift+F)">
+      <span class="fs-icon-enter">{{ icons.icon("maximize", size=20) }}</span>
+      <span class="fs-icon-exit">{{ icons.icon("minimize", size=20) }}</span>
+    </button>
   </header>
 
   {# Scrim: dimmed backdrop shown behind the drawer on mobile. Click
@@ -261,11 +295,22 @@
       </a>
       {% endif %}
 
-      {% if has_cap(request, 'manage_users') %}
+      {% if has_cap(request, 'manage_users') or _ws.can_manage %}
       <div class="side-group">Access</div>
+      {% if has_cap(request, 'manage_users') %}
       <a href="/users" class="nav-item {% if nav_active == 'users' %}active{% endif %}" data-nav="users">
         {{ icons.icon("users", size=18, cls="nav-icon") }}<span class="nav-label">Users</span>
       </a>
+      {% endif %}
+      {% if has_cap(request, 'manage_workspaces') %}
+      <a href="/workspaces" class="nav-item {% if nav_active == 'workspaces' %}active{% endif %}" data-nav="workspaces">
+        {{ icons.icon("folder", size=18, cls="nav-icon") }}<span class="nav-label">Workspaces</span>
+      </a>
+      {% elif _ws.can_manage and _ws.active %}
+      <a href="/workspaces/{{ _ws.active.workspace_id }}" class="nav-item {% if nav_active == 'workspaces' %}active{% endif %}" data-nav="workspaces">
+        {{ icons.icon("folder", size=18, cls="nav-icon") }}<span class="nav-label">Workspace members</span>
+      </a>
+      {% endif %}
       {% endif %}
 
       <div class="side-group">System</div>
@@ -310,9 +355,9 @@
   <aside id="tools-rail" class="tools-rail" role="toolbar"
          aria-label="Appearance and tools" aria-orientation="vertical">
     <button id="tool-palette" class="rail-button icon-button" type="button"
-            aria-controls="command-palette" aria-haspopup="dialog"
+            aria-controls="command-palette"
             aria-expanded="false" data-tool="palette"
-            aria-label="Command palette" title="Search &amp; jump (Ctrl-K)">
+            aria-label="Search" title="Search &amp; jump (Ctrl-K)">
       {{ icons.icon("search", size=20) }}
     </button>
 
@@ -392,15 +437,17 @@
       <div id="llm-route" class="llm-route" aria-label="Models in use"></div>
     </div>
   </aside>
+  <script src="/static/llm_proposal_form.js" defer></script>
   <script src="/static/llm_panel.js" defer></script>
   {% endif %}
 
-  {# Command palette (Ctrl-K): a centred, client-only fuzzy launcher over
-     the nav links already rendered in the drawer (so it inherits RBAC
-     for free) plus a localStorage-backed recent-pages list. Rendered and
+  {# Search panel (Ctrl-K): a client-only fuzzy launcher over the nav
+     links already rendered in the drawer (so it inherits RBAC for free)
+     plus a localStorage-backed recent-pages list. Opens from the right
+     edge at the same width as Appearance / Agent Ovid. Rendered and
      driven entirely by /static/cmdk.js — no backend route. #}
-  <div id="command-palette" class="cmdk" role="dialog" aria-modal="true"
-       aria-label="Command palette" aria-hidden="true"></div>
+  <aside id="command-palette" class="cmdk" role="region"
+         aria-label="Search" aria-hidden="true"></aside>
 
   <footer class="site-footer" role="contentinfo">
     {% if auth_enabled() %}

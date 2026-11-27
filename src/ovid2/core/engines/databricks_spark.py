@@ -49,6 +49,10 @@ class DatabricksSparkEngine(BaseEngine):
     type_name = "databricks_spark"
     family = EngineFamily.SPARK
     session_is_spark = True
+    #: The Spark session runs on a remote Databricks cluster, which cannot
+    #: see this host's filesystem: disc / access are reached through the
+    #: Arrow bridge (``core/engines/bridge.py``) instead of native reads.
+    supports_local_files = False
 
     def __init__(
         self,
@@ -100,6 +104,22 @@ class DatabricksSparkEngine(BaseEngine):
         if self._functions is None:
             self._functions = _SparkFunctions()
         return self._functions
+
+    def read_shared_view_file(
+        self, source: Any, *, delimiter: str, header: bool, bus: Any = None
+    ) -> Any:
+        """Read a shared-view file through the Spark vocabulary cache (as before)."""
+        from ovid2.core.engines.pyspark import read_shared_view_spark
+
+        return read_shared_view_spark(
+            self.get_session(), source, delimiter=delimiter, header=header, bus=bus
+        )
+
+    def warm_reference(self, session: Any, df: Any, name: str) -> Any:
+        """Persist a reference table (Spark's cache warm-up)."""
+        from ovid2.core.engines.pyspark import spark_warm_reference
+
+        return spark_warm_reference(self, session, df, name)
 
     def native(self) -> SparkSession:
         """Return the underlying Databricks-Connect ``SparkSession``."""

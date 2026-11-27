@@ -35,6 +35,7 @@ from ovid2.config import paths as xdg_paths
 from ovid2.reports.artifacts import analysis_artifact_path, read_analysis_records
 from ovid2.reports.sources import ADAPTERS, SourceError, describe_source, validate_source
 from ovid2.web import db as web_db
+from ovid2.workspaces import active_workspace, is_default
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,10 @@ def sources_dir() -> Path:
     """Return the durable source store (mode 0700)."""
     override = os.environ.get("OVID2_REPORTS_DIR")
     base = Path(override) if override else xdg_paths.state_dir() / "reports"
-    path = base / "sources"
+    ws = active_workspace()
+    # ``default`` keeps the historical flat store; other workspaces get
+    # their own sub-store (adr-workspaces.md).
+    path = base / "sources" if is_default(ws) else base / "workspaces" / ws / "sources"
     path.mkdir(parents=True, exist_ok=True, mode=0o700)
     return path
 
@@ -96,8 +100,8 @@ def store_source(doc: dict[str, Any], *, actor: str) -> dict[str, Any]:
     with web_db.connect() as conn:
         conn.execute(
             "INSERT INTO web_report_sources (source_id, kind, title, instance_id, pipeline, batch_id, cdm, "
-            "generated_at, ingested_at, ingested_by, file_name, summary_json) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "generated_at, ingested_at, ingested_by, file_name, summary_json, workspace_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(source_id) DO UPDATE SET kind=excluded.kind, title=excluded.title, "
             "instance_id=excluded.instance_id, pipeline=excluded.pipeline, batch_id=excluded.batch_id, "
             "cdm=excluded.cdm, generated_at=excluded.generated_at, ingested_at=excluded.ingested_at, "
@@ -115,6 +119,7 @@ def store_source(doc: dict[str, Any], *, actor: str) -> dict[str, Any]:
                 actor,
                 file_name,
                 json.dumps(_summary(doc)),
+                active_workspace(),
             ),
         )
     return _row_dict_for(sid)
@@ -130,7 +135,8 @@ def _row_to_dict(row: Any) -> dict[str, Any]:
 def _row_dict_for(source_id: str) -> dict[str, Any]:
     with web_db.connect() as conn:
         row = conn.execute(
-            "SELECT * FROM web_report_sources WHERE source_id = ?", (source_id,)
+            "SELECT * FROM web_report_sources WHERE source_id = ? AND workspace_id = ?",
+            (source_id, active_workspace()),
         ).fetchone()
     if row is None:
         raise SourceNotFound(source_id)
@@ -157,6 +163,7 @@ def list_sources(
     web_db.ensure_schema()
     like = f"%{q.lower()}%" if q else None
     params: list[Any] = [
+        active_workspace(),
         kind,
         kind,
         pipeline,
@@ -189,7 +196,7 @@ def list_sources(
 
 #: Fixed WHERE clause; every filter is optional via ``? IS NULL``.
 _LIST_WHERE = (
-    "(? IS NULL OR kind = ?) AND (? IS NULL OR pipeline = ?) AND (? IS NULL OR instance_id = ?) "
+    "workspace_id = ? AND (? IS NULL OR kind = ?) AND (? IS NULL OR pipeline = ?) AND (? IS NULL OR instance_id = ?) "
     "AND (? IS NULL OR lower(title) LIKE ? OR lower(coalesce(batch_id, '')) LIKE ? OR source_id LIKE ?)"
 )
 
@@ -198,6 +205,7 @@ def get_source(source_id: str) -> dict[str, Any]:
     """Return the full source document (with rows)."""
     if not _SOURCE_ID_RE.match(source_id or ""):
         raise SourceNotFound(source_id)
+    _row_dict_for(source_id)  # 404 for another workspace's source
     path = sources_dir() / f"{source_id}.json"
     try:
         with path.open("r", encoding="utf-8") as fh:
@@ -320,7 +328,13 @@ def build_trend(source_ids: list[str], *, actor: str) -> dict[str, Any]:
 def delete_orphan_files() -> int:
     """Remove source files with no catalogue row (housekeeping)."""
     with web_db.connect() as conn:
-        known = {r[0] for r in conn.execute("SELECT file_name FROM web_report_sources").fetchall()}
+        known = {
+            r[0]
+            for r in conn.execute(
+                "SELECT file_name FROM web_report_sources WHERE workspace_id = ?",
+                (active_workspace(),),
+            ).fetchall()
+        }
     removed = 0
     for path in sources_dir().glob("*.json"):
         if path.name not in known:

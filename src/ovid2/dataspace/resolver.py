@@ -31,6 +31,7 @@ from ovid2.dataspace.path import OdsPath
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "AccountSuggestion",
     "OdsEntry",
     "OdsResolutionError",
     "ResolvedTarget",
@@ -38,6 +39,7 @@ __all__ = [
     "list_children",
     "list_storage_accounts",
     "resolve",
+    "suggest_accounts",
 ]
 
 #: Connection types whose location is ``DATABASE/SCHEMA`` (not a folder).
@@ -145,6 +147,103 @@ def _addresses_on(connection: str) -> list[tuple[str, dict[str, Any]]]:
 # ---------------------------------------------------------------------------
 
 
+def _norm(name: str) -> str:
+    """Lower-case ``name`` and drop separators, for fuzzy comparison."""
+    return "".join(ch for ch in name.lower() if ch.isalnum())
+
+
+@dataclass(frozen=True)
+class AccountSuggestion:
+    """A storage account that *could* serve a path naming an unknown one.
+
+    Attributes:
+        name: Proposed connection name.
+        type: Storage type (always ``disc`` for derived proposals).
+        host_path: Folder the new account would point at.
+        sibling_of: The existing account the proposal was derived from.
+    """
+
+    name: str
+    type: str
+    host_path: str
+    sibling_of: str
+
+
+def suggest_accounts(
+    path: str | OdsPath, limit: int = 3
+) -> tuple[list[str], list[AccountSuggestion]]:
+    """Suggest storage accounts for a path whose account does not exist.
+
+    Reads connection configs only (no secrets, no storage listing).
+
+    Returns:
+        ``(close, proposals)``: existing account names close to the unknown
+        one (prefix / containment / fuzzy), and new ``disc`` accounts derived
+        from an existing disc account whose ``host_path`` has the unknown
+        name as a parent folder — e.g. ``/inboxarchive/NU`` with an account
+        on ``/data/inboxarchive/ACME`` proposes ``inboxarchive_nu`` on
+        ``/data/inboxarchive/NU``.
+    """
+    import difflib
+    import posixpath
+
+    ods_path = path if isinstance(path, OdsPath) else OdsPath.parse(path)
+    wanted = ods_path.connection or ""
+    key = _norm(wanted)
+    names = _connection_config.list_available_connections()
+    close: list[str] = []
+    for cand in names:
+        ck = _norm(cand)
+        if key and (ck.startswith(key) or key.startswith(ck) or (len(key) > 3 and key in ck)):
+            close.append(cand)
+    by_norm = {_norm(n): n for n in names}
+    for hit in difflib.get_close_matches(key, list(by_norm), n=limit, cutoff=0.6):
+        if by_norm[hit] not in close:
+            close.append(by_norm[hit])
+    proposals: list[AccountSuggestion] = []
+    seen: set[str] = set()
+    first = ods_path.parts[0] if ods_path.parts else ""
+    for cand in names:
+        try:
+            raw = _connection_config.load_connection_config(cand)
+        except (FileNotFoundError, ValueError):
+            continue
+        if raw.get("type") != "disc":
+            continue
+        host = str((raw.get("args") or {}).get("host_path") or "").rstrip("/")
+        if not host:
+            continue
+        segs = host.split("/")
+        for idx, seg in enumerate(segs):
+            if not seg or seg.lower() != wanted.lower():
+                continue
+            base = "/".join(segs[: idx + 1])
+            target = posixpath.join(base, first) if first else base
+            suffix = f"_{_norm(first)}" if first else ""
+            name = f"{seg}{suffix}".lower()
+            if target in seen or name in names:
+                continue
+            seen.add(target)
+            proposals.append(
+                AccountSuggestion(name=name, type="disc", host_path=target, sibling_of=cand)
+            )
+    return close[:limit], proposals[:limit]
+
+
+def _unknown_account_message(ods_path: OdsPath) -> str:
+    """Build the error text for a path whose storage account is unknown."""
+    msg = f"Storage account '{ods_path.connection}' does not exist."
+    close, proposals = suggest_accounts(ods_path)
+    if close:
+        msg += " Close existing accounts: " + ", ".join(close) + "."
+    for p in proposals:
+        msg += (
+            f" Suggested new {p.type} account '{p.name}' with host_path '{p.host_path}'"
+            f" (next to '{p.sibling_of}')."
+        )
+    return msg
+
+
 def resolve(path: str | OdsPath) -> ResolvedTarget:
     """Map a Data Space path to its storage account + exact location.
 
@@ -167,7 +266,7 @@ def resolve(path: str | OdsPath) -> ResolvedTarget:
                 conn, conn_type = candidate, _connection_type(candidate)
                 break
     if conn_type is None:
-        raise OdsResolutionError(f"Storage account '{ods_path.connection}' does not exist.")
+        raise OdsResolutionError(_unknown_account_message(ods_path))
     warehouse = conn_type in _WAREHOUSES
     location = ods_path.location
     match: str | None = None

@@ -21,6 +21,8 @@ if TYPE_CHECKING:
 class FormatTransformer(BaseTransformer):
     """Pass-through placeholder for the ``format`` stage."""
 
+    stage_name = "format"
+
     def transform(self, df: DataFrame, context: dict[str, Any]) -> DataFrame:
         """Return ``df`` unchanged. See module docstring."""
         return df

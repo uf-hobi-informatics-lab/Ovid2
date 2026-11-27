@@ -157,6 +157,19 @@ Semantically identical to the equivalent YAML.
 
 Adapters live under `src/ovid2/formatters/adapters/`. Add a new class
 that subclasses :class:`ovid2.formatters.adapters.base.BaseAdapter`,
-register it in `adapters/__init__.py::ADAPTERS`, and extend the JSON
-schema `adapter` enum. New adapters are **framework-level** — do not
+register it in `adapters/__init__.py::ADAPTERS` (it is then reachable as
+kind `formatter` through `ovid2.algorithms.registry.AlgorithmRegistry`), and
+extend the JSON schema `adapter` enum.
+
+Declare the engine capabilities the adapter uses in a `REQUIRES` class
+attribute (`frozenset[Capability]` from `ovid2.config.capabilities`): every
+DSL function it calls (`Capability.FN_COL`, …) plus any feature
+(`Capability.INPUT_FILE_NAME`, `Capability.WINDOW`, …).
+`tests/contract/test_algorithm_requires_declared.py` AST-checks the
+declaration against the source, and feature capabilities must be mirrored in
+`ovid2.config.algorithm_requirements` so the plan-time check (`ovid2 etl`,
+`jobs_svc.submit`) can refuse an engine that lacks them. Read sources through
+`ctx.source` (the resolved `SourceHandle`) and its capability flags
+(`is_local_path`) — never import a driver. See `docs/engines.md` →
+*Capabilities*. New adapters are **framework-level** — do not
 put per-pipeline adapters in `ovid2_pipelines/*`.

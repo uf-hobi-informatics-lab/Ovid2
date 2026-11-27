@@ -11,8 +11,8 @@ create-pipeline wizard and the pipeline builder ask:
 * **Identity** — every identity constant the package declares
   (:data:`ovid2.tools.pipeline_identity.IDENTITY_FIELDS`), with its
   current value and the default a clone would get.
-* **Requirements** — CDM, ETL profile, required engine family (package
-  ``REQUIRES_FAMILY`` or any custom formatter's ``requires_family``).
+* **Requirements** — CDM and ETL profile (every engine runs every
+  package; there is no engine-family requirement).
 * **Bindings** — every name that must match configuration elsewhere,
   each checked: ``ok`` / ``warn`` / ``error`` with a fix hint
   (:func:`check_bindings`).
@@ -67,7 +67,6 @@ class TableInspection:
     salt_keys: list[str] = field(default_factory=list)
     fixers: list[str] = field(default_factory=list)
     transforms: list[str] = field(default_factory=list)
-    requires_family: str = ""
     is_reference: bool = False
     #: The CDM table's column names — the builder's column pickers
     #: (UI rule U2) offer these instead of free text.
@@ -100,7 +99,6 @@ class PackageInspection:
     pipeline: str
     cdm: str
     profile: str
-    requires_family: str
     tables: list[TableInspection]
     identity: list[dict[str, Any]]
     multi_table_fixes: list[str]
@@ -134,6 +132,10 @@ class PackageInspection:
 
 
 def _package_dir(pipeline: str) -> Path | None:
+    from ovid2.config.pipeline_packages import package_visible
+
+    if not package_visible(pipeline):
+        return None
     try:
         pkg = importlib.import_module(f"ovid2_pipelines.{pipeline}")
     except ModuleNotFoundError:
@@ -244,7 +246,6 @@ def _formatter_info(pkg: Path, pipeline: str, table: str) -> dict[str, Any]:
         "formatter_class": "",
         "inputs": [],
         "auxiliary_tables": [],
-        "requires_family": "",
     }
     fdir = pkg / "formatters"
     if (fdir / f"{table}.py").is_file():
@@ -268,12 +269,10 @@ def _formatter_info(pkg: Path, pipeline: str, table: str) -> dict[str, Any]:
             info["formatter_class"] = class_path
             if class_path:
                 module_path = _module_path_for_class(class_path)
-                if module_path is not None:
-                    if not info["inputs"]:
-                        name = _class_attr(module_path, "input_file_name")
-                        if name:
-                            info["inputs"] = [name]
-                    info["requires_family"] = _class_attr(module_path, "requires_family")
+                if module_path is not None and not info["inputs"]:
+                    name = _class_attr(module_path, "input_file_name")
+                    if name:
+                        info["inputs"] = [name]
             return info
     custom = pkg / "formatters_custom" / f"{table}_formatter.py"
     if custom.is_file():
@@ -281,7 +280,6 @@ def _formatter_info(pkg: Path, pipeline: str, table: str) -> dict[str, Any]:
         info["formatter_class"] = f"ovid2_pipelines.{pipeline}.formatters_custom.{table}_formatter"
         name = _class_attr(custom, "input_file_name")
         info["inputs"] = [name] if name else []
-        info["requires_family"] = _class_attr(custom, "requires_family")
     return info
 
 
@@ -354,7 +352,8 @@ def inspect_package(
             identity rows then carry the clone's ``default`` values.
         identity_overrides: Wizard-supplied identity values (checked by
             :func:`check_bindings` and reflected in ``default``).
-        engine: Engine name or type to check family compatibility against.
+        engine: Engine name or type (accepted for API stability; every
+            engine runs every package, so it does not change the result).
 
     Raises:
         LookupError: When the package is not installed.
@@ -421,15 +420,10 @@ def inspect_package(
                 salt_keys=m["salt_keys"],
                 fixers=[str(e.get("fix", "")) for e in chains.get(table, [])],
                 transforms=[*assigned.get("*", []), *assigned.get(table, [])],
-                requires_family=f["requires_family"],
                 is_reference=table in reference,
                 columns=columns,
             )
         )
-
-    requires = str(constants.get("REQUIRES_FAMILY") or "").lower()
-    if legacy:
-        requires = requires or "spark"
 
     defaults = default_identity(
         new_name or pipeline, constants, cdm=cdm_name, overrides=identity_overrides
@@ -451,7 +445,6 @@ def inspect_package(
         pipeline=pipeline,
         cdm=cdm_name,
         profile=profile,
-        requires_family=requires,
         tables=rows,
         identity=identity,
         multi_table_fixes=[str(e.get("fix", "")) for e in multi],
@@ -550,13 +543,6 @@ def _known_vocabularies() -> set[str]:
     return {p.stem for p in root.glob("*.yaml")}
 
 
-def _engine_family_for(engine: str) -> str | None:
-    from ovid2.config.engines import engine_family, resolve_engine_type
-
-    engine_type = resolve_engine_type(engine) or engine
-    return engine_family(engine_type)
-
-
 def check_bindings(
     inspection: PackageInspection,
     *,
@@ -638,51 +624,6 @@ def check_bindings(
                     status="warn",
                     detail="PCORnet datamart ids are prefixed by the network id.",
                     where="pipeline_settings.py",
-                )
-            )
-
-    # -- engine family ---------------------------------------------------
-    if inspection.requires_family:
-        status, detail, value = "info", "", inspection.requires_family
-        if engine:
-            family = _engine_family_for(engine)
-            value = f"{engine} ({family or '?'})"
-            if family and family != inspection.requires_family:
-                status = "error"
-                detail = f"package requires a '{inspection.requires_family}' engine."
-            else:
-                status = "ok"
-        out.append(
-            Binding(
-                id="engine.family",
-                category="engine",
-                label="Engine family",
-                value=value,
-                must_match=f"family '{inspection.requires_family}'",
-                status=status,
-                detail=detail,
-                where="REQUIRES_FAMILY / custom formatter requires_family",
-            )
-        )
-
-    gated = [t for t in inspection.tables if t.configured and t.requires_family]
-    if gated and engine:
-        family = _engine_family_for(engine)
-        bad = [t.name for t in gated if family and t.requires_family != family]
-        if bad:
-            out.append(
-                Binding(
-                    id="engine.tables",
-                    category="engine",
-                    label="Engine-gated tables",
-                    value=", ".join(bad),
-                    must_match=f"engine family {gated[0].requires_family}",
-                    status="warn",
-                    detail=(
-                        f"these tables' custom formatters need a different engine family "
-                        f"than '{family}' — deselect them or pick a compatible engine"
-                    ),
-                    where="formatters_custom requires_family",
                 )
             )
 

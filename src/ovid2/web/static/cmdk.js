@@ -15,11 +15,12 @@
  *      (`ovid2RecentPages`) so the palette opens with useful shortcuts
  *      even before the user types.
  *
- * Interaction: Ctrl-K / Cmd-K (or the rail search button) toggles a
- * centred modal dialog with a text input and a ranked result list.
- * Arrow keys move the active row, Enter navigates (recording the
- * destination), Escape closes, and a backdrop click closes. Focus is
- * trapped in the input while open and restored to the trigger on close.
+ * Interaction: Ctrl-K / Cmd-K (or the rail search button) toggles the
+ * Search panel, which opens from the right edge beside the rail at the
+ * same width as Appearance and Agent Ovid (opening one closes the
+ * others). Arrow keys move the active row, Enter navigates (recording
+ * the destination), Escape or the × button closes. Focus moves to the
+ * input on open and is restored to the trigger on close.
  *
  * No third-party imports; classic (non-module) script loaded with
  * <script defer> after appearance.js. Mirrors the localStorage-guard
@@ -257,11 +258,17 @@
     var root = container();
     root.innerHTML = "";
 
-    var backdrop = el("div", "cmdk-backdrop", null);
-    backdrop.setAttribute("data-cmdk-close", "");
-    root.appendChild(backdrop);
-
     var box = el("div", "cmdk-box", null);
+
+    var head = el("div", "cmdk-head", null);
+    head.appendChild(el("h2", "cmdk-title", "Search"));
+    var closeBtn = el("button", "cmdk-close", "\u00d7");
+    closeBtn.type = "button";
+    closeBtn.setAttribute("data-cmdk-close", "");
+    closeBtn.setAttribute("aria-label", "Close search");
+    closeBtn.title = "Close (Esc)";
+    head.appendChild(closeBtn);
+    box.appendChild(head);
 
     var input = el("input", "cmdk-input", null);
     input.type = "text";
@@ -328,6 +335,13 @@
       return;
     }
     lastFocus = document.activeElement;
+    // Right-rail panels are mutually exclusive.
+    if (window.Ovid2Appearance && html.classList.contains("right-panel-open")) {
+      window.Ovid2Appearance.close();
+    }
+    if (window.Ovid2Llm && html.classList.contains("llm-panel-open")) {
+      window.Ovid2Llm.close();
+    }
     var input = buildShell(buildIndex());
     container().setAttribute("aria-hidden", "false");
     html.classList.add("cmdk-open");
@@ -393,7 +407,9 @@
         togglePalette();
         return;
       }
-      if (isOpen() && t.closest("[data-cmdk-close]")) {
+      if (isOpen() && (t.closest("[data-cmdk-close]") ||
+          t.closest("#tool-appearance") || t.closest("#tool-llm") ||
+          (t.classList && t.classList.contains("right-scrim")))) {
         closePalette();
       }
     });

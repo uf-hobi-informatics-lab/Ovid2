@@ -76,6 +76,35 @@ configs, and running, duplicating, enabling or cancelling
 **Run** sends the request from **your** browser session, with your
 permissions and any approval gate. **Dismiss** discards it.
 
+### Proposals you can edit
+
+The assistant can also offer to **create a storage account**
+(`create_connection`) or a **saved address** (`create_address`). This needs
+the *manage config* permission. These cards are short forms instead of JSON:
+
+- What the assistant worked out is filled in; you can change anything.
+- Fields that must come from a list (type, mount mode, file format, storage
+  account) are drop-downs.
+- Missing required fields are highlighted, and **Run** stays disabled until
+  you fill them.
+- Passwords and keys are typed **by you** into the form. The assistant never
+  sees them. They are not saved in the chat and not sent back to the model.
+- If you rename an account in its form, the address card that uses it follows.
+  A workflow draft from the same answer waits until you have run the forms
+  (**Open now** skips the wait).
+
+Example: *"run the NU ETL automatically on new folders in inboxarchive/NU
+and load into CHAR_NU"*. The assistant answers with:
+
+1. a storage account on the NU folder, suggested from the existing
+   `inboxarchive_acme` account next to it;
+2. a Snowflake address `CHAR_NU` / `PUBLIC`;
+3. a draft workflow with a **watch** trigger.
+
+If automatic triggers are switched off on the server (Settings → *route
+dispatch*), it tells you so. On its first scan a watch treats every existing
+sub-folder as new.
+
 ## UI actions
 
 `set_appearance`, `save_appearance` and `apply_saved_appearance` let you
@@ -112,6 +141,6 @@ test checks the catalogue against this list on every commit.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `max_tool_iterations` | 6 | model round-trips per turn. The last one offers only draft / proposal / UI tools and tells the model it is the last. If the budget runs out mid-look-up, one tool-free call makes the model answer, so a turn never ends empty. |
+| `max_tool_iterations` | 10 | model round-trips per turn. A step that only repeats an earlier identical look-up is not counted (at most twice per turn). The last one offers only draft / proposal / UI tools and tells the model it is the last. If the budget runs out mid-look-up, one tool-free call makes the model answer, so a turn never ends empty. |
 | `tool_result_max_chars` | 8000 | cap on each tool result; job logs keep the tail |
 | `OVID2_LLM_TOOLS_API_URL` | the server's own socket | where the executor calls back |

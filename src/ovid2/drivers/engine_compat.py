@@ -136,6 +136,8 @@ def _driver_class_for_address(address_name: str) -> type[Driver] | None:
 def assert_engine_supports_drivers(
     engine: BaseEngine,
     address_names: Iterable[str],
+    *,
+    output_names: Iterable[str] = (),
 ) -> None:
     """Refuse the run when the engine's stager cannot reach every driver.
 
@@ -177,12 +179,15 @@ def assert_engine_supports_drivers(
         engine_family=engine_family_value,
         engine_type=engine_type,
         address_names=address_names,
+        output_names=output_names,
     )
 
 
 def assert_engine_type_supports_drivers(
     engine_type: str,
     address_names: Iterable[str],
+    *,
+    output_names: Iterable[str] = (),
 ) -> None:
     """Web-safe variant that consults the type name only.
 
@@ -209,14 +214,21 @@ def assert_engine_type_supports_drivers(
             Config-file *names* (e.g. ``"pyspark-prod"``) are also
             accepted and treated as unknown → the check skips.
         address_names: Same as :func:`assert_engine_supports_drivers`.
+        output_names: The subset of ``address_names`` written to (a
+            read-only driver there is refused).
 
     Raises:
         RuntimeError: When any address's driver is not supported by
             the engine's stager.
     """
-    from ovid2.config.engines import engine_family
+    from ovid2.config.engines import engine_family, resolve_engine_type
     from ovid2.core.engines.stager import stager_class_for_engine_type
 
+    # A named engine config (``local_engine`` → ``pyspark``) resolves to its
+    # type first; checking the bare name silently skipped every named
+    # config (field failure 2026-11-23: a ``local_engine`` draft was never
+    # checked against its storage).
+    engine_type = resolve_engine_type(engine_type) or engine_type
     stager_cls = stager_class_for_engine_type(engine_type)
     if stager_cls is None:
         logger.debug(
@@ -231,6 +243,7 @@ def assert_engine_type_supports_drivers(
         engine_family=str(family or ""),
         engine_type=engine_type,
         address_names=address_names,
+        output_names=output_names,
     )
 
 
@@ -240,6 +253,7 @@ def _assert_stager_supports_drivers(
     engine_family: str,
     engine_type: str,
     address_names: Iterable[str],
+    output_names: Iterable[str] = (),
 ) -> None:
     """Shared body for the two public entry points.
 
@@ -252,11 +266,17 @@ def _assert_stager_supports_drivers(
     :meth:`EngineStager.supported_driver_types` is enough to make the
     decision — no engine session is built, no strategy is instantiated.
 
-    The error message names the incompatible pair, the stager's
-    supported set, and the escape hatch (``--engine duckdb`` /
-    ``--engine pyspark``; no single engine accepts every driver — the
-    Spark stager refuses drivers with ``spark_capable = False``).
+    The error message names the incompatible pair and the stager's
+    supported set. Under engine universality every stager supports every
+    driver type (``tests/contract/test_engine_storage_matrix_complete.py``),
+    so this only fires for a driver added without engine strategies.
+
+    The *output* address must also be writable: a read-only driver
+    (``Driver.read_only``, e.g. Access) is refused as an output for every
+    engine with the same message.
     """
+    address_names = list(address_names)
+    outputs = set(output_names or ())
     for address_name in address_names:
         driver_cls = _driver_class_for_address(address_name)
         if driver_cls is None:
@@ -267,6 +287,12 @@ def _assert_stager_supports_drivers(
             )
             continue
         driver_type = getattr(driver_cls, "type_name", driver_cls.__name__)
+        if address_name in outputs and bool(getattr(driver_cls, "read_only", False)):
+            raise RuntimeError(
+                f"Address '{address_name}' (driver '{driver_type}') is read-only: "
+                f"'{driver_type}' storage can be read by every engine but written by none. "
+                "Pick a writable output address."
+            )
         try:
             supported_ok = stager_cls.supports(driver_type)
         except Exception:
@@ -284,12 +310,9 @@ def _assert_stager_supports_drivers(
         except Exception:
             supported = []
         hint = (
-            "Snowpark DataFrames live inside Snowflake and cannot read/write "
-            "non-Snowflake peripherals directly; use '--engine pyspark' or "
-            "'--engine duckdb' for cross-peripheral copies."
-            if engine_family == "snowpark"
-            else "Pick an engine whose stager supports this driver type "
-            "(e.g. '--engine duckdb' or '--engine pyspark')."
+            "Every engine must reach every storage type; this driver has no "
+            f"'{engine_family}' staging strategy yet (a missing implementation — "
+            "see adr-engine-universality.md)."
         )
         raise RuntimeError(
             f"Engine '{engine_type}' (family '{engine_family}') is not "

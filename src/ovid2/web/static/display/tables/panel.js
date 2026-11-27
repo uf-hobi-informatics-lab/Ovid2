@@ -23,6 +23,7 @@ import { mountRunPanel, fetchPlanTables } from "/static/display/run/panel.js";
 const STATUS_LABEL = {
   pending: "queued",
   running: "running",
+  waiting: "waiting (between stages)",
   completed: "done",
   failed: "failed",
   cancelled: "cancelled",

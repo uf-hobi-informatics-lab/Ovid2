@@ -1,0 +1,42 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+dataset: pcornet_small
+expected:
+  columns:
+  - source_table
+  - metric
+  - value_num
+  - value_str
+  - exception_flag
+  rows:
+  - - LDS_ADDRESS_HISTORY
+    - MISSING_PCT
+    - 66.6667
+    - null
+    - true
+  - - LDS_ADDRESS_HISTORY
+    - MISSING_PCT
+    - 66.6667
+    - null
+    - true
+tables:
+  lds_address_history:
+    columns:
+    - ADDRESSID
+    - PATID
+    - ADDRESS_ZIP5
+    - ADDRESS_COUNTY
+    rows:
+    - - A1
+      - P1
+      - '32601'
+      - Alachua
+    - - A2
+      - P2
+      - null
+      - ''
+    - - A3
+      - P3
+      - NI
+      - null
+note: "decimal rounding: missing-percent with a 20% threshold \u2014 expected = PySpark reference, identical\
+  \ on DuckDB when recorded"

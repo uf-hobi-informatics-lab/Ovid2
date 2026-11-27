@@ -14,6 +14,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from ovid2.core.sources import SourceHandle
 from ovid2.formatters.spec import FormatterSpec
 
 if TYPE_CHECKING:
@@ -46,6 +47,11 @@ class AdapterContext:
             through the engine's stager when the engine is not
             Spark-compatible (Snowpark). ``None`` on the Spark path (the
             already-loaded ``input_address`` is used directly).
+        source: The resolved, read-only :class:`~ovid2.core.sources.SourceHandle`
+            adapters read through. Built by the pipeline
+            (:func:`ovid2.formatters.engine.build_formatter`); assembled from
+            the fields above when omitted. Adapters never resolve storage
+            themselves.
     """
 
     spark: SparkSession
@@ -54,6 +60,18 @@ class AdapterContext:
     batch_id: str
     engine: BaseEngine | None = None
     input_address_name: str | None = None
+    source: SourceHandle | None = None
+
+    def __post_init__(self) -> None:
+        if self.source is None:
+            self.source = SourceHandle(
+                session=self.spark,
+                input_address=self.input_address,
+                pipeline=self.pipeline,
+                batch_id=self.batch_id,
+                engine=self.engine,
+                input_address_name=self.input_address_name,
+            )
 
     @property
     def functions(self) -> EngineFunctions:

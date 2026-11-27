@@ -24,7 +24,7 @@ TOOL_DESCRIPTION = (
     "general-purpose lazy DataFrame operations (formatting, correction, "
     "reshape, sampling) that can be composed into reusable transform "
     "chains. Returns each transform's name, summary, category, "
-    "requires_family, and params_schema. Optionally filter by category."
+    "and params_schema. Optionally filter by category."
 )
 ARGS_MODEL = ListTransformsArgs
 

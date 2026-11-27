@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from ovid2.cdm.handle import CdmHandle, SharedViewSpec
+from ovid2.core.engines.base import BaseEngine
 from ovid2.core.pipeline import register_shared_tables
 
 if TYPE_CHECKING:
@@ -155,13 +156,21 @@ class _FakeSnowparkSession:
     """A session double that has no ``read`` attribute (like the real bug)."""
 
 
-class _FakeEngine:
-    """A non-Spark engine exposing ``session_is_spark = False``."""
+class _FakeEngine(BaseEngine):
+    """A Snowpark-like engine: no native local-file reader (stager fallback)."""
 
+    type_name = "snowpark"
     session_is_spark = False
 
     def __init__(self, stager: _FakeStager) -> None:
+        super().__init__()
         self._stager = stager
+
+    def get_session(self) -> object:  # type: ignore[override]
+        return _FakeSnowparkSession()
+
+    def stop_session(self) -> None:
+        pass
 
     def get_stager(self) -> _FakeStager:
         return self._stager

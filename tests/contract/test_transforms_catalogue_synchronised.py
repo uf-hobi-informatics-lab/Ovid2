@@ -3,9 +3,10 @@
 The web/MCP tiers enumerate transforms through
 :mod:`ovid2.config.transforms_catalogue` (web-safe, no pipeline import),
 while the pipeline tier runs them through
-:data:`ovid2.transforms.registry.TRANSFORMS`. This test proves the two
+:class:`~ovid2.algorithms.registry.AlgorithmRegistry` (kind ``transform``,
+delegating to ``ovid2.transforms.registry.TRANSFORMS``). This test proves the two
 never drift: every registered transform's discovery metadata (name,
-summary, category, requires_family, params_schema) must appear verbatim
+summary, category, params_schema) must appear verbatim
 in the catalogue, and the catalogue must not carry phantom entries.
 
 This is the transforms analogue of the engine registry/config split
@@ -18,17 +19,16 @@ import pytest
 
 
 def _registry_metadata() -> dict[str, dict[str, object]]:
-    """Return ``{name: metadata}`` derived from the live registry."""
-    from ovid2.transforms.registry import TRANSFORMS
+    """Return ``{name: metadata}`` derived from the algorithm facade."""
+    from ovid2.algorithms.registry import registry
 
     out: dict[str, dict[str, object]] = {}
-    for name, cls in TRANSFORMS.items():
+    for name, cls in registry.native_entries("transform").items():
         inst = cls()
         out[name] = {
             "name": inst.name,
             "summary": inst.summary,
             "category": inst.category,
-            "requires_family": inst.requires_family,
             "params_schema": inst.params_schema,
         }
     return out

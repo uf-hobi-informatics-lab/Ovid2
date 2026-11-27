@@ -49,8 +49,9 @@ missing dict raises (legacy raised ``AttributeError`` and the table failed).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
+from ovid2.config.capabilities import Capability
 from ovid2.mappers.base import BaseMapOp, MapOpContext
 
 if TYPE_CHECKING:
@@ -62,6 +63,20 @@ _JOIN_FIELD_NEW = "__legacy_join_field_new"
 
 class LegacySelectOp(BaseMapOp):
     """Project ``df`` exactly like a legacy mapper's ``select(...)``."""
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.FN_COALESCE,
+            Capability.FN_COL,
+            Capability.FN_CONCAT,
+            Capability.FN_CREATE_MAP,
+            Capability.FN_LIT,
+            Capability.FN_TRIM,
+            Capability.FN_UPPER,
+            Capability.FN_WHEN,
+        }
+    )
 
     @property
     def name(self) -> str:

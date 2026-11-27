@@ -536,3 +536,50 @@ def test_jobs_url_redirects_to_runs(web_client: object, pipeline_env_run: str) -
     )
     assert resp.status_code == 302
     assert resp.headers["location"] == "/runs"
+
+
+@pytest.mark.unit
+def test_table_failure_does_not_end_the_run_in_the_console() -> None:
+    """A ``table.failed`` must not flip ■ Stop to ▶ Play while the run goes on.
+
+    Regression: the console treated any ``table.failed`` as run-terminal
+    and swapped the transport glyph to ▶ Rerun (label red) although the
+    pipeline had moved on to the next table — the operator could no
+    longer stop the still-running job. Only ``instance.finished``, the end
+    of the event stream or the server job status may end the run.
+    """
+    root = Path(__file__).resolve().parents[3] / "src" / "ovid2" / "web" / "static"
+    mount = (root / "display" / "terminal" / "mount.js").read_text(encoding="utf-8")
+    body = mount.split("function applyStatusFromEvent", 1)[1].split("\n  function ", 1)[0]
+    assert '"table.failed"' not in body and '"batch.failed"' not in body
+    assert "function syncServerStatus" in mount
+    assert "return { close, syncServerStatus };" in mount
+    live = (root / "live.js").read_text(encoding="utf-8")
+    sync = live.split("function syncVisibleStatus", 1)[1].split("\nfunction ", 1)[0]
+    assert "terminalHandle.syncServerStatus(status, endedAtMs)" in sync
+
+
+@pytest.mark.unit
+def test_terminal_server_status_stops_every_clock() -> None:
+    """A terminal job status freezes all clocks even without ``instance.finished``.
+
+    A SIGKILLed / crashed / cancelled worker never writes the final event,
+    so the total, current-table and per-table clocks must stop from the
+    server's job status (the HTMX poll), not only from the event log.
+    """
+    root = Path(__file__).resolve().parents[3] / "src" / "ovid2" / "web" / "static"
+    mount = (root / "display" / "terminal" / "mount.js").read_text(encoding="utf-8")
+    sync = mount.split("function syncServerStatus", 1)[1].split("\n  function ", 1)[0]
+    assert "stopClocks(endedAtMs)" in sync
+    stop = mount.split("function stopClocks", 1)[1].split("\n  function ", 1)[0]
+    assert "finished = true" in stop and "cancelAnimationFrame(elapsedRaf)" in stop
+    assert "reader.close()" in stop
+    panel = (root / "display" / "run" / "panel.js").read_text(encoding="utf-8")
+    assert "return { handleEvents, close, setRunEnded };" in panel
+    tick = panel.split("function tickTimers", 1)[1].split("\n  function ", 1)[0]
+    assert "runEndedTsMs != null) return" in tick
+    live = (root / "live.js").read_text(encoding="utf-8")
+    assert "panelHandle.setRunEnded(endedAtMs)" in live
+    assert "panelHandle.close()" in live
+    status = (root.parent / "templates" / "_run_job_status.html").read_text(encoding="utf-8")
+    assert "data-ended-at-ms" in status

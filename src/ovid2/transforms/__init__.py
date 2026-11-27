@@ -11,7 +11,7 @@ mapper ops, fixers, and formatter adapters.
 from __future__ import annotations
 
 from ovid2.transforms.base import BaseTransform, TransformContext
-from ovid2.transforms.engine import TransformFamilyError, run
+from ovid2.transforms.engine import run
 from ovid2.transforms.registry import TRANSFORMS, register, transform_names
 from ovid2.transforms.spec import (
     TransformSpec,
@@ -28,7 +28,6 @@ __all__ = [
     "TRANSFORMS",
     "BaseTransform",
     "TransformContext",
-    "TransformFamilyError",
     "TransformSpec",
     "TransformSpecNotFoundError",
     "TransformSpecValidationError",

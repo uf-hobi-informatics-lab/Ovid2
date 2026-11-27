@@ -23,7 +23,12 @@ from dataclasses import dataclass, field
 from datetime import UTC
 from typing import TYPE_CHECKING, Any
 
-from ovid2.core.engines.protocols import EngineFamily, EngineFunctions, EngineSession
+from ovid2.core.engines.protocols import (
+    Capability,
+    EngineFamily,
+    EngineFunctions,
+    EngineSession,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -97,6 +102,20 @@ class BaseEngine(ABC):
     def stop_session(self) -> None:
         """Dispose of the active session, if any."""
 
+    def capabilities(self) -> frozenset[Capability]:
+        """Return the :class:`Capability` set this engine supports.
+
+        Defaults to the web-safe declaration for :attr:`type_name`
+        (:data:`ovid2.config.capabilities.ENGINE_CAPABILITIES`), which the
+        contract ``test_engine_capabilities_declared.py`` pins per engine.
+        Engines whose capabilities depend on configuration override this.
+        An unknown type declares only the function surface.
+        """
+        from ovid2.config.capabilities import FUNCTION_CAPABILITIES, engine_capabilities
+
+        declared = engine_capabilities(self.type_name)
+        return declared if declared is not None else FUNCTION_CAPABILITIES
+
     def get_functions(self) -> EngineFunctions:
         """Return the engine's column-expression DSL.
 
@@ -110,11 +129,10 @@ class BaseEngine(ABC):
     def native(self) -> Any:
         """Return the underlying native session (escape hatch).
 
-        Used by pipeline code and Spark-family-only fixers that need
-        access to the real ``SparkSession`` / ``snowpark.Session``.
-        Callers that use this MUST declare
-        ``requires_family="spark"`` (or the matching family) in their
-        registry entry so they never run under an incompatible engine.
+        Discouraged: code that uses it is tied to one engine's native
+        API, which breaks engine universality. Prefer the portable
+        surface (:mod:`ovid2.core.engines.dsl`). Engine internals
+        (stagers, staging strategies) are the legitimate callers.
         """
         return self.get_session()
 
@@ -306,6 +324,75 @@ class BaseEngine(ABC):
                 continue
             released += 1
         return released
+
+    # ---- Pipeline-step hooks (one pipeline path for every engine) --------
+    #
+    # ``core/pipeline.py`` runs a single code path; the few steps whose
+    # implementation differs per engine are these hooks. Defaults serve the
+    # Spark family (and any engine with a PySpark-shaped session).
+
+    def register_temp_view(self, session: Any, name: str, df: Any) -> None:
+        """Register ``df`` as the temp view ``name`` so later steps can read it.
+
+        Spark / DuckDB frames expose ``createOrReplaceTempView``; Snowpark's
+        native frames ``create_or_replace_temp_view``. ``session`` is passed
+        for engines that register on the session instead.
+
+        Raises:
+            AttributeError: When ``df`` exposes neither spelling.
+        """
+        del session
+        for method in ("createOrReplaceTempView", "create_or_replace_temp_view"):
+            create = getattr(df, method, None)
+            if callable(create):
+                create(name)
+                return
+        raise AttributeError(
+            f"DataFrame of type {type(df).__name__!r} exposes neither "
+            "'createOrReplaceTempView' nor 'create_or_replace_temp_view'; "
+            f"cannot register table '{name}' as a view."
+        )
+
+    def registered_view_names(self, session: Any) -> frozenset[str]:
+        """Return the (lower-cased) temp views already registered on ``session``.
+
+        Lets the pipeline skip re-registering a shared / auxiliary view.
+        Engines whose catalogue cannot enumerate temp views return an empty
+        set (every view is then (re)registered — idempotent).
+        """
+        catalog = getattr(session, "catalog", None)
+        list_tables = getattr(catalog, "listTables", None)
+        if not callable(list_tables):
+            return frozenset()
+        return frozenset(
+            str(t.name).lower() for t in list_tables() if getattr(t, "isTemporary", False)
+        )
+
+    def read_shared_view_file(
+        self, source: Any, *, delimiter: str, header: bool, bus: Any = None
+    ) -> Any:
+        """Read a local, file-sourced shared view (e.g. OMOP ``CONCEPT.csv``).
+
+        Returns the frame, or ``None`` when the engine has no native local
+        reader — the pipeline then stages the file through
+        :meth:`get_stager` with a synthetic disc driver (Snowpark: ``PUT`` +
+        ``COPY INTO``). Spark and DuckDB read through the columnar
+        vocabulary cache.
+        """
+        del source, delimiter, header, bus
+        return None
+
+    def warm_reference(self, session: Any, df: Any, name: str) -> Any:
+        """Materialise a reference table once; return the frame to register + write.
+
+        Reference tables (demographic / encounter / …) are read back by later
+        tables' cross-table fixers. The default is a no-op (Snowpark persists
+        into a real table that later fixers read anyway). The Spark family
+        persists the view so its write fills the cache (``PySparkEngine``);
+        DuckDB writes the result to scratch Parquet (``DuckDBEngine``).
+        """
+        del session, name
+        return df
 
     def get_stager(self) -> Any:
         """Return the :class:`EngineStager` for this engine's family.

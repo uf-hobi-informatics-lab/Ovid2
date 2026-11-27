@@ -1,0 +1,69 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  key_fields:
+  - K1
+  - K2
+tables:
+  input:
+    columns:
+    - K1
+    - K2
+    - V
+    rows:
+    - - a
+      - '1'
+      - x
+    - - a
+      - '1'
+      - x
+    - - a
+      - '1'
+      - x
+    - - a
+      - '2'
+      - y
+    - - null
+      - '1'
+      - n1
+    - - null
+      - '1'
+      - n1
+    - - ''
+      - '1'
+      - e1
+    - - ''
+      - '1'
+      - e1
+    - - b
+      - null
+      - n2
+note: 'seeded randomness in dedup: the salted two-stage dedup (rand(seed=42) on Spark, unseeded random()
+  on DuckDB, single-stage on Snowpark) must keep exactly one row per complete key; null-key passthrough
+  keeps every row whose key has a null OR empty component (null vs empty string are both incomplete)'
+expected:
+  columns:
+  - K1
+  - K2
+  - V
+  rows:
+  - - a
+    - '1'
+    - x
+  - - a
+    - '2'
+    - y
+  - - null
+    - '1'
+    - n1
+  - - null
+    - '1'
+    - n1
+  - - ''
+    - '1'
+    - e1
+  - - ''
+    - '1'
+    - e1
+  - - b
+    - null
+    - n2

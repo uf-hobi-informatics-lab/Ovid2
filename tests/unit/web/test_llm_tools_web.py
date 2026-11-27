@@ -149,7 +149,7 @@ def test_allowed_tools_respects_role() -> None:
     assert "list_jobs" in viewer and "list_connections" not in viewer
     assert "submit_run" not in viewer  # viewer cannot submit, so no proposal either
     guest = {t.name for t in llm_chat_svc.allowed_tools(Role.GUEST)}
-    assert guest == {"health", "list_cdms", "get_cdm"}
+    assert guest == {"health", "list_cdms", "get_cdm", "list_workspaces"}
 
 
 def test_build_request_has_no_tools_when_disabled(client: TestClient) -> None:
@@ -396,7 +396,7 @@ class _UiGateway(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/event-stream")
         self.end_headers()
         if not tool_msgs:
-            args = json.dumps({"theme": "tatooine", "appearance": {"--body-fs": "16px"}})
+            args = json.dumps({"theme": "dune", "appearance": {"--body-fs": "16px"}})
             chunks = [
                 {
                     "choices": [
@@ -415,7 +415,7 @@ class _UiGateway(BaseHTTPRequestHandler):
                 }
             ]
         else:
-            chunks = [{"choices": [{"delta": {"content": "Switched to Tatooine."}}]}]
+            chunks = [{"choices": [{"delta": {"content": "Switched to Dune."}}]}]
         for c in chunks:
             self.wfile.write(f"data: {json.dumps(c)}\n\n".encode())
         self.wfile.write(b"data: [DONE]\n\n")
@@ -460,10 +460,10 @@ def test_set_appearance_end_to_end(live_server: str) -> None:
     ]
     ui = [e for e in events if e["type"] == "ui_action"]
     assert ui and ui[0]["name"] == "set_appearance"
-    assert ui[0]["args"] == {"theme": "tatooine", "appearance": {"--body-fs": "16px"}}
+    assert ui[0]["args"] == {"theme": "dune", "appearance": {"--body-fs": "16px"}}
     assert events[-2]["type"] == "done" and events[-2]["ok"] is True
     assert events[-1]["type"] == "session"
-    assert any(e["type"] == "delta" and "Tatooine" in e["text"] for e in events)
+    assert any(e["type"] == "delta" and "Dune" in e["text"] for e in events)
     # The model saw the current look in its system prompt.
     system = _UiGateway.requests[0]["messages"][0]["content"]
     assert "theme=clinical" in system and '["night"]' in system
@@ -472,4 +472,44 @@ def test_set_appearance_end_to_end(live_server: str) -> None:
         rows = conn.execute("SELECT action, detail_json FROM web_audit ORDER BY rowid").fetchall()
     detail = [r for r in rows if r[0] == "llm.chat"][-1][1]
     assert json.loads(detail)["ui_actions"] == [{"name": "set_appearance"}]
-    assert "tatooine" not in detail and "16px" not in detail
+    assert "dune" not in detail and "16px" not in detail
+
+
+def test_automation_status_reflects_route_dispatch(client: TestClient) -> None:
+    from ovid2.web.models import SettingsWorker
+
+    current = settings_svc.get_settings()
+    settings_svc.save_settings(
+        current.model_copy(update={"worker": SettingsWorker(route_dispatch_enabled=False)}),
+        actor="test",
+    )
+    body = client.get("/api/v1/automation").json()
+    assert body["dispatch_enabled"] is False
+    settings_svc.save_settings(
+        current.model_copy(update={"worker": SettingsWorker(route_dispatch_enabled=True)}),
+        actor="test",
+    )
+    assert client.get("/api/v1/automation").json()["dispatch_enabled"] is True
+
+
+def test_create_tools_only_for_config_managers() -> None:
+    admin = {t.name for t in llm_chat_svc.allowed_tools(Role.SYSTEM_ADMIN)}
+    assert {"create_connection", "create_address", "get_automation_status"} <= admin
+    operator = {t.name for t in llm_chat_svc.allowed_tools(Role.PIPELINE_OPERATOR)}
+    assert "create_connection" not in operator and "create_address" not in operator
+
+
+def test_resolve_unknown_account_suggests_sibling(client: TestClient, isolated_xdg: Path) -> None:
+    import os
+
+    conns = Path(
+        os.environ.get("OVID2_CONNECTIONS_DIR") or isolated_xdg / "config/ovid2/connections"
+    )
+    conns.mkdir(parents=True, exist_ok=True)
+    (conns / "inboxarchive_acme.json").write_text(
+        json.dumps({"type": "disc", "args": {"host_path": "/data/inboxarchive/ACME"}}),
+        encoding="utf-8",
+    )
+    r = client.get("/api/v1/dataspace/resolve", params={"path": "/inboxarchive/NU"})
+    assert r.status_code == 400
+    assert "inboxarchive_nu" in r.json()["detail"]

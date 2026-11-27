@@ -296,6 +296,6 @@ def test_signed_in_user_page_renders_their_look(
 ) -> None:
     _enable_auth(monkeypatch)
     uid, cookie = _cookie(Role.VIEWER, "dana")
-    prefs_svc.save_appearance(uid, {"theme": "tatooine"})
+    prefs_svc.save_appearance(uid, {"theme": "dune"})
     client.cookies.set("ovid2_session", cookie)
-    assert _prepaint(client.get("/runs").text)["theme"] == "tatooine"
+    assert _prepaint(client.get("/runs").text)["theme"] == "dune"

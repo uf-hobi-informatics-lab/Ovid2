@@ -274,7 +274,11 @@ def main(args: argparse.Namespace) -> int:
             if a
         ]
         if addresses:
-            assert_engine_type_supports_drivers(args.engine, addresses)
+            assert_engine_type_supports_drivers(
+                args.engine,
+                addresses,
+                output_names=[a for a in [getattr(args, "output_address", None)] if a],
+            )
     except RuntimeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -313,6 +317,13 @@ def _run_host_mode(args: argparse.Namespace) -> int:
         ],
     )
 
+    # Non-Spark engines (DuckDB, Snowpark) need one driver container, not a
+    # Spark cluster sized by *Workers* — same rule as ``ovid2 etl``.
+    from ovid2.config.engines import engine_uses_workers
+
+    if not engine_uses_workers(getattr(args, "engine", None)):
+        args.no_spark_cluster = True
+        return submit_to_docker(args, instance)
     if SPARK_MODE == "cluster":
         return submit_with_cluster(args, instance)
     return submit_to_docker(args, instance)
@@ -480,6 +491,8 @@ def _run_container_mode(args: argparse.Namespace) -> int:
         getattr(args, "output_location", None),
     )
 
+    from ovid2.core.sources import local_file_reader
+
     runner = HealthCheckRunner(
         session=session,
         cdm=cdm,
@@ -488,6 +501,7 @@ def _run_container_mode(args: argparse.Namespace) -> int:
         instance_id=instance_id,
         event_bus=bus,
         engine=engine,
+        reference_reader=local_file_reader(engine, pipeline=pipeline, batch_id=batch_id),
     )
 
     failures = 0

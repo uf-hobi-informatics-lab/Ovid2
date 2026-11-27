@@ -11,6 +11,7 @@ _OWNERS: dict[str, str] = {
     "ovid2001_suppressions": "test_no_collect_in_src.py",
     "pyspark_tree_runtime_importers": "test_no_pyspark_outside_engine.py",
     "cross_pipeline_imports": "test_no_runtime_pyspark_in_shared.py",
+    "algorithm_backend_imports": "test_algorithms_engine_and_storage_free.py",
 }
 
 

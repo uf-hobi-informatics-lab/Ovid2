@@ -1,0 +1,107 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+dataset: pcornet_small
+expected:
+  columns:
+  - source_table
+  - metric
+  - value_num
+  - value_str
+  - exception_flag
+  rows:
+  - - DEMOGRAPHIC
+    - DISTINCT_PK_COUNT
+    - 4.0
+    - null
+    - false
+  - - DEMOGRAPHIC
+    - DUPLICATE_PK_COUNT
+    - 1.0
+    - null
+    - true
+  - - DEMOGRAPHIC
+    - ROW_COUNT
+    - 5.0
+    - null
+    - false
+  - - DIAGNOSIS
+    - DISTINCT_PK_COUNT
+    - 4.0
+    - null
+    - false
+  - - DIAGNOSIS
+    - DUPLICATE_PK_COUNT
+    - 0.0
+    - null
+    - false
+  - - DIAGNOSIS
+    - ROW_COUNT
+    - 4.0
+    - null
+    - false
+  - - ENCOUNTER
+    - DISTINCT_PK_COUNT
+    - 6.0
+    - null
+    - false
+  - - ENCOUNTER
+    - DUPLICATE_PK_COUNT
+    - 0.0
+    - null
+    - false
+  - - ENCOUNTER
+    - ROW_COUNT
+    - 6.0
+    - null
+    - false
+  - - LAB_RESULT_CM
+    - DISTINCT_PK_COUNT
+    - 3.0
+    - null
+    - false
+  - - LAB_RESULT_CM
+    - DUPLICATE_PK_COUNT
+    - 0.0
+    - null
+    - false
+  - - LAB_RESULT_CM
+    - ROW_COUNT
+    - 3.0
+    - null
+    - false
+  - - PRESCRIBING
+    - DISTINCT_PK_COUNT
+    - 3.0
+    - null
+    - false
+  - - PRESCRIBING
+    - DUPLICATE_PK_COUNT
+    - 0.0
+    - null
+    - false
+  - - PRESCRIBING
+    - ROW_COUNT
+    - 3.0
+    - null
+    - false
+  - - PROCEDURES
+    - DISTINCT_PK_COUNT
+    - 2.0
+    - null
+    - false
+  - - PROCEDURES
+    - DUPLICATE_PK_COUNT
+    - 0.0
+    - null
+    - false
+  - - PROCEDURES
+    - ROW_COUNT
+    - 2.0
+    - null
+    - false
+  - - VITAL
+    - DISTINCT_PK_COUNT
+    - null
+    - null
+    - false
+note: "metric rows on the shared pcornet_small dataset \u2014 expected = PySpark reference, identical\
+  \ on DuckDB when recorded"

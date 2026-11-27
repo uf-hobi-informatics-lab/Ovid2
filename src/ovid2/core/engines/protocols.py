@@ -15,9 +15,9 @@ Contract-test guardrail
 
 ``tests/contract/test_no_pyspark_outside_engine.py`` forbids
 ``import pyspark`` outside ``ovid2.core.engines.*``. New consumers of a
-Spark method must either extend :class:`EngineSession` here or call
-``engine.native()`` and declare their fixer / adapter as
-``requires_family="spark"``.
+Spark method extend the portable surface
+(:mod:`ovid2.core.engines.surface`) on *every* engine — there is no
+per-family opt-out (``tests/contract/test_no_engine_family_gates.py``).
 """
 
 from __future__ import annotations
@@ -32,9 +32,8 @@ if TYPE_CHECKING:
 class EngineFamily(str, Enum):
     """Broad compute-family classification.
 
-    Fixers, adapters, and pipeline code may declare a ``requires_family``
-    marker that gates them to one family. This lets us ship Snowpark as a
-    real engine without pretending every Spark-only fixer works under it.
+    Informational only (stager dispatch, SQL dialect): no code is gated
+    to a family — every engine runs every pipeline.
     """
 
     SPARK = "spark"
@@ -128,9 +127,22 @@ class EngineOperationUnsupported(RuntimeError):
         self.detail = detail
 
 
+# Capabilities live in the web-safe ``ovid2.config.capabilities`` (the web
+# tier's submit check needs them); re-exported here as part of the engine API.
+from ovid2.config.capabilities import (  # noqa: E402
+    FEATURE_CAPABILITIES,
+    FUNCTION_CAPABILITIES,
+    Capability,
+    function_capability,
+)
+
 __all__ = [
+    "FEATURE_CAPABILITIES",
+    "FUNCTION_CAPABILITIES",
+    "Capability",
     "EngineFamily",
     "EngineFunctions",
     "EngineOperationUnsupported",
     "EngineSession",
+    "function_capability",
 ]

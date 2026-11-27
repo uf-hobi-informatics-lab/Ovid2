@@ -138,7 +138,7 @@ model ─ tool call ─┬─ GET tool  → executor calls /api/v1/... with a pe
   the proposal.
 - **Appearance (UI actions)**: `set_appearance`, `save_appearance` and
   `apply_saved_appearance`. You can ask things like *"switch to the
-  Tatooine theme with a red accent"*, *"make the text bigger and use a
+  Dune theme with a red accent"*, *"make the text bigger and use a
   serif font"*, *"save this as desert"* or *"go back to desert"*.
 
   The assistant never calls the API for these tools. Your browser

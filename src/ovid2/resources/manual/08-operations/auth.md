@@ -73,7 +73,7 @@ Only the `issuer` is needed. Ovid2 discovers the provider's endpoints at
 | `auth_<provider>.json` | `{"client_secret": "…"}` | the OIDC client secret |
 | `auth_session.json` | `{"signing_key": "…"}` | cookie and CSRF signing (auto-generated) |
 | `auth_breakglass.json` | `{"password_hash": "…"}` | set via the CLI only |
-| `auth_service_tokens.json` | `{"<sha256hex>": "<role>"}` | MCP service tokens |
+| `auth_service_tokens.json` | `{"<sha256hex>": "<role>"}`, or `{"<sha256hex>": {"role": …, "workspaces": […]}}` | MCP service tokens (bound to [workspaces](../03-web-panel/workspaces.md); a plain role means `default`) |
 
 ```bash
 install -m 600 /dev/null "$XDG_CONFIG_HOME/ovid2/secrets.d/auth_google.json"

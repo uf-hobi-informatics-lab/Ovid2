@@ -8,8 +8,9 @@ Params:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
+from ovid2.config.capabilities import Capability
 from ovid2.mappers.base import BaseMapOp, MapOpContext
 
 if TYPE_CHECKING:
@@ -18,6 +19,15 @@ if TYPE_CHECKING:
 
 class RegexReplaceOp(BaseMapOp):
     """Regex substitution on one column."""
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.FN_COL,
+            Capability.FN_REGEXP_REPLACE,
+            Capability.REGEX,
+        }
+    )
 
     @property
     def name(self) -> str:

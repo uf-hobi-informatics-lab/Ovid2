@@ -53,7 +53,7 @@ account and asks you to pick a database or schema.
 | Stages (transformations) | ETL, Analysis | `all` |
 | Report cycle / checks | Health, DQ checks | the newest cycle |
 | Engine | all | `settings.defaults.engine` (`pyspark`) |
-| Workers | ETL, Analysis, Health, DQ checks on Spark / DuckDB | `settings.defaults.workers` (25) |
+| Workers | ETL, Analysis, Health, DQ checks on Spark engines | `settings.defaults.workers` (25) |
 | Strict CDM type check | Move | off |
 | *Advanced:* Snowflake ACCOUNT override | ETL, Analysis, Health, DQ checks on Snowpark | — |
 | *Advanced:* Mirror events to stderr | ETL, Analysis, Health, DQ checks | off |

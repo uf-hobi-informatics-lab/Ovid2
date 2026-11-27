@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Workspaces &mdash; Ovid2{% endblock %}
+{% block content %}
+{% import "_help.html" as help %}
+<section class="page">
+  <div class="page-header">
+    <h1>Workspaces {% call help.tip_block() %}A workspace is a shared space for a team. Its members see the same pipelines, workflows, jobs, runs, reports, connections, addresses, secrets, engines, LLM connections, transform library and pipeline packages; nothing is visible across workspaces. What a member may do inside a workspace is still their own role. Every existing item lives in <code>default</code>.{% endcall %}</h1>
+  </div>
+
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+  {% if notice %}<div class="flash">{{ notice }}</div>{% endif %}
+
+  <div class="table-wrap">
+    <table class="runs-table">
+      <thead>
+        <tr><th>Name</th><th>Slug</th><th>Members</th><th>Status</th><th>Created</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for w in workspaces %}
+          <tr>
+            <td><a href="/workspaces/{{ w.workspace_id }}">{{ w.display_name }}</a>{% if w.workspace_id == active_workspace %} <span class="badge">current</span>{% endif %}</td>
+            <td class="mono">{{ w.workspace_id }}</td>
+            <td>{{ w.member_count }}</td>
+            <td><span class="badge status-{{ w.status }}">{{ w.status }}</span></td>
+            <td class="small">{{ w.created_at | localtime }}</td>
+            <td><a class="link-button small" href="/workspaces/{{ w.workspace_id }}">manage</a></td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="empty">No workspaces yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if archived_count %}
+    <p class="small">
+      {% if show_archived %}<a href="/workspaces">Hide archived</a>{% else %}<a href="/workspaces?show_archived=true">Show {{ archived_count }} archived</a>{% endif %}
+    </p>
+  {% endif %}
+
+  <h2 class="small">New workspace {% call help.tip_block() %}The slug is permanent (it names the workspace's folder and is what API / MCP callers send in the <code>X-Ovid2-Workspace</code> header); the name can be changed later. Add members on the next page.{% endcall %}</h2>
+  <form action="/workspaces" method="post" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Name
+      <input type="text" name="display_name" required maxlength="80" autocomplete="off">
+    </label>
+    <label>Slug
+      <input type="text" name="workspace_id" required minlength="2" maxlength="40"
+             pattern="[a-z0-9][a-z0-9_-]{1,39}" autocomplete="off" spellcheck="false" data-allow-new>
+    </label>
+    <label>Description
+      <input type="text" name="description" maxlength="500" autocomplete="off">
+    </label>
+    <div><button type="submit" class="button primary">Create workspace</button></div>
+  </form>
+</section>
+{% endblock %}

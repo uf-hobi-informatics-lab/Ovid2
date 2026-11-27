@@ -1,0 +1,27 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  src1: demographic
+tables:
+  input:
+    columns:
+    - PATID
+    - TOKEN_01
+    rows:
+    - - P1
+      - t
+  demographic:
+    columns:
+    - PATID
+    - BIRTH_DATE
+    rows:
+    - - P1
+      - '2000-01-01'
+    - - P2
+      - null
+compare: count
+note: a stub row (null tokens, current_timestamp UPDATED) is added per missing PATID; compared by count
+expected:
+  columns:
+  - n
+  rows:
+  - - 2

@@ -24,7 +24,7 @@ from typing import Any
 
 import httpx
 
-from ovid2.mcp.settings import MCP_API_TOKEN, MCP_HTTP_TIMEOUT, MCP_UPSTREAM
+from ovid2.mcp.settings import MCP_API_TOKEN, MCP_HTTP_TIMEOUT, MCP_UPSTREAM, MCP_WORKSPACE
 
 
 class WebApiError(RuntimeError):
@@ -53,14 +53,20 @@ class WebApiClient:
         timeout: float = MCP_HTTP_TIMEOUT,
         transport: httpx.AsyncBaseTransport | None = None,
         token: str | None = MCP_API_TOKEN,
+        workspace: str | None = MCP_WORKSPACE,
     ) -> None:
         self._base_url = base_url.rstrip("/")
-        headers = {"Authorization": f"Bearer {token}"} if token else None
+        headers: dict[str, str] = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        if workspace:
+            # adr-workspaces.md — every call runs in this workspace.
+            headers["X-Ovid2-Workspace"] = workspace
         self._client = httpx.AsyncClient(
             base_url=self._base_url,
             timeout=timeout,
             transport=transport,
-            headers=headers,
+            headers=headers or None,
         )
 
     @property

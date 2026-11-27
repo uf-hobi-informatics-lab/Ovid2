@@ -225,6 +225,12 @@ def activate(user_id: str, role: Role, actor: str) -> dict[str, Any]:
             (role.value, "active", now, now, user_id),
         )
 
+        # Workspaces (adr-workspaces.md): a newly activated user with no
+        # membership lands in ``default`` so they are never stranded.
+        from ovid2.web.services import workspaces_svc
+
+        workspaces_svc.enrol_default(user_id, actor=actor)
+
         # Audit the change
         web_db.ensure_schema()
         web_db.audit(

@@ -1,0 +1,21 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  fraction: 1.0
+  seed: 7
+tables:
+  input:
+    columns:
+    - k
+    rows:
+    - - '1'
+    - - '2'
+    - - '3'
+note: 'seeded draws: requires rand_seeded, so the matrix runs this on the Spark family only and marks
+  DuckDB / Snowpark as refused-at-plan-time; fraction 1.0 keeps every row'
+expected:
+  columns:
+  - k
+  rows:
+  - - '1'
+  - - '2'
+  - - '3'

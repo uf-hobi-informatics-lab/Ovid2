@@ -54,13 +54,13 @@ not listed here are internal; don't rely on them.
 | `OVID2_SPARK_LOCAL_DRIVER_MEMORY_GB` | half the host's Spark budget, clamped | `local[N]` driver heap in GiB |
 | `OVID2_SPARK_ALLOW_OVERSUBSCRIBE` | off | `1` lets `--workers` exceed what the host fits (otherwise capped) |
 | `OVID2_SPARK_LOCAL_DIR` | real-disk scratch | Spark spill and scratch root |
+| `OVID2_LEGACY_SCRATCH_DIR` | `$XDG_CACHE_HOME/ovid2/legacy-scratch` | real-disk root for `legacy_ovid` stage files (mapper / fixer outputs, round-trip dirs) |
 | `OVID2_HOST_MEMORY_GB` / `OVID2_HOST_CPUS` | detected | override host sizing |
 | `OVID2_DEDUP_SALT_BUCKETS` | `32` | salted-dedup partitions |
 | `OVID2_DEDUP_NULL_KEY_PASSTHROUGH` | `true` | keep null-key rows out of dedup |
 | `OVID2_DISC_WRITE_PARTITIONS` | engine default | output partitions for disc writes |
 | `OVID2_SNOWFLAKE_WRITE_PARTITIONS` | unset (keep the DataFrame's own partitioning) | Spark partitions fed to the Snowflake connector on write; non-positive or non-integer values are ignored |
 | `OVID2_VOCAB_PARQUET_CACHE` | on | `0` disables the one-time Parquet cache of large vocabulary files (OMOP `CONCEPT`, `CONCEPT_RELATIONSHIP`) shared by Spark and DuckDB |
-| `OVID2_COPY_TABLE_CONCURRENCY` | `8` | tables copied at once |
 | `OVID2_COPY_ORDER` | largest first | `as_given` keeps the listed order |
 | `OVID2_TIMEZONE` | `America/New_York` | timezone for executor timestamps (e.g. `UPDATED` columns) |
 | `OVID2_NETWORK_ID` | the template's `NETWORKID`, else `NET` | default network id (`HARVEST.NETWORKID`, prefix of `DATAMARTID`) offered when a new pipeline is scaffolded |
@@ -80,10 +80,8 @@ not listed here are internal; don't rely on them.
 | `OVID2_DUCKDB_CPUS` | every usable CPU | the container's `--cpus` |
 | `OVID2_DUCKDB_TEMP_DIR` | per-run scratch | spill directory |
 | `OVID2_DUCKDB_STAGE_SOURCES` | `true` | parse each text source once into scratch Parquet |
-| `OVID2_DUCKDB_TABLE_CONCURRENCY` | Workers, else `min(tables, CPUs)` | tables at once (`1` = sequential) |
 | `OVID2_DUCKDB_MAX_LINE_SIZE` | 8 MiB | longest CSV record |
 | `OVID2_DUCKDB_SCRATCH_CODEC` | `zstd` | scratch Parquet codec (`zstd` / `lz4_raw` / `snappy` / `uncompressed`) |
-| `OVID2_DUCKDB_PRESTAGE` | off | stage every source before the parallel phase (opt-in) |
 | `OVID2_DUCKDB_EXTENSION_DIR` | DuckDB's own | directory of pre-installed DuckDB extensions (no download at run time) |
 | `OVID2_GCS_ENDPOINT` | — | point DuckDB's GCS client at an emulator (anonymous credentials) |
 

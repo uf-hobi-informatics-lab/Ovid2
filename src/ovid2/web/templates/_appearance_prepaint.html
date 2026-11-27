@@ -18,14 +18,13 @@
   (function () {
     var root = document.documentElement;
     var p = window.OVID2_APPEARANCE || {};
-    var KNOWN = ["clinical", "matrix", "super-mario-world",
-                 "tatooine", "financial", "lego", "spaceship",
-                 "data-factory",
+    var KNOWN = ["clinical", "data-factory", "dune", "financial",
+                 "lego", "matrix", "spaceship", "super-mario-world",
                  /* legacy light/dark aliases (map to clinical/matrix) */
                  "light", "dark"];
     /* Retired slugs remapped to their replacements (mirrors
      * LEGACY_ALIASES in theme.js). */
-    var ALIASES = { dune: "tatooine", industry: "lego" };
+    var ALIASES = { tatooine: "dune", industry: "lego" };
     var slug = p.theme;
     if (slug && ALIASES[slug]) { slug = ALIASES[slug]; }
     /* No saved (or an unknown) theme -> the shipped default, Data

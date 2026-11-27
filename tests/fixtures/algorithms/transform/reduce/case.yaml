@@ -1,0 +1,28 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  group_by:
+  - k
+  aggs:
+    v: max
+tables:
+  input:
+    columns:
+    - k
+    - v
+    rows:
+    - - a
+      - '1'
+    - - a
+      - '3'
+    - - b
+      - '2'
+expected:
+  columns:
+  - k
+  - max(v)
+  rows:
+  - - a
+    - '3'
+  - - b
+    - '2'
+note: the aggregate column keeps Spark's default name (max(v)) on every engine

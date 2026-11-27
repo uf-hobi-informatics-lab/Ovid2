@@ -169,6 +169,89 @@ def local_driver_memory_gb(memory_gb: int | None = None) -> int:
     return max(LOCAL_DRIVER_MEMORY_FLOOR_GB, min(LOCAL_DRIVER_MEMORY_CAP_GB, candidate))
 
 
+_MEMORY_UNITS_MB: dict[str, float] = {
+    "k": 1 / 1024,
+    "m": 1,
+    "g": 1024,
+    "t": 1024 * 1024,
+}
+
+
+def _parse_memory_mb(raw: str) -> int | None:
+    """Parse a Spark memory string (``48g``, ``512m``, ``8192``) into MiB.
+
+    A bare number is MiB (Spark's default unit for these keys). Returns
+    ``None`` when the value cannot be parsed.
+    """
+    text = str(raw).strip().lower().removesuffix("b")
+    if not text:
+        return None
+    unit = text[-1]
+    number = text[:-1] if unit in _MEMORY_UNITS_MB else text
+    factor = _MEMORY_UNITS_MB.get(unit, 1)
+    try:
+        return int(float(number) * factor)
+    except ValueError:
+        return None
+
+
+def fit_executor_to_worker(
+    conf: dict[str, str],
+    *,
+    worker_cores: int = WORKER_CORES,
+    worker_memory_gb: int = WORKER_MEMORY_GB,
+) -> tuple[dict[str, str], list[str]]:
+    """Shrink the executor request so one executor fits on one worker.
+
+    A Spark standalone master never places an executor bigger than a
+    worker. If ``spark.executor.cores`` or the executor memory is larger
+    than that, the app sits in ``WAITING`` ("requires more resource than
+    any of Workers could have") and every stage shows ``(0 + 0)``. This
+    happens when an engine config sets, say, ``spark.executor.cores=32``
+    on a cluster whose workers have 8 cores each.
+
+    Args:
+        conf: Merged Spark config (not mutated).
+        worker_cores: Cores each worker offers.
+        worker_memory_gb: Spark memory each worker offers (GiB).
+
+    Returns:
+        ``(fitted_conf, messages)``. ``messages`` names each value that
+        was lowered; it is empty when the request already fits.
+    """
+    fitted = dict(conf)
+    messages: list[str] = []
+
+    cores_raw = fitted.get("spark.executor.cores")
+    if cores_raw is not None:
+        try:
+            cores = int(str(cores_raw).strip())
+        except ValueError:
+            cores = None
+        if cores is not None and cores > worker_cores:
+            fitted["spark.executor.cores"] = str(worker_cores)
+            messages.append(
+                f"spark.executor.cores {cores} -> {worker_cores} "
+                f"(each worker has {worker_cores} cores)"
+            )
+
+    worker_mb = worker_memory_gb * 1024
+    heap_mb = _parse_memory_mb(fitted.get("spark.executor.memory", "") or "")
+    overhead_mb = _parse_memory_mb(fitted.get("spark.executor.memoryOverhead", "") or "") or 0
+    if heap_mb is not None and heap_mb + overhead_mb > worker_mb:
+        asked_overhead_mb = overhead_mb
+        if overhead_mb >= worker_mb // 2:
+            overhead_mb = max(384, worker_mb // 8)
+            fitted["spark.executor.memoryOverhead"] = f"{overhead_mb}m"
+        new_heap_mb = max(512, worker_mb - overhead_mb)
+        fitted["spark.executor.memory"] = f"{new_heap_mb}m"
+        messages.append(
+            f"spark.executor.memory {heap_mb}m (+{asked_overhead_mb}m overhead) -> "
+            f"{new_heap_mb}m (each worker has {worker_memory_gb} GiB)"
+        )
+    return fitted, messages
+
+
 #: Fraction of host RAM one DuckDB driver container may claim.
 DUCKDB_DEFAULT_MEMORY_FRACTION: float = 0.75
 #: Share of the container cap handed to DuckDB's ``memory_limit``
@@ -177,7 +260,6 @@ DUCKDB_ENGINE_MEMORY_SHARE: float = 0.85
 
 
 def duckdb_container_sizing(
-    workers: int | None = None,
     *,
     cpus: int | None = None,
     memory_gb: int | None = None,
@@ -187,18 +269,16 @@ def duckdb_container_sizing(
     DuckDB runs in-process, so one container is the whole run. Its size
     comes from the host, not from Spark's driver-heap cap: the container
     may use ``$OVID2_DUCKDB_MEMORY_FRACTION`` (default 0.75) of host RAM
-    and every CPU (``$OVID2_DUCKDB_CPUS`` narrows it). ``workers`` — the
-    job's *Workers* field — is the number of tables run side by side.
+    and every CPU (``$OVID2_DUCKDB_CPUS`` narrows it). Tables run one at
+    a time, so the running table gets every thread and the whole memory
+    limit; there is no per-job *Workers* knob for DuckDB.
 
     Args:
-        workers: Requested concurrent tables (``--workers``); ``None``
-            → one per CPU.
         cpus: Host CPU override (tests).
         memory_gb: Host RAM override (tests).
 
     Returns:
-        ``{"memory_gb", "cpus", "threads", "table_concurrency",
-        "engine_memory_gb"}``.
+        ``{"memory_gb", "cpus", "threads", "engine_memory_gb"}``.
     """
     host_cpus = cpus if cpus is not None else host_cpu_count()
     host_mem = memory_gb if memory_gb is not None else host_memory_gb()
@@ -206,12 +286,10 @@ def duckdb_container_sizing(
     fraction = _env_float("OVID2_DUCKDB_MEMORY_FRACTION", DUCKDB_DEFAULT_MEMORY_FRACTION)
     container_gb = max(4, int(host_mem * fraction))
     engine_gb = max(1, int(container_gb * DUCKDB_ENGINE_MEMORY_SHARE))
-    concurrency = max(1, int(workers)) if workers else use_cpus
     return {
         "memory_gb": container_gb,
         "cpus": use_cpus,
         "threads": use_cpus,
-        "table_concurrency": concurrency,
         "engine_memory_gb": engine_gb,
     }
 
@@ -224,6 +302,7 @@ __all__ = [
     "WORKER_MEMORY_LIMIT_GB",
     "duckdb_container_sizing",
     "effective_worker_count",
+    "fit_executor_to_worker",
     "host_cpu_count",
     "host_memory_gb",
     "local_cores",

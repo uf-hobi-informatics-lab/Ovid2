@@ -1,0 +1,49 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+spec:
+  formatter: condition
+  input_file_name: '*cond*'
+  sources:
+    c:
+      glob: cond.txt
+  joins:
+  - with: concept
+    'on': cc_concept_code = c.code
+    how: left
+    prefix: cc
+    domain_filter:
+    - Condition
+  projections:
+    CODE: code
+    CONCEPT_ID: cc_concept_id
+  adapter: semantic_join
+files:
+  cond.txt: 'code
+
+    E11.9
+
+    zz
+
+    '
+tables:
+  concept:
+    columns:
+    - concept_id
+    - concept_code
+    - domain_id
+    rows:
+    - - '201826'
+      - E11.9
+      - Condition
+    - - '9'
+      - E11.9
+      - Drug
+note: left join on the concept view after the domain filter (Drug row ignored)
+expected:
+  columns:
+  - CODE
+  - CONCEPT_ID
+  rows:
+  - - E11.9
+    - '201826'
+  - - zz
+    - null

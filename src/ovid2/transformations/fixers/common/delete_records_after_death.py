@@ -59,8 +59,9 @@ Deployment:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
+from ovid2.config.capabilities import Capability
 from ovid2.core.engines.dsl import broadcast, col, to_date
 from ovid2.transformations.fixers.base import BaseFixer
 
@@ -79,6 +80,16 @@ class DeleteRecordsAfterDeathFixer(BaseFixer):
 
     All operations are lazy Spark DataFrame transformations.
     """
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.BROADCAST_JOIN,
+            Capability.FN_BROADCAST,
+            Capability.FN_COL,
+            Capability.FN_TO_DATE,
+        }
+    )
 
     @property
     def name(self) -> str:

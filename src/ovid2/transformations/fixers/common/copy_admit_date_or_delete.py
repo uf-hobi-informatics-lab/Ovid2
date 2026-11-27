@@ -64,8 +64,9 @@ Deployment:
 from __future__ import annotations
 
 from functools import reduce
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
+from ovid2.config.capabilities import Capability
 from ovid2.core.engines.dsl import broadcast, col, when
 from ovid2.transformations.fixers.base import BaseFixer
 
@@ -84,6 +85,16 @@ class CopyAdmitDateOrDeleteFixer(BaseFixer):
 
     All operations are lazy Spark DataFrame transformations.
     """
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.BROADCAST_JOIN,
+            Capability.FN_BROADCAST,
+            Capability.FN_COL,
+            Capability.FN_WHEN,
+        }
+    )
 
     @property
     def name(self) -> str:

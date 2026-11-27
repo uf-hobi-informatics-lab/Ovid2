@@ -1,0 +1,53 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  columns:
+  - name
+  - sex
+tables:
+  input:
+    columns:
+    - id
+    - name
+    - sex
+    - n
+    rows:
+    - - '1'
+      - '  alice  smith '
+      - f
+      - '5'
+    - - '2'
+      - BOB
+      - M
+      - '-3.5'
+    - - '3'
+      - ''
+      - UN
+      - null
+    - - '4'
+      - null
+      - m
+      - '12'
+note: null stays null; empty string stays empty
+expected:
+  columns:
+  - id
+  - name
+  - sex
+  - n
+  rows:
+  - - '1'
+    - '  ALICE  SMITH '
+    - F
+    - '5'
+  - - '2'
+    - BOB
+    - M
+    - '-3.5'
+  - - '3'
+    - ''
+    - UN
+    - null
+  - - '4'
+    - null
+    - M
+    - '12'

@@ -53,6 +53,15 @@ class _WorkingAddress:
         return _FakeDataFrame(file_name)
 
 
+class _NativePlaneEngine:
+    """Spark-family stand-in: reads through the address, no DSL needed."""
+
+    session_is_spark = True
+
+    def get_functions(self) -> Any:
+        return object()
+
+
 def _runner(bus: _CapturingBus) -> HealthCheckRunner:
     return HealthCheckRunner(
         session=object(),
@@ -61,6 +70,7 @@ def _runner(bus: _CapturingBus) -> HealthCheckRunner:
         batch_id="20260915-233005",
         instance_id="test-instance",
         event_bus=bus,  # type: ignore[arg-type]
+        engine=_NativePlaneEngine(),  # type: ignore[arg-type]
     )
 
 
@@ -138,6 +148,7 @@ def _na_runner(session: Any) -> HealthCheckRunner:
         batch_id="20260916-000000",
         instance_id="na-test",
         event_bus=_CapturingBus(),  # type: ignore[arg-type]
+        engine=_NativePlaneEngine(),  # type: ignore[arg-type]
     )
 
 
@@ -284,6 +295,40 @@ def test_results_frame_built_by_engine_with_portable_schema() -> None:
     _rows, schema = engine.typed[0]
     assert schema == RESULTS_SCHEMA
     assert tuple(name for name, _t in RESULTS_SCHEMA) == METRIC_ROW_COLUMNS
+
+
+@pytest.mark.unit
+def test_runner_requires_an_engine() -> None:
+    """No implicit Spark fallback: the engine comes from the caller."""
+    with pytest.raises(ValueError, match="needs an engine"):
+        HealthCheckRunner(
+            session=object(),
+            cdm=object(),  # type: ignore[arg-type]
+            pipeline="p",
+            batch_id="b",
+            event_bus=_CapturingBus(),  # type: ignore[arg-type]
+            engine=None,  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.unit
+def test_reference_files_use_the_caller_supplied_reader() -> None:
+    """The runner never builds a storage driver for reference files."""
+    seen: list[tuple[str, str]] = []
+    runner = HealthCheckRunner(
+        session=object(),
+        cdm=object(),  # type: ignore[arg-type]
+        pipeline="p",
+        batch_id="b",
+        event_bus=_CapturingBus(),  # type: ignore[arg-type]
+        engine=_NativePlaneEngine(),  # type: ignore[arg-type]
+        reference_reader=lambda path, delim: seen.append((path, delim)) or "ref",
+    )
+    assert runner._read_reference("/x/ref.tsv", "\t") == "ref"
+    assert seen == [("/x/ref.tsv", "\t")]
+    bare = _runner(_CapturingBus())
+    with pytest.raises(RuntimeError, match="reference_reader"):
+        bare._read_reference("/x/ref.tsv", "\t")
 
 
 @pytest.mark.unit

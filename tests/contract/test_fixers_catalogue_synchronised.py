@@ -6,21 +6,19 @@ import inspect
 
 import pytest
 
+from ovid2.algorithms.registry import registry
 from ovid2.config.fixers_catalogue import FIXER_CATALOGUE
-from ovid2.transformations.fixers.common.registry import (
-    COMMON_FIXES,
-    FIXER_ALIASES,
-    scope_of,
-)
 
 
 @pytest.mark.contract
 def test_fixer_catalogue_matches_registry() -> None:
-    assert set(FIXER_CATALOGUE) == set(COMMON_FIXES), (
-        "config/fixers_catalogue.py is out of sync with COMMON_FIXES"
+    fixers = registry.native_entries("fixer")
+    assert set(FIXER_CATALOGUE) == set(fixers), (
+        "config/fixers_catalogue.py is out of sync with the AlgorithmRegistry fixers"
     )
-    for name, cls in COMMON_FIXES.items():
+    for name, cls in fixers.items():
         entry = FIXER_CATALOGUE[name]
-        assert entry["scope"] == scope_of(name), name
-        assert entry["aliases"] == FIXER_ALIASES.get(name, {}), name
+        info = registry.describe("fixer", name)
+        assert entry["scope"] == info["scope"], name
+        assert entry["aliases"] == info["aliases"], name
         assert entry["summary"] == (inspect.getdoc(cls) or "").splitlines()[0], name

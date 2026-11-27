@@ -342,6 +342,26 @@ def load_table_fields_from_yaml(cdm_name: str, table: str) -> list[CdmField]:
     return rows
 
 
+def load_table_field_names_as_authored(cdm_name: str, table: str) -> list[str]:
+    """Return ``table``'s field names exactly as the YAML spells them.
+
+    :func:`load_table_fields_from_yaml` upper-cases names (Snowflake DDL
+    convention). Engines that fold identifiers (Snowpark) use this to
+    restore the CDM's authored case (OMOP lower, PCORnet upper) on file
+    outputs so every engine writes the same header. Missing CDM / table
+    → ``[]``.
+    """
+    try:
+        directory = cdm_yaml_dir(cdm_name)
+    except CdmYamlError:
+        return []
+    path = directory / "tables" / f"{table.lower()}.yaml"
+    if not path.is_file():
+        return []
+    fields_raw = _load_yaml(path).get("fields") or []
+    return [str(e["name"]) for e in fields_raw if isinstance(e, dict) and e.get("name")]
+
+
 def iter_valueset_docs(cdm_name: str) -> list[tuple[str, str, dict[str, Any]]]:
     """Yield ``(table, field, payload)`` for every valueset YAML of a CDM.
 

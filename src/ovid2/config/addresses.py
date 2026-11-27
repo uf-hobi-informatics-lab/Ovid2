@@ -35,7 +35,6 @@ from __future__ import annotations
 import importlib
 import json
 import logging
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -70,17 +69,20 @@ CONNECTION_TO_SRC_NAME: dict[str, str] = {
 
 
 def _config_search_paths() -> list[Path]:
-    """Return the ordered list of directories to search for JSON configs."""
-    paths: list[Path] = []
-    override = os.environ.get("OVID2_CONFIGS_DIR")
-    if override:
-        paths.append(Path(override))
+    """Return the ordered directories searched for address JSON configs.
 
-    xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    paths.append(Path(xdg_cfg) / "ovid2" / "configs")
-    paths.append(Path.cwd() / "configs")
-    paths.append(Path("/etc/ovid2/configs"))
-    return paths
+    Scoped to the active workspace (:func:`ovid2.workspaces.search_dirs`).
+    """
+    from ovid2.workspaces import search_dirs
+
+    return search_dirs("configs", "OVID2_CONFIGS_DIR")
+
+
+def addresses_dir() -> Path:
+    """Return the active workspace's write target for address configs."""
+    from ovid2.workspaces import write_dir
+
+    return write_dir("configs", "OVID2_CONFIGS_DIR")
 
 
 def load_address_config(address_name: str) -> dict[str, Any]:

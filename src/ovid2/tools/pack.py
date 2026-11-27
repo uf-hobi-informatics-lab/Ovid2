@@ -247,11 +247,11 @@ def validate_pack_dir(root: Path, *, check_operators: bool = True) -> dict[str, 
 
     # Cross-registry resolution (executor imports).
     if check_operators and (operators or remediation_fixers or remediation_transforms):
+        from ovid2.algorithms.registry import registry as algorithms
         from ovid2.config.fixers_catalogue import FIXER_CATALOGUE
         from ovid2.config.transforms_catalogue import transform_names
-        from ovid2.transformations.quality.ops import operator_names
 
-        known_ops = operator_names()
+        known_ops = algorithms.health_operator_names()
         for op in sorted(operators - known_ops):
             if op.startswith(f"{pid}_") and prov.get("operators_module"):
                 warnings.append(

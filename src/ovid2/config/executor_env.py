@@ -61,6 +61,8 @@ __all__ = [
     "prepare_scoped_secrets",
     "scoped_executor_env",
     "secret_source_dirs",
+    "source_for",
+    "stamp_workspace",
     "sweep_stale_scopes",
 ]
 
@@ -109,10 +111,39 @@ def build_minimal_env(source_env: Mapping[str, str], allowlist: tuple[str, ...])
 
 
 def secret_source_dirs(env: Mapping[str, str] | None = None) -> list[Path]:
-    """Return the unscoped ``secrets.d`` directories, in lookup order."""
+    """Return the unscoped ``secrets.d`` directories, in lookup order.
+
+    Workspace-aware (adr-workspaces.md): the active workspace's own
+    ``secrets.d`` — for ``default`` the flat ``$XDG_CONFIG_HOME/ovid2/
+    secrets.d`` then ``/etc/ovid2/secrets.d``; for any other workspace only
+    ``…/workspaces/<slug>/secrets.d``. Shared files (the XOR seed) are
+    added by :func:`source_for`.
+    """
+    from ovid2 import workspaces
+
     source = env if env is not None else os.environ
-    xdg = source.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return [Path(xdg) / "ovid2" / "secrets.d", Path("/etc/ovid2/secrets.d")]
+    ws = workspaces.active_workspace()
+    if ws == workspaces.DEFAULT_WORKSPACE:
+        xdg = source.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+        return [Path(xdg) / "ovid2" / "secrets.d", Path("/etc/ovid2/secrets.d")]
+    return workspaces.secret_dirs(ws)
+
+
+def source_for(file_name: str, sources: list[Path]) -> Path | None:
+    """Return the source file granted for ``file_name`` (``None`` when absent).
+
+    ``auth_*`` files are site-wide web-tier secrets and are never granted
+    to an executor from a non-default workspace; the XOR seed is shared by
+    every workspace.
+    """
+    from ovid2 import workspaces
+
+    if not workspaces.is_default() and workspaces.is_global_secret(file_name):
+        return None
+    dirs = list(sources)
+    if file_name in workspaces.shared_executor_secret_files():
+        dirs += [d for d in workspaces.shared_secret_dirs() if d not in dirs]
+    return next((d / file_name for d in dirs if (d / file_name).is_file()), None)
 
 
 def _scope_root() -> Path:
@@ -176,7 +207,7 @@ def prepare_scoped_secrets(
         if "/" in file_name or file_name.startswith("."):
             missing.append(file_name)
             continue
-        src = next((d / file_name for d in sources if (d / file_name).is_file()), None)
+        src = source_for(file_name, sources)
         if src is None:
             missing.append(file_name)
             continue
@@ -210,9 +241,27 @@ def scoped_executor_env(
     try:
         env = build_minimal_env(source, allowlist)
         env[_SCOPE_ENV] = str(scoped.path)
+        stamp_workspace(env)
         yield env
     finally:
         scoped.cleanup()
+
+
+def stamp_workspace(env: dict[str, str]) -> dict[str, str]:
+    """Set ``OVID2_WORKSPACE`` (+ the workspace package root) on a child env.
+
+    Every executor subprocess resolves names inside the caller's active
+    workspace (adr-workspaces.md). Returns ``env`` for chaining.
+    """
+    from ovid2 import workspaces
+
+    active = workspaces.active_workspace()
+    env[workspaces.WORKSPACE_ENV] = active
+    env.pop("OVID2_WORKSPACE_PACKAGES_DIR", None)
+    packages = workspaces.packages_dir(active)
+    if packages is not None:
+        env["OVID2_WORKSPACE_PACKAGES_DIR"] = str(packages)
+    return env
 
 
 def sweep_stale_scopes(max_age_seconds: float = 24 * 3600) -> int:

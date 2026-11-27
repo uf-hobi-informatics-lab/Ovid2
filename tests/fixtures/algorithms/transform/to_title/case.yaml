@@ -1,0 +1,52 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  columns:
+  - name
+tables:
+  input:
+    columns:
+    - id
+    - name
+    - sex
+    - n
+    rows:
+    - - '1'
+      - '  alice  smith '
+      - f
+      - '5'
+    - - '2'
+      - BOB
+      - M
+      - '-3.5'
+    - - '3'
+      - ''
+      - UN
+      - null
+    - - '4'
+      - null
+      - m
+      - '12'
+note: 'initcap: string-case trap (word boundaries on spaces)'
+expected:
+  columns:
+  - id
+  - name
+  - sex
+  - n
+  rows:
+  - - '1'
+    - '  Alice  Smith '
+    - f
+    - '5'
+  - - '2'
+    - Bob
+    - M
+    - '-3.5'
+  - - '3'
+    - ''
+    - UN
+    - null
+  - - '4'
+    - null
+    - m
+    - '12'

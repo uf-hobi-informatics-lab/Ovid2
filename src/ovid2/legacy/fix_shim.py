@@ -128,6 +128,11 @@ def fatal_failures() -> list[str]:
     ]
 
 
+def recorded_failures() -> list[str]:
+    """Return every failure message recorded since :func:`reset_failures`."""
+    return [str(t) for t in _STATE["failures"]]
+
+
 def quarantine(output_path: str, fixed_table_name: str) -> None:
     """Legacy ``_quarantine_failed_fixed_table``."""
     src = os.path.join(output_path, fixed_table_name)
@@ -145,8 +150,14 @@ def write_tab_file(df: DataFrame, folder: str, output_file_name: str) -> None:
 
     Writes to a temporary sibling then renames, so a fix that reads and
     rewrites the same ``fixed_<t>.csv`` behaves like legacy (which wrote
-    ``<name>.partial`` and ``os.replace``-d it).
+    ``<name>.partial`` and ``os.replace``-d it). Non-Spark engines write
+    the identical bytes through :func:`ovid2.legacy.text_io.write_frame_file`.
     """
+    if not type(df).__module__.startswith("pyspark."):
+        from ovid2.legacy.text_io import write_frame_file
+
+        write_frame_file(df, folder if folder.endswith("/") else folder + "/", output_file_name)
+        return
     from pyspark.sql import functions as sf
     from pyspark.sql.types import NullType
 
@@ -211,7 +222,49 @@ class NonStoppingSession:
             raise RuntimeError(
                 "java.lang.IllegalStateException: Cannot call methods on a stopped SparkContext."
             )
-        return getattr(object.__getattribute__(self, "_spark"), name)
+        target = getattr(object.__getattribute__(self, "_spark"), name)
+        if name == "read" and not type(
+            object.__getattribute__(self, "_spark")
+        ).__module__.startswith("pyspark."):
+            # Non-Spark engines: the Spark ``DataFrameReader`` path hook is
+            # not installed, so resolve legacy paths on the reader itself.
+            return _LegacyPathReader(target)
+        return target
+
+
+class _LegacyPathReader:
+    """Reader proxy that rewrites legacy ``/app/common`` paths (non-Spark engines)."""
+
+    def __init__(self, reader: Any) -> None:
+        self._reader = reader
+
+    def _wrap(self, value: Any) -> Any:
+        return (
+            _LegacyPathReader(value)
+            if value is self._reader or type(value) is type(self._reader)
+            else value
+        )
+
+    def load(self, path: Any = None, *args: Any, **kwargs: Any) -> Any:
+        if isinstance(path, str):
+            path = resolve_legacy_path(path)
+        return self._reader.load(path, *args, **kwargs)
+
+    def csv(self, path: Any, *args: Any, **kwargs: Any) -> Any:
+        if isinstance(path, str):
+            path = resolve_legacy_path(path)
+        return self._reader.csv(path, *args, **kwargs)
+
+    def parquet(self, *paths: Any) -> Any:
+        return self._reader.parquet(
+            *[resolve_legacy_path(p) if isinstance(p, str) else p for p in paths]
+        )
+
+    def __getattr__(self, name: str) -> Any:
+        attr = getattr(self._reader, name)
+        if callable(attr):
+            return lambda *a, **k: self._wrap(attr(*a, **k))
+        return attr
 
 
 # ---------------------------------------------------------------------------
@@ -251,7 +304,7 @@ class CommonFuncitons:
     @classmethod
     def spark_read(cls, file_path: str, spark: SparkSession) -> DataFrame:
         """Legacy ``spark_read``."""
-        return spark.read.csv(
+        return spark.read.csv(  # legacy reader options (portable: every engine's ``read.csv``)
             resolve_legacy_path(file_path),
             sep="\t",
             header=True,
@@ -398,6 +451,11 @@ class CommonFuncitons:
     def print_failure_message(cls, folder: str, partner: str, job: str, text: str) -> None:
         """Record a failure (legacy ``_record_fix_failure``)."""
         _STATE["failures"].append(str(text))
+        from ovid2.legacy.fix_stage import chain_fix_skipped
+
+        # Inside the in-process chain this is the "skipped" warning of the
+        # fix announced last (``fix_chain.run_fix_chain``).
+        chain_fix_skipped(str(text))
         level = logging.WARNING if "does not exist" in str(text) else logging.ERROR
         logger.log(
             level, "legacy fix failure partner=%s folder=%s job=%s: %s", partner, folder, job, text
@@ -411,8 +469,18 @@ class CommonFuncitons:
 
     @classmethod
     def print_fixer_status(cls, *args: Any, **kwargs: Any) -> None:
-        """Legacy status line → debug log."""
+        """Legacy status line → debug log (+ per-fix progress for the chain).
+
+        The vendored ``fix_chain`` announces every in-process fix with an
+        integer ``current_count`` before applying it; fix scripts pass
+        ``'**'`` (they are reported by ``run_fix_script`` instead).
+        """
         logger.debug("fixer status %s %s", args, kwargs)
+        current = kwargs.get("current_count", args[0] if args else None)
+        if isinstance(current, int) and not isinstance(current, bool):
+            from ovid2.legacy.fix_stage import chain_fix_started
+
+            chain_fix_started(current)
 
     @classmethod
     def print_run_status(cls, *args: Any, **kwargs: Any) -> None:
@@ -462,8 +530,14 @@ def _install_path_hooks() -> None:
 
     A few vendored fixes build ``/app/common/...`` or ``common/lists/...``
     paths and hand them to ``spark.read.load`` / ``os.path.exists``. The
-    hooks rewrite only those legacy prefixes and are idempotent.
+    hooks rewrite only those legacy prefixes and are idempotent. On a
+    non-Spark engine the session's own reader resolves legacy paths
+    (:class:`~ovid2.legacy.fix_shim.LegacySession`), so only the
+    filesystem probes are patched.
     """
+    if not _spark_available():
+        _install_fs_hooks()
+        return
     from pyspark.sql.readwriter import DataFrameReader
 
     if "load" not in _ORIG:
@@ -500,11 +574,41 @@ def _install_path_hooks() -> None:
 
 def _remove_path_hooks() -> None:
     """Restore the unpatched reader / filesystem probes."""
-    if "load" not in _ORIG:
-        return
-    from pyspark.sql.readwriter import DataFrameReader
+    if "load" in _ORIG:
+        from pyspark.sql.readwriter import DataFrameReader
 
-    DataFrameReader.load = _ORIG.pop("load")  # type: ignore[method-assign]
-    DataFrameReader.csv = _ORIG.pop("csv")  # type: ignore[method-assign]
-    os.path.exists = _ORIG.pop("exists")
-    os.path.isfile = _ORIG.pop("isfile")
+        DataFrameReader.load = _ORIG.pop("load")  # type: ignore[method-assign]
+        DataFrameReader.csv = _ORIG.pop("csv")  # type: ignore[method-assign]
+    if "exists" in _ORIG:
+        os.path.exists = _ORIG.pop("exists")
+        os.path.isfile = _ORIG.pop("isfile")
+
+
+def _spark_available() -> bool:
+    """Return ``True`` when the shim's session is a real Spark session."""
+    spark = _STATE.get("spark")
+    target = (
+        object.__getattribute__(spark, "_spark") if isinstance(spark, NonStoppingSession) else spark
+    )
+    return type(target).__module__.startswith("pyspark.")
+
+
+def _install_fs_hooks() -> None:
+    """Patch only ``os.path.exists`` / ``isfile`` (non-Spark engines)."""
+    if "exists" in _ORIG:
+        return
+    _ORIG["exists"] = _REAL_EXISTS
+    _ORIG["isfile"] = _REAL_ISFILE
+
+    def _exists(path: Any) -> bool:
+        if isinstance(path, str):
+            path = resolve_legacy_path(path)
+        return bool(_ORIG["exists"](path))
+
+    def _isfile(path: Any) -> bool:
+        if isinstance(path, str):
+            path = resolve_legacy_path(path)
+        return bool(_ORIG["isfile"](path))
+
+    os.path.exists = _exists
+    os.path.isfile = _isfile

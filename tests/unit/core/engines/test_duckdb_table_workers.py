@@ -47,17 +47,9 @@ def _in_worker(engine: DuckDBEngine, fn: Any) -> Any:
     return out["value"]
 
 
-def test_table_concurrency_defaults_and_overrides(
-    engine: DuckDBEngine, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("OVID2_HOST_CPUS", "8")
-    monkeypatch.delenv("OVID2_DUCKDB_TABLE_CONCURRENCY", raising=False)
-    assert engine.table_concurrency(20) == 8
-    assert engine.table_concurrency(3) == 3
-    monkeypatch.setenv("OVID2_DUCKDB_TABLE_CONCURRENCY", "2")
-    assert engine.table_concurrency(20) == 2
-    engine.args["table_concurrency"] = "1"
-    assert engine.table_concurrency(20) == 1
+def test_engine_has_no_table_concurrency_knob(engine: DuckDBEngine) -> None:
+    """Tables run one at a time on every engine; DuckDB has no concurrency knob."""
+    assert not hasattr(engine, "table_concurrency")
 
 
 def test_worker_uses_private_cursor(engine: DuckDBEngine) -> None:
@@ -231,3 +223,18 @@ def test_release_checkpoints_is_per_thread(engine: DuckDBEngine) -> None:
     engine._checkpoints().append(engine.create_dataframe([("a",)], "x string"))
     assert _in_worker(engine, engine.release_checkpoints) == 0
     assert engine.release_checkpoints() == 1
+
+
+def test_worker_cursor_sees_java_double_macro() -> None:
+    """``CAST(double AS STRING)`` works on a table worker (TEMP macros are per connection)."""
+    from ovid2.core.engines import dsl
+    from ovid2.core.engines.duckdb import DuckDBEngine
+
+    eng = DuckDBEngine(args={"threads": 2, "memory_limit": "1GB"})
+    try:
+        with dsl.use_engine(eng), eng.table_worker():
+            frame = eng.wrap(eng.connection().sql("SELECT 1.5::DOUBLE AS x"))
+            got = frame.selectExpr("CAST(x AS STRING) AS s").relation.fetchall()
+        assert got == [("1.5",)]
+    finally:
+        eng.stop_session()

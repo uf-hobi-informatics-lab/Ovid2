@@ -366,8 +366,7 @@ def _gen_transforms() -> str:
         ),
         "Transforms are CDM-agnostic, lazy DataFrame ops you compose into chains (from a "
         "mapper via `apply_transforms`, or over HTTP / MCP). Guide: "
-        "[Transforms library](../06-authoring/transforms.md). Ops marked *spark* need a "
-        "Spark-family engine.\n",
+        "[Transforms library](../06-authoring/transforms.md). Every op runs on every engine.\n",
     ]
     for cat in CATEGORIES:
         entries = sorted(
@@ -381,8 +380,8 @@ def _gen_transforms() -> str:
             params = ", ".join(
                 f"`{p}`" + ("*" if p in req else "") for p in (schema.get("properties") or {})
             )
-            rows.append([f"`{t['name']}`", t["summary"], params, t.get("requires_family") or "any"])
-        lines.append(_table(["Op", "Summary", "Params (* = required)", "Engine"], rows))
+            rows.append([f"`{t['name']}`", t["summary"], params])
+        lines.append(_table(["Op", "Summary", "Params (* = required)"], rows))
     return "\n".join(lines)
 
 
@@ -425,7 +424,9 @@ def _docstring_params(doc: str | None) -> list[tuple[str, str]]:
 
 
 def _gen_mapper_ops() -> str:
-    from ovid2.mappers.registry import MAP_OPS
+    from ovid2.algorithms.registry import registry as algorithms
+
+    MAP_OPS = algorithms.native_entries("mapper")  # noqa: N806 — registry-shaped dict
 
     lines = [
         _front(
@@ -448,10 +449,17 @@ def _gen_mapper_ops() -> str:
 
 
 def _gen_adapters() -> str:
-    from ovid2.formatters.adapters import ADAPTER_ALIASES, ADAPTERS
+    from ovid2.algorithms.registry import registry as algorithms
 
-    canonical = {k: v for k, v in ADAPTERS.items() if k not in ADAPTER_ALIASES}
-    aliases = ", ".join(f"`{a}` → `{t}`" for a, t in sorted(ADAPTER_ALIASES.items()))
+    adapter_aliases = {
+        name: alias
+        for name in algorithms.names("formatter")
+        if (alias := algorithms.describe("formatter", name).get("alias_of"))
+    }
+    canonical = {
+        k: v for k, v in algorithms.native_entries("formatter").items() if k not in adapter_aliases
+    }
+    aliases = ", ".join(f"`{a}` → `{t}`" for a, t in sorted(adapter_aliases.items()))
     return "\n".join(
         [
             _front(
@@ -469,7 +477,10 @@ def _gen_adapters() -> str:
 
 
 def _gen_fixers() -> str:
-    from ovid2.transformations.fixers.common.registry import COMMON_FIXES, FIXER_SCOPES
+    from ovid2.algorithms.registry import registry as algorithms
+
+    common_fixes = algorithms.native_entries("fixer")
+    scope_order = algorithms.fixer_scopes()
 
     lines = [
         _front(
@@ -482,14 +493,14 @@ def _gen_fixers() -> str:
         "on that CDM. Guide: [Fixer chains](../06-authoring/fixers.md).\n",
     ]
     scopes: dict[str, list[str]] = {}
-    for name, scope in FIXER_SCOPES.items():
+    for name, scope in scope_order.items():
         scopes.setdefault(scope, []).append(name)
     for scope in sorted(scopes, key=lambda s: (s != "generic", s)):
         lines.append(f"## {scope}\n")
         lines.append(
             _table(
                 ["Fixer", "What it does"],
-                _registry_rows({n: COMMON_FIXES[n] for n in scopes[scope] if n in COMMON_FIXES}),
+                _registry_rows({n: common_fixes[n] for n in scopes[scope] if n in common_fixes}),
             )
         )
     return "\n".join(lines)

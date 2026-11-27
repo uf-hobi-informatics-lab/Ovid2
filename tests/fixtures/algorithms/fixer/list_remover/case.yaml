@@ -1,0 +1,25 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  src1: codes
+  src2: CODE
+lists:
+  codes: 'X1
+
+    X2
+
+    '
+tables:
+  input:
+    columns:
+    - CODE
+    rows:
+    - - X1
+    - - Y
+    - - null
+note: anti-join against the list; null kept
+expected:
+  columns:
+  - CODE
+  rows:
+  - - Y
+  - - null

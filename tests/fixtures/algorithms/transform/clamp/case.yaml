@@ -1,0 +1,23 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  column: n
+  min: 0
+  max: 10
+tables:
+  input:
+    columns:
+    - n
+    rows:
+    - - '-3.5'
+    - - '5'
+    - - '12.25'
+    - - null
+note: 'decimal rounding trap: values compare numerically, result is double'
+expected:
+  columns:
+  - n
+  rows:
+  - - 0.0
+  - - 5.0
+  - - 10.0
+  - - null

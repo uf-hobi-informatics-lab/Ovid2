@@ -26,7 +26,6 @@ the config directory.
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -271,13 +270,6 @@ _FIELD_SPECS: dict[str, dict[str, list[dict[str, Any]]]] = {
                 "default": "false",
                 "help": "Keep input row order in outputs (slower, more memory).",
             },
-            {
-                "name": "table_concurrency",
-                "required": False,
-                "help": "Tables run at once after the reference tables, largest "
-                "first, each on its own cursor (default: min(tables, CPUs); "
-                "'1' = sequential; $OVID2_DUCKDB_TABLE_CONCURRENCY).",
-            },
         ],
         "secrets": [],
     },
@@ -319,22 +311,17 @@ def engine_field_spec(type_name: str) -> dict[str, list[dict[str, Any]]]:
 
 
 def _search_paths() -> list[Path]:
-    """Return the ordered list of directories to search for engine JSONs."""
-    paths: list[Path] = []
-    override = os.environ.get("OVID2_ENGINES_DIR")
-    if override:
-        paths.append(Path(override))
-    xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    paths.append(Path(xdg_cfg) / "ovid2" / "engines")
-    paths.append(Path.cwd() / "engines")
-    paths.append(Path("/etc/ovid2/engines"))
-    return paths
+    """Return the ordered directories searched for engine JSONs (workspace-scoped)."""
+    from ovid2.workspaces import search_dirs
+
+    return search_dirs("engines", "OVID2_ENGINES_DIR")
 
 
 def engines_dir() -> Path:
-    """Return the user-scoped write target for engine files."""
-    xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(xdg_cfg) / "ovid2" / "engines"
+    """Return the active workspace's write target for engine files."""
+    from ovid2.workspaces import write_dir
+
+    return write_dir("engines", "OVID2_ENGINES_DIR")
 
 
 def locate_engine(name: str) -> Path | None:
@@ -361,6 +348,21 @@ def list_available_engines() -> list[str]:
 # ---------------------------------------------------------------------------
 # Config loading
 # ---------------------------------------------------------------------------
+
+
+def engine_uses_workers(name: str | None) -> bool:
+    """Return ``True`` when a run on engine ``name`` is sized by *Workers*.
+
+    Only Spark-family engines start a Spark cluster sized by the job's
+    *Workers* field. DuckDB (one host-sized container) and Snowpark
+    (remote warehouse) have no worker count; every engine runs tables one
+    at a time. Web-safe (no engine import). ``name`` is an engine config
+    name or a bare type; ``None`` / ``""`` is the ``pyspark`` default. An
+    unresolvable name keeps the historical Spark behaviour (``True``),
+    matching ``ovid2 etl``'s cluster decision.
+    """
+    engine_type = resolve_engine_type(name)
+    return engine_type is None or engine_family(engine_type) == "spark"
 
 
 def resolve_engine_type(name: str | None) -> str | None:
@@ -448,6 +450,7 @@ def resolve_secrets(config: dict[str, Any]) -> dict[str, Any]:
 
 __all__ = [
     "engine_field_spec",
+    "engine_uses_workers",
     "engines_dir",
     "list_available_engines",
     "list_engine_types",

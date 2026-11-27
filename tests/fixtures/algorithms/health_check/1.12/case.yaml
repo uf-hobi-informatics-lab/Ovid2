@@ -1,0 +1,56 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+dataset: pcornet_small
+expected:
+  columns:
+  - source_table
+  - metric
+  - value_num
+  - value_str
+  - exception_flag
+  rows:
+  - - ENCOUNTER
+    - CHILD_ROWS
+    - 2.0
+    - null
+    - false
+  - - ENCOUNTER
+    - ORPHAN_PCT
+    - 50.0
+    - null
+    - false
+  - - ENCOUNTER
+    - ORPHAN_ROWS
+    - 1.0
+    - null
+    - true
+tables:
+  provider:
+    columns:
+    - PROVIDERID
+    rows:
+    - - R1
+  encounter:
+    columns:
+    - ENCOUNTERID
+    - PATID
+    - PROVIDERID
+    - ADMIT_DATE
+    - ENC_TYPE
+    rows:
+    - - E1
+      - P1
+      - R1
+      - '2024-01-10'
+      - IP
+    - - E2
+      - P1
+      - R9
+      - '2024-01-11'
+      - AV
+    - - E3
+      - P2
+      - null
+      - '2024-01-12'
+      - AV
+note: "orphan PROVIDERID (null keys are not orphans) \u2014 expected = PySpark reference, identical on\
+  \ DuckDB when recorded"

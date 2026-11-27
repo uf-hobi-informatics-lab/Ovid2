@@ -126,7 +126,7 @@ class LegacyRuntime:
             return self.outputs[self.output_file]
         path = os.path.join(self.work_dir, self.output_file)
         if os.path.exists(path):
-            return self.spark.read.load(
+            return self.spark.read.load(  # legacy reader options; every engine's ``read``
                 path, format="csv", sep="\t", inferSchema="false", header="true", quote='"'
             )
         raise LegacyFormatterError(
@@ -139,8 +139,14 @@ def write_legacy_csv(df: DataFrame, folder: str, output_file_name: str) -> None:
 
     One tab-delimited file, header from the schema, quoting disabled,
     ``NullType`` columns cast to string — the Ovid2 disc single-file writer
-    implements exactly that contract.
+    implements exactly that contract (Spark); other engines write the
+    same bytes through :mod:`ovid2.legacy.text_io`.
     """
+    if not type(df).__module__.startswith("pyspark."):
+        from ovid2.legacy.text_io import write_frame_file
+
+        write_frame_file(df, folder, output_file_name)
+        return
     from ovid2.drivers.disc.spark import write_dataframe
 
     os.makedirs(folder, exist_ok=True)
@@ -336,8 +342,6 @@ class LegacyFormatter(BaseFormatter):
     and :attr:`BODY` (the generated ``_legacy_body(rt, cf, spark, …)``).
     """
 
-    requires_family: str | None = "spark"
-
     #: CDM table name.
     TABLE: str = ""
     #: The primary input glob (used only for the placeholder read).
@@ -364,7 +368,7 @@ class LegacyFormatter(BaseFormatter):
 
     def _runtime(self) -> LegacyRuntime:
         """Build the :class:`LegacyRuntime` from the adapter context."""
-        from ovid2.config.settings import COMMON_LISTS_DIR, OMOP_CDM_DIR, WORK_DIR
+        from ovid2.config.settings import COMMON_LISTS_DIR, LEGACY_SCRATCH_ROOT, OMOP_CDM_DIR
 
         ctx = self.context
         root = getattr(ctx.input_address, "root_path", None)
@@ -376,7 +380,9 @@ class LegacyFormatter(BaseFormatter):
                 f"{type(self).__name__}: legacy formatters read raw files from a "
                 "disc input address; the configured input address has no filesystem root."
             )
-        scratch = os.path.join(str(WORK_DIR), "legacy_scratch", ctx.pipeline, _safe(ctx.batch_id))
+        scratch = os.path.join(
+            str(LEGACY_SCRATCH_ROOT), "legacy_scratch", ctx.pipeline, _safe(ctx.batch_id)
+        )
         work = os.path.join(scratch, "formatter_output")
         datavant = os.path.join(scratch, "datavant_output")
         os.makedirs(work, exist_ok=True)

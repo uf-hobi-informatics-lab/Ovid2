@@ -1,0 +1,34 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+spec:
+  formatter: demographic
+  adapter: source_passthrough
+  input_file_name: '*Demographic*'
+  sources:
+    demographic:
+      glob: '*Demographic_*.txt'
+      lowercase_columns: true
+  projections:
+    PATID: patid
+    SEX: upper(sex)
+    BIRTH_DATE: birth_date
+files:
+  Demographic_1.txt: 'PATID|SEX|BIRTH_DATE
+
+    1|F|2000-01-01
+
+    2|M|
+
+    '
+note: 'CSV read: an empty field is read as null on every engine'
+expected:
+  columns:
+  - PATID
+  - SEX
+  - BIRTH_DATE
+  rows:
+  - - '1'
+    - F
+    - '2000-01-01'
+  - - '2'
+    - M
+    - null

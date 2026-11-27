@@ -1,0 +1,14 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params: {}
+tables:
+  input:
+    columns:
+    - ADDRESSID
+    rows:
+    - - A1
+note: 'no existing_lds_df in context: returns df unchanged'
+expected:
+  columns:
+  - ADDRESSID
+  rows:
+  - - A1

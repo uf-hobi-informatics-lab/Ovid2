@@ -172,6 +172,7 @@
         <select name="principal_kind" aria-label="Share with">
           <option value="user">User id / e-mail</option>
           <option value="role">Everyone with role</option>
+          <option value="workspace">Everyone in this workspace</option>
         </select>
         {# UI rule U2: a role principal is a select over the shareable roles;
            a user principal is an id / e-mail (new values, never a listing
@@ -180,6 +181,7 @@
         <select name="principal" aria-label="Role" data-principal="role" hidden disabled>
           {% for r in shareable_roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
         </select>
+        <input type="hidden" name="principal" value="*" data-principal="workspace" disabled>
         <select name="permission" aria-label="Access">
           <option value="view">can view</option>
           <option value="edit">can edit</option>

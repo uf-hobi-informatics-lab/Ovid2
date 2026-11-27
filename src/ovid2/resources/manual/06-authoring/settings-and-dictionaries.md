@@ -17,7 +17,6 @@ Ovid2 reads these:
 | `NETWORKID`, `NETWORK_NAME`, `DATAMARTID`, `DATAMART_NAME`, `DATAMART_PLATFORM`, `CDM_VERSION`, `DATAMART_CLAIMS`, `DATAMART_EHR` | PCORnet **HARVEST** identity |
 | `DATAVANT_KEY` | the site key for hash-token generation |
 | `DEFAULT_UPLOAD_TYPE`, `MERGE_DATABASE_NAME`, `MERGE_SCHEMA_NAME` | how output is merged into a cumulative database (`no_merge` by default) |
-| `REQUIRES_FAMILY` | set to `"spark"` if custom formatters need Spark-only APIs; the package is then refused on DuckDB |
 | `ETL_PROFILE` | `"legacy_ovid"` marks a generated legacy-parity port; don't set it by hand |
 
 ```python

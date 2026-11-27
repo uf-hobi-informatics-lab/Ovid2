@@ -19,6 +19,7 @@ from ovid2.web.auth.csrf import require_json_content_type
 from ovid2.web.auth.deps import AuthContext, require_capability
 from ovid2.web.auth.roles import Capability, Role, has_capability
 from ovid2.web.models import (
+    ActiveWorkspaceRequest,
     AddressDetail,
     AddressSummary,
     AddressWrite,
@@ -26,6 +27,7 @@ from ovid2.web.models import (
     ApprovalDecision,
     ApprovalListResponse,
     ApprovalSummary,
+    AutomationStatus,
     BootstrapRequest,
     BootstrapResponse,
     BuilderRawText,
@@ -74,6 +76,8 @@ from ovid2.web.models import (
     MapperSpecDetail,
     MapperValidationReport,
     MapperWrite,
+    MyWorkspace,
+    MyWorkspacesResponse,
     OdsDimensionCatalog,
     OdsExportJobRequest,
     OdsListing,
@@ -138,6 +142,11 @@ from ovid2.web.models import (
     WorkflowSummary,
     WorkflowValidation,
     WorkflowWrite,
+    WorkspaceCreateRequest,
+    WorkspaceMember,
+    WorkspaceMemberRequest,
+    WorkspaceSummary,
+    WorkspaceUpdateRequest,
     WriteResult,
 )
 from ovid2.web.routes._route_policy import owner_scoped
@@ -181,6 +190,7 @@ from ovid2.web.services import (
     users_svc,
     workflow_runner_svc,
     workflows_svc,
+    workspaces_svc,
 )
 from ovid2.web.settings import LLM_TOOLS_API_URL, RUN_EVENTS_PAGE_SIZE
 
@@ -223,11 +233,16 @@ def _is_agent(ctx: AuthContext | None) -> bool:
 def _actor(ctx: AuthContext | None) -> str:
     """Audit label for a job written through the API.
 
-    Humans (and the auth-disabled bypass) keep the historical ``web``
-    label; agent principals are recorded verbatim (``mcp:service`` /
-    ``llm:<user>``) so an agent-initiated run is attributable.
+    Agent principals are recorded verbatim (``mcp:service`` /
+    ``llm:<user>``); humans by their email (else user id) so members of a
+    shared workspace can tell who did what (adr-workspaces.md). The
+    auth-disabled bypass keeps the historical ``web`` label.
     """
-    return ctx.user_id if _is_agent(ctx) and ctx is not None else "web"
+    if ctx is None or ctx.anonymous_bypass:
+        return "web"
+    if _is_agent(ctx):
+        return ctx.user_id
+    return ctx.email or ctx.user_id
 
 
 def _overwrite_target(job_or_output: str) -> str:
@@ -975,8 +990,7 @@ def api_list_transforms(
 
     Reads the web-safe catalogue mirror
     (:mod:`ovid2.config.transforms_catalogue`); does not import pipeline
-    code. Each entry carries name / summary / category / requires_family
-    / params_schema so a user or Agent Ovid can pick and configure a
+    code. Each entry carries name / summary / category / params_schema so a user or Agent Ovid can pick and configure a
     transform before composing it into a chain.
     """
     return [TransformSummary(**entry) for entry in transforms_svc.list_transforms(category)]
@@ -1733,6 +1747,40 @@ def api_cancel_job(job_id: str) -> JobDetail:
     """Request cancellation of a queued or running job."""
     try:
         return jobs_svc.cancel(job_id, actor="web")
+    except jobs_svc.SubmitError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post(
+    "/jobs/{job_id}/pause",
+    response_model=JobDetail,
+    summary="Pause a job at its next table boundary",
+    dependencies=[Depends(require_capability(Capability.SUBMIT_JOBS))],
+)
+def api_pause_job(job_id: str) -> JobDetail:
+    """Ask a queued or running job to hold before its next table.
+
+    The table that is running finishes first (its write is already
+    executing); the job then waits, clocks frozen, until it is resumed or
+    cancelled. One-shot job kinds (export, workflow storage / probe) do
+    not pause.
+    """
+    try:
+        return jobs_svc.pause(job_id, actor="web")
+    except jobs_svc.SubmitError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post(
+    "/jobs/{job_id}/resume",
+    response_model=JobDetail,
+    summary="Resume a paused job",
+    dependencies=[Depends(require_capability(Capability.SUBMIT_JOBS))],
+)
+def api_resume_job(job_id: str) -> JobDetail:
+    """Clear a pause; the job continues with its next table."""
+    try:
+        return jobs_svc.resume(job_id, actor="web")
     except jobs_svc.SubmitError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -2629,6 +2677,21 @@ def api_retry_workflow_rollback(run_id: str) -> WorkflowRunDetail:
 def api_get_settings() -> GlobalSettings:
     """Return the merged settings (disk-backed values + built-in defaults)."""
     return settings_svc.get_settings()
+
+
+@router.get(
+    "/automation",
+    response_model=AutomationStatus,
+    summary="Whether automatic (watch / cron / interval) triggers fire",
+    dependencies=[Depends(require_capability(Capability.VIEW_PIPELINE_DATA))],
+)
+def api_get_automation() -> AutomationStatus:
+    """Return the worker's route-dispatch flag (read-only, no secrets)."""
+    worker = settings_svc.get_settings().worker
+    return AutomationStatus(
+        dispatch_enabled=bool(worker.route_dispatch_enabled),
+        poll_interval_seconds=float(worker.poll_interval_seconds),
+    )
 
 
 @router.put(
@@ -4348,3 +4411,333 @@ def api_download_report_export(
         filename=out.filename,
         headers={"Cache-Control": "no-store"},
     )
+
+
+# ---------------------------------------------------------------------------
+# Workspaces (adr-workspaces.md)
+#
+# A workspace is the tenant boundary for pipelines, workflows, jobs, runs,
+# reports, connections, addresses, secrets, engines, LLM connections, the
+# transform library and workspace pipeline packages. Creating / archiving /
+# deleting needs MANAGE_WORKSPACES (system admins). A workspace's members
+# are managed by system admins or that workspace's ``admin`` members.
+# Workspaces the caller cannot see answer 404 (never 403).
+# ---------------------------------------------------------------------------
+
+
+def _ws_actor(ctx: AuthContext) -> str:
+    return _actor(ctx)
+
+
+def _ws_visible(ctx: AuthContext, workspace_id: str) -> dict[str, Any]:
+    """Return the workspace when the caller may see it, else 404."""
+    record = workspaces_svc.get_workspace(workspace_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="workspace_not_found")
+    if ctx.role == Role.SYSTEM_ADMIN and not _is_agent(ctx):
+        return record
+    if record["status"] == "active" and workspaces_svc.is_member(workspace_id, ctx.user_id):
+        return record
+    raise HTTPException(status_code=404, detail="workspace_not_found")
+
+
+def _ws_require_member_admin(ctx: AuthContext, workspace_id: str) -> None:
+    """403 unless the caller may manage ``workspace_id``'s members (human only)."""
+    if _is_agent(ctx):
+        raise HTTPException(status_code=403, detail="Agents cannot manage workspace members.")
+    if not workspaces_svc.can_manage_members(
+        workspace_id, ctx.user_id, is_system_admin=ctx.role == Role.SYSTEM_ADMIN
+    ):
+        raise HTTPException(status_code=403, detail="Only workspace admins can manage members.")
+
+
+def _ws_http(exc: Exception) -> HTTPException:
+    if isinstance(exc, workspaces_svc.WorkspaceNotFound):
+        return HTTPException(status_code=404, detail=str(exc))
+    return HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get(
+    "/me/workspaces",
+    response_model=MyWorkspacesResponse,
+    summary="List the workspaces the caller may switch into",
+)
+def api_my_workspaces(
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_PUBLIC)),
+) -> MyWorkspacesResponse:
+    """Return the caller's workspaces and the one this request runs in."""
+    if _is_agent(ctx):
+        allowed = {ctx.workspace_id}
+        views = [
+            v
+            for v in workspaces_svc.visible_workspaces(ctx.user_id, is_system_admin=True)
+            if v.workspace_id in allowed
+        ]
+    else:
+        views = workspaces_svc.visible_workspaces(
+            ctx.user_id, is_system_admin=ctx.role == Role.SYSTEM_ADMIN
+        )
+    return MyWorkspacesResponse(
+        active=ctx.workspace_id,
+        workspaces=[
+            MyWorkspace(
+                workspace_id=v.workspace_id,
+                display_name=v.display_name,
+                ws_role=v.ws_role,
+                active=v.workspace_id == ctx.workspace_id,
+            )
+            for v in views
+        ],
+    )
+
+
+@router.put(
+    "/me/active-workspace",
+    response_model=MyWorkspacesResponse,
+    summary="Switch the caller's browser session to another workspace",
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_set_active_workspace(
+    payload: ActiveWorkspaceRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_PUBLIC)),
+) -> MyWorkspacesResponse:
+    """Pin the session to ``workspace_id`` (404 when not visible to the caller)."""
+    if _is_agent(ctx):
+        raise HTTPException(
+            status_code=403,
+            detail="Agents select a workspace per request with the X-Ovid2-Workspace header.",
+        )
+    try:
+        slug, _role = workspaces_svc.resolve_for(
+            user_id=ctx.user_id,
+            is_system_admin=ctx.role == Role.SYSTEM_ADMIN,
+            requested=payload.workspace_id,
+        )
+    except workspaces_svc.WorkspaceNotFound as exc:
+        raise HTTPException(status_code=404, detail="workspace_not_found") from exc
+    workspaces_svc.set_session_workspace(ctx.session_id, ctx.user_id, slug)
+    from dataclasses import replace
+
+    return api_my_workspaces(replace(ctx, workspace_id=slug))
+
+
+@router.get(
+    "/workspaces",
+    response_model=list[WorkspaceSummary],
+    summary="List workspaces (all for system admins; memberships otherwise)",
+)
+def api_list_workspaces(
+    include_archived: bool = Query(False, description="Include archived workspaces (admins)."),
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_PUBLIC)),
+) -> list[WorkspaceSummary]:
+    """Return the workspaces visible to the caller."""
+    is_admin = ctx.role == Role.SYSTEM_ADMIN and not _is_agent(ctx)
+    records = workspaces_svc.list_workspaces(include_archived=include_archived and is_admin)
+    if not is_admin:
+        mine = set(workspaces_svc.user_workspace_ids(ctx.user_id))
+        if _is_agent(ctx):
+            mine = {ctx.workspace_id}
+        records = [r for r in records if r["workspace_id"] in mine]
+    return [WorkspaceSummary(**r) for r in records]
+
+
+@router.post(
+    "/workspaces",
+    response_model=WorkspaceSummary,
+    status_code=201,
+    summary="Create a workspace",
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_create_workspace(
+    payload: WorkspaceCreateRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_WORKSPACES)),
+) -> WorkspaceSummary:
+    """Create a workspace (and its on-disk tree). 400 on a bad / taken slug."""
+    if _is_agent(ctx):
+        raise HTTPException(status_code=403, detail="Agents cannot create workspaces.")
+    try:
+        record = workspaces_svc.create_workspace(
+            payload.workspace_id,
+            payload.display_name,
+            description=payload.description,
+            actor=_ws_actor(ctx),
+        )
+    except workspaces_svc.WorkspaceError as exc:
+        raise _ws_http(exc) from exc
+    return WorkspaceSummary(**record)
+
+
+@router.get(
+    "/workspaces/{workspace_id}",
+    response_model=WorkspaceSummary,
+    summary="Get one workspace",
+)
+def api_get_workspace(
+    workspace_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_PUBLIC)),
+) -> WorkspaceSummary:
+    """Return one workspace (404 when not visible to the caller)."""
+    return WorkspaceSummary(**_ws_visible(ctx, workspace_id))
+
+
+@router.patch(
+    "/workspaces/{workspace_id}",
+    response_model=WorkspaceSummary,
+    summary="Rename / re-describe a workspace",
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_update_workspace(
+    workspace_id: str,
+    payload: WorkspaceUpdateRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_WORKSPACES)),
+) -> WorkspaceSummary:
+    """Update the display name / description (the slug never changes)."""
+    _ws_visible(ctx, workspace_id)
+    try:
+        record = workspaces_svc.update_workspace(
+            workspace_id,
+            display_name=payload.display_name,
+            description=payload.description,
+            actor=_ws_actor(ctx),
+        )
+    except workspaces_svc.WorkspaceError as exc:
+        raise _ws_http(exc) from exc
+    return WorkspaceSummary(**record)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/archive",
+    response_model=WorkspaceSummary,
+    summary="Archive a workspace (human approval required)",
+    responses={202: {"description": "Awaiting human approval (`workspace.archive`)."}},
+)
+def api_archive_workspace(
+    workspace_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_WORKSPACES)),
+) -> WorkspaceSummary:
+    """Archive a workspace: members can no longer switch into it."""
+    _ws_visible(ctx, workspace_id)
+    if workspace_id == "default":
+        raise HTTPException(status_code=400, detail="The default workspace cannot be archived.")
+    _gate("workspace.archive", workspace_id, requested_by=_ws_actor(ctx))
+    try:
+        record = workspaces_svc.archive_workspace(workspace_id, actor=_ws_actor(ctx))
+    except workspaces_svc.WorkspaceError as exc:
+        raise _ws_http(exc) from exc
+    return WorkspaceSummary(**record)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/restore",
+    response_model=WorkspaceSummary,
+    summary="Restore an archived workspace",
+)
+def api_restore_workspace(
+    workspace_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_WORKSPACES)),
+) -> WorkspaceSummary:
+    """Re-activate an archived workspace."""
+    _ws_visible(ctx, workspace_id)
+    try:
+        record = workspaces_svc.restore_workspace(workspace_id, actor=_ws_actor(ctx))
+    except workspaces_svc.WorkspaceError as exc:
+        raise _ws_http(exc) from exc
+    return WorkspaceSummary(**record)
+
+
+@router.delete(
+    "/workspaces/{workspace_id}",
+    status_code=204,
+    summary="Delete an archived, empty workspace (human approval required)",
+    responses={202: {"description": "Awaiting human approval (`workspace.delete`)."}},
+)
+def api_delete_workspace(
+    workspace_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.MANAGE_WORKSPACES)),
+) -> Response:
+    """Delete a workspace. 400 unless it is archived and holds nothing."""
+    _ws_visible(ctx, workspace_id)
+    record = workspaces_svc.get_workspace(workspace_id)
+    if record is not None and (
+        workspace_id == "default"
+        or record["status"] != "archived"
+        or not workspaces_svc.workspace_is_empty(workspace_id)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Only an archived, empty workspace (not 'default') can be deleted.",
+        )
+    _gate("workspace.delete", workspace_id, requested_by=_ws_actor(ctx))
+    try:
+        workspaces_svc.delete_workspace(workspace_id, actor=_ws_actor(ctx))
+    except workspaces_svc.WorkspaceError as exc:
+        raise _ws_http(exc) from exc
+    return Response(status_code=204)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/members",
+    response_model=list[WorkspaceMember],
+    summary="List a workspace's members",
+)
+def api_list_workspace_members(
+    workspace_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_PUBLIC)),
+) -> list[WorkspaceMember]:
+    """Return the members (visible to members and system admins)."""
+    _ws_visible(ctx, workspace_id)
+    return [WorkspaceMember(**m) for m in workspaces_svc.list_members(workspace_id)]
+
+
+@router.post(
+    "/workspaces/{workspace_id}/members",
+    response_model=WorkspaceMember,
+    summary="Add a member (or change their workspace role)",
+    dependencies=[Depends(require_json_content_type)],
+)
+def api_add_workspace_member(
+    workspace_id: str,
+    payload: WorkspaceMemberRequest,
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_PUBLIC)),
+) -> WorkspaceMember:
+    """Add ``user_id``. System admins or the workspace's admins only.
+
+    The member keeps their global role; ``ws_role=admin`` only lets them
+    manage this workspace's members.
+    """
+    _ws_visible(ctx, workspace_id)
+    _ws_require_member_admin(ctx, workspace_id)
+    try:
+        workspaces_svc.add_member(
+            workspace_id, payload.user_id, ws_role=payload.ws_role, actor=_ws_actor(ctx)
+        )
+    except workspaces_svc.WorkspaceError as exc:
+        raise _ws_http(exc) from exc
+    member = next(
+        m for m in workspaces_svc.list_members(workspace_id) if m["user_id"] == payload.user_id
+    )
+    return WorkspaceMember(**member)
+
+
+@router.delete(
+    "/workspaces/{workspace_id}/members/{user_id}",
+    status_code=204,
+    summary="Remove a member",
+    openapi_extra=owner_scoped(
+        "Removes one membership row only; no pipeline, job, report or credential "
+        "is deleted and an admin can re-add the member at any time."
+    ),
+)
+def api_remove_workspace_member(
+    workspace_id: str,
+    user_id: str,
+    ctx: AuthContext = Depends(require_capability(Capability.VIEW_PUBLIC)),
+) -> Response:
+    """Remove ``user_id`` from the workspace (system admins / workspace admins)."""
+    _ws_visible(ctx, workspace_id)
+    _ws_require_member_admin(ctx, workspace_id)
+    try:
+        workspaces_svc.remove_member(workspace_id, user_id, actor=_ws_actor(ctx))
+    except workspaces_svc.WorkspaceError as exc:
+        raise _ws_http(exc) from exc
+    return Response(status_code=204)

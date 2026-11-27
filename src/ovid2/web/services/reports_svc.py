@@ -47,6 +47,7 @@ from ovid2.reports.formats import EXPORT_FORMATS
 from ovid2.web import db as web_db
 from ovid2.web.services import report_sources_svc
 from ovid2.web.services._broker import BrokerError, SecretScope, run_tool_json
+from ovid2.workspaces import active_workspace
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +100,11 @@ _MAX_TAGS = 12
 _MAX_TAG = 40
 _MAX_VERSIONS_KEPT = 200
 _PERMS = ("view", "edit")
-_PRINCIPAL_KINDS = ("user", "role")
+_PRINCIPAL_KINDS = ("user", "role", "workspace")
+
+#: The only principal of a ``workspace`` share: every member of the report's
+#: workspace (adr-workspaces.md).
+WORKSPACE_PRINCIPAL = "*"
 
 
 class ReportError(ValueError):
@@ -211,13 +216,23 @@ def _shares_for(conn: Any, report_id: str) -> list[dict[str, Any]]:
 
 
 def _permission(row: Any, shares: list[dict[str, Any]], who: Principal) -> str | None:
-    """Return ``owner`` / ``edit`` / ``view`` / ``None`` for ``who``."""
+    """Return ``owner`` / ``edit`` / ``view`` / ``None`` for ``who``.
+
+    Workspaces (adr-workspaces.md): a report belongs to one workspace and
+    is never visible outside it. Inside it the owner + share ACL applies; a
+    ``workspace`` share (principal ``*``) grants every member of the
+    workspace at once.
+    """
+    if row["workspace_id"] != active_workspace():
+        return None
     if row["owner"] == who.user_id:
         return "owner"
     best: str | None = None
     for s in shares:
-        hit = (s["principal_kind"] == "user" and s["principal"] == who.user_id) or (
-            s["principal_kind"] == "role" and s["principal"] == who.role
+        hit = (
+            (s["principal_kind"] == "user" and s["principal"] == who.user_id)
+            or (s["principal_kind"] == "role" and s["principal"] == who.role)
+            or s["principal_kind"] == "workspace"
         )
         if hit:
             if s["permission"] == "edit":
@@ -258,7 +273,10 @@ def _summary(row: Any, perm: str, favorite: bool, shares: list[dict[str, Any]]) 
 
 
 def _load(conn: Any, report_id: str, who: Principal) -> tuple[Any, list[dict[str, Any]], str]:
-    row = conn.execute("SELECT * FROM web_reports WHERE report_id = ?", (report_id,)).fetchone()
+    row = conn.execute(
+        "SELECT * FROM web_reports WHERE report_id = ? AND workspace_id = ?",
+        (report_id, active_workspace()),
+    ).fetchone()
     if row is None:
         raise ReportNotFound(report_id)
     shares = _shares_for(conn, report_id)
@@ -305,7 +323,8 @@ def _template_layout(template_id: str, who: Principal) -> tuple[dict[str, Any], 
         return dict(builtin.layout), builtin.source_kind
     with web_db.connect() as conn:
         row = conn.execute(
-            "SELECT * FROM web_report_templates WHERE template_id = ?", (template_id,)
+            "SELECT * FROM web_report_templates WHERE template_id = ? AND workspace_id = ?",
+            (template_id, active_workspace()),
         ).fetchone()
     if row is None or (row["owner"] != who.user_id and not row["shared"]):
         raise ReportError(f"unknown template {template_id!r}")
@@ -352,8 +371,8 @@ def create_report(
     with web_db.connect() as conn:
         conn.execute(
             "INSERT INTO web_reports (report_id, owner, title, description, folder, tags_json, source_id, "
-            "template_id, layout_json, version, status, created_at, updated_at, updated_by, archived) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, 0)",
+            "template_id, layout_json, version, status, created_at, updated_at, updated_by, archived, "
+            "workspace_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, 0, ?)",
             (
                 rid,
                 who.user_id,
@@ -368,6 +387,7 @@ def create_report(
                 now,
                 now,
                 who.actor or who.user_id,
+                active_workspace(),
             ),
         )
         conn.execute(
@@ -435,8 +455,9 @@ def list_reports(
     web_db.ensure_schema()
     with web_db.connect() as conn:
         rows = conn.execute(
-            "SELECT * FROM web_reports WHERE archived = ? ORDER BY updated_at DESC",
-            (1 if archived else 0,),
+            "SELECT * FROM web_reports WHERE archived = ? AND workspace_id = ? "
+            "ORDER BY updated_at DESC",
+            (1 if archived else 0, active_workspace()),
         ).fetchall()
         favs = {
             r[0]
@@ -478,8 +499,8 @@ def list_folders(who: Principal) -> list[dict[str, Any]]:
     with web_db.connect() as conn:
         rows = conn.execute(
             "SELECT folder, COUNT(*) AS n FROM web_reports WHERE owner = ? AND archived = 0 "
-            "GROUP BY folder ORDER BY folder",
-            (who.user_id,),
+            "AND workspace_id = ? GROUP BY folder ORDER BY folder",
+            (who.user_id, active_workspace()),
         ).fetchall()
     return [{"folder": r["folder"], "count": int(r["n"])} for r in rows]
 
@@ -718,19 +739,29 @@ def set_share(
     if who.agent:
         raise ReportForbidden("sharing is a human-only action")
     if principal_kind not in _PRINCIPAL_KINDS:
-        raise ReportError("principal_kind must be user or role")
+        raise ReportError("principal_kind must be user, role or workspace")
     if permission not in _PERMS:
         raise ReportError("permission must be view or edit")
     principal = str(principal or "").strip()
+    if principal_kind == "workspace":
+        principal = WORKSPACE_PRINCIPAL
     if not principal or len(principal) > 200:
         raise ReportError("principal is required")
-    if principal_kind == "role":
+    if principal_kind == "workspace":
+        pass
+    elif principal_kind == "role":
         from ovid2.web.auth.roles import Role
 
         if principal not in {r.value for r in Role} or principal == Role.PENDING.value:
             raise ReportError(f"unknown role {principal!r}")
     elif principal == who.user_id:
         raise ReportError("you already own this report")
+    else:
+        from ovid2.web.services import workspaces_svc
+
+        # A report can only be shared with members of its workspace.
+        if not workspaces_svc.is_member(active_workspace(), principal):
+            raise ReportError("that user is not a member of this workspace")
     with web_db.connect() as conn:
         _row, _s, perm = _load(conn, report_id, who)
         _require_owner(perm)
@@ -784,9 +815,9 @@ def list_templates(who: Principal, source_kind: str | None = None) -> list[dict[
     out = [t.as_dict() for t in catalogue.list_templates(source_kind)]
     with web_db.connect() as conn:
         rows = conn.execute(
-            "SELECT * FROM web_report_templates WHERE (owner = ? OR shared = 1) "
+            "SELECT * FROM web_report_templates WHERE workspace_id = ? AND (owner = ? OR shared = 1) "
             "AND (? IS NULL OR source_kind = ?) ORDER BY name",
-            (who.user_id, source_kind, source_kind),
+            (active_workspace(), who.user_id, source_kind, source_kind),
         ).fetchall()
     for r in rows:
         out.append(
@@ -814,7 +845,8 @@ def get_template(template_id: str, who: Principal) -> dict[str, Any]:
         raise ReportNotFound(template_id) from exc
     with web_db.connect() as conn:
         row = conn.execute(
-            "SELECT * FROM web_report_templates WHERE template_id = ?", (template_id,)
+            "SELECT * FROM web_report_templates WHERE template_id = ? AND workspace_id = ?",
+            (template_id, active_workspace()),
         ).fetchone()
     return {
         "template_id": template_id,
@@ -840,7 +872,7 @@ def save_as_template(
     with web_db.connect() as conn:
         conn.execute(
             "INSERT INTO web_report_templates (template_id, owner, name, description, source_kind, layout_json, "
-            "shared, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "shared, created_at, workspace_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 tid,
                 who.user_id,
@@ -850,6 +882,7 @@ def save_as_template(
                 json.dumps(layout_mod.as_template(report["layout"])),
                 1 if shared else 0,
                 _now(),
+                active_workspace(),
             ),
         )
     web_db.audit(
@@ -865,13 +898,17 @@ def delete_user_template(template_id: str, who: Principal) -> dict[str, Any]:
     """Delete a user template the caller owns."""
     with web_db.connect() as conn:
         row = conn.execute(
-            "SELECT owner FROM web_report_templates WHERE template_id = ?", (template_id,)
+            "SELECT owner FROM web_report_templates WHERE template_id = ? AND workspace_id = ?",
+            (template_id, active_workspace()),
         ).fetchone()
         if row is None:
             raise ReportNotFound(template_id)
         if row["owner"] != who.user_id:
             raise ReportForbidden("only the owner can delete this template")
-        conn.execute("DELETE FROM web_report_templates WHERE template_id = ?", (template_id,))
+        conn.execute(
+            "DELETE FROM web_report_templates WHERE template_id = ? AND workspace_id = ?",
+            (template_id, active_workspace()),
+        )
     web_db.audit(
         actor=who.actor or who.user_id, action="report.template_delete", target=template_id
     )

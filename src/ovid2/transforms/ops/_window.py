@@ -4,9 +4,9 @@ Window functions have no entry on :class:`EngineFunctions` and we may
 not ``import pyspark`` in this tree. Instead we express windows as SQL
 fragments through the portable ``functions.expr`` entry, which both the
 PySpark and (future) Snowpark ``EngineFunctions`` adapters implement.
-The reshape/sampling ops that use these helpers declare
-``requires_family = "spark"`` so the engine gates them; the SQL used
-here is ANSI window syntax that Spark SQL accepts.
+The SQL used here is ANSI window syntax; Spark SQL reads it directly and
+the DuckDB / Snowpark engines transpile it, so these ops run on every
+engine (``adr-engine-universality.md``).
 
 The expression built is, for example::
 

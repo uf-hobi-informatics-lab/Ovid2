@@ -9,6 +9,7 @@ with no args) and also the only engine that may import from
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
 import shutil
 import sys
@@ -24,6 +25,8 @@ if TYPE_CHECKING:
     from pyspark.sql import SparkSession
 
     from ovid2.core.engines.metrics import EngineMetricsSample
+
+logger = logging.getLogger(__name__)
 
 
 #: Maximum number of bytes of captured JVM stderr to surface in
@@ -284,6 +287,74 @@ class _SparkFunctions:
         # so an unparseable string casts to NULL — the lenient contract.
         return c.cast("double")
 
+    # --- The rest of ``pyspark.sql.functions`` (portable surface) ---------
+
+    def udf(self, f: Any = None, returnType: Any = "string", **kwargs: Any) -> Any:  # noqa: N803
+        """``pyspark.sql.functions.udf`` accepting portable types."""
+        returnType = kwargs.pop("return_type", returnType)  # noqa: N806
+        if f is None or not callable(f):
+            rt = f if f is not None else returnType
+            return lambda fn: spark_udf(fn, rt, vectorised=False)
+        return spark_udf(f, returnType, vectorised=False)
+
+    def pandas_udf(self, f: Any = None, returnType: Any = None, functionType: Any = None) -> Any:  # noqa: N803
+        """Scalar ``pandas_udf`` accepting portable types."""
+        del functionType
+        if f is None or not callable(f):
+            rt = f if f is not None else (returnType or "string")
+            return lambda fn: spark_udf(fn, rt, vectorised=True)
+        return spark_udf(f, returnType or "string", vectorised=True)
+
+    @property
+    def Window(self) -> Any:
+        """``pyspark.sql.Window``."""
+        from pyspark.sql import Window
+
+        return Window
+
+    def __getattr__(self, name: str) -> Any:
+        """Every other ``pyspark.sql.functions`` name, unchanged."""
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return getattr(self._F, name)
+
+
+def spark_type(data_type: Any) -> Any:
+    """Return a real ``pyspark.sql.types.DataType`` for a portable / DDL / PySpark type."""
+    from pyspark.sql import types as T
+
+    if isinstance(data_type, T.DataType):
+        return data_type
+    from ovid2.core.engines.types import StructType as PortableStruct
+
+    if isinstance(data_type, PortableStruct):
+        portable_fields = data_type.fields
+        return T.StructType(
+            [T.StructField(f.name, spark_type(f.dataType), f.nullable) for f in portable_fields]
+        )
+    from pyspark.sql.types import _parse_datatype_string
+
+    return _parse_datatype_string(str(data_type))
+
+
+def spark_udf(fn: Any, return_type: Any, *, vectorised: bool) -> Any:
+    """Build a PySpark UDF (row or scalar pandas) from a portable return type."""
+    from pyspark.sql import functions as F
+
+    rtype = spark_type(return_type or "string")
+    if vectorised:
+        import warnings
+
+        from pyspark.sql.functions import PandasUDFType  # type: ignore[attr-defined]
+        from pyspark.sql.pandas.functions import pandas_udf
+
+        # Explicit eval type (string annotations defeat type-hint inference);
+        # PySpark warns that the form is "preferred" otherwise — harmless.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            return pandas_udf(fn, rtype, PandasUDFType.SCALAR)
+    return F.udf(fn, rtype)
+
 
 #: Portable type-name -> ``pyspark.sql.types`` class name, consumed by
 #: :func:`create_typed_dataframe`. Keep in sync with the Snowpark mirror
@@ -341,6 +412,38 @@ def _pin_worker_python() -> None:
     """
     if sys.executable:
         os.environ.setdefault("PYSPARK_PYTHON", sys.executable)
+
+
+def _fit_executor_to_managed_workers(conf: dict[str, str]) -> dict[str, str]:
+    """Lower executor cores / memory to fit the ovid2-launched workers.
+
+    The host launcher sets ``OVID2_SPARK_WORKER_CORES`` and
+    ``OVID2_SPARK_WORKER_MEMORY_GB`` only when it starts its own
+    standalone cluster, so the real worker shape is known. An executor
+    bigger than a worker is never scheduled (the app waits forever), so
+    shrink it and log a warning. Without those variables (an external
+    cluster, local mode) the config is returned unchanged.
+    """
+    raw_cores = os.environ.get("OVID2_SPARK_WORKER_CORES", "").strip()
+    raw_mem = os.environ.get("OVID2_SPARK_WORKER_MEMORY_GB", "").strip()
+    if not raw_cores or not raw_mem:
+        return conf
+    try:
+        worker_cores, worker_mem = int(raw_cores), int(raw_mem)
+    except ValueError:
+        return conf
+    from ovid2.config.spark_sizing import fit_executor_to_worker
+
+    fitted, messages = fit_executor_to_worker(
+        conf, worker_cores=worker_cores, worker_memory_gb=worker_mem
+    )
+    for message in messages:
+        logger.warning(
+            "Executor request is larger than one Spark worker, lowering %s; "
+            "otherwise no executor could start and the run would hang.",
+            message,
+        )
+    return fitted
 
 
 class PySparkEngine(BaseEngine):
@@ -414,6 +517,7 @@ class PySparkEngine(BaseEngine):
             if master_url:
                 builder = builder.master(str(master_url))
 
+            merged = _fit_executor_to_managed_workers(merged)
             for key, value in merged.items():
                 builder = builder.config(key, value)
             _pin_worker_python()
@@ -434,6 +538,24 @@ class PySparkEngine(BaseEngine):
         if self._functions is None:
             self._functions = _SparkFunctions()
         return self._functions
+
+    def read_shared_view_file(
+        self, source: Any, *, delimiter: str, header: bool, bus: Any = None
+    ) -> Any:
+        """Read a local shared-view file through the columnar vocabulary cache."""
+        return read_shared_view_spark(
+            self.get_session(), source, delimiter=delimiter, header=header, bus=bus
+        )
+
+    def warm_reference(self, session: Any, df: Any, name: str) -> Any:
+        """Persist a reference table (Spark's cache warm-up).
+
+        Registers ``df`` as ``name``, persists the view ``MEMORY_AND_DISK``
+        and re-registers the cached frame; the table's write fills the cache
+        so later ``spark.table(name)`` reads hit it (see
+        :func:`spark_warm_reference`).
+        """
+        return spark_warm_reference(self, session, df, name)
 
     def native(self) -> SparkSession:
         """Return the underlying real ``SparkSession``."""
@@ -674,6 +796,75 @@ class PySparkEngine(BaseEngine):
             # Any hiccup (JVM disconnected, tracker unavailable) →
             # return a bare sample. Never blow up the sampler.
             return EngineMetricsSample(t_ms=now_ms, wall_iso=wall, engine_family=self.family.value)
+
+
+def read_shared_view_spark(
+    spark: Any, source: Any, *, delimiter: str, header: bool, bus: Any = None
+) -> Any:
+    """Read a file-sourced shared view on Spark, via the Parquet cache.
+
+    Returns a lazy DataFrame over the cached Parquet directory when one
+    exists for the file's current ``(size, mtime)``; otherwise converts
+    the CSV once (a deliberate one-time write — the cache build is the
+    only eager action here, and it replaces N later full-text parses)
+    and reads the result. Any cache failure falls back to the plain CSV
+    read, so a read-only material directory never breaks a run.
+    """
+    from pathlib import Path
+
+    from ovid2.core import vocab_cache
+    from ovid2.core.events import warning_event
+
+    source = Path(source)
+
+    def _csv() -> Any:
+        return spark.read.csv(
+            str(source),
+            header=header,
+            sep=delimiter,
+            inferSchema=False,
+        )
+
+    cached = vocab_cache.cached_parquet(source, delimiter=delimiter, header=header)
+    if cached is not None:
+        return spark.read.parquet(str(cached))
+
+    target = vocab_cache.build_target(source, delimiter=delimiter, header=header)
+    if target is None:
+        return _csv()
+    temp, final = target
+    try:
+        _csv().write.mode("overwrite").parquet(str(temp))
+        published = vocab_cache.publish(temp, final)
+    except Exception as exc:
+        vocab_cache.discard(temp)
+        if bus is not None:
+            bus.emit(
+                warning_event(
+                    instance_id="",
+                    message=f"Vocabulary Parquet cache build failed for {source.name}: {exc}; "
+                    "reading the CSV directly.",
+                )
+            )
+        return _csv()
+    return spark.read.parquet(str(published))
+
+
+def spark_warm_reference(engine: BaseEngine, session: Any, df: Any, name: str) -> Any:
+    """Shared Spark-family reference warm-up (``PySparkEngine`` / Databricks).
+
+    Persists the registered view ``MEMORY_AND_DISK`` and re-registers the
+    cached frame. The cache is filled by the table's own write (tables run
+    one at a time — ``core/table_runner.TABLE_CONCURRENCY``), so every later
+    ``spark.table(name)`` read by a cross-table fixer hits it; no separate
+    eager ``count()`` is needed.
+    """
+    from pyspark import StorageLevel
+
+    engine.register_temp_view(session, name, df)
+    cached = session.table(name).persist(StorageLevel.MEMORY_AND_DISK)
+    engine.register_temp_view(session, name, cached)
+    return cached
 
 
 def spark_functions() -> EngineFunctions:

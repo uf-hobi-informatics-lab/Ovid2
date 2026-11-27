@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}{{ ws.display_name }} &mdash; Workspaces &mdash; Ovid2{% endblock %}
+{% block content %}
+{% import "_help.html" as help %}
+<section class="page">
+  <div class="page-header">
+    <h1>{{ ws.display_name }} <span class="mono small">{{ ws.workspace_id }}</span>
+      <span class="badge status-{{ ws.status }}">{{ ws.status }}</span>
+      {% call help.tip_block() %}Members share this workspace's pipelines, workflows, jobs, reports and configuration. A member's own role still decides what they may do here. A workspace <code>admin</code> may add and remove members of this workspace and nothing more.{% endcall %}
+    </h1>
+    {% if is_system_admin %}<a class="link-button small" href="/workspaces">&larr; All workspaces</a>{% endif %}
+  </div>
+
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+  {% if notice %}<div class="flash">{{ notice }}</div>{% endif %}
+
+  <h2 class="small">Members ({{ members | length }})</h2>
+  <div class="table-wrap">
+    <table class="runs-table">
+      <thead>
+        <tr><th>Email</th><th>Name</th><th>Role</th><th>Workspace role</th><th>Added</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for m in members %}
+          <tr>
+            <td class="mono">{{ m.email or m.user_id }}</td>
+            <td>{{ m.name or "&mdash;" | safe }}</td>
+            <td><span class="badge status-{{ m.role }}">{{ m.role or "&mdash;" | safe }}</span>{% if m.status and m.status != 'active' %} <span class="badge status-{{ m.status }}">{{ m.status }}</span>{% endif %}</td>
+            <td>
+              <form action="/workspaces/{{ ws.workspace_id }}/members" method="post" class="ws-inline-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="user_id" value="{{ m.user_id }}">
+                <select name="ws_role" aria-label="Workspace role for {{ m.email or m.user_id }}">
+                  {% for r in ws_roles %}<option value="{{ r }}" {% if m.ws_role == r %}selected{% endif %}>{{ r }}</option>{% endfor %}
+                </select>
+                <button type="submit" class="link-button small">save</button>
+              </form>
+            </td>
+            <td class="small">{{ m.added_at | localtime }}</td>
+            <td>
+              <form action="/workspaces/{{ ws.workspace_id }}/members/{{ m.user_id }}/remove" method="post" class="ws-inline-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="link-button small danger">remove</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="empty">No members yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if ws.status == 'active' %}
+  <h2 class="small">Add a member {% call help.tip_block() %}Pick from the users known to Ovid2. Someone who has never signed in is not listed yet: ask them to sign in once (a pending user can be added before an administrator activates them).{% endcall %}</h2>
+  {% if candidates %}
+  <form action="/workspaces/{{ ws.workspace_id }}/members" method="post" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>User
+      <select name="user_id" required>
+        {% for u in candidates %}
+          <option value="{{ u.user_id }}">{{ u.email or u.user_id }}{% if u.name %} ({{ u.name }}){% endif %}{% if u.status != 'active' %} &mdash; {{ u.status }}{% endif %}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Workspace role
+      <select name="ws_role">
+        {% for r in ws_roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+      </select>
+    </label>
+    <div><button type="submit" class="button primary">Add member</button></div>
+  </form>
+  {% else %}
+    <p class="empty">Every known user is already a member.</p>
+  {% endif %}
+  {% endif %}
+
+  {% if is_system_admin %}
+  <h2 class="small">Settings</h2>
+  <form action="/workspaces/{{ ws.workspace_id }}/edit" method="post" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Name <input type="text" name="display_name" value="{{ ws.display_name }}" required maxlength="80"></label>
+    <label>Description <input type="text" name="description" value="{{ ws.description }}" maxlength="500"></label>
+    <div><button type="submit" class="button">Save</button></div>
+  </form>
+
+  {% if not is_default %}
+  <h2 class="small">Lifecycle {% call help.tip_block() %}Archiving hides the workspace from every member (nothing is deleted). Deleting is only possible for an archived workspace that holds no jobs, reports or configuration files. Both need approval from a second administrator.{% endcall %}</h2>
+  <div class="button-row">
+    {% if ws.status == 'active' %}
+      <form action="/workspaces/{{ ws.workspace_id }}/archive" method="post" class="ws-inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="button danger">Archive workspace</button>
+      </form>
+    {% else %}
+      <form action="/workspaces/{{ ws.workspace_id }}/restore" method="post" class="ws-inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="button">Restore workspace</button>
+      </form>
+      {% if is_empty %}
+      <form action="/workspaces/{{ ws.workspace_id }}/delete" method="post" class="ws-inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="button danger">Delete workspace</button>
+      </form>
+      {% endif %}
+    {% endif %}
+  </div>
+  {% endif %}
+  {% endif %}
+</section>
+{% endblock %}

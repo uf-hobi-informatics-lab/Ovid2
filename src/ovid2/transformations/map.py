@@ -43,6 +43,8 @@ _LEGACY_MAPPER_TYPE_MODULES: dict[str, str] = {
 class MapTransformer(BaseTransformer):
     """Apply the declarative mapper spec (or a legacy mapper class)."""
 
+    stage_name = "map"
+
     def transform(self, df: DataFrame, context: dict[str, Any]) -> DataFrame:
         """Apply the mapper for ``context['table_name']``.
 

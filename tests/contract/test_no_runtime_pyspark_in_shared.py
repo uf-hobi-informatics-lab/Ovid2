@@ -59,47 +59,31 @@ def test_no_runtime_pyspark_in_shared_code(src_root: Path) -> None:
     )
 
 
-#: Non-legacy pipeline packages (``legacy_ovid`` ports are Spark-only by
-#: definition and governed by ``test_legacy_ports_contained.py``).
-_PORTABLE_PIPELINES: tuple[str, ...] = (
-    "apihosp",
-    "dup",
-    "acme_from_disc",
-    "example_pcornet",
-    "formhosp",
-    "pcornet_to_omop",
-)
+def test_no_pipeline_package_imports_pyspark(repo_root: Path) -> None:
+    """No pipeline package — hand-written or generated legacy port — imports pyspark at runtime.
 
-
-def _declares_spark(text: str) -> bool:
-    return 'REQUIRES_FAMILY = "spark"' in text or 'requires_family = "spark"' in text
-
-
-@pytest.mark.contract
-def test_portable_pipelines_import_pyspark_only_when_spark_family(repo_root: Path) -> None:
-    """A non-legacy pipeline may import pyspark at runtime only if it declares Spark.
-
-    Either the package (``REQUIRES_FAMILY = "spark"`` in
-    ``pipeline_settings.py``) or the file (``requires_family = "spark"``)
-    must say so; otherwise the pipeline claims to be engine-portable.
+    Every engine runs every pipeline (engine universality,
+    ``adr-engine-universality.md``): column functions come from
+    :mod:`ovid2.core.engines.dsl`, generated ports import the portable
+    :mod:`ovid2.core.engines.sparkapi` package (the legacy formatter
+    migrator rewrites their ``pyspark`` imports). There is no family
+    marker that exempts a package any more.
     """
+    import warnings
+
     offenders: list[str] = []
-    for name in _PORTABLE_PIPELINES:
-        pkg = repo_root / "pipelines" / "ovid2_pipelines" / name
-        settings = pkg / "pipeline_settings.py"
-        if not settings.is_file():
+    root = repo_root / "pipelines" / "ovid2_pipelines"
+    for py in sorted(root.rglob("*.py")):
+        if "__pycache__" in py.parts or "_superseded" in py.parts:
             continue
-        pkg_spark = _declares_spark(settings.read_text(encoding="utf-8"))
-        for py in sorted(pkg.rglob("*.py")):
-            if "__pycache__" in py.parts or "_superseded" in py.parts:
-                continue
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", SyntaxWarning)
             lines = _runtime_pyspark_imports(py)
-            if lines and not (pkg_spark or _declares_spark(py.read_text(encoding="utf-8"))):
-                offenders += [f"{py.relative_to(repo_root)}:{n}" for n in lines]
+        offenders += [f"{py.relative_to(repo_root)}:{n}" for n in lines]
     assert not offenders, (
-        "Runtime pyspark import in an engine-portable pipeline — use "
-        "ovid2.core.engines.dsl or declare REQUIRES_FAMILY/requires_family "
-        '= "spark":\n' + "\n".join(offenders)
+        "Runtime pyspark import in a pipeline package — use ovid2.core.engines.dsl "
+        "(hand-written) or re-run the legacy formatter migrator (generated ports):\n"
+        + "\n".join(offenders)
     )
 
 

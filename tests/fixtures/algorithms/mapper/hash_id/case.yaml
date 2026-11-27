@@ -1,0 +1,21 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  column: id
+  output_length: 16
+spec:
+  secrets:
+    id_salt: s3cr3t
+tables:
+  input:
+    columns:
+    - id
+    rows:
+    - - P1
+    - - P2
+note: "SHA-256 of 'salt|value' (portable; sha2 is SHA-256 everywhere), truncated \u2014 expected = hashlib.sha256(b's3cr3t|P1').hexdigest()[:16]"
+expected:
+  columns:
+  - id
+  rows:
+  - - 48ff7e8c986fc385
+  - - 75efa276e1394c43

@@ -1,0 +1,31 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  src1: '1'
+spec:
+  table_name: lab_result_cm
+  context_frames:
+    loinc_location_df: ref
+tables:
+  input:
+    columns:
+    - LAB_LOINC
+    rows:
+    - - A
+    - - B
+    - - C
+  ref:
+    columns:
+    - loinc_num
+    - classtype
+    rows:
+    - - A
+      - '1'
+    - - B
+      - '2'
+note: 'v1: keep unknown LOINCs and those whose classtype belongs to the table'
+expected:
+  columns:
+  - LAB_LOINC
+  rows:
+  - - A
+  - - C

@@ -48,7 +48,6 @@ import argparse
 import logging
 import os
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -58,43 +57,6 @@ if TYPE_CHECKING:
     from ovid2.tools.table_specs import TableSpec
 
 logger = logging.getLogger(__name__)
-
-#: Default number of tables copied concurrently in container mode.
-#:
-#: Each per-table read is a single, non-splittable JDBC/CSV partition
-#: (an Access ``.accdb`` has no natural partition column, so
-#: :func:`ovid2.drivers.access.spark.read_table` yields exactly one
-#: partition), which means one table keeps exactly one Spark executor
-#: busy while the rest of the cluster idles. Submitting several tables'
-#: ``persist`` actions concurrently from independent driver threads lets
-#: Spark's scheduler run those single-task jobs in parallel across the
-#: otherwise-idle workers — turning a serial 201-table copy into a
-#: fan-out bounded by :data:`_COPY_TABLE_CONCURRENCY`. Overridable per
-#: run via ``$OVID2_COPY_TABLE_CONCURRENCY``.
-_DEFAULT_COPY_TABLE_CONCURRENCY: int = 8
-
-
-def _copy_table_concurrency() -> int:
-    """Return the per-table copy concurrency, honouring the env override.
-
-    Reads ``$OVID2_COPY_TABLE_CONCURRENCY`` and falls back to
-    :data:`_DEFAULT_COPY_TABLE_CONCURRENCY`. A value below 1 (or a
-    non-integer) is clamped to 1 so a misconfiguration degrades to the
-    original serial behaviour rather than crashing.
-    """
-    raw = os.environ.get("OVID2_COPY_TABLE_CONCURRENCY")
-    if raw is None:
-        return _DEFAULT_COPY_TABLE_CONCURRENCY
-    try:
-        value = int(raw)
-    except ValueError:
-        logger.warning(
-            "Ignoring non-integer OVID2_COPY_TABLE_CONCURRENCY=%r; falling back to %d.",
-            raw,
-            _DEFAULT_COPY_TABLE_CONCURRENCY,
-        )
-        return _DEFAULT_COPY_TABLE_CONCURRENCY
-    return max(1, value)
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -213,6 +175,7 @@ def main(args: argparse.Namespace) -> int:
         assert_engine_supports_drivers(
             engine,
             [args.from_address, args.to_address],
+            output_names=[args.to_address],
         )
     except (ValueError, RuntimeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -425,10 +388,9 @@ def _run_container_mode(args: argparse.Namespace) -> int:
         else:
             resolved = parse_table_specs(args.tables)
 
-    # Largest-first (LPT) scheduling: start the biggest tables at t=0 so
-    # the run is bounded by the largest table rather than by whichever
-    # large table the list order happened to put last. Metadata-only
-    # size lookup; any failure keeps the given order.
+    # Largest-first order (tables run one at a time): the big tables
+    # surface first on the run page. Metadata-only size lookup; any
+    # failure keeps the given order.
     from ovid2.tools.table_order import format_size, order_largest_first
 
     resolved, sizes = order_largest_first(
@@ -470,7 +432,7 @@ def _run_container_mode(args: argparse.Namespace) -> int:
 
     failures = 0
     try:
-        failures = _copy_tables_concurrently(
+        failures = _copy_tables(
             resolved,
             stager,
             input_driver,
@@ -488,7 +450,15 @@ def _run_container_mode(args: argparse.Namespace) -> int:
     return 0 if failures == 0 else 1
 
 
-def _copy_tables_concurrently(
+class _NullBus:
+    """Event sink used when ``_copy_tables`` runs without a bus."""
+
+    def emit(self, event: object) -> None:
+        """Drop ``event``."""
+        del event
+
+
+def _copy_tables(
     resolved: list[TableSpec],
     stager: EngineStager,
     input_driver: Driver,
@@ -499,33 +469,23 @@ def _copy_tables_concurrently(
     instance_id: str = "",
     engine: object | None = None,
 ) -> int:
-    """Copy every resolved table, fanning out across driver threads.
+    """Copy every resolved table, one at a time (every engine).
 
-    Each table's ``materialise`` (lazy) + ``persist`` (the Spark action
-    that triggers the write) runs on its own worker thread. Because a
-    single Access/disc table read is one non-splittable partition, one
-    table occupies exactly one executor; submitting several tables at
-    once from independent threads lets Spark's scheduler run those
-    single-task jobs in parallel across the whole cluster instead of
-    leaving 24 of 25 workers idle. Spark supports concurrent job
-    submission from multiple threads on one driver, and the Spark-family
-    stager is a stateless pass-through, so this is safe.
+    Each table's ``materialise`` (lazy) + ``persist`` (the action that
+    triggers the write) runs to completion before the next starts, so the
+    running table gets the engine's whole capacity and every engine
+    reports the same per-table order and timings.
 
     When a ``bus`` is supplied, each table emits ``table.started`` →
     ``table.completed`` / ``table.failed`` so the live run console shows
-    the per-table roster fill in — the same event stream every other
-    pipeline type renders (the copy has no CDM roster to pre-seed, so
-    these events are how the run page discovers the tables). The bus is
-    thread-safe (``JsonlEventBus`` guards its writes with a lock), so it
-    is safe to emit from the worker threads.
+    the per-table roster fill in (the copy has no CDM roster to pre-seed).
 
     Returns the number of tables that failed to copy.
     """
+    del engine  # accepted for call-site compatibility
     import time
 
     from ovid2.core.events import table_completed, table_failed, table_started
-
-    concurrency = min(_copy_table_concurrency(), len(resolved)) or 1
 
     def _emit(event_factory: object, **kwargs: object) -> None:
         """Emit an event on the bus when one is configured (no-op otherwise)."""
@@ -533,29 +493,7 @@ def _copy_tables_concurrently(
             return
         bus.emit(event_factory(instance_id=instance_id, **kwargs))  # type: ignore[operator]
 
-    import contextlib
-
-    from ovid2.core.table_runner import supports_parallel_tables
-
-    def _worker_scope() -> contextlib.AbstractContextManager[None]:
-        """Per-thread engine scope (DuckDB: a private cursor per table thread).
-
-        A DuckDB connection must not be shared by threads running queries at
-        the same time — doing so intermittently fails with "Attempting to
-        execute an unsuccessful or closed pending query result". Engines
-        that support parallel tables expose ``table_worker()``; Spark-family
-        engines do not need one.
-        """
-        if engine is not None and supports_parallel_tables(engine):
-            return engine.table_worker()  # type: ignore[attr-defined,no-any-return]
-        return contextlib.nullcontext()
-
     def _copy_one(spec: TableSpec) -> tuple[str, str | None]:
-        """Copy one table on its own engine scope; return ``(name, error)``."""
-        with _worker_scope():
-            return _copy_one_inner(spec)
-
-    def _copy_one_inner(spec: TableSpec) -> tuple[str, str | None]:
         """Copy one table; return ``(table_name, error_or_None)``."""
         table_name = spec.table_name
         file_name = spec.file_name
@@ -597,37 +535,25 @@ def _copy_tables_concurrently(
                 batch_id=args.batch_id,
                 table=table_name,
                 error=str(exc),
+                elapsed_ms=(time.monotonic() - started) * 1000.0,
             )
             return (table_name, str(exc))
 
-    # A single table (or concurrency==1) keeps the original serial,
-    # thread-free behaviour — no pool overhead, easier tracebacks.
-    if concurrency == 1:
-        failures = 0
-        for spec in resolved:
-            _table_name, error = _copy_one(spec)
-            if error is None:
-                print(f"[ovid2 tools copy] {_table_name}: OK")
-            else:
-                failures += 1
-                print(
-                    f"[ovid2 tools copy] {_table_name}: FAILED — {error}",
-                    file=sys.stderr,
-                )
-        return failures
+    from ovid2.core.pause import gate as _pause_gate
 
-    print(f"[ovid2 tools copy] copying {len(resolved)} table(s) with concurrency {concurrency}")
+    hold = _pause_gate(
+        bus if bus is not None else _NullBus(),
+        instance_id=instance_id,
+        pipeline=args.pipeline,
+        batch_id=args.batch_id,
+    )
     failures = 0
-    with ThreadPoolExecutor(max_workers=concurrency) as pool:
-        futures = {pool.submit(_copy_one, spec): spec for spec in resolved}
-        for future in as_completed(futures):
-            table_name, error = future.result()
-            if error is None:
-                print(f"[ovid2 tools copy] {table_name}: OK")
-            else:
-                failures += 1
-                print(
-                    f"[ovid2 tools copy] {table_name}: FAILED — {error}",
-                    file=sys.stderr,
-                )
+    for spec in resolved:
+        hold()
+        table_name, error = _copy_one(spec)
+        if error is None:
+            print(f"[ovid2 tools copy] {table_name}: OK")
+        else:
+            failures += 1
+            print(f"[ovid2 tools copy] {table_name}: FAILED — {error}", file=sys.stderr)
     return failures

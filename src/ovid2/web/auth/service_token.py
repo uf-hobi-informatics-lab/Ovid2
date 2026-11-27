@@ -8,7 +8,10 @@ a :class:`~ovid2.web.auth.roles.Role`.
 
 The token→role map is stored as a HASH map under
 ``$XDG_CONFIG_HOME/ovid2/secrets.d/auth_service_tokens.json`` (mode
-``0o600``) with the shape ``{"<sha256hex>": "<role>"}``. Only the
+``0o600``) with the shape ``{"<sha256hex>": "<role>"}`` or — to bind a
+token to workspaces (adr-workspaces.md) —
+``{"<sha256hex>": {"role": "<role>", "workspaces": ["default", "lab"]}}``.
+A plain role string means ``workspaces: ["default"]``. Only the
 SHA-256 hex digest of each token is persisted — the plaintext token is
 never stored, logged, or returned.
 
@@ -35,7 +38,7 @@ from ovid2.web.services import settings_svc
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["SECRET_NAME", "is_configured", "verify_token"]
+__all__ = ["SECRET_NAME", "is_configured", "token_workspaces", "verify_token"]
 
 #: Logical secret name (stem of the JSON blob under ``secrets.d/``).
 SECRET_NAME: str = "auth_service_tokens"  # noqa: S105 — file stem, not a token
@@ -44,6 +47,41 @@ SECRET_NAME: str = "auth_service_tokens"  # noqa: S105 — file stem, not a toke
 #: silently escalate to ``system_admin`` even if the settings default is
 #: mis-configured to that value.
 _MAX_FALLBACK_ROLE: Role = Role.PIPELINE_OPERATOR
+
+
+def _load_entries() -> dict[str, dict[str, object]]:
+    """Return ``{sha256hex: {"role": str, "workspaces": [slug, …]}}`` (normalised)."""
+    try:
+        payload = _secrets.load_secret(SECRET_NAME)
+    except _secrets.SecretNotFoundError:
+        return {}
+    out: dict[str, dict[str, object]] = {}
+    for key, value in payload.items():
+        if not isinstance(key, str):
+            continue
+        if isinstance(value, str):
+            out[key] = {"role": value, "workspaces": ["default"]}
+        elif isinstance(value, dict):
+            raw_ws = value.get("workspaces")
+            ws = (
+                [str(w) for w in raw_ws if isinstance(w, str)]
+                if isinstance(raw_ws, list)
+                else ["default"]
+            )
+            out[key] = {"role": str(value.get("role") or ""), "workspaces": ws}
+    return out
+
+
+def token_workspaces(token: str) -> tuple[str, ...]:
+    """Return the workspaces a service token may act in (empty when unknown)."""
+    if not token:
+        return ()
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    entry = _load_entries().get(digest)
+    if entry is None:
+        return ()
+    ws = entry.get("workspaces")
+    return tuple(ws) if isinstance(ws, list) else ()
 
 
 def _load_map() -> dict[str, str]:
@@ -57,15 +95,7 @@ def _load_map() -> dict[str, str]:
         The token→role map with string keys and values; empty when no
         secret file exists or the payload is malformed.
     """
-    try:
-        payload = _secrets.load_secret(SECRET_NAME)
-    except _secrets.SecretNotFoundError:
-        return {}
-    return {
-        key: value
-        for key, value in payload.items()
-        if isinstance(key, str) and isinstance(value, str)
-    }
+    return {key: str(entry["role"]) for key, entry in _load_entries().items()}
 
 
 def _fallback_role() -> Role:

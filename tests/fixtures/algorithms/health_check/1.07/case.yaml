@@ -1,0 +1,142 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+dataset: pcornet_small
+expected:
+  columns:
+  - source_table
+  - metric
+  - value_num
+  - value_str
+  - exception_flag
+  rows:
+  - - DEMOGRAPHIC
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - DEMOGRAPHIC
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - DEMOGRAPHIC
+    - NULL_PCT
+    - 20.0
+    - null
+    - true
+  - - DIAGNOSIS
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - DIAGNOSIS
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - DIAGNOSIS
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - DIAGNOSIS
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - DIAGNOSIS
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - ENCOUNTER
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - ENCOUNTER
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - ENCOUNTER
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - ENCOUNTER
+    - NULL_PCT
+    - 16.6667
+    - null
+    - true
+  - - LAB_RESULT_CM
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - LAB_RESULT_CM
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - LAB_RESULT_CM
+    - NULL_PCT
+    - 33.3333
+    - null
+    - true
+  - - PRESCRIBING
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - PRESCRIBING
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - PRESCRIBING
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - PROCEDURES
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - PROCEDURES
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - PROCEDURES
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - PROCEDURES
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - PROCEDURES
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - VITAL
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - VITAL
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+  - - VITAL
+    - NULL_PCT
+    - 0.0
+    - null
+    - false
+note: "metric rows on the shared pcornet_small dataset \u2014 expected = PySpark reference, identical\
+  \ on DuckDB when recorded"

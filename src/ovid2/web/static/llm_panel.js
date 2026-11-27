@@ -38,6 +38,12 @@
  *             stores an unsaved workflow working copy in sessionStorage and
  *             opens /workflows/new?prefill=1 once the stream ends (no HTTP
  *             call; the canvas re-checks every name); Undo goes back.
+ * - Forms:    create_connection / create_address proposals render as
+ *             editable forms (llm_proposal_form.js): the model's arguments
+ *             are a prefill, closed sets are selects, secrets are typed by
+ *             the human and never stored or sent back to the model. Drafts
+ *             of the same answer are held until those forms are run; all
+ *             outcomes go back to the model in one follow-up turn.
  * - Context:  every turn sends ui_context (current theme, overrides, saved
  *             theme names) so the model can answer "make it darker".
  *
@@ -918,7 +924,66 @@
     return det;
   }
 
+  function formLib() { return window.Ovid2ProposalForm || null; }
+
+  // Editable (form) proposals of ``m`` still waiting for the human.
+  function pendingForms(m) {
+    var f = formLib();
+    return ((m.meta && m.meta.proposals) || []).filter(function (q) {
+      return f && f.editable(q) && (!q.state || q.state === "pending" || q.state === "running");
+    });
+  }
+
+  function pendingProposals(m) {
+    return ((m.meta && m.meta.proposals) || []).filter(function (q) {
+      return !q.draft && (!q.state || q.state === "pending" || q.state === "running");
+    });
+  }
+
+  // All proposals of an answer resolved: release held drafts, or report
+  // every outcome to the model in ONE follow-up turn.
+  function proposalsSettled(m) {
+    if (pendingProposals(m).length) return;
+    var held = ((m.meta && m.meta.proposals) || []).filter(function (q) { return q.draft && q.state === "held"; });
+    if (held.length) {
+      held.forEach(function (q) { q.state = "running"; });
+      save(); renderAll();
+      openDraft(held[0]);
+      return;
+    }
+    var lines = [];
+    ((m.meta && m.meta.proposals) || []).forEach(function (q) {
+      if (q.draft || !q.report) return;
+      lines.push(q.report);
+      q.report = null;
+    });
+    if (!lines.length) return;
+    save();
+    send(lines.join("\n") + "\nBriefly confirm the outcome and suggest a next step.", { kind: "action" });
+  }
+
   function proposalCard(m, p) {
+    if (p.draft && p.state === "held") {
+      var hc = el("div", "llm-block llm-proposal llm-draft held");
+      var hh = el("div", "llm-block-title");
+      hh.innerHTML = (p.path === "/api/v1/workflow-drafts" ? "Draft workflow <code>" : "Draft <code>") +
+        esc((p.body && (p.body.name || p.body.pipeline)) || p.name) + '</code> <span class="badge">waiting</span>';
+      hc.appendChild(hh);
+      hc.appendChild(el("div", "small muted", "Opens after the forms above are run."));
+      if (p.body && Object.keys(p.body).length) {
+        var hpre = el("pre", "llm-tool-out");
+        hpre.textContent = JSON.stringify(p.body, null, 2);
+        hc.appendChild(hpre);
+      }
+      var hrow = el("div", "llm-proposal-actions");
+      var now = el("button", "button small", "Open now");
+      now.type = "button";
+      now.disabled = state.busy;
+      now.addEventListener("click", function () { p.state = "running"; save(); renderAll(); openDraft(p); });
+      hrow.appendChild(now);
+      hc.appendChild(hrow);
+      return hc;
+    }
     if (p.draft) {
       var dc = el("div", "llm-block llm-proposal llm-draft " + (p.state || "running"));
       var dh = el("div", "llm-block-title");
@@ -950,6 +1015,19 @@
        p.state === "awaiting" ? ' <span class="badge severity-warning">awaiting approval</span>' :
        p.state === "dismissed" ? ' <span class="badge">dismissed</span>' : "");
     card.appendChild(head);
+    var fl = formLib();
+    if (fl && fl.editable(p) && (!p.state || p.state === "pending")) {
+      fl.render(card, p, {
+        m: m,
+        busy: function () { return state.busy; },
+        onChange: function (rerender) { save(); if (rerender) renderAll(); },
+        onDismiss: function () { p.state = "dismissed"; save(); renderAll(); proposalsSettled(m); },
+        onRun: function (req) { runProposal(m, p, req); }
+      });
+      card.appendChild(el("div", "small muted",
+        "Runs with your own permissions. Nothing happens until you click Run."));
+      return card;
+    }
     card.appendChild(el("div", "small", (p.method || "") + " " + (p.path || "")));
     if (p.body && Object.keys(p.body).length) {
       var pre = el("pre", "llm-tool-out");
@@ -965,7 +1043,7 @@
       run.addEventListener("click", function () { runProposal(m, p); });
       var dis = el("button", "button small", "Dismiss");
       dis.type = "button";
-      dis.addEventListener("click", function () { p.state = "dismissed"; save(); renderAll(); });
+      dis.addEventListener("click", function () { p.state = "dismissed"; save(); renderAll(); proposalsSettled(m); });
       row.appendChild(run);
       row.appendChild(dis);
       card.appendChild(row);
@@ -1094,9 +1172,16 @@
     return buffer;
   }
 
-  function runProposal(m, p) {
+  function runProposal(m, p, formReq) {
     if (state.busy || (p.state && p.state !== "pending")) return;
-    if (!/^\/api\/v1\/[A-Za-z0-9_\-%.:\/]+$/.test(p.path || "") ||
+    var fl = formLib();
+    var editable = !!(formReq && fl && fl.editable(p));
+    // A form proposal sends what the human completed; the stored body is the
+    // redacted copy (secret values never persist or reach the model).
+    var reqPath = editable ? formReq.path : p.path;
+    var reqBody = editable ? formReq.body : p.body;
+    if (editable) { p.path = formReq.path; p.body = fl.redactedBody(p); }
+    if (!/^\/api\/v1\/[A-Za-z0-9_\-%.:\/]+$/.test(reqPath || "") ||
         ["POST", "PUT"].indexOf(p.method) === -1) {
       p.state = "failed";
       p.outcome = "Refused: not an Ovid2 API action.";
@@ -1108,9 +1193,9 @@
     var opts = { method: p.method, headers: { "Accept": "application/json" }, credentials: "same-origin" };
     if (p.method !== "GET") {
       opts.headers["Content-Type"] = "application/json";
-      opts.body = JSON.stringify(p.body || {});
+      opts.body = JSON.stringify(reqBody || {});
     }
-    fetch(p.path, opts).then(function (resp) {
+    fetch(reqPath, opts).then(function (resp) {
       return resp.text().then(function (txt) {
         var data;
         try { data = JSON.parse(txt); } catch (e) { data = txt; }
@@ -1129,11 +1214,23 @@
       renderAll();
       var shown = typeof r.data === "string" ? r.data : JSON.stringify(r.data);
       if (shown.length > 4000) shown = shown.slice(0, 4000) + "…";
-      send("[I ran the proposed action `" + p.name + "` (" + p.method + " " + p.path +
-           ") → HTTP " + r.status + "]\n```json\n" + shown + "\n```\n" +
-           "Briefly confirm the outcome and suggest a next step.", { kind: "action" });
+      if (!r.ok) {
+        var d = r.data && r.data.detail;
+        if (d) p.outcome += ": " + (typeof d === "string" ? d : JSON.stringify(d)).slice(0, 300);
+        if (editable) { p.state = "pending"; save(); renderAll(); return; } // let the human fix the form
+      }
+      var report = "[I ran the proposed action `" + p.name + "` (" + p.method + " " + p.path +
+           (editable ? ", body " + JSON.stringify(p.body) : "") +
+           ") → HTTP " + r.status + "]\n```json\n" + shown + "\n```";
+      if (!editable) {
+        send(report + "\nBriefly confirm the outcome and suggest a next step.", { kind: "action" });
+        return;
+      }
+      p.report = report;
+      save();
+      proposalsSettled(m);
     }).catch(function (err) {
-      p.state = "failed";
+      p.state = editable ? "pending" : "failed";
       p.outcome = (err && err.message) || "Network error";
       save();
       renderAll();
@@ -1289,6 +1386,14 @@
       save();
       repaint();
       var drafts = state.pendingDrafts.splice(0);
+      if (drafts.length && pendingForms(reply).length) {
+        // The draft needs what the forms create (account / address): hold it
+        // until they are run, then proposalsSettled() opens it.
+        drafts.forEach(function (d) { d.state = "held"; });
+        state.pendingNav = null;
+        save(); renderAll();
+        return;
+      }
       if (drafts.length) { state.pendingNav = null; openDraft(drafts[0]); return; }
       var nav = state.pendingNav;
       state.pendingNav = null;
@@ -1373,6 +1478,9 @@
     if (window.Ovid2Appearance && html.classList.contains("right-panel-open")) {
       window.Ovid2Appearance.close();
     }
+    if (window.Ovid2Palette && html.classList.contains("cmdk-open")) {
+      window.Ovid2Palette.close();
+    }
     html.classList.add("llm-panel-open");
     try { localStorage.setItem(OPEN_KEY, "1"); } catch (e) { /* ignore */ }
     setExpanded(true);
@@ -1403,7 +1511,7 @@
       var t = ev.target;
       if (!t || typeof t.closest !== "function") return;
       if (t.closest("#tool-llm")) { ev.preventDefault(); toggle(); return; }
-      if (t.closest("#tool-appearance") && html.classList.contains("llm-panel-open")) { close(); return; }
+      if ((t.closest("#tool-appearance") || t.closest("#tool-palette")) && html.classList.contains("llm-panel-open")) { close(); return; }
       if (html.classList.contains("llm-panel-open") &&
           (t.closest("[data-tools-close]") || (t.classList && t.classList.contains("right-scrim")))) {
         close();

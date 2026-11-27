@@ -31,8 +31,7 @@ def list_transforms(category: str | None = None) -> list[dict[str, Any]]:
             returned. Unknown categories yield an empty list.
 
     Returns:
-        A list of ``{name, summary, category, requires_family,
-        params_schema}`` dicts.
+        A list of ``{name, summary, category, params_schema}`` dicts.
     """
     from ovid2.config.transforms_catalogue import list_catalogue
 

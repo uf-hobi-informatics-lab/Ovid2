@@ -1,0 +1,43 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  src1: encounter
+tables:
+  input:
+    columns:
+    - ENCOUNTERID
+    - ADMIT_DATE
+    - ENC_TYPE
+    rows:
+    - - E1
+      - '1999-01-01'
+      - XX
+    - - E9
+      - x
+      - y
+  encounter:
+    columns:
+    - ENCOUNTERID
+    - ADMIT_DATE
+    - DISCHARGE_DATE
+    - ENC_TYPE
+    rows:
+    - - E1
+      - '2023-01-10'
+      - '2023-01-12'
+      - IP
+    - - E2
+      - '2023-02-01'
+      - '2023-02-01'
+      - AV
+expected:
+  columns:
+  - ENCOUNTERID
+  - ADMIT_DATE
+  - ENC_TYPE
+  rows:
+  - - E1
+    - '2023-01-10'
+    - IP
+  - - E9
+    - null
+    - null

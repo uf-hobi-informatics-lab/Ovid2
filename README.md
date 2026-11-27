@@ -4,7 +4,7 @@ Developed and maintained by **OneFlorida+**
 - Alexander T. Loiacono - atloiaco@ufl.edu
 - Abdelali Nouina - abdelali@ufl.edu
 
-Last Updated: 2026-11-18
+Last Updated: 2026-11-27
 
 # Ovid2
 
@@ -55,7 +55,7 @@ touching the others:
 | Formatter / mapper / fixer spec engines, transforms library | PCORnet → OMOP converter (18/18 tables) |
 | CDM registry (`CdmHandle`) and semantic layer (vocabularies + bindings) | Clinical vocabularies: LOINC, SNOMED, ICD-10/9-CM, RxNorm, NDC, OMOP CONCEPT |
 | Data-health check framework (operators, packages, reports) | PCORnet EDC check packages (`dcq_v7_03`, `20r1`) and clinical fixers |
-| Web panel, REST API, MCP server, LLM assistant, scheduler, pipeline navigator, Report Studio | `hash_id` patient-identifier hashing, PHI-aware defaults |
+| Web panel, REST API, MCP server, LLM assistant, scheduler, Ovid Atlas (navigator), Report Studio | `hash_id` patient-identifier hashing, PHI-aware defaults |
 
 A new domain is a new CDM directory (`resources/cdms/<model>/`), optional
 vocabularies and bindings (`resources/semantic/`), and pipeline specs — see
@@ -64,8 +64,11 @@ vocabularies and bindings (`resources/semantic/`), and pipeline specs — see
 
 Around that engine sits an event-driven display layer, a pip/pipx-installable
 package, XDG-compliant paths, a **web control panel + JSON API**, an
-**MCP server** for AI agents, an optional **LLM assistant**, a **pipeline
-navigator** that traces every field to the functions applied to it, a
+**MCP server** for AI agents, an optional **LLM assistant**, the
+**Ovid Atlas** — a live, workspace-wide board of every workflow and pipeline
+across storage ⟂ compute ⟂ algorithms, where you run, pause at a table
+boundary, resume and edit pipelines and trace every field to the functions
+applied to it — a
 **Report Studio** for designing, sharing and exporting research reports from
 finished runs, and a systemd
 deployment story. Everything is **lazy end-to-end**: nothing materializes
@@ -93,7 +96,7 @@ deploying organization (see [Pipelines](#pipelines-adapters-mappers--fixes)).
 | Web control panel + JSON API + MCP server | Feature-complete, alpha |
 | Web authentication (OIDC SSO + RBAC) | Implemented, **on by default** outside dev instances |
 | LLM assistant (general + System 1) | Implemented, **off until you configure a model** |
-| Pipeline navigator (field-level lineage, declarative UDFs) | Implemented, alpha |
+| Ovid Atlas (workspace board, pause / resume, field-level lineage, declarative UDFs) | Implemented, alpha |
 | Report Studio (reports, charts, themes, sharing, exports) | Implemented, alpha |
 | Native drivers | `disc`, `s3`, `azure_blob`, `snowflake`, `access`; the rest run through a legacy adapter |
 | Version | `0.1.0` (pre-1.0; no stability guarantees) |
@@ -115,7 +118,7 @@ deploying organization (see [Pipelines](#pipelines-adapters-mappers--fixes)).
 - [Data health & EDC checks](#data-health--edc-checks)
 - [Web control panel & MCP](#web-control-panel--mcp)
 - [LLM assistant](#llm-assistant)
-- [Pipeline navigator](#pipeline-navigator)
+- [Ovid Atlas (navigator)](#ovid-atlas-navigator)
 - [Report Studio](#report-studio)
 - [Scheduling & the worker](#scheduling--the-worker)
 - [Testing](#testing)
@@ -167,7 +170,7 @@ once and the rest of the doc reads cleanly.
 | Term | What it is |
 |---|---|
 | **Pipeline** | A data-source package under `pipelines/ovid2_pipelines/<name>/` — its formatter specs, dictionaries, fixer chain, and settings. |
-| **Pipeline config / kind** | A persisted, schedulable job template. Its **kind** (`etl`, `analysis`, `dq_checks`, `health`, `copy`, `move`) comes from the run-kind registry (`src/ovid2/run_kinds.py`). |
+| **Pipeline config / kind** | A persisted, schedulable job template. Its **kind** (`etl`, `analysis`, `dq_checks`, `health`, `copy`, `move`, plus the job-only `export`, `workflow_storage`, `workflow_probe`) comes from the run-kind registry (`src/ovid2/run_kinds.py`). |
 | **CDM** | Common Data Model — the *target shape* (`pcornet_7_0`, `omop_5_3`). Authored as a YAML tree under `resources/cdms/`; the ETL engine never imports a CDM module (P10). |
 | **Formatter (spec)** | A YAML/dict declaration of how to build one CDM table from raw sources, via a framework **adapter**. |
 | **Mapper (op)** | A declarative value-translation step (`translate_by_dict`, `hash_id`, …) applied during the map stage. |
@@ -216,29 +219,38 @@ flowchart TB
         WEB["ovid2 web<br/>(FastAPI + HTMX + JSON API)"]
         DB[("scheduler.db<br/>web_jobs / web_pipelines / web_audit")]
         BROKER["_broker.py<br/>short-lived 'ovid2 tools' subprocess<br/>(probes / storage browse)"]
+        ODS["Data Space<br/>/&lt;account&gt;/&lt;path&gt; browse · sample · export"]
+        REPORTS["Report Studio<br/>layouts over report sources"]
     end
 
     subgraph EXEC["Executor tier — dereferences credentials, least-privilege"]
         WORKER["ovid2 web-worker<br/>(poll + cron/interval/watch dispatch)"]
         CLI["ovid2 etl / tools copy|move / health<br/>(host CLI)"]
-        subgraph CLUSTER["Per-invocation Docker Spark cluster"]
-            MASTER["Spark master<br/>(runs the container-mode pipeline)"]
-            WORKERS["N Spark workers"]
+        LLM["LLM assistant executor<br/>python -m ovid2.llm<br/>(GET-only token, proposals)"]
+        subgraph CLUSTER["Per-invocation engine container(s)"]
+            MASTER["driver (pyspark · duckdb · snowpark · databricks_spark)<br/>runs the container-mode pipeline"]
+            WORKERS["N Spark workers<br/>(Spark engines only)"]
         end
     end
 
-    STORE[("Storage backends<br/>disc · s3 · azure_blob · snowflake · access<br/>gcs · databricks · postgres · mssql")]
+    STORE[("Storage backends<br/>disc · s3 · azure_blob · snowflake<br/>gcs · databricks · postgres · mssql · access")]
     EVENTS[["events-&lt;id&gt;.jsonl<br/>(append-only event log)"]]
 
     MCP -- "HTTP only" --> WEB
     WEB --> DB
     WEB --> BROKER
+    WEB --> ODS
+    WEB --> REPORTS
+    WEB -->|spawn, scoped env| LLM
+    LLM -- "HTTP only (GET)" --> WEB
+    ODS -.->|metadata via broker| BROKER
     BROKER -.->|scoped, one-shot| STORE
     WORKER -->|claim queued jobs| DB
     WORKER -->|spawn subprocess<br/>allow-listed env + instance id| CLI
+    WORKER -->|ingest report sources on finalise| REPORTS
     CLI -->|docker compose up<br/>scoped secret mounts + nss overlay| CLUSTER
     MASTER --> WORKERS
-    MASTER <-->|engine → stager → driver| STORE
+    MASTER <-->|AlgorithmRegistry → engine → stager → driver| STORE
     MASTER --> EVENTS
     EVENTS -->|byte-offset tail + SSE| WEB
     EVENTS --> RENDER["renderers:<br/>tui · json_file · email_digest · plain_log"]
@@ -440,6 +452,43 @@ CDM handle and semantic registry feed the format stage without the engine
 ever importing a CDM module. The engine→stager→driver seam is where compute
 (PySpark/Snowpark) and storage (disc/s3/…) become orthogonal.
 
+#### Algorithms ⟂ compute ⟂ storage
+
+Three handlers, two seams, three guarantees.
+
+| Axis | Handler (one entry point) | What it holds |
+|---|---|---|
+| **Algorithms** | `ovid2.algorithms.registry.AlgorithmRegistry` | formatters (adapters), the deduplicator, mapper ops, fixers, transforms, health checks — a facade over each kind's own registry |
+| **Compute** | `ovid2.core.engines.registry` (`ENGINE_TYPE_MAP`) | `pyspark`, `databricks_spark`, `duckdb`, `snowpark` |
+| **Storage** | `ovid2.drivers.registry` (`DRIVERS`) | disc, s3, azure_blob, gcs, snowflake, databricks, postgres, mssql, access |
+
+- **Seam 1 — algorithms ↔ compute:** `ovid2.core.engines.dsl` /
+  `protocols.py`. Algorithms call portable column functions and DataFrame
+  methods; the active engine implements them (`core/engines/surface.py`).
+- **Seam 2 — compute ↔ storage:** `EngineStager`. The engine moves data to
+  and from any driver (natively, or through the Arrow bridge). Algorithms
+  read through a resolved `SourceHandle` handed to them in their context.
+
+Guarantees:
+
+1. **Import contract.** Nothing under `formatters/`, `mappers/`,
+   `transforms/`, `transformations/` or `algorithms/` imports `pyspark` /
+   `snowflake` / `duckdb`, a concrete engine module, `ovid2.drivers` or
+   `ovid2.connections` — not even lazily
+   (`test_algorithms_engine_and_storage_free.py`). Pipeline code resolves
+   algorithms only through the facade (`test_algorithm_registry_complete.py`).
+2. **Plan-time capability check.** Every algorithm declares the engine
+   capabilities it uses (`requires`, AST-checked); every engine declares
+   `capabilities()`. `ovid2 etl` (exit `2`) and `jobs_svc.submit()` (HTTP
+   400) refuse a run whose steps need a capability the engine lacks —
+   before any cluster starts or any job is queued. See
+   [`docs/engines.md`](docs/engines.md) → *Capabilities*.
+3. **Conformance matrix.** Every algorithm runs on every engine that covers
+   its `requires` against a fixture with expected rows
+   (`tests/integration/test_algorithm_conformance.py`, marker
+   `conformance`), and every engine × driver pair runs one pipeline end to
+   end (`tests/integration/io_matrix/`).
+
 ### 6. Event bus & live display
 
 Pipeline code never prints — it emits typed events; everything else
@@ -469,6 +518,16 @@ The JSONL log is append-only, mode `0600`, and bind-mounted at the same
 absolute path inside and outside the container, so host renderers and the web
 tier read exactly what the pipeline wrote. A daemon sampler thread emits cheap
 `engine.metrics` heartbeats that drive the "cooking" live view.
+
+Every engine runs a pipeline's tables **one at a time**. On entering each
+stage of a table, `core/pipeline.py` emits a `stage.progress` *enter* event
+(`stage_entered`, with `extra.lazy` for steps that only build the lazy plan),
+so the run console and the Atlas show the real chain and never present lazy
+plan time as work. Between tables (and between health checks) every loop
+calls `core.pause.gate`: an operator **pause** (`POST /api/v1/jobs/{id}/pause`,
+mirrored by the worker to a `{WORK_DIR}/pause-<id>` flag file) holds the run
+at the next table boundary and emits a run-level `stage="paused"` event;
+resume and cancel work while paused.
 
 ## The ETL workflow
 
@@ -505,6 +564,9 @@ Beyond the ETL, Ovid2 also ships these run kinds / surfaces:
 | **`dq_checks`** | PCORnet EDC data-characterization checks selected by **report cycle** (e.g. `dcq_v7_03`). |
 | **`health`** | Data-health / EDC checks selected by cycle, part, or explicit check id; produces a browsable report. |
 | **`copy` / `move`** | Driver-native one-shot table moves between any two addresses (no transformation; `--tables all` for self-describing sources such as Access). |
+| **`export`** | Background full-table export of one Data Space table to csv / xlsx (created from the Data Space table page; runs in a driver container). |
+| **`workflow_storage`** | Whole-table snapshot / restore / drop at one address, queued by a workflow run to back up an occupied output and roll it back on failure (job-only). |
+| **`workflow_probe`** | Numbers-only data probe a workflow condition reads (row counts / filtered counts behind `sql_expr_guard`; job-only). |
 | **`tools raw_upload`** | Ship raw pipeline files to the output address as-is. |
 | **`web` / `web-worker` / `mcp`** | The control panel, its dispatcher, and the agent server. |
 
@@ -551,8 +613,9 @@ gcs) live under `src/ovid2/drivers/snowflake/staging/`.
 
 **DuckDB** (`--engine duckdb`) runs the same pipeline in-process on a lazy,
 PySpark-shaped `DuckFrame`, so no Spark cluster is needed. A run is one driver
-container sized from the host (75% RAM, all CPUs). The job's *Workers* is the
-number of tables processed at once: reference tables first, then the largest first.
+container sized from the host (75% RAM, all CPUs). Like every engine, it runs
+tables one at a time so each table gets the whole machine; *Workers* only
+sizes a Spark cluster.
 Shared code imports column functions from `ovid2.core.engines.dsl`, so fixers,
 mapper ops and transforms run unchanged. Guide: [Engines](src/ovid2/resources/manual/02-concepts/engines.md).
 
@@ -622,7 +685,7 @@ in `<pipeline>/transforms/assignments.yaml` run in their own **transform**
 stage (deduplicate → transform → map); user-defined transforms (UDFs) are
 declarative chains or `derive_column` computed columns whose Spark-SQL
 expression must pass `ovid2.config.sql_expr_guard` — apply them from the
-[pipeline navigator](#pipeline-navigator). The catalogue
+[Ovid Atlas](#ovid-atlas-navigator). The catalogue
 is browsable at `GET /api/v1/transforms` and via MCP. See
 [`docs/transforms.md`](docs/transforms.md).
 
@@ -1051,13 +1114,19 @@ See [`docs/pipelines.md`](docs/pipelines.md#health-checks-report-cycle-packages-
 
 `ovid2 web` serves a FastAPI + HTMX control panel (loopback
 `127.0.0.1:8090` by default; put TLS in front with a reverse proxy) with a
-JSON API at `/api/v1` (**161 paths**; interactive docs at `/docs`, schema at `/openapi.json`) and a live D3
-run canvas. Submit, monitor, cancel, rerun, and schedule runs; chain pipelines into
+JSON API at `/api/v1` (**186 paths**; interactive docs at `/docs`, schema at `/openapi.json`) and a live D3
+run canvas. Submit, monitor, pause / resume, cancel, rerun, and schedule runs; chain pipelines into
 **workflows** on a visual canvas; browse
-pipelines (with a field-level **navigator**), formatters, mappers, transforms,
+the whole workspace on the **Ovid Atlas** (`/navigator`), pipelines, formatters, mappers, transforms,
 connections, addresses, engines, CDMs, health reports, research reports (Report Studio), and the Data Space; edit configs and secrets (secret
-*values* are never returned by the API). Appearance is themeable (eight
-built-in themes, **Data Factory** by default, plus custom overrides). The
+*values* are never returned by the API). Appearance is themeable: eight
+built-in themes (sorted A to Z; **Data Factory** "LINE ONE" by default,
+**Dune** replaces the retired Star Wars / Tatooine theme), plus accent / font
+overrides and saved looks that appear in the theme list. A **full screen**
+button at the right of the top bar (or <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd>)
+hides the browser chrome and stays on across link clicks; every response
+carries `frame-ancestors 'self'` / `X-Frame-Options: SAMEORIGIN`. Search,
+Appearance and Agent Ovid share one right-panel width. The
 animated Ovid2 mark in the top bar shows pipeline activity: it follows the
 job on a run page and shows whether any job is running everywhere else. The
 browser-tab icon uses the same colours.
@@ -1081,7 +1150,7 @@ Capabilities are cumulative:
 | View pipeline data, submit / cancel jobs | | | ✓ | ✓ |
 | Manage config / secrets / users / LLMs, settings, install | | | | ✓ |
 
-`ovid2 mcp` exposes a curated **113-tool** MCP surface over that API for AI
+`ovid2 mcp` exposes a curated **117-tool** MCP surface over that API for AI
 agents (stdio or streamable-HTTP transport). It speaks *only* HTTP to the API
 and imports no pipeline, driver, or secret module — the agent tier is the
 untrusted planner. Agents can browse metadata freely, but reading row values
@@ -1117,13 +1186,18 @@ metadata only (actor, session, model, token counts, latency, tool names).
 
 With **assistant tools** enabled, the general model can call a pinned
 allow-list of Ovid2 API routes
-(`src/ovid2/resources/agent_tools/catalogue.yaml`, 77 tools):
+(`src/ovid2/resources/agent_tools/catalogue.yaml`, 86 tools):
 
-- **Read tools** (54 GET routes) run automatically with a per-turn,
+- **Read tools** (59 GET routes) run automatically with a per-turn,
   GET-only token capped at the user's role (at most pipeline operator).
-- **Proposals and drafts** (submit / cancel / rerun / draft a job) are never
-  executed by the model: they appear as cards you click **Run** on, or as a
-  draft job you launch with ▶.
+- **Proposals and drafts** (submit / cancel / pause / resume / rerun / draft
+  a job, create a storage account or location) are never executed by the
+  model: they appear as cards you click **Run** on, or as a draft job you
+  launch with ▶. `create_connection` / `create_address` proposals are
+  **editable forms**: the model's arguments are only a prefill, closed sets
+  are selects, and secret fields are typed by you and never sent back to the
+  model. A proposal no longer ends the turn, so one answer can chain
+  account → location → workflow draft.
 - **UI actions** do one of three things in *your* page:
   - restyle it (theme, fonts, saved appearances);
   - edit the open report's unsaved working copy;
@@ -1141,60 +1215,61 @@ allow-list of Ovid2 API routes
 
 Full guide: [`docs/llm.md`](docs/llm.md).
 
-## Pipeline navigator
+## Ovid Atlas (navigator)
 
-The **pipeline navigator** (*Operate → Navigator*, `/navigator`) answers
-*"what happens to this column, and where is that defined?"* for every
-installed pipeline package. It reads the package's specs statically (YAML +
-`ast`); it never runs the pipeline or reads data.
+**Operate → Navigator** (`/navigator`) is the **Ovid Atlas**: the whole
+workspace drawn as one live lane board across the three independent layers
+— **storage** ⟂ **compute** ⟂ **algorithms**. It is built statically (JSON /
+YAML / `ast`, `web/services/atlas_svc.py`); nothing reads data until you ask
+for sample rows, and no secret is ever loaded.
 
-- **Tree.** Pipeline type (group by CDM, ETL profile, run kind, template, or
-  CDM · profile) → package → table → field → step. Each table shows five
-  stage dots (format · deduplicate · transform · map · fix); a hollow dot is
-  Python the navigator cannot see into. Fields are flagged `key`,
-  `constant`, `unmapped` or `extra`. Filter by name, by "has a UDF" /
-  editable / opaque / unmapped, or by stage; the tree works from the
-  keyboard, remembers its state, and every selection is a deep link
-  (`/navigator?p=<package>&t=<table>&f=<FIELD>`).
-- **Views.** An **overview** of the package's tables with their stage
-  strips; **lanes** — one row per field, one column per stage, one chip per
-  function (italic chips only read the field, `⊘` chips drop rows, dashed
-  chips are opaque Python), with table-wide bands for dedup / joins / row
-  filters and lines to the columns a step reads; and the lineage as **YAML**.
-- **Edit in place.** Clicking a step opens the same Form / YAML editor the
-  pipeline builder uses, scrolled to that step, with live checks. Python
-  sources (custom formatters, generated legacy formatters, vendored fixer
-  scripts) open read-only at the matching line. `legacy_ovid` parity ports
-  are generated, so every step of them is read-only.
-- **Declarative UDFs.** On an editable package, apply a *computed column*
-  (`derive_column` — a Spark-SQL row expression checked live against the
-  `sql_expr_guard` allow-list, with column / function autocomplete), a
-  *chain* of library functions, or an *existing chain* (with where-used).
-  Keep it inline in `transforms/assignments.yaml`, as a private chain in
-  the package, or in your transform library, scoped to one table or every
-  table (`*`). UDFs run in the *transform* stage; Python UDFs are not
-  supported. Applying needs the manage-config capability and is validated
-  before anything is written (`POST /api/v1/pipeline-packages/{p}/udfs:apply`).
-- **Column roles.** Which columns each op reads or writes comes from the
-  column roles declared beside the web-safe catalogues
-  (`TRANSFORM_COLUMN_ROLES`, `MAPPER_OP_COLUMN_ROLES`, `FIXER_COLUMN_ROLES`);
-  every new transform op, mapper op and fixer must declare one
-  (`test_column_roles_complete.py`).
-- **Packages.** Unused packages are hidden; there's an **Unused packages** toggle to show them. The tree
-  refreshes when you return to the tab, and every builder / pipeline page has
-  **Open in navigator**. **Delete package** moves a package to
-  `$XDG_STATE_HOME/ovid2/trash/pipelines/` (also `ovid2 pipeline delete`; the
-  API route is approval-gated).
-- **For agents.** The read-only `inspect_pipeline_lineage` MCP / assistant
-  tool returns the same lineage as JSON — the quickest way for an agent to
-  explain why a field holds the value it does.
+- **Pipeline components.** Every saved pipeline is one component: *name*
+  (clock, ▶ ‖ ■, status) · *shape* (run kind · package) · *material* (engine,
+  with its logo) · *input → output* (each with its storage logo).
+- **Lines and groups.** ⛓ *Workflows* (one line per workflow, its steps laid
+  out as the DAG you linked: data links solid, after links dashed, failure
+  branches red), ▶ *Pipelines* (saved pipelines no workflow uses),
+  ◫ *Storage accounts* and ∅ *Not used*.
+- **Fits the page.** Lines share the canvas height and re-fit on every
+  resize; the page never scrolls and cards never expand in place.
+  **running on top** (`t`) floats running / queued / paused lines up. Layer
+  buttons (`1` `2` `3`), find (`/`), jump to running (`r`), clear (`c`).
+- **The dock** holds everything about the selection: overview (recent runs,
+  **replay**), live **run console**, **lanes** (fields × stages with the
+  spec editor — the former field-level navigator, old
+  `?p=&t=&f=` links still work), **data space** (browse / describe / sample),
+  in-place **edit**, and **ask steward**.
+- **Run, pause, cancel.** ▶ runs; **‖ pauses at the next table boundary**
+  (the running table's write finishes first; health / DQ runs hold between
+  checks); ▶ resumes; ■ cancels, paused or not.
+  `POST /api/v1/jobs/{id}/pause|resume|cancel`, MCP `pause_job` /
+  `resume_job` / `cancel_job`.
+- **Honest animation.** The chain `read › format › deduplicate › transform ›
+  map › fix › write` follows the running table from per-table
+  `stage_entered` events; dashed (lazy) steps only build the plan, so the
+  write's clock is the table's real time. Clocks use server times.
+- **Drag to rebind** an engine or location onto a pipeline; the drop is
+  checked first (capability plan, read-only outputs, engine ↔ storage).
+- **Overlays:** heat (30-day median time / failures), data health (failed
+  checks pinned to locations and tables, with remediation), changed since
+  last success, and who is here (presence, soft edit locks). Shift-click for
+  a **blast radius**; shared **saved views** per workspace.
+- **Declarative UDFs.** In the lanes of an editable package, apply a
+  *computed column* (`derive_column`, checked live against the
+  `sql_expr_guard` allow-list), a *chain* of library functions or an
+  *existing chain*; keep it inline, private or in your transform library.
+  Python UDFs are not supported; `legacy_ovid` ports are read-only.
+- **For agents.** `atlas_subgraph`, `atlas_live` and
+  `inspect_pipeline_lineage` return metadata only — never row values or
+  secrets. The Atlas adds **no second write path**: run, pause, save and
+  edit all go through their owning routes.
 
-API: `GET /api/v1/navigator`, `GET /api/v1/pipeline-packages/{p}/lineage[?table=]`,
-`GET …/lineage/source`, `POST …/udfs:apply`, `POST /api/v1/expressions:check`,
-`GET /api/v1/expressions/functions`, `GET /api/v1/transform-library/{name}/usage`.
+API: `/api/v1/atlas/*` (graph, nodes, live, replay, heat / health / drift
+overlays, impact, subgraph, `rebind:check`, shared layouts, presence), `GET /api/v1/pipeline-packages/{p}/lineage[?table=]`,
+`POST …/udfs:apply`, `POST /api/v1/expressions:check`.
 
-Full guide: [Pipeline navigator](src/ovid2/resources/manual/03-web-panel/navigator.md)
-in the Ovid2 Manual.
+Full guide: [Atlas (navigator)](src/ovid2/resources/manual/03-web-panel/navigator.md)
+in the Ovid2 Manual; ADR `adr-atlas.md`.
 
 ## Report Studio
 
@@ -1351,6 +1426,10 @@ uv run pre-commit run --all            # everything the commit hooks run
 | `test_control_tier_no_row_access.py` | Control-tier code calls no row-access or data-plane driver method |
 | `test_driver_data_plane_declared.py` | Every driver declares `spark_capable` and has a data plane |
 | `test_web_openapi_stable.py` | The public API schema only changes intentionally |
+| `test_atlas_catalogue.py` | Atlas node kinds match between `atlas_svc.NODE_KINDS` and `static/atlas/kinds.js` |
+| `test_engine_logos.py` | Every engine and storage type has a logo mark |
+| `test_fullscreen_mode.py` | Full screen is wired on every page and the panel can only be framed by itself |
+| `test_no_menu_numbering.py` | No theme numbers the left menu |
 
 ## Documentation
 

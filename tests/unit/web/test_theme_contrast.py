@@ -24,13 +24,13 @@ _CSS = Path(__file__).resolve().parents[3] / "src" / "ovid2" / "web" / "static" 
 
 _SLUGS = (
     "clinical",
-    "matrix",
-    "super-mario-world",
-    "tatooine",
+    "data-factory",
+    "dune",
     "financial",
     "lego",
+    "matrix",
     "spaceship",
-    "data-factory",
+    "super-mario-world",
 )
 _ON_CARD = ("--fg", "--fg-muted", "--fg-subtle", "--ok", "--warn", "--err")
 _AA = 4.5

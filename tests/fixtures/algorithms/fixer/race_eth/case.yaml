@@ -1,0 +1,67 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  src1: RACE
+  src2: HISPANIC
+tables:
+  input:
+    columns:
+    - RACE
+    - HISPANIC
+    rows:
+    - - '05'
+      - N
+    - - '03'
+      - Y
+    - - NI
+      - NI
+    - - null
+      - null
+expected:
+  columns:
+  - RACE
+  - HISPANIC
+  - RACE_ETH_AI_AN
+  - RACE_ETH_ASIAN
+  - RACE_ETH_BLACK
+  - RACE_ETH_NH_PI
+  - RACE_ETH_WHITE
+  - RACE_ETH_HISPANIC
+  - RACE_ETH_MISSING
+  rows:
+  - - '05'
+    - N
+    - N
+    - N
+    - N
+    - N
+    - Y
+    - N
+    - N
+  - - '03'
+    - Y
+    - N
+    - N
+    - N
+    - N
+    - N
+    - Y
+    - N
+  - - NI
+    - NI
+    - N
+    - N
+    - N
+    - N
+    - N
+    - N
+    - UN
+  - - null
+    - null
+    - N
+    - N
+    - N
+    - N
+    - N
+    - N
+    - NI
+note: RACE_ETH_* flags only for non-Hispanic; NI/NI -> UN; null/null -> NI (null comparisons are false)

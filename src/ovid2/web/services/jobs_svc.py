@@ -50,8 +50,10 @@ from ovid2.web.models import (
     OdsExportJobRequest,
     normalize_kind,
 )
+from ovid2.web.request_context import resolve_actor
 from ovid2.web.services import pipelines_meta_svc
 from ovid2.web.settings import web_log_dir
+from ovid2.workspaces import DEFAULT_WORKSPACE, active_workspace
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +147,9 @@ def _row_to_job_detail(row: dict[str, object]) -> JobDetail:
         error=(str(row["error"]) if row.get("error") else None),
         workflow_run_id=(str(row["workflow_run_id"]) if row.get("workflow_run_id") else None),
         workflow_step_id=(str(row["workflow_step_id"]) if row.get("workflow_step_id") else None),
+        pause_requested=bool(row.get("pause_requested") or 0),
         result=_parse_result(row.get("result_json")),
+        workspace_id=str(row.get("workspace_id") or DEFAULT_WORKSPACE),
     )
 
 
@@ -161,7 +165,19 @@ def _parse_result(raw: object) -> dict[str, Any] | None:
 
 
 def _fetchrow(conn: sqlite3.Connection, job_id: str) -> dict[str, object] | None:
-    """Return one ``web_jobs`` row as a plain dict."""
+    """Return one ``web_jobs`` row of the active workspace as a plain dict.
+
+    A job of another workspace is indistinguishable from a missing one.
+    """
+    row = conn.execute(
+        "SELECT * FROM web_jobs WHERE job_id = ? AND workspace_id = ?",
+        (job_id, active_workspace()),
+    ).fetchone()
+    return dict(row) if row is not None else None
+
+
+def _fetchrow_any(conn: sqlite3.Connection, job_id: str) -> dict[str, object] | None:
+    """Return one ``web_jobs`` row regardless of workspace (worker-internal)."""
     row = conn.execute("SELECT * FROM web_jobs WHERE job_id = ?", (job_id,)).fetchone()
     return dict(row) if row is not None else None
 
@@ -328,10 +344,15 @@ def _insert_job(request: JobSubmitRequest, *, actor: str, status: str) -> JobSub
         "kind": kind,
         "cdm": request.cdm,
         "engine": request.engine,
-        "workers": request.workers,
         "sf_account": request.sf_account,
         "stderr_log": bool(request.stderr_log),
     }
+    # *Workers* sizes a Spark cluster only; DuckDB / Snowpark runs have no
+    # worker count (every engine runs tables one at a time).
+    from ovid2.config.engines import engine_uses_workers
+
+    if engine_uses_workers(request.engine):
+        extra_args["workers"] = request.workers
     # Operator-confirmed overwrite of an occupied output location; the
     # worker forwards it as ``--overwrite`` so the executor gate allows it.
     if request.confirm_overwrite:
@@ -370,12 +391,12 @@ def _insert_job(request: JobSubmitRequest, *, actor: str, status: str) -> JobSub
             "INSERT INTO web_jobs "
             "(job_id, submitted_at, submitted_by, parent_job_id, pipeline, batch_id, "
             "input_address, output_address, tables_json, transformations_json, "
-            "extra_args_json, status, cancel_requested, instance_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)",
+            "extra_args_json, status, cancel_requested, instance_id, workspace_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
             (
                 job_id,
                 submitted_at,
-                actor,
+                resolve_actor(actor),
                 None,
                 request.pipeline,
                 request.batch_id,
@@ -386,6 +407,7 @@ def _insert_job(request: JobSubmitRequest, *, actor: str, status: str) -> JobSub
                 json.dumps(extra_args),
                 status,
                 instance_id,
+                active_workspace(),
             ),
         )
 
@@ -466,12 +488,12 @@ def submit_export(request: OdsExportJobRequest, *, actor: str = "web") -> JobSub
             "INSERT INTO web_jobs "
             "(job_id, submitted_at, submitted_by, parent_job_id, pipeline, batch_id, "
             "input_address, output_address, tables_json, transformations_json, "
-            "extra_args_json, status, cancel_requested, instance_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)",
+            "extra_args_json, status, cancel_requested, instance_id, workspace_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
             (
                 job_id,
                 _now_iso(),
-                actor,
+                resolve_actor(actor),
                 None,
                 "export",
                 target.batch_id,
@@ -482,6 +504,7 @@ def submit_export(request: OdsExportJobRequest, *, actor: str = "web") -> JobSub
                 json.dumps(extra_args),
                 STATUS_QUEUED,
                 instance_id,
+                active_workspace(),
             ),
         )
     web_db.audit(
@@ -526,12 +549,12 @@ def submit_workflow_storage(
             "(job_id, submitted_at, submitted_by, parent_job_id, pipeline, batch_id, "
             "input_address, output_address, tables_json, transformations_json, "
             "extra_args_json, status, cancel_requested, instance_id, workflow_run_id, "
-            "workflow_step_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
+            "workflow_step_id, workspace_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)",
             (
                 job_id,
                 _now_iso(),
-                actor,
+                resolve_actor(actor),
                 None,
                 label,
                 batch_id or key,
@@ -544,6 +567,7 @@ def submit_workflow_storage(
                 instance_id,
                 workflow_run_id,
                 workflow_step_id,
+                active_workspace(),
             ),
         )
     web_db.audit(
@@ -591,12 +615,12 @@ def submit_workflow_probe(
             "(job_id, submitted_at, submitted_by, parent_job_id, pipeline, batch_id, "
             "input_address, output_address, tables_json, transformations_json, "
             "extra_args_json, status, cancel_requested, instance_id, workflow_run_id, "
-            "workflow_step_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
+            "workflow_step_id, workspace_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)",
             (
                 job_id,
                 _now_iso(),
-                actor,
+                resolve_actor(actor),
                 None,
                 label,
                 batch_id or workflow_run_id,
@@ -609,6 +633,7 @@ def submit_workflow_probe(
                 instance_id,
                 workflow_run_id,
                 workflow_step_id,
+                active_workspace(),
             ),
         )
     web_db.audit(
@@ -994,10 +1019,28 @@ def _validate_submit(request: JobSubmitRequest) -> None:
         return
     try:
         assert_engine_type_supports_drivers(
-            engine_name, [request.input_address, request.output_address]
+            engine_name,
+            [request.input_address, request.output_address],
+            output_names=[request.output_address],
         )
     except RuntimeError as exc:
         raise SubmitError(str(exc)) from None
+
+    # Capability plan check (web-safe, static): refuse a job whose algorithms
+    # need an engine capability the engine lacks, before it is queued.
+    if kind not in PACKAGE_FREE_KINDS:
+        from ovid2.config.capability_plan import CapabilityPlanError, check_pipeline
+        from ovid2.config.engines import resolve_engine_type
+
+        try:
+            check_pipeline(
+                resolve_engine_type(engine_name),
+                request.pipeline,
+                list(request.tables or ["all"]),
+                list(request.transformations or ["all"]),
+            )
+        except CapabilityPlanError as exc:
+            raise SubmitError(str(exc)) from None
 
 
 def rerun(job_id: str, *, actor: str = "web", confirm_overwrite: bool = False) -> JobSubmitResponse:
@@ -1042,12 +1085,12 @@ def rerun(job_id: str, *, actor: str = "web", confirm_overwrite: bool = False) -
             "INSERT INTO web_jobs "
             "(job_id, submitted_at, submitted_by, parent_job_id, pipeline, batch_id, "
             "input_address, output_address, tables_json, transformations_json, "
-            "extra_args_json, status, cancel_requested, instance_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)",
+            "extra_args_json, status, cancel_requested, instance_id, workspace_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
             (
                 new_job_id,
                 submitted_at,
-                actor,
+                resolve_actor(actor),
                 job_id,
                 row["pipeline"],
                 row["batch_id"],
@@ -1058,6 +1101,7 @@ def rerun(job_id: str, *, actor: str = "web", confirm_overwrite: bool = False) -
                 extra_json,
                 STATUS_QUEUED,
                 instance_id,
+                active_workspace(),
             ),
         )
 
@@ -1149,6 +1193,84 @@ def cancel(job_id: str, *, actor: str = "web") -> JobDetail:
 
 
 # ---------------------------------------------------------------------------
+# Pause / resume (adr-atlas.md)
+# ---------------------------------------------------------------------------
+
+#: Run kinds whose executor honours a pause between tables / checks.
+PAUSABLE_ARGV_BUILDERS: frozenset[str] = frozenset({"etl", "health", "copy", "move"})
+
+
+def is_pausable(job: JobDetail) -> bool:
+    """Return ``True`` when ``job``'s executor has a table-boundary pause gate."""
+    spec = get_kind(normalize_kind(str(job.extra_args.get("kind") or "etl")))
+    return spec is not None and spec.argv_builder in PAUSABLE_ARGV_BUILDERS
+
+
+def _set_pause(job_id: str, *, paused: bool, actor: str) -> JobDetail:
+    web_db.ensure_schema()
+    with web_db.connect() as conn:
+        row = _fetchrow(conn, job_id)
+        if row is None:
+            raise SubmitError(f"Job '{job_id}' not found.")
+        status = str(row["status"])
+        if status not in {STATUS_QUEUED, STATUS_RUNNING}:
+            raise SubmitError(f"Job '{job_id}' is {status}; only a queued or running job pauses.")
+        if paused and not is_pausable(_row_to_job_detail(row)):
+            raise SubmitError(f"Job '{job_id}' is a one-shot job and cannot pause.")
+        conn.execute(
+            "UPDATE web_jobs SET pause_requested = ? WHERE job_id = ? AND workspace_id = ?",
+            (1 if paused else 0, job_id, active_workspace()),
+        )
+        row = _fetchrow(conn, job_id)
+    web_db.audit(
+        actor=actor,
+        action="run.pause" if paused else "run.resume",
+        target=job_id,
+        detail_json=json.dumps({"status": status}),
+    )
+    assert row is not None
+    return _row_to_job_detail(row)
+
+
+def pause(job_id: str, *, actor: str = "web") -> JobDetail:
+    """Ask a queued / running job to hold at its next table boundary.
+
+    The worker mirrors the request into the run's pause flag
+    (:mod:`ovid2.config.run_control`); the executor finishes the table it
+    is on and then waits. A queued job starts paused (it holds before its
+    first table).
+
+    Raises:
+        SubmitError: Unknown job, terminal job, or a kind with no gate.
+    """
+    return _set_pause(job_id, paused=True, actor=actor)
+
+
+def resume(job_id: str, *, actor: str = "web") -> JobDetail:
+    """Clear a pause request; the executor continues with the next table.
+
+    Raises:
+        SubmitError: Unknown or terminal job.
+    """
+    return _set_pause(job_id, paused=False, actor=actor)
+
+
+def pause_requests() -> list[tuple[str, bool]]:
+    """Return ``[(instance_id, pause_requested)]`` of every running job (worker).
+
+    Cross-workspace on purpose: the worker owns every workspace's jobs.
+    """
+    web_db.ensure_schema()
+    with web_db.connect() as conn:
+        rows = conn.execute(
+            "SELECT instance_id, pause_requested FROM web_jobs "
+            "WHERE status = ? AND instance_id IS NOT NULL",
+            (STATUS_RUNNING,),
+        ).fetchall()
+    return [(str(r["instance_id"]), bool(r["pause_requested"])) for r in rows]
+
+
+# ---------------------------------------------------------------------------
 # Worker helpers — public so tests + the worker can reuse them.
 # ---------------------------------------------------------------------------
 
@@ -1178,7 +1300,7 @@ def claim_next_queued() -> JobDetail | None:
             (STATUS_RUNNING, _now_iso(), job_id),
         )
         conn.execute("COMMIT")
-        row = _fetchrow(conn, job_id)
+        row = _fetchrow_any(conn, job_id)
     assert row is not None
     return _row_to_job_detail(row)
 
@@ -1222,9 +1344,11 @@ def resume_in_flight() -> int:
     """
     web_db.ensure_schema()
     reset = 0
+    closed: list[tuple[str, str, str, str]] = []
     with web_db.connect() as conn:
         rows = conn.execute(
-            "SELECT job_id, pid, cancel_requested FROM web_jobs WHERE status = ?",
+            "SELECT job_id, pid, cancel_requested, instance_id, workspace_id "
+            "FROM web_jobs WHERE status = ?",
             (STATUS_RUNNING,),
         ).fetchall()
         for row in rows:
@@ -1232,19 +1356,45 @@ def resume_in_flight() -> int:
             if pid is not None and _pid_is_alive(int(pid)):
                 continue
             new_status = STATUS_CANCELLED if row["cancel_requested"] else STATUS_FAILED
+            ended = _now_iso()
             conn.execute(
                 "UPDATE web_jobs SET status = ?, ended_at = ?, error = ? WHERE job_id = ?",
                 (
                     new_status,
-                    _now_iso(),
+                    ended,
                     None if new_status == STATUS_CANCELLED else "worker crash recovered",
                     row["job_id"],
                 ),
             )
             reset += 1
+            if row["instance_id"]:
+                closed.append(
+                    (
+                        str(row["instance_id"]),
+                        str(row["workspace_id"] or "default"),
+                        new_status,
+                        ended,
+                    )
+                )
     if reset:
         logger.warning("Resumed %d in-flight web_jobs row(s) after worker restart", reset)
+    _close_recovered_runs(closed)
     return reset
+
+
+def _close_recovered_runs(closed: list[tuple[str, str, str, str]]) -> None:
+    """Close the event log + saved item clocks of crash-recovered runs."""
+    if not closed:
+        return
+    from ovid2 import workspaces
+    from ovid2.web.services import run_items_svc
+
+    for instance_id, workspace_id, status, ended in closed:
+        try:
+            with workspaces.use_workspace(workspace_id):
+                run_items_svc.finalize_run(instance_id, job_status=status, ended_at=ended)
+        except Exception as exc:  # recovery must never block the worker start
+            logger.warning("Closing recovered run %s failed: %s", instance_id, exc)
 
 
 def _pid_is_alive(pid: int) -> bool:
@@ -1267,19 +1417,28 @@ def _pid_is_alive(pid: int) -> bool:
 
 
 def get_job(job_id: str) -> JobDetail | None:
-    """Return one job by id, or ``None`` when unknown."""
+    """Return one job of the active workspace by id, or ``None`` when unknown."""
     web_db.ensure_schema()
     with web_db.connect() as conn:
         row = _fetchrow(conn, job_id)
     return None if row is None else _row_to_job_detail(row)
 
 
+def get_job_any_workspace(job_id: str) -> JobDetail | None:
+    """Return one job by id whatever its workspace (worker / runner internal)."""
+    web_db.ensure_schema()
+    with web_db.connect() as conn:
+        row = _fetchrow_any(conn, job_id)
+    return None if row is None else _row_to_job_detail(row)
+
+
 def get_job_by_instance(instance_id: str) -> JobDetail | None:
-    """Return the job that owns a given ``instance_id``."""
+    """Return the job of the active workspace that owns a given ``instance_id``."""
     web_db.ensure_schema()
     with web_db.connect() as conn:
         row = conn.execute(
-            "SELECT * FROM web_jobs WHERE instance_id = ? LIMIT 1", (instance_id,)
+            "SELECT * FROM web_jobs WHERE instance_id = ? AND workspace_id = ? LIMIT 1",
+            (instance_id, active_workspace()),
         ).fetchone()
     if row is None:
         return None
@@ -1331,8 +1490,10 @@ def statuses_for_instances(instance_ids: list[str]) -> dict[str, str]:
     placeholders = ",".join("?" for _ in ids)
     with web_db.connect() as conn:
         rows = conn.execute(
-            "SELECT instance_id, status FROM web_jobs WHERE instance_id IN (" + placeholders + ")",
-            tuple(ids),
+            "SELECT instance_id, status FROM web_jobs WHERE workspace_id = ? AND instance_id IN ("
+            + placeholders
+            + ")",
+            (active_workspace(), *ids),
         ).fetchall()
     return {str(r["instance_id"]): str(r["status"]) for r in rows}
 
@@ -1349,42 +1510,26 @@ def list_jobs(
     offset = max(0, int(offset))
     if status is not None and status not in _VALID_STATUSES:
         raise SubmitError(f"Invalid status filter '{status}'.")
+    where = ["workspace_id = ?"]
+    params: list[object] = [active_workspace()]
+    if status is not None:
+        where.append("status = ?")
+        params.append(status)
+    if pipeline is not None:
+        where.append("pipeline = ?")
+        params.append(pipeline)
+    clause = " AND ".join(where)
     web_db.ensure_schema()
     with web_db.connect() as conn:
-        if status is not None and pipeline is not None:
-            total = conn.execute(
-                "SELECT COUNT(*) FROM web_jobs WHERE status = ? AND pipeline = ?",
-                (status, pipeline),
-            ).fetchone()[0]
-            cursor = conn.execute(
-                "SELECT * FROM web_jobs WHERE status = ? AND pipeline = ? "
-                "ORDER BY submitted_at DESC LIMIT ? OFFSET ?",
-                (status, pipeline, limit, offset),
-            )
-        elif status is not None:
-            total = conn.execute(
-                "SELECT COUNT(*) FROM web_jobs WHERE status = ?", (status,)
-            ).fetchone()[0]
-            cursor = conn.execute(
-                "SELECT * FROM web_jobs WHERE status = ? "
-                "ORDER BY submitted_at DESC LIMIT ? OFFSET ?",
-                (status, limit, offset),
-            )
-        elif pipeline is not None:
-            total = conn.execute(
-                "SELECT COUNT(*) FROM web_jobs WHERE pipeline = ?", (pipeline,)
-            ).fetchone()[0]
-            cursor = conn.execute(
-                "SELECT * FROM web_jobs WHERE pipeline = ? "
-                "ORDER BY submitted_at DESC LIMIT ? OFFSET ?",
-                (pipeline, limit, offset),
-            )
-        else:
-            total = conn.execute("SELECT COUNT(*) FROM web_jobs").fetchone()[0]
-            cursor = conn.execute(
-                "SELECT * FROM web_jobs ORDER BY submitted_at DESC LIMIT ? OFFSET ?",
-                (limit, offset),
-            )
+        total = conn.execute(
+            "SELECT COUNT(*) FROM web_jobs WHERE " + clause, tuple(params)
+        ).fetchone()[0]
+        cursor = conn.execute(
+            "SELECT * FROM web_jobs WHERE "
+            + clause
+            + " ORDER BY submitted_at DESC LIMIT ? OFFSET ?",
+            (*params, limit, offset),
+        )
         rows = [dict(r) for r in cursor.fetchall()]
     return JobListResponse(
         total=int(total),

@@ -137,11 +137,158 @@ def table_completed(
 
 
 def table_failed(
-    *, instance_id: str, pipeline: str, batch_id: str, table: str, error: str
+    *,
+    instance_id: str,
+    pipeline: str,
+    batch_id: str,
+    table: str,
+    error: str,
+    elapsed_ms: float | None = None,
 ) -> Event:
+    payload: dict[str, Any] = {
+        "pipeline": pipeline,
+        "batch_id": batch_id,
+        "table": table,
+        "error": error,
+    }
+    if elapsed_ms is not None:
+        payload["elapsed_ms"] = elapsed_ms
+    return Event(kind="table.failed", payload=payload, instance_id=instance_id)
+
+
+#: ``extra.state`` values of a per-table :func:`table_stage` event.
+TABLE_STAGE_ACTIVE: str = "active"
+TABLE_STAGE_WAITING: str = "waiting"
+
+
+def table_stage(
+    *,
+    instance_id: str,
+    pipeline: str,
+    batch_id: str,
+    table: str,
+    stage: str,
+    state: str,
+) -> Event:
+    """Mark a started table as actively worked on, or waiting, between stages.
+
+    Pipelines that process a table in several separated phases (the
+    ``legacy_ovid`` runner: format/map every table, *then* fix, *then*
+    publish) emit this so the per-table clocks only count the time the
+    table is actually being worked on. ``state`` is
+    :data:`TABLE_STAGE_WAITING` when the table leaves a stage and waits for
+    the next phase, :data:`TABLE_STAGE_ACTIVE` when the next phase picks it
+    up again. A table without these events is active from ``table.started``
+    to its ``table.completed`` / ``table.failed``.
+
+    Args:
+        instance_id: Owning instance id.
+        pipeline: Pipeline name.
+        batch_id: Batch label.
+        table: CDM table name.
+        stage: Stage that ended / begins (``map`` / ``fix`` / ``write`` …).
+        state: :data:`TABLE_STAGE_ACTIVE` or :data:`TABLE_STAGE_WAITING`.
+    """
+    if state not in (TABLE_STAGE_ACTIVE, TABLE_STAGE_WAITING):
+        raise ValueError(f"table_stage state must be active|waiting, got {state!r}")
     return Event(
-        kind="table.failed",
-        payload={"pipeline": pipeline, "batch_id": batch_id, "table": table, "error": error},
+        kind="stage.progress",
+        payload={
+            "pipeline": pipeline,
+            "batch_id": batch_id,
+            "table": table,
+            "stage": stage,
+            "extra": {"state": state},
+        },
+        instance_id=instance_id,
+    )
+
+
+#: ``stage`` of a run-level pause / resume :func:`run_paused` event.
+RUN_STAGE_PAUSED: str = "paused"
+
+#: Pipeline stages a table moves through on the one execution path
+#: (``core/pipeline.py``). ``read`` / ``format`` / ``transform``-chain stages
+#: only *build* a lazy plan; ``write`` is where the engine executes it.
+PIPELINE_STAGES: tuple[str, ...] = (
+    "read",
+    "format",
+    "deduplicate",
+    "transform",
+    "map",
+    "fix",
+    "write",
+)
+
+
+def stage_entered(
+    *,
+    instance_id: str,
+    pipeline: str,
+    batch_id: str,
+    table: str,
+    stage: str,
+    index: int,
+    total: int,
+    lazy: bool,
+) -> Event:
+    """Mark that a running table entered ``stage`` of the pipeline.
+
+    Unlike :func:`table_stage` this never pauses the table's clock
+    (``extra.state`` is absent): it only tells the run console and the
+    Atlas *which* step of the chain a table is on. ``lazy`` is ``True`` for
+    stages that only build the plan (everything before ``write``), so the
+    UI can be honest that a lazy step's wall time is plan time, not work.
+
+    Args:
+        instance_id: Owning instance id.
+        pipeline: Pipeline name.
+        batch_id: Batch label.
+        table: CDM table name.
+        stage: One of :data:`PIPELINE_STAGES`.
+        index: 1-based position of the stage in this table's chain.
+        total: Number of stages in this table's chain.
+        lazy: Whether the stage only builds a lazy plan.
+    """
+    if stage not in PIPELINE_STAGES:
+        raise ValueError(f"stage must be one of {PIPELINE_STAGES}, got {stage!r}")
+    return Event(
+        kind="stage.progress",
+        payload={
+            "pipeline": pipeline,
+            "batch_id": batch_id,
+            "table": table,
+            "stage": stage,
+            "extra": {"step": "enter", "current": index, "total": total, "lazy": lazy},
+        },
+        instance_id=instance_id,
+    )
+
+
+def run_paused(*, instance_id: str, pipeline: str, batch_id: str) -> Event:
+    """The run is holding at a table boundary (operator pause)."""
+    return Event(
+        kind="stage.progress",
+        payload={
+            "pipeline": pipeline,
+            "batch_id": batch_id,
+            "stage": RUN_STAGE_PAUSED,
+            "extra": {"state": TABLE_STAGE_WAITING, "scope": "run"},
+        },
+        instance_id=instance_id,
+    )
+
+
+def run_resumed(*, instance_id: str, pipeline: str, batch_id: str) -> Event:
+    """The run left its operator pause and continues with the next table."""
+    return Event(
+        kind="stage.progress",
+        payload={
+            "pipeline": pipeline,
+            "batch_id": batch_id,
+            "stage": RUN_STAGE_PAUSED,
+            "extra": {"state": TABLE_STAGE_ACTIVE, "scope": "run"},
+        },
         instance_id=instance_id,
     )
 
@@ -201,6 +348,41 @@ def fix_failed(
             "table": table,
             "fix": fix,
             "error": error,
+            "fix_type": fix_type,
+            "current_fix": current_fix,
+            "total_fixes": total_fixes,
+            "src1": src1,
+            "src2": src2,
+            "file_name": file_name,
+        },
+        instance_id=instance_id,
+    )
+
+
+def fix_skipped(
+    *,
+    instance_id: str,
+    pipeline: str,
+    batch_id: str,
+    table: str,
+    fix: str,
+    reason: str = "",
+    fix_type: str = "common",
+    current_fix: int = 0,
+    total_fixes: int = 0,
+    src1: str = "",
+    src2: str = "",
+    file_name: str = "",
+) -> Event:
+    """Emitted when a fix ran but did not apply (e.g. a missing optional reference)."""
+    return Event(
+        kind="fix.skipped",
+        payload={
+            "pipeline": pipeline,
+            "batch_id": batch_id,
+            "table": table,
+            "fix": fix,
+            "message": reason,
             "fix_type": fix_type,
             "current_fix": current_fix,
             "total_fixes": total_fixes,
@@ -369,7 +551,11 @@ def set_default_bus(bus: EventBus) -> None:
 
 __all__ = [
     "EVENT_KINDS",
+    "PIPELINE_STAGES",
+    "RUN_STAGE_PAUSED",
     "SCHEMA_VERSION",
+    "TABLE_STAGE_ACTIVE",
+    "TABLE_STAGE_WAITING",
     "Event",
     "EventBus",
     "NullEventBus",
@@ -383,13 +569,18 @@ __all__ = [
     "error_event",
     "fix_applied",
     "fix_failed",
+    "fix_skipped",
     "get_default_bus",
     "instance_finished",
     "instance_started",
     "log_event",
+    "run_paused",
+    "run_resumed",
     "set_default_bus",
+    "stage_entered",
     "table_completed",
     "table_failed",
+    "table_stage",
     "table_started",
     "warning_event",
 ]

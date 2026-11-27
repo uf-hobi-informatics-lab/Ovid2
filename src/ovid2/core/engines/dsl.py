@@ -31,10 +31,48 @@ from typing import Any
 
 from ovid2.core.engines.protocols import EngineOperationUnsupported
 
-_ACTIVE: contextvars.ContextVar[Any] = contextvars.ContextVar("ovid2_active_engine", default=None)
+
+class _EngineSlot:
+    """A ``ContextVar`` that pickles as a fresh, empty slot.
+
+    Snowpark ships UDF bodies (and, by value, the Ovid2 modules they close
+    over — this one included) to Snowflake with ``cloudpickle``. A raw
+    ``ContextVar`` cannot be pickled, and the host's active engine is
+    meaningless inside the remote runtime, so the slot drops its value.
+    """
+
+    def __init__(self) -> None:
+        self._var: contextvars.ContextVar[Any] = contextvars.ContextVar(
+            "ovid2_active_engine", default=None
+        )
+
+    def get(self) -> Any:
+        """Return the context-local engine (or ``None``)."""
+        return self._var.get()
+
+    def set(self, value: Any) -> contextvars.Token[Any]:
+        """Set the context-local engine; return the reset token."""
+        return self._var.set(value)
+
+    def reset(self, token: contextvars.Token[Any]) -> None:
+        """Restore the value captured by ``token``."""
+        self._var.reset(token)
+
+    def __reduce__(self) -> tuple[type[_EngineSlot], tuple[()]]:
+        return (_EngineSlot, ())
+
+
+class _ProcessSlot(list[Any]):
+    """Process-wide fallback holder; pickles empty (see :class:`_EngineSlot`)."""
+
+    def __reduce__(self) -> tuple[type[_ProcessSlot], tuple[list[None]]]:
+        return (_ProcessSlot, ([None],))
+
+
+_ACTIVE = _EngineSlot()
 
 #: Process-wide fallback (a run uses exactly one engine per process).
-_PROCESS_ENGINE: list[Any] = [None]
+_PROCESS_ENGINE: list[Any] = _ProcessSlot([None])
 
 
 def set_active_engine(engine: Any) -> None:
@@ -87,6 +125,31 @@ def functions_for(engine: Any = None) -> Any:
     return engine.get_functions()
 
 
+def functions_and_family_for_frame(df: Any, engine: Any = None) -> tuple[Any, str]:
+    """Return ``(functions, family)`` for running engine-portable code on ``df``.
+
+    ``engine`` (or the active one) wins; otherwise the frame's type decides
+    (DuckDB / Snowpark frame, else Spark). Lives here so algorithm modules
+    never import a concrete engine to answer the question.
+    """
+    engine = engine if engine is not None else active_engine()
+    if engine is not None:
+        family = getattr(engine, "family", "spark")
+        return engine.get_functions(), str(getattr(family, "value", family))
+    module = type(df).__module__
+    if module.startswith("ovid2.core.engines._duck"):
+        from ovid2.core.engines.duckdb import _DuckFunctions
+
+        return _DuckFunctions(), "duckdb"
+    if module.startswith("snowflake.snowpark"):
+        from ovid2.core.engines.snowpark import _SnowparkFunctions
+
+        return _SnowparkFunctions(), "snowpark"
+    from ovid2.core.engines.pyspark import spark_functions
+
+    return spark_functions(), "spark"
+
+
 def _resolve(name: str, args: tuple[Any, ...]) -> Any:
     engine = active_engine()
     if (engine is None or getattr(engine, "session_is_spark", True)) and _is_duck_arg(args):
@@ -136,6 +199,7 @@ lower = _dispatch("lower")
 max = _dispatch("max")
 min = _dispatch("min")
 monotonically_increasing_id = _dispatch("monotonically_increasing_id")
+rand = _dispatch("rand")
 regexp_extract = _dispatch("regexp_extract")
 regexp_replace = _dispatch("regexp_replace")
 round = _dispatch("round")
@@ -185,9 +249,112 @@ class _WindowProxy:
         """Start a window spec with an ordering."""
         return self._target(cols).orderBy(*cols)
 
+    def rowsBetween(self, start: int, end: int) -> Any:  # noqa: N802 — PySpark API
+        """Start a window spec with a ROWS frame."""
+        return self._target(()).rowsBetween(start, end)
+
+    def rangeBetween(self, start: int, end: int) -> Any:  # noqa: N802 — PySpark API
+        """Start a window spec with a RANGE frame."""
+        return self._target(()).rangeBetween(start, end)
+
+    #: Frame boundaries — identical values on every engine (Spark's).
+    unboundedPreceding: int = -(1 << 63)  # noqa: N815 — PySpark API
+    unboundedFollowing: int = (1 << 63) - 1  # noqa: N815 — PySpark API
+    currentRow: int = 0  # noqa: N815 — PySpark API
+
 
 #: Engine-dispatching ``Window`` entry point.
 Window = _WindowProxy()
+
+
+class _LazyUdf:
+    """A UDF bound to whichever engine is active when it is *applied*.
+
+    Legacy ports and shared helpers create UDFs at import time
+    (``fmt_udf = udf(fn, StringType())``), before any engine exists.
+    The real engine UDF is built on first call, per engine family, so
+    the same module-level object works on every engine.
+    """
+
+    def __init__(self, fn: Any, return_type: Any, *, vectorised: bool) -> None:
+        self.func = fn
+        self.returnType = return_type
+        self._vectorised = vectorised
+        self._built: dict[str, Any] = {}
+        self._deterministic = True
+        self.__name__ = getattr(fn, "__name__", "udf")
+        self.__doc__ = getattr(fn, "__doc__", None)
+
+    def _for(self, args: tuple[Any, ...]) -> Any:
+        engine = active_engine()
+        spark = (engine is None or getattr(engine, "session_is_spark", True)) and not _is_duck_arg(
+            args
+        )
+        key = "spark" if spark else str(getattr(engine, "type_name", "duckdb") or "duckdb")
+        built = self._built.get(key)
+        if built is None:
+            if spark:
+                from ovid2.core.engines.pyspark import spark_udf
+
+                built = spark_udf(self.func, self.returnType, vectorised=self._vectorised)
+            else:
+                namespace = (
+                    engine.get_functions()
+                    if engine is not None and not _is_duck_arg(args)
+                    else None
+                )
+                if namespace is None:
+                    from ovid2.core.engines.duckdb import _DuckFunctions
+
+                    namespace = _DuckFunctions()
+                maker = namespace.pandas_udf if self._vectorised else namespace.udf
+                built = maker(self.func, self.returnType)
+            if not self._deterministic:
+                mark = getattr(built, "asNondeterministic", None)
+                built = mark() if callable(mark) else built
+            self._built[key] = built
+        return built
+
+    def __call__(self, *cols: Any) -> Any:
+        """Apply the UDF to ``cols`` on the active engine."""
+        return self._for(cols)(*cols)
+
+    def engine_udf(self) -> Any:
+        """Return the active engine's UDF object (for ``session.udf.register``)."""
+        return self._for(())
+
+    def asNondeterministic(self) -> _LazyUdf:  # noqa: N802 — PySpark API
+        """PySpark API: the engine UDF is built non-deterministic (never memoised)."""
+        self._deterministic = False
+        self._built.clear()
+        return self
+
+
+def udf(f: Any = None, returnType: Any = "string", **kwargs: Any) -> Any:  # noqa: N803
+    """Engine-portable ``pyspark.sql.functions.udf`` (callable or decorator form)."""
+    returnType = kwargs.pop("return_type", returnType)  # noqa: N806
+    if f is None or not callable(f):
+        rt = f if f is not None else returnType
+        return lambda fn: _LazyUdf(fn, rt, vectorised=False)
+    return _LazyUdf(f, returnType, vectorised=False)
+
+
+def pandas_udf(f: Any = None, returnType: Any = None, functionType: Any = None) -> Any:  # noqa: N803
+    """Engine-portable scalar ``pandas_udf`` (Series in, Series out)."""
+    del functionType
+    if f is None or not callable(f):
+        rt = f if f is not None else (returnType or "string")
+        return lambda fn: _LazyUdf(fn, rt, vectorised=True)
+    return _LazyUdf(f, returnType or "string", vectorised=True)
+
+
+class PandasUDFType:
+    """``pyspark.sql.functions.PandasUDFType`` constants (scalar only is portable)."""
+
+    SCALAR = 200
+    SCALAR_ITER = 204
+    GROUPED_MAP = 201
+    GROUPED_AGG = 202
 
 
 def __getattr__(name: str) -> Any:
@@ -198,6 +365,7 @@ def __getattr__(name: str) -> Any:
 
 
 __all__ = [
+    "PandasUDFType",
     "Window",
     "active_engine",
     "array",
@@ -215,6 +383,7 @@ __all__ = [
     "datediff",
     "explode",
     "expr",
+    "functions_and_family_for_frame",
     "functions_for",
     "initcap",
     "input_file_name",
@@ -224,6 +393,8 @@ __all__ = [
     "max",
     "min",
     "monotonically_increasing_id",
+    "pandas_udf",
+    "rand",
     "regexp_extract",
     "regexp_replace",
     "round",
@@ -236,6 +407,7 @@ __all__ = [
     "to_date",
     "to_timestamp",
     "trim",
+    "udf",
     "upper",
     "use_engine",
     "when",

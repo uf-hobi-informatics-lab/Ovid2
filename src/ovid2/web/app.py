@@ -18,16 +18,21 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 
 from ovid2 import __version__
-from ovid2.config.pipeline_packages import ensure_pipeline_packages_on_path
+from ovid2.config.pipeline_packages import (
+    ensure_all_workspace_packages_on_path,
+    ensure_pipeline_packages_on_path,
+)
 from ovid2.web import db as web_db
 from ovid2.web.routes import (
     api_v1,
+    atlas_api,
     auth,
     branding,
     html,
     llm_html,
     manual_html,
     workflows_html,
+    workspaces_html,
 )
 from ovid2.web.templating import static_dir
 
@@ -65,6 +70,7 @@ def _inject_dev_pipelines_dir() -> None:
     ``ovid2_pipelines.*`` packages).
     """
     ensure_pipeline_packages_on_path()
+    ensure_all_workspace_packages_on_path()
 
 
 def create_app() -> FastAPI:
@@ -111,8 +117,10 @@ def create_app() -> FastAPI:
 
     app.include_router(llm_html.router)
     app.include_router(workflows_html.router)
+    app.include_router(workspaces_html.router)
     app.include_router(html.router)
     app.include_router(api_v1.router)
+    app.include_router(atlas_api.router)
     app.include_router(branding.router)
     app.include_router(manual_html.router)
     app.include_router(auth.router)
@@ -121,8 +129,17 @@ def create_app() -> FastAPI:
     # whole app and runs *before* routing (Starlette reverse-registration) —
     # do not "fix" this by moving the call above include_router.
     from ovid2.web.auth.middleware import AuthRedirectMiddleware
+    from ovid2.web.auth.workspace_middleware import WorkspaceMiddleware
 
     app.add_middleware(AuthRedirectMiddleware)
+    # Added last → outermost: the workspace context is bound before the
+    # auth redirect gate (and every route) runs (adr-workspaces.md).
+    app.add_middleware(WorkspaceMiddleware)
+    # Clickjacking guard: only the panel itself may frame its pages (it
+    # does, for full screen — static/fullscreen.js).
+    from ovid2.web.frame_headers import FrameAncestorsMiddleware
+
+    app.add_middleware(FrameAncestorsMiddleware)
     return app
 
 

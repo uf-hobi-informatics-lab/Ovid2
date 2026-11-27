@@ -16,7 +16,7 @@ pytest.importorskip("pyspark")
 from pyspark.sql import SparkSession
 
 from ovid2.core.engines.pyspark import spark_functions
-from ovid2.transforms import TransformFamilyError, load_from_dict, run
+from ovid2.transforms import load_from_dict, run
 from ovid2.transforms.base import TransformContext
 
 
@@ -186,23 +186,69 @@ def test_random_sample_seed_reproducible(spark: SparkSession) -> None:
 
 
 @pytest.mark.unit
-def test_family_gating_blocks_spark_only_op(spark: SparkSession) -> None:
-    """A spark-only op is refused under a snowpark family."""
-    df = spark.createDataFrame([("p1", "2020-01-01")], ["PATID", "DT"])
-    with pytest.raises(TransformFamilyError):
-        _run(
-            spark,
-            df,
+def test_no_family_gating_window_ops_run_everywhere(spark: SparkSession) -> None:
+    """Former Spark-only window ops run under any engine family (engine universality)."""
+    df = spark.createDataFrame([("p1", "2020-01-01"), ("p1", "2020-02-01")], ["PATID", "DT"])
+    steps = [
+        {
+            "op": "add_row_number",
+            "partition_by": ["PATID"],
+            "order_by": [{"col": "DT"}],
+            "output_column": "RN",
+        }
+    ]
+    out = _run(spark, df, steps, family="snowpark")
+    assert sorted(r["RN"] for r in out.collect()) == [1, 2]
+
+
+@pytest.mark.unit
+def test_window_and_sampling_ops_run_on_duckdb() -> None:
+    """add_row_number / rank / dense_rank / head_by_group / stratified_sample on DuckDB."""
+    pytest.importorskip("duckdb")
+    from ovid2.core.engines import dsl
+    from ovid2.core.engines.duckdb import DuckDBEngine
+
+    engine = DuckDBEngine(args={"threads": 1, "memory_limit": "512MB"})
+    dsl.set_active_engine(engine)
+    try:
+        session = engine.get_session()
+        df = session.createDataFrame(
             [
-                {
-                    "op": "add_row_number",
-                    "partition_by": ["PATID"],
-                    "order_by": [{"col": "DT"}],
-                    "output_column": "RN",
-                }
+                ("p1", "2020-01-01"),
+                ("p1", "2020-02-01"),
+                ("p2", "2020-01-01"),
+                ("p2", "2020-01-01"),
             ],
-            family="snowpark",
+            ["PATID", "DT"],
         )
+        window = {"partition_by": ["PATID"], "order_by": [{"col": "DT"}]}
+
+        def _go(steps: list[dict[str, object]]) -> list[tuple[object, ...]]:
+            spec = load_from_dict({"v": 1, "steps": steps}, name="t")
+            out = run(
+                df, spec, session=session, functions=engine.get_functions(), engine_family="duckdb"
+            )
+            return sorted(tuple(r) for r in out.collect())
+
+        assert _go([{"op": "add_row_number", **window, "output_column": "RN"}]) == [
+            ("p1", "2020-01-01", 1),
+            ("p1", "2020-02-01", 2),
+            ("p2", "2020-01-01", 1),
+            ("p2", "2020-01-01", 2),
+        ]
+        assert [r[2] for r in _go([{"op": "rank", **window, "output_column": "R"}])] == [1, 2, 1, 1]
+        assert [r[2] for r in _go([{"op": "dense_rank", **window, "output_column": "R"}])] == [
+            1,
+            2,
+            1,
+            1,
+        ]
+        assert len(_go([{"op": "head_by_group", **window, "n": 1}])) == 2
+        sampled = _go([{"op": "stratified_sample", "key": "PATID", "fractions": {"p1": 1.0}}])
+        assert {r[0] for r in sampled} == {"p1"}
+    finally:
+        engine.stop_session()
+        dsl.set_active_engine(None)
 
 
 @pytest.mark.unit

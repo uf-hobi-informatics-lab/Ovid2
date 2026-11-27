@@ -1,0 +1,32 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  src1: DX_DATE
+  src2: death
+tables:
+  input:
+    columns:
+    - PATID
+    - DX_DATE
+    rows:
+    - - P1
+      - '2023-01-14'
+    - - P1
+      - '2023-02-01'
+    - - P2
+      - '2030-01-01'
+  death:
+    columns:
+    - PATID
+    - DEATH_DATE
+    rows:
+    - - P1
+      - '2023-01-15'
+expected:
+  columns:
+  - PATID
+  - DX_DATE
+  rows:
+  - - P1
+    - '2023-01-14'
+  - - P2
+    - '2030-01-01'

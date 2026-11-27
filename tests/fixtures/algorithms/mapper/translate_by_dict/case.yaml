@@ -1,0 +1,27 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  column: sex
+  dict: sex_dict
+spec:
+  dictionaries:
+    sex_dict:
+      M: Male
+      F: Female
+tables:
+  input:
+    columns:
+    - sex
+    rows:
+    - - M
+    - - F
+    - - UN
+    - - null
+note: unmatched passes through; null stays null
+expected:
+  columns:
+  - sex
+  rows:
+  - - Male
+  - - Female
+  - - UN
+  - - null

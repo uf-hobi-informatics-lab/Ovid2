@@ -868,16 +868,13 @@ def test_submit_move_accepts_extra_mounts(
 
 
 @pytest.mark.unit
-def test_submit_rejects_incompatible_snowpark_with_postgres(
+def test_submit_accepts_snowpark_with_postgres(
     registered_pipeline: str,
 ) -> None:
-    """``--engine snowpark`` + postgres input rejects at submit time.
+    """``--engine snowpark`` + postgres input is accepted (engine universality).
 
-    Post-Phase-E, snowpark + disc / s3 / azure_blob / databricks are
-    all compatible pairings (Phase C staging for disc via ``@~``;
-    Phase D external stages for the object stores; Phase E S3-bounce
-    for databricks). This test uses ``postgres`` — a driver type
-    whose strategy has not yet landed on the Snowpark stager.
+    Every engine reaches every storage type; postgres is bridged into
+    Snowpark through its DuckDB strategy (Arrow).
     """
     # Write a synthetic postgres address config for the input.
     configs = Path(os.environ["OVID2_CONFIGS_DIR"])
@@ -899,15 +896,10 @@ def test_submit_rejects_incompatible_snowpark_with_postgres(
         pipeline=registered_pipeline,
         batch_id="20260806",
         input_address="pg_in",
-        output_address="out_test",  # disc — compatible w/ snowpark
+        output_address="out_test",
         engine="snowpark",
     )
-    with pytest.raises(jobs_svc.SubmitError) as exc_info:
-        jobs_svc.submit(request)
-    message = str(exc_info.value)
-    assert "snowpark" in message
-    assert "pg_in" in message
-    assert "--engine pyspark" in message
+    assert jobs_svc.submit(request).job_id
 
 
 @pytest.mark.unit

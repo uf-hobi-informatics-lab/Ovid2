@@ -85,6 +85,8 @@
     { value: '"IBM Plex Sans Condensed", sans-serif', label: "IBM Plex Sans Condensed (dense)" },
     { value: '"Exo 2", sans-serif', label: "Exo 2 (techno)" },
     { value: '"Michroma", sans-serif', label: "Michroma (wide sci-fi)" },
+    { value: '"Big Shoulders Stencil", sans-serif', label: "Big Shoulders Stencil (stencil)" },
+    { value: '"Cinzel", serif', label: "Cinzel (carved capitals)" },
     { value: '"Nunito", sans-serif', label: "Nunito (rounded sans)" },
     { value: '"Comic Sans MS", "Comic Sans", cursive', label: "Comic Sans" },
     { value: 'Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif', label: "Impact" },
@@ -189,22 +191,71 @@
   // token, but written across all the group's colour vars.
   function colorVarKey(ref) { return ref; }
 
+  /* ---- Theme list: built-in themes + the user's saved themes ------ */
+
+  function byName(a, b) {
+    return String(a).localeCompare(String(b), undefined, { sensitivity: "base" });
+  }
+
+  function swatchStrip(sw) {
+    var strip = el("span", "theme-swatch-strip");
+    strip.setAttribute("aria-hidden", "true");
+    ["bg", "surface", "accent", "fg"].forEach(function (k) {
+      var chip = el("span", "theme-swatch");
+      chip.style.background = sw[k];
+      strip.appendChild(chip);
+    });
+    return strip;
+  }
+
+  // A saved theme's preview: its own colour overrides over its base theme.
+  function savedSwatch(entry) {
+    var base = (lib.getTheme && lib.getTheme(entry.theme)) || {};
+    var bs = base.swatch || {};
+    var o = entry.overrides || {};
+    return {
+      bg: o["--bg"] || bs.bg || "#ffffff",
+      surface: o["--card-bg"] || o["--bg-elev"] || bs.surface || "#ffffff",
+      accent: o["--accent"] || bs.accent || "#000000",
+      fg: o["--fg"] || bs.fg || "#000000"
+    };
+  }
+
+  function sameMap(a, b) {
+    var ka = Object.keys(a || {}).sort();
+    var kb = Object.keys(b || {}).sort();
+    if (ka.length !== kb.length) { return false; }
+    for (var i = 0; i < ka.length; i++) {
+      if (ka[i] !== kb[i] || a[ka[i]] !== b[kb[i]]) { return false; }
+    }
+    return true;
+  }
+
+  function afterApply(container) {
+    markActiveTheme(container);
+    seedAllInputs(container);
+    updateContrast(container);
+  }
+
+  function applySaved(container, entry) {
+    if (lib.writeCustom) { lib.writeCustom({}); }
+    writeAppearance(entry.overrides || {});
+    if (entry.theme && lib.applyTheme) { lib.applyTheme(entry.theme); }
+    else { repaint(); }
+    afterApply(container);
+  }
+
   function buildThemeList(container) {
     var section = el("div", "appearance-section");
-    section.appendChild(el("p", "appearance-section-head", "Base theme"));
+    section.appendChild(el("p", "appearance-section-head", "Theme"));
     var list = el("div", "theme-list");
-    (lib.THEMES || []).forEach(function (theme) {
+    list.setAttribute("role", "list");
+    var themes = (lib.THEMES || []).slice().sort(function (a, b) { return byName(a.label, b.label); });
+    themes.forEach(function (theme) {
       var row = el("button", "theme-row");
       row.type = "button";
       row.setAttribute("data-theme-slug", theme.slug);
-      var strip = el("span", "theme-swatch-strip");
-      strip.setAttribute("aria-hidden", "true");
-      ["bg", "surface", "accent", "fg"].forEach(function (k) {
-        var chip = el("span", "theme-swatch");
-        chip.style.background = theme.swatch[k];
-        strip.appendChild(chip);
-      });
-      row.appendChild(strip);
+      row.appendChild(swatchStrip(theme.swatch));
       row.appendChild(el("span", "theme-row-label", theme.label));
       row.addEventListener("click", function () {
         // Selecting a base theme discards earlier colour/font overrides
@@ -214,23 +265,115 @@
         if (lib.writeCustom) { lib.writeCustom({}); }
         writeAppearance({});
         if (lib.applyTheme) { lib.applyTheme(theme.slug); }
-        markActiveTheme(container);
-        // Re-seed colour inputs so they reflect the new theme's tokens.
-        seedAllInputs(container);
-        updateContrast(container);
+        afterApply(container);
       });
       list.appendChild(row);
     });
     section.appendChild(list);
+
+    // The user's saved looks live in the same list, under their own head.
+    var savedHead = el("p", "theme-list-subhead", "Your themes");
+    section.appendChild(savedHead);
+    var savedList = el("div", "theme-list theme-list-saved");
+    savedList.setAttribute("role", "list");
+    section.appendChild(savedList);
+    var empty = el("p", "theme-saved-empty", "No saved themes yet.");
+    section.appendChild(empty);
+
+    var saveRow = el("div", "appearance-save-row");
+    var name = document.createElement("input");
+    name.type = "text";
+    name.maxLength = 60;
+    name.placeholder = "Save current look as\u2026";
+    name.setAttribute("aria-label", "Name for the current look");
+    var saveBtn = el("button", "button small primary", "Save");
+    saveBtn.type = "button";
+    saveRow.appendChild(name);
+    saveRow.appendChild(saveBtn);
+    section.appendChild(saveRow);
     container.appendChild(section);
+
+    function refresh() {
+      savedList.innerHTML = "";
+      var saved = readSaved().slice().sort(function (a, b) { return byName(a.name, b.name); });
+      empty.hidden = saved.length > 0;
+      saved.forEach(function (entry) {
+        var wrap = el("div", "theme-row-wrap");
+        wrap.setAttribute("role", "listitem");
+        var row = el("button", "theme-row theme-row-saved");
+        row.type = "button";
+        row.setAttribute("data-saved-name", entry.name);
+        row.appendChild(swatchStrip(savedSwatch(entry)));
+        var text = el("span", "theme-row-text");
+        text.appendChild(el("span", "theme-row-label", entry.name));
+        var base = lib.getTheme && lib.getTheme(entry.theme);
+        text.appendChild(el("span", "theme-row-base", "based on " + (base ? base.label : entry.theme)));
+        row.appendChild(text);
+        row.addEventListener("click", function () { applySaved(container, entry); });
+        var del = el("button", "theme-row-delete", "\u00d7");
+        del.type = "button";
+        del.title = "Delete saved theme " + entry.name;
+        del.setAttribute("aria-label", "Delete saved theme " + entry.name);
+        del.addEventListener("click", function () {
+          writeSaved(readSaved().filter(function (e) { return e.name !== entry.name; }));
+          refresh();
+        });
+        wrap.appendChild(row);
+        wrap.appendChild(del);
+        savedList.appendChild(wrap);
+      });
+      markActiveTheme(container);
+    }
+
+    function save() {
+      var nm = (name.value || "").trim();
+      if (!nm) { name.focus(); return; }
+      var arr = readSaved();
+      var entry = {
+        name: nm,
+        theme: lib.currentTheme ? lib.currentTheme() : "data-factory",
+        overrides: foldedOverrides()
+      };
+      // Overwrite a same-named theme rather than duplicating.
+      var existing = -1;
+      for (var i = 0; i < arr.length; i++) {
+        if (arr[i].name === nm) { existing = i; break; }
+      }
+      if (existing >= 0) { arr[existing] = entry; }
+      else { arr.push(entry); }
+      writeSaved(arr);
+      name.value = "";
+      refresh();
+    }
+    saveBtn.addEventListener("click", save);
+    name.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") { ev.preventDefault(); save(); }
+    });
+
+    refresh();
+    refreshSaved = refresh;
   }
 
+  // Highlight the saved look that matches what is on screen; otherwise the
+  // base theme row.
   function markActiveTheme(container) {
     var slug = lib.currentTheme ? lib.currentTheme() : "data-factory";
+    var current = foldedOverrides();
+    var match = null;
+    readSaved().forEach(function (e) {
+      if (!match && e.theme === slug && sameMap(e.overrides || {}, current)) { match = e.name; }
+    });
     var rows = container.querySelectorAll("[data-theme-slug]");
     for (var i = 0; i < rows.length; i++) {
-      rows[i].classList.toggle("active",
-        rows[i].getAttribute("data-theme-slug") === slug);
+      var on = !match && rows[i].getAttribute("data-theme-slug") === slug;
+      rows[i].classList.toggle("active", on);
+      rows[i].setAttribute("aria-pressed", on ? "true" : "false");
+    }
+    var saved = container.querySelectorAll("[data-saved-name]");
+    for (var j = 0; j < saved.length; j++) {
+      var son = saved[j].getAttribute("data-saved-name") === match;
+      saved[j].classList.toggle("active", son);
+      saved[j].setAttribute("aria-pressed", son ? "true" : "false");
     }
   }
 
@@ -420,80 +563,6 @@
     return map;
   }
 
-  function buildSavedSection(container) {
-    var section = el("div", "appearance-section");
-    section.appendChild(el("p", "appearance-section-head", "Saved themes"));
-
-    var list = el("div", "appearance-saved-list");
-    section.appendChild(list);
-
-    var saveRow = el("div", "appearance-save-row");
-    var name = document.createElement("input");
-    name.type = "text";
-    name.placeholder = "Theme name";
-    name.setAttribute("aria-label", "Theme name");
-    var saveBtn = el("button", "button small primary", "Save");
-    saveBtn.type = "button";
-    saveRow.appendChild(name);
-    saveRow.appendChild(saveBtn);
-    section.appendChild(saveRow);
-
-    container.appendChild(section);
-
-    function refresh() {
-      list.innerHTML = "";
-      readSaved().forEach(function (entry, idx) {
-        var row = el("div", "saved-theme-row");
-        row.appendChild(el("span", "saved-theme-name", entry.name));
-        var apply = el("button", null, "Apply");
-        apply.type = "button";
-        apply.addEventListener("click", function () {
-          if (lib.writeCustom) { lib.writeCustom({}); }
-          writeAppearance(entry.overrides || {});
-          if (entry.theme && lib.applyTheme) { lib.applyTheme(entry.theme); }
-          else { repaint(); }
-          seedAllInputs(container);
-          updateContrast(container);
-        });
-        var del = el("button", null, "Delete");
-        del.type = "button";
-        del.addEventListener("click", function () {
-          var arr = readSaved();
-          arr.splice(idx, 1);
-          writeSaved(arr);
-          refresh();
-        });
-        row.appendChild(apply);
-        row.appendChild(del);
-        list.appendChild(row);
-      });
-    }
-
-    saveBtn.addEventListener("click", function () {
-      var nm = (name.value || "").trim();
-      if (!nm) { name.focus(); return; }
-      var arr = readSaved();
-      var entry = {
-        name: nm,
-        theme: lib.currentTheme ? lib.currentTheme() : "data-factory",
-        overrides: foldedOverrides()
-      };
-      // Overwrite a same-named theme rather than duplicating.
-      var existing = -1;
-      for (var i = 0; i < arr.length; i++) {
-        if (arr[i].name === nm) { existing = i; break; }
-      }
-      if (existing >= 0) { arr[existing] = entry; }
-      else { arr.push(entry); }
-      writeSaved(arr);
-      name.value = "";
-      refresh();
-    });
-
-    refresh();
-    refreshSaved = refresh;
-  }
-
   function buildActions(container) {
     var actions = el("div", "appearance-actions");
     var resetAll = el("button", "button small", "Reset all");
@@ -538,7 +607,6 @@
     container.appendChild(compSection);
 
     buildActions(container);
-    buildSavedSection(container);
 
     // Live preview: any input/change inside the component section
     // updates immediately.
@@ -562,9 +630,13 @@
   /* ---- Rail + panel controller ----------------------------------- */
 
   function openPanel() {
-    // Right-rail panels are mutually exclusive (assistant vs appearance).
+    // Right-rail panels are mutually exclusive (search / appearance /
+    // assistant) and share one width (--right-panel-w).
     if (window.Ovid2Llm && typeof window.Ovid2Llm.close === "function") {
       window.Ovid2Llm.close();
+    }
+    if (window.Ovid2Palette && typeof window.Ovid2Palette.close === "function") {
+      window.Ovid2Palette.close();
     }
     html.classList.add("right-panel-open");
     try { localStorage.setItem(PANEL_KEY, "1"); } catch (e) { /* ignore */ }

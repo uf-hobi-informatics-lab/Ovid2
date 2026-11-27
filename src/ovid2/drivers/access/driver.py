@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from ovid2.drivers.access.metadata import (
     ACCESS_FILE_SUFFIXES,
@@ -69,6 +69,8 @@ class AccessDriver(Driver):
     """
 
     type_name: str = "access"
+    #: Access files are read-only on every engine (UCanAccess / mdbtools).
+    read_only: ClassVar[bool] = True
 
     # ------------------------------------------------------------------
     # Metadata (import-safe)

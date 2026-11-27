@@ -8,8 +8,9 @@ concrete engine module.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
+from ovid2.config.capabilities import Capability
 from ovid2.transforms.base import BaseTransform, DataFrame, TransformContext
 
 
@@ -57,6 +58,9 @@ class RenameColumnsTransform(BaseTransform):
 
 class SelectColumnsTransform(BaseTransform):
     """Project down to an explicit, ordered list of columns."""
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset({Capability.FN_COL})
 
     category = "reshape"
 
@@ -137,6 +141,9 @@ class DropColumnsTransform(BaseTransform):
 class CastTransform(BaseTransform):
     """Cast columns to target types via a ``{column: type}`` map."""
 
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset({Capability.FN_COL})
+
     category = "formatting"
 
     @property
@@ -184,6 +191,9 @@ class PadTransform(BaseTransform):
     Left-pad is the default (zero-padded ids). Set ``side: right`` for
     right-padding.
     """
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset({Capability.FN_EXPR})
 
     category = "formatting"
 
@@ -234,6 +244,11 @@ class PadTransform(BaseTransform):
 class CoalesceColumnsTransform(BaseTransform):
     """First-non-null across a list of columns into a target column."""
 
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset(
+        {Capability.FN_COALESCE, Capability.FN_COL}
+    )
+
     category = "correction"
 
     @property
@@ -275,6 +290,15 @@ class CoalesceColumnsTransform(BaseTransform):
 
 class DefaultValueTransform(BaseTransform):
     """Fill nulls in a column with a literal default."""
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.FN_COALESCE,
+            Capability.FN_COL,
+            Capability.FN_LIT,
+        }
+    )
 
     category = "correction"
 

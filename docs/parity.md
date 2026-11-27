@@ -53,5 +53,11 @@ framework (`src/ovid2/legacy/*`, the migrators, `gen_reference.py`) and then reg
 - demo `procedures`: the custom fix script is missing, so legacy writes `FAILED_fixed_procedures.csv`.
 - beta / chi2 `obs_gen`: the legacy formatter is empty, so neither side produces output.
 - mu: `loinc_mover_fix` leaves an empty `fixed_lab_result_cm.csv` when no input table exists.
+- acme `external_meds`: the formatter aliases `"EXT_PAT_END_DATE "` (trailing space) and the
+  mapper selects `EXT_PAT_END_DATE`, so mapping fails on every engine. Legacy's
+  `mapped_external_meds.csv` is stale (2026-09-17). It needs a fix in the legacy partner
+  script, then re-vendoring and regeneration — never in the generated port. (acme
+  `procedures` had the same kind of bug — `RAW_PX_TYPE` read `vocabulary_id` after the
+  concept frame renamed it — and was fixed that way on 2026-11-25.)
 - Partner formatters that reference columns absent from a given batch fail on both sides
   (for example, kappa 20261014 `diagnosis`).

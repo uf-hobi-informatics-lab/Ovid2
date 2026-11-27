@@ -43,6 +43,12 @@ import { mountCheckPanel } from "/static/display/checks/panel.js";
 // detail region. Kept at module scope so a smooth in-place swap can tear
 // the old reader down (``.close()``) before booting the new one.
 let terminalHandle = null;
+// The per-table / per-check split panel for the same run (closed with the
+// terminal on an in-place swap so its clock loop never outlives the run).
+let panelHandle = null;
+
+//: Job statuses after which nothing in the run is executing any more.
+const TERMINAL_JOB = new Set(["done", "failed", "cancelled"]);
 
 function bootTerminal() {
   const pane = document.querySelector(".terminal-pane");
@@ -55,6 +61,7 @@ function bootTerminal() {
   const panel = document.getElementById("check-summary")
     ? mountCheckPanel({})
     : mountTablePanel({});
+  panelHandle = panel;
   terminalHandle = mountTerminal(pane, {
     d3: window.d3,
     onEvents(events) {
@@ -216,6 +223,14 @@ function navigateRun(url, opts) {
         }
       }
       terminalHandle = null;
+      if (panelHandle && typeof panelHandle.close === "function") {
+        try {
+          panelHandle.close();
+        } catch (_e) {
+          /* ignore */
+        }
+      }
+      panelHandle = null;
       region.replaceChildren(fresh);
       if (doc.title) document.title = doc.title;
       markSelected(runId || fresh.getAttribute("data-instance-id"));
@@ -350,6 +365,25 @@ function syncVisibleStatus() {
     }
   }
   pane.setAttribute("data-status", status);
+  const endedAtMs = parseInt(marker.getAttribute("data-ended-at-ms") || "0", 10) || null;
+  // Let the console follow the server status too (■ Stop while queued /
+  // running, ▶ Play once terminal) — the server is authoritative. A
+  // terminal status stops every clock on the page (total, current table,
+  // per-table list) even when the run log never recorded its end.
+  if (terminalHandle && typeof terminalHandle.syncServerStatus === "function") {
+    try {
+      terminalHandle.syncServerStatus(status, endedAtMs);
+    } catch (_e) {
+      /* never let the status sync break the page */
+    }
+  }
+  if (TERMINAL_JOB.has(status) && panelHandle && typeof panelHandle.setRunEnded === "function") {
+    try {
+      panelHandle.setRunEnded(endedAtMs);
+    } catch (_e) {
+      /* ignore */
+    }
+  }
   const note = pane.querySelector(".term-queue-note");
   if (note) {
     if (status === "queued") {

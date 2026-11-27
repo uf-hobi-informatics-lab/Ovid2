@@ -13,13 +13,15 @@ class CheckPipelineBindingsArgs(BaseModel):
     """Arguments for :data:`TOOL_NAME`."""
 
     pipeline: str = Field(..., description="Pipeline package name.")
-    engine: str | None = Field(None, description="Engine to check family compatibility against.")
+    engine: str | None = Field(
+        None, description="Accepted for compatibility; every engine runs every package."
+    )
 
 
 TOOL_NAME = "check_pipeline_bindings"
 TOOL_DESCRIPTION = (
     "Check every name a pipeline package depends on against the rest of Ovid2 — "
-    "registered CDM, identity constants, engine family, secrets.d salt keys, "
+    "registered CDM, identity constants, secrets.d salt keys, "
     "dictionaries.py names, fixer names / reference tables / list files, formatter "
     "class paths and vocabularies, transform assignments. Returns "
     "[{id, category, label, value, must_match, status, detail, where}]. Read-only."

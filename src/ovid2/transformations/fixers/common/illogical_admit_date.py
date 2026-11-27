@@ -61,8 +61,9 @@ Deployment:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
+from ovid2.config.capabilities import Capability
 from ovid2.core.engines.dsl import col, datediff, to_date, when
 from ovid2.transformations.fixers.base import BaseFixer
 
@@ -80,6 +81,16 @@ class IllogicalAdmitDateFixer(BaseFixer):
 
     All operations are lazy Spark DataFrame transformations.
     """
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.FN_COL,
+            Capability.FN_DATEDIFF,
+            Capability.FN_TO_DATE,
+            Capability.FN_WHEN,
+        }
+    )
 
     @property
     def name(self) -> str:

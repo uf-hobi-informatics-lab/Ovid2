@@ -31,6 +31,11 @@ its original copyright below. The full license text follows.
   IBM Plex Mono   Copyright 2017 IBM Corp. (https://github.com/IBM/plex)
   IBM Plex Sans Condensed
                   Copyright 2019 IBM Corp. (https://github.com/IBM/plex)
+  Big Shoulders Stencil
+                  Copyright 2019 The Big Shoulders Project Authors
+                  (https://github.com/xyztype/Big-Shoulders-Stencil)
+  Cinzel          Copyright 2020 The Cinzel Project Authors
+                  (https://github.com/NDISCOVER/Cinzel)
 
 Sources are the Google Fonts distribution (fonts.google.com), packaged
 as Latin-subset woff2 by the Fontsource project (fontsource.org) for the

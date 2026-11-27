@@ -15,7 +15,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from ovid2.formatters.adapters import ADAPTERS, AdapterContext
+from ovid2.algorithms.adapters import Invocation
+from ovid2.algorithms.protocol import AlgorithmKind
+from ovid2.algorithms.registry import UnknownAlgorithm
+from ovid2.algorithms.registry import registry as algorithms
+from ovid2.formatters.adapters import AdapterContext
 from ovid2.formatters.adapters._sources import is_empty_source
 from ovid2.formatters.base import BaseFormatter
 from ovid2.formatters.spec import FormatterSpec, find_and_load
@@ -75,13 +79,14 @@ def execute_spec(spec: FormatterSpec, ctx: AdapterContext) -> DataFrame:
     if not spec.enabled:
         raise FormatterSpecError(f"Spec '{spec.formatter}' is disabled (enabled: false).")
 
-    adapter_cls = ADAPTERS.get(spec.adapter)
-    if adapter_cls is None:
+    try:
+        adapter = algorithms.get(AlgorithmKind.FORMATTER, spec.adapter)
+    except UnknownAlgorithm:
         raise FormatterSpecError(
-            f"Unknown adapter '{spec.adapter}'. Valid: {', '.join(sorted(ADAPTERS))}."
-        )
-    adapter = adapter_cls()
-    df = adapter.resolve(spec, ctx)
+            f"Unknown adapter '{spec.adapter}'. "
+            f"Valid: {', '.join(algorithms.names(AlgorithmKind.FORMATTER))}."
+        ) from None
+    df: DataFrame = adapter.apply(None, Invocation(ctx, {"spec": spec}))
 
     # Empty-source shortcut. When every source backing the adapter was
     # optional and absent (``read_source`` -> ``_empty_df``), the resolved

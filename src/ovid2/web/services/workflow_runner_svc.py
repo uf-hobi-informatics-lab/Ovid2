@@ -73,6 +73,7 @@ from ovid2.web.models import (
     WorkflowWrite,
 )
 from ovid2.web.services import jobs_svc, pipelines_svc, workflows_svc
+from ovid2.workspaces import DEFAULT_WORKSPACE, active_workspace, use_workspace
 
 logger = logging.getLogger(__name__)
 
@@ -139,8 +140,12 @@ def _now_iso() -> str:
 
 
 def _run_row(run_id: str) -> dict[str, Any] | None:
+    """Return one run of the active workspace (another workspace's run → ``None``)."""
     with web_db.connect() as conn:
-        row = conn.execute("SELECT * FROM web_workflow_runs WHERE run_id = ?", (run_id,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM web_workflow_runs WHERE run_id = ? AND workspace_id = ?",
+            (run_id, active_workspace()),
+        ).fetchone()
     return dict(row) if row is not None else None
 
 
@@ -340,22 +345,18 @@ def list_runs(
     web_db.ensure_schema()
     limit = max(1, min(int(limit), 500))
     offset = max(0, int(offset))
+    where = "workspace_id = ?" + (" AND workflow = ?" if workflow else "")
+    params: tuple[Any, ...] = (active_workspace(), workflow) if workflow else (active_workspace(),)
     with web_db.connect() as conn:
-        if workflow:
-            total = conn.execute(
-                "SELECT COUNT(*) FROM web_workflow_runs WHERE workflow = ?", (workflow,)
-            ).fetchone()[0]
-            rows = conn.execute(
-                "SELECT * FROM web_workflow_runs WHERE workflow = ? "
-                "ORDER BY created_at DESC LIMIT ? OFFSET ?",
-                (workflow, limit, offset),
-            ).fetchall()
-        else:
-            total = conn.execute("SELECT COUNT(*) FROM web_workflow_runs").fetchone()[0]
-            rows = conn.execute(
-                "SELECT * FROM web_workflow_runs ORDER BY created_at DESC LIMIT ? OFFSET ?",
-                (limit, offset),
-            ).fetchall()
+        total = conn.execute(
+            "SELECT COUNT(*) FROM web_workflow_runs WHERE " + where, params
+        ).fetchone()[0]
+        rows = conn.execute(
+            "SELECT * FROM web_workflow_runs WHERE "
+            + where
+            + " ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (*params, limit, offset),
+        ).fetchall()
     return WorkflowRunListResponse(
         total=int(total), runs=[_to_detail(dict(r), with_definition=False) for r in rows]
     )
@@ -367,10 +368,9 @@ def active_run(workflow: str) -> str | None:
     placeholders = ",".join("?" for _ in ACTIVE_RUN_STATUSES)
     with web_db.connect() as conn:
         row = conn.execute(
-            "SELECT run_id FROM web_workflow_runs WHERE workflow = ? AND status IN ("
-            + placeholders
-            + ") ORDER BY created_at DESC LIMIT 1",
-            (workflow, *sorted(ACTIVE_RUN_STATUSES)),
+            "SELECT run_id FROM web_workflow_runs WHERE workflow = ? AND workspace_id = ? "
+            "AND status IN (" + placeholders + ") ORDER BY created_at DESC LIMIT 1",
+            (workflow, active_workspace(), *sorted(ACTIVE_RUN_STATUSES)),
         ).fetchone()
     return str(row["run_id"]) if row is not None else None
 
@@ -424,8 +424,8 @@ def start_run(
     with web_db.connect() as conn:
         conn.execute(
             "INSERT INTO web_workflow_runs (run_id, workflow, trigger, batch_id, root_input, "
-            "status, cancel_requested, created_at, created_by, started_at, definition_json) "
-            "VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)",
+            "status, cancel_requested, created_at, created_by, started_at, definition_json, "
+            "workspace_id) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)",
             (
                 run_id,
                 workflow.name,
@@ -437,6 +437,7 @@ def start_run(
                 actor,
                 now,
                 definition.model_dump_json(by_alias=True),
+                active_workspace(),
             ),
         )
         for step in definition.steps:
@@ -518,14 +519,19 @@ def advance_all() -> None:
     placeholders = ",".join("?" for _ in ACTIVE_RUN_STATUSES)
     with web_db.connect() as conn:
         rows = conn.execute(
-            "SELECT run_id FROM web_workflow_runs WHERE status IN (" + placeholders + ")",
+            "SELECT run_id, workspace_id FROM web_workflow_runs WHERE status IN ("
+            + placeholders
+            + ")",
             tuple(sorted(ACTIVE_RUN_STATUSES)),
         ).fetchall()
     for row in rows:
-        try:
-            advance_run(str(row["run_id"]))
-        except Exception:
-            logger.exception("Advancing workflow run %s failed.", row["run_id"])
+        # Each run advances inside its own workspace: its steps resolve
+        # that workspace's pipelines / addresses and submit jobs there.
+        with use_workspace(str(row["workspace_id"] or DEFAULT_WORKSPACE)):
+            try:
+                advance_run(str(row["run_id"]))
+            except Exception:
+                logger.exception("Advancing workflow run %s failed.", row["run_id"])
 
 
 def advance_run(run_id: str) -> None:

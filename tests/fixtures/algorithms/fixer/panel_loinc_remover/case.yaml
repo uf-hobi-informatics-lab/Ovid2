@@ -1,0 +1,42 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  src1: ''
+  src2: CODE,TYPE
+spec:
+  context_frames:
+    panel_loinc_df: panels
+tables:
+  input:
+    columns:
+    - CODE
+    - TYPE
+    rows:
+    - - 1-1
+      - LC
+    - - 2-2
+      - lc
+    - - 1-1
+      - SM
+    - - 3-3
+      - null
+  panels:
+    columns:
+    - LOINC_NUM
+    - PANEL_TYPE
+    rows:
+    - - 1-1
+      - panel
+    - - 2-2
+      - Component
+note: drops LOINC (LC, case-insensitive) rows whose code is a panel
+expected:
+  columns:
+  - CODE
+  - TYPE
+  rows:
+  - - 2-2
+    - lc
+  - - 1-1
+    - SM
+  - - 3-3
+    - null

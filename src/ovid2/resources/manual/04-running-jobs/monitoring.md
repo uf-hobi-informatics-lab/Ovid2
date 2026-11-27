@@ -1,6 +1,6 @@
 ---
 title: Monitoring & control
-summary: Follow runs live in the browser or terminal, read logs and events, cancel and rerun.
+summary: Follow runs live in the browser or terminal, read logs and events, pause, resume, cancel and rerun.
 audience: [user, admin]
 ---
 
@@ -110,6 +110,23 @@ jq -c 'select(.kind=="table.failed") | {instance_id, table, error}' \
 
 A queued job is cancelled immediately. A running job is sent SIGTERM, and
 the worker removes its containers and cluster.
+
+## Pause and resume
+
+A running ETL, copy, move, legacy-port or health run can be **paused at the
+next table boundary**. The table that is running finishes first (its write
+is already executing); the run then holds, its clocks freeze and its status
+reads *paused*. Health and DQ runs hold between checks. One-shot jobs
+(exports) cannot pause.
+
+- **Web**: **‖** on the pipeline's card or run console in the
+  [Atlas](../03-web-panel/navigator.md#running-pausing-cancelling); **▶**
+  resumes with the next table.
+- **API**: `POST /api/v1/jobs/{job_id}/pause` and `…/resume`.
+- **MCP**: `pause_job` / `resume_job` (proposals for the assistant).
+
+Cancel still works while a run is paused. Pausing and resuming need the
+submit-jobs capability.
 
 ## Rerun
 

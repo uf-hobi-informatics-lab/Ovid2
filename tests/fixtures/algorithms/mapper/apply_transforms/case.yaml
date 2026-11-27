@@ -1,0 +1,22 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  steps:
+  - op: trim
+    columns:
+    - s
+  - op: to_upper
+    columns:
+    - s
+tables:
+  input:
+    columns:
+    - s
+    rows:
+    - - '  m '
+    - - null
+expected:
+  columns:
+  - s
+  rows:
+  - - M
+  - - null

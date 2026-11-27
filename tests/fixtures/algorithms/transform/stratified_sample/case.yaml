@@ -1,0 +1,27 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  key: g
+  fractions:
+    a: 1.0
+    b: 0.0
+tables:
+  input:
+    columns:
+    - g
+    - k
+    rows:
+    - - a
+      - '1'
+    - - a
+      - '2'
+    - - b
+      - '3'
+expected:
+  columns:
+  - g
+  - k
+  rows:
+  - - a
+    - '1'
+  - - a
+    - '2'

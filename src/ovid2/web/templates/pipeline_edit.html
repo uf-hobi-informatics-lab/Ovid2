@@ -140,8 +140,8 @@
         {% endif %}
       </select>
     </div>
-    <div class="form-row" id="workers-row" data-show-kind-flag="uses_engine_overrides" data-hide-engine-family="snowpark">
-      <label for="workers">Workers {{ help.tip("Spark: worker containers in the run's cluster. DuckDB: tables run concurrently in one host-sized container.") }}</label>
+    <div class="form-row" id="workers-row" data-show-kind-flag="uses_engine_overrides" data-show-engine-family="spark">
+      <label for="workers">Workers {{ help.tip("Spark worker containers in the run's cluster. Tables run one at a time on every engine; DuckDB and Snowpark have no worker count.") }}</label>
       <input type="number" id="workers" name="workers" min="1" max="200" value="{{ pipeline_config.workers }}">
     </div>
     <div class="form-row" id="sf-row" data-show-kind-flag="uses_engine_overrides" data-show-engine-family="snowpark">

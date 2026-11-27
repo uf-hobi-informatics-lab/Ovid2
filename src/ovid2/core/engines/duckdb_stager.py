@@ -360,6 +360,249 @@ def read_csv_relation(
     return rel
 
 
+def native_text_enabled() -> bool:
+    """Native SQL fast paths for Spark / legacy CSV text (``$OVID2_DUCKDB_NATIVE_TEXT``, default on).
+
+    ``0`` / ``false`` routes every record and cell through the exact
+    Python models again — a rollback switch; output is identical either way.
+    """
+    return os.environ.get("OVID2_DUCKDB_NATIVE_TEXT", "1").lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    )
+
+
+def _re_char(ch: str) -> str:
+    """``ch`` as an RE2 literal usable inside and outside a character class."""
+    return f"\\x{{{ord(ch):x}}}"
+
+
+def spark_csv_fields_sql(
+    line: str,
+    *,
+    width: int,
+    delimiter: str,
+    quote: str,
+    escape: str,
+    parser_sql: str,
+    trims: bool = False,
+) -> str:
+    """SQL splitting one physical record into ``width`` fields exactly like Spark.
+
+    Most records take a native, parallel path; only records the native path
+    cannot prove equivalent go to ``parser_sql`` (the univocity port,
+    :func:`ovid2.core.engines.csv_text.parse_line`, as a Python UDF):
+
+    * no quote char → ``string_split`` on the delimiter (univocity yields
+      exactly that split);
+    * *simply quoted* — every field is either ``<q>…<q>`` whose body holds
+      no quote / escape / ``\\0`` / ``\\1``, or an unquoted run free of the
+      delimiter, quote, escape, ``\\0`` and ``\\1`` → the quotes are
+      dropped and the delimiters inside quoted bodies are protected with
+      ``\\1`` while splitting. univocity's fast quoted-string path returns
+      exactly the body for such a field (pinned by the oracle fuzz test
+      ``tests/unit/core/engines/test_spark_csv_fast_path.py``);
+    * anything else (escapes, doubled quotes, text after a closing quote,
+      NUL — univocity's sentinel) → ``parser_sql``.
+
+    The caller maps empty strings to NULL (Spark reads ``""`` and empty
+    fields as NULL).
+
+    Args:
+        line: SQL expression of the record text (no terminator).
+        width: Number of output fields (short → NULL-padded, long → truncated).
+        delimiter: Field delimiter (one char).
+        quote: Quote char (one char).
+        escape: Quote-escape char (one char).
+        parser_sql: SQL calling the exact parser on ``line`` (``VARCHAR[]``).
+        trims: ``ignoreLeading/TrailingWhiteSpace`` set — every record that
+            contains the quote char goes to ``parser_sql``.
+
+    Returns:
+        A ``VARCHAR[]`` SQL expression.
+    """
+    q, d = sql_string(quote), sql_string(delimiter)
+    padded = f"list_resize(string_split({line}, {d}), {width})"
+    if trims or not native_text_enabled():
+        # Whitespace trimming interacts with quoting and the record start:
+        # every record goes through the univocity port.
+        return parser_sql
+    reserved = {quote, escape, "\x00", "\x01"}
+    if delimiter in reserved or len(quote) != 1 or len(delimiter) != 1 or len(escape) != 1:
+        return f"CASE WHEN contains({line}, {q}) THEN {parser_sql} ELSE {padded} END"
+    unquoted_cls = "".join(_re_char(c) for c in sorted(reserved | {delimiter}))
+    body_cls = "".join(_re_char(c) for c in sorted(reserved))
+    rq, rd = _re_char(quote), _re_char(delimiter)
+    field = f"(?:{rq}[^{body_cls}]*{rq}|[^{unquoted_cls}]*)"
+    pattern = sql_string(f"{field}(?:{rd}{field})*")
+    # Split on the quote: even-indexed parts (1-based odd) are outside
+    # quotes, odd-indexed parts are quoted bodies — protect their
+    # delimiters with \1, glue, split on the delimiter, restore.
+    simple = (
+        "list_resize(list_transform(string_split(array_to_string(list_transform("
+        f"string_split({line}, {q}), (__p, __i) -> CASE WHEN __i % 2 = 0 "
+        f"THEN replace(__p, {d}, chr(1)) ELSE __p END), ''), {d}), "
+        f"__v -> replace(__v, chr(1), {d})), {width})"
+    )
+    return (
+        f"CASE WHEN NOT contains({line}, {q}) THEN {padded} "
+        f"WHEN regexp_full_match({line}, {pattern}) THEN {simple} "
+        f"ELSE {parser_sql} END"
+    )
+
+
+def read_spark_default_csv(
+    engine: Any,
+    path: Any,
+    *,
+    delimiter: str,
+    quote: str,
+    escape: str,
+    header: bool,
+    ignore_leading: bool = False,
+    ignore_trailing: bool = False,
+) -> DuckFrame:
+    """Read CSV exactly like Spark's CSV reader (``multiLine=false``, any whitespace options).
+
+    DuckDB reads raw physical records (a delimiter that never occurs,
+    ``quote=''``) with its parallel scanner, so record splitting matches
+    Spark's line reader. A record without the quote char is split on the
+    delimiter in SQL (univocity yields exactly that split, empty → NULL);
+    a record containing the quote char goes through the univocity port
+    (:func:`ovid2.core.engines.csv_text.parse_line`) as a Python UDF.
+    Blank records (only chars ``<= U+0020``) are dropped, as Spark does;
+    with ``header`` each file's first non-blank record is skipped.
+    """
+    from ovid2.core.engines.csv_text import is_blank_line, parse_fields, parse_line
+    from ovid2.legacy.csv_roundtrip import safe_header
+
+    files = _resolve_files(path)
+    if not files:
+        raise FileNotFoundError(f"[PATH_NOT_FOUND] Path does not exist: {path}")
+    first: list[str | None] | None = None
+    skips: list[int] = []
+    for f in files:
+        skip = 0
+        with open(f, encoding="utf-8", errors="replace", newline="") as fh:
+            for rec in _iter_physical_lines(fh):
+                skip += 1
+                if not is_blank_line(rec):
+                    if first is None:
+                        first = parse_fields(
+                            rec,
+                            escape=escape,
+                            delimiter=delimiter,
+                            quote=quote,
+                            ignore_leading=ignore_leading,
+                            ignore_trailing=ignore_trailing,
+                        )
+                    break
+        skips.append(skip if header else 0)
+    if header:
+        names = safe_header([v or "" for v in (first or ["_c0"])])
+    else:
+        names = [f"_c{i}" for i in range(max(1, len(first or [None])))]
+    width = len(names)
+    parser_name = (
+        f"__ovid2_csvline_{width}_{ord(escape)}_{ord(quote)}_{ord(delimiter)}"
+        f"_{int(ignore_leading)}{int(ignore_trailing)}"
+    )
+    registered: set[str] = engine.__dict__.setdefault("_csv_line_parsers", set())
+    if parser_name not in registered:
+
+        def _parse(rec: str | None) -> list[str | None] | None:
+            if rec is None:
+                return None
+            return parse_line(
+                rec,
+                width=width,
+                escape=escape,
+                delimiter=delimiter,
+                quote=quote,
+                ignore_leading=ignore_leading,
+                ignore_trailing=ignore_trailing,
+            )
+
+        engine._root_connection().create_function(
+            parser_name, _parse, ["VARCHAR"], "VARCHAR[]", null_handling="special"
+        )
+        registered.add(parser_name)
+    never = "chr(30) || chr(31) || chr(29) || chr(28)"
+    ws = " || ".join(f"chr({i})" for i in range(33))
+    fields = spark_csv_fields_sql(
+        "l",
+        width=width,
+        delimiter=delimiter,
+        quote=quote,
+        escape=escape,
+        parser_sql=f"{parser_name}(l)",
+        trims=ignore_leading or ignore_trailing,
+    )
+    select = ", ".join(f"NULLIF(__f[{i + 1}], '') AS {ident(n)}" for i, n in enumerate(names))
+    scans = " UNION ALL ".join(
+        f"SELECT l FROM read_csv({sql_string(str(f))}, delim = {never}, quote = '', "
+        f"escape = '', header = false, skip = {skip}, columns = {{'l': 'VARCHAR'}}, "
+        f"auto_detect = false, strict_mode = false, null_padding = false, "
+        f"max_line_size = {_max_line_size()})"
+        for f, skip in zip(files, skips, strict=True)
+    )
+    body = (
+        f"SELECT {select} FROM (SELECT {fields} AS __f FROM ({scans}) "
+        f"WHERE l IS NOT NULL AND ltrim(l, {ws}) <> '')"
+    )
+    rel = engine.connection().sql(body)
+    # The staging cache is keyed on the plan SQL; fold each file's identity
+    # (inode, size, mtime) into the name so a file rewritten in place (the
+    # legacy fix stage rewrites ``fixed_<t>.csv`` between fixes) is re-read,
+    # as Spark re-reads it.
+    stamp = ",".join(_file_identity(f) for f in files)
+    frame = engine.wrap(rel.filter(f"'{stamp}' = '{stamp}'"))
+    return engine.stage_source(frame, name=f"spark_csv:{path}")  # type: ignore[no-any-return]
+
+
+def _files_stamp(source: Any) -> str:
+    """Identity of local source files (cache key part); ``""`` for remote URLs."""
+    if isinstance(source, str) and re.match(r"^[a-z][a-z0-9+]*://", source):
+        return ""
+    try:
+        return ",".join(_file_identity(f) for f in _resolve_files(source))
+    except OSError:
+        return ""
+
+
+def _file_identity(path: str) -> str:
+    st = os.stat(path)
+    return f"{st.st_ino}:{st.st_size}:{st.st_mtime_ns}"
+
+
+def _iter_physical_lines(fh: Any) -> Any:
+    """Yield records split on ``\n`` / ``\r\n`` / ``\r`` (Spark's line reader)."""
+    pending = ""
+    while True:
+        chunk = fh.read(1 << 16)
+        if not chunk:
+            break
+        text = pending + chunk
+        start = 0
+        i = 0
+        n = len(text)
+        while i < n:
+            ch = text[i]
+            if ch == "\n" or ch == "\r":
+                if ch == "\r" and i + 1 == n:
+                    break
+                yield text[start:i]
+                if ch == "\r" and text[i + 1] == "\n":
+                    i += 1
+                start = i + 1
+            i += 1
+        pending = text[start:]
+    if pending:
+        yield pending.rstrip("\r")
+
+
 def _max_line_size() -> int:
     """Longest CSV record accepted (bytes); ``$OVID2_DUCKDB_MAX_LINE_SIZE``.
 
@@ -430,6 +673,9 @@ def read_csv_frame(
             parallel=parallel,
             strict=strict,
         )
+        stamp = _files_stamp(source)
+        if stamp:
+            rel = rel.filter(f"'{stamp}' = '{stamp}'")
         return engine.stage_source(engine.wrap(rel), name=name)
 
     def _frame_any_scanner(source: Any) -> Any:
@@ -613,17 +859,39 @@ def _is_safe_text_type(duck_type: str, delimiter: str) -> bool:
     return t in _SAFE_TEXT_TYPES or t.startswith(("DECIMAL", "TIMESTAMP"))
 
 
+def _register_text_macros(conn: Any) -> None:
+    """Register the univocity string-cell macros (Spark CSV writer rules).
+
+    ``__ovid2_ws()`` is every char ``<= U+0020`` (univocity's whitespace);
+    ``__ovid2_csv_cell(v, delim, line_start)`` renders one non-NULL string
+    cell exactly like Spark's writer (``quote=""`` → NUL, ``escape="\\"``,
+    leading / trailing whitespace trimmed, ``""`` for an empty value, the
+    comment char ``#`` NUL-quoted at the start of a line). Mirrors
+    :func:`ovid2.core.engines.csv_text.write_cell`.
+    """
+    ws = " || ".join(f"chr({i})" for i in range(33))
+    conn.execute(f"CREATE OR REPLACE TEMP MACRO __ovid2_ws() AS ({ws})")
+    conn.execute(
+        "CREATE OR REPLACE TEMP MACRO __ovid2_csv_cell(v, d, line_start) AS ("
+        "CASE WHEN ltrim(v, __ovid2_ws()) = '' THEN '\"\"' "
+        "WHEN (line_start AND starts_with(v, '#')) "
+        "OR list_bool_or(list_transform([chr(0), d, chr(10), chr(13)], "
+        "c -> contains(ltrim(v, __ovid2_ws()), c))) "
+        "THEN chr(0) || rtrim(replace(replace(ltrim(v, __ovid2_ws()), '\\', '\\\\'), "
+        "chr(0), '\\' || chr(0)), __ovid2_ws()) || chr(0) "
+        "ELSE rtrim(ltrim(v, __ovid2_ws()), __ovid2_ws()) END)"
+    )
+
+
 def _text_projection(frame: DuckFrame, delimiter: str) -> str:
     """Project every column to Spark's CSV text rendering.
 
-    NULL stays NULL (``COPY … NULL ''`` writes it as empty). Only
-    columns whose text can contain the delimiter / a line break / be
-    ``''`` (strings and unknown types) get the Univocity wrapping; typed
-    columns are cast straight to text. The wrapping is a plain ``CASE``
-    (no per-cell ``list_transform``), so the row renderer stays cheap.
+    NULL stays NULL (``COPY … NULL ''`` writes it as empty). String (and
+    unknown-typed) columns go through :func:`~ovid2.core.engines.csv_text.write_cell_sql`
+    — Spark's univocity writer rules, byte for byte. Typed columns whose
+    rendering can never need quoting are cast straight to text.
     """
     items: list[str] = []
-    delim = sql_string(delimiter)
     for idx, (name, duck_type) in enumerate(frame.dtypes, start=1):
         ref = f"#{idx}"
         t = duck_type.upper()
@@ -641,15 +909,12 @@ def _text_projection(frame: DuckFrame, delimiter: str) -> str:
         if _is_safe_text_type(t, delimiter):
             items.append(f"{text} AS {ident(name)}")
             continue
-        # Univocity (quote disabled -> '\0') wraps a value containing the
-        # delimiter or a line break in NUL characters; Spark's "empty
-        # value" for a non-null '' is '""'.
-        v = text if t.startswith("VARCHAR") else f"({text})"
+        # ``write_cell_sql`` is ``__ovid2_csv_cell`` plus a one-regex fast
+        # path for values that need no rewriting (pinned to ``write_cell``).
+        from ovid2.core.engines.csv_text import write_cell_sql
+
         items.append(
-            f"CASE WHEN {v} = '' THEN '\"\"' "
-            f"WHEN contains({v}, {delim}) OR contains({v}, chr(10)) OR contains({v}, chr(13)) "
-            f"THEN chr(0) || replace({v}, chr(0), '\\' || chr(0)) || chr(0) "
-            f"ELSE {v} END AS {ident(name)}"
+            f"{write_cell_sql(text, delimiter=delimiter, line_start=idx == 1)} AS {ident(name)}"
         )
     return ", ".join(items)
 
@@ -683,6 +948,7 @@ def write_csv_file(
     """
     conn = engine.connection()
     _shortest_double_text(conn)
+    _register_text_macros(conn)
     projection = _text_projection(frame, delimiter)
     text_rel = frame.relation.project(projection) if frame.columns else frame.relation
     Path(target).parent.mkdir(parents=True, exist_ok=True)
@@ -827,3 +1093,132 @@ def local_scratch_dir(engine: DuckDBEngine) -> str:
     path = os.path.join(base, f"stage-{uuid.uuid4().hex[:10]}")
     os.makedirs(path, exist_ok=True)
     return path
+
+
+# ---------------------------------------------------------------------------
+# Legacy stage-boundary text files (``ovid2.legacy.text_io`` fast paths)
+# ---------------------------------------------------------------------------
+
+#: DuckDB types whose ``CAST(… AS VARCHAR)`` equals
+#: ``_duck_udf.python_value_text`` of the Python value DuckDB hands out
+#: (``str``, ``int``, ``bool`` → ``true``/``false``, ``Decimal`` →
+#: ``str(Decimal)``, ``date`` → ISO). Floats, timestamps (``str(datetime)``
+#: drops a zero fraction) and nested types keep the Python renderer.
+_LEGACY_TEXT_CAST_TYPES: tuple[str, ...] = (
+    "VARCHAR",
+    "TINYINT",
+    "SMALLINT",
+    "INTEGER",
+    "BIGINT",
+    "HUGEINT",
+    "UTINYINT",
+    "USMALLINT",
+    "UINTEGER",
+    "UBIGINT",
+    "BOOLEAN",
+    "DATE",
+    '"NULL"',
+    "NULL",
+)
+
+
+def legacy_text_castable(duck_type: str) -> bool:
+    """Return whether ``duck_type`` renders natively like ``python_value_text``."""
+    t = duck_type.upper()
+    return t in _LEGACY_TEXT_CAST_TYPES or t.startswith("DECIMAL")
+
+
+def _write_body_with_header(
+    engine: DuckDBEngine, relation: Any, target: str, header_line: str | None
+) -> None:
+    """``COPY`` one VARCHAR projection verbatim (tab joined, no quoting) to ``target``.
+
+    The header (``header_line`` incl. terminator) is written by Python so
+    arbitrary legacy column names (empty, quoted, duplicated) stay exact;
+    the body is DuckDB's parallel ``COPY`` with quoting / escaping off and
+    NULL as the empty field. Rows go out in DuckDB's natural order —
+    legacy wrote Spark part files, so row order was never part of parity.
+    """
+    conn = engine.connection()
+    Path(target).parent.mkdir(parents=True, exist_ok=True)
+    body = f"{target}.ovid2-body-{uuid.uuid4().hex[:8]}"
+    view = f"__ovid2_lt_{uuid.uuid4().hex[:8]}"
+    relation.create_view(view, replace=True)
+    partial = f"{target}.partial"
+    try:
+        conn.execute(
+            f"COPY (SELECT * FROM {ident(view)}) TO {sql_string(body)} "
+            "(FORMAT csv, HEADER false, DELIMITER '\t', QUOTE '', ESCAPE '', "
+            "NULL '', PRESERVE_ORDER false)"
+        )
+        with open(partial, "wb") as out:
+            if header_line is not None:
+                out.write(header_line.encode("utf-8"))
+                out.flush()
+            with open(body, "rb") as src:
+                _append_file(src, out)
+        os.replace(partial, target)
+    finally:
+        with contextlib.suppress(Exception):
+            conn.execute(f"DROP VIEW IF EXISTS {ident(view)}")
+        for leftover in (body, partial):
+            with contextlib.suppress(OSError):
+                os.unlink(leftover)
+
+
+def write_legacy_text(
+    engine: DuckDBEngine,
+    frame: DuckFrame,
+    target: str,
+    *,
+    raw: bool,
+    header: bool = True,
+    python_text: Any = None,
+) -> bool:
+    """Write ``frame`` as a legacy tab file natively; ``False`` = caller falls back.
+
+    ``raw``: cells already are file text (written verbatim). Otherwise each
+    cell is rendered with the Spark CSV writer rules
+    (:func:`ovid2.core.engines.csv_text.write_cell_sql`) over
+    ``python_value_text`` — native SQL for :func:`legacy_text_castable`
+    types, the exact Python converter (``python_text``, a DSL UDF) for the
+    rest. Byte-identical to ``ovid2.legacy.text_io._write`` (pinned by
+    ``tests/unit/legacy/test_text_io_native.py``).
+    """
+    from ovid2.core.engines.csv_text import write_cell_sql
+
+    columns = list(frame.columns)
+    if not columns or not native_text_enabled():
+        return False
+    dtypes = [t for _n, t in frame.dtypes]
+    rel = frame.relation
+    if raw:
+        # Verbatim ``str(v)``: equal to the VARCHAR cast for every castable
+        # type except BOOLEAN (``str(True)`` is ``True``).
+        if not all(legacy_text_castable(t) and t.upper() != "BOOLEAN" for t in dtypes):
+            return False
+    elif python_text is not None and not all(legacy_text_castable(t) for t in dtypes):
+        # Pre-render the Python-only columns to text (one UDF per such cell).
+        from ovid2.core.engines import dsl
+
+        positional = frame.toDF(*[f"_p{i}" for i in range(len(columns))])
+        positional = positional.select(
+            *[
+                dsl.col(f"_p{i}")
+                if legacy_text_castable(t)
+                else python_text(dsl.col(f"_p{i}")).alias(f"_p{i}")
+                for i, t in enumerate(dtypes)
+            ]
+        )
+        rel = positional.relation
+    elif not all(legacy_text_castable(t) for t in dtypes):
+        return False
+    items = []
+    for i in range(len(columns)):
+        cell = f"CAST(#{i + 1} AS VARCHAR)"
+        items.append(
+            f"{cell if raw else write_cell_sql(cell, line_start=i == 0)} AS {ident(f'_c{i}')}"
+        )
+    header_line = ("\t".join(columns) + "\n") if header else None
+    _write_body_with_header(engine, rel.project(", ".join(items)), target, header_line)
+    return True

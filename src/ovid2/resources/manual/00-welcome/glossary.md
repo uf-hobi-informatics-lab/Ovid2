@@ -40,7 +40,7 @@ CDM
 
 Column role
 : What an op does to columns — reads, writes, drops rows — declared beside
-  each transform, mapper op and fixer. The [navigator](#navigator) uses it
+  each transform, mapper op and fixer. The [navigator](#navigator-ovid-atlas) uses it
   to draw per-field lineage. → [Extending Ovid2](../09-developers/extending.md)
 
 Composite key
@@ -151,10 +151,12 @@ MCP
 : Model Context Protocol — the standard Agent Ovid uses to expose tools to
   AI clients. → [Agent Ovid (MCP)](../07-assistant/mcp.md)
 
-Navigator
-: The web page (**Operate → Navigator**) that shows every pipeline down to
-  each field and the ordered functions applied to it, with the YAML behind
-  each step. → [Pipeline navigator](../03-web-panel/navigator.md)
+Navigator (Ovid Atlas)
+: The web page (**Operate → Navigator**) that draws the whole workspace as
+  one board — every workflow and saved pipeline across storage, compute and
+  algorithms — where you run, pause, resume and edit pipelines, and trace
+  every field down to the ordered functions applied to it, with the YAML
+  behind each step. → [Atlas (navigator)](../03-web-panel/navigator.md)
 
 ## P–Z
 
@@ -162,7 +164,12 @@ Package trash
 : Where a deleted pipeline package goes:
   `$XDG_STATE_HOME/ovid2/trash/pipelines/<name>-<timestamp>/`, with the
   run configs deleted alongside it. Restore it with `mv`.
-  → [Pipeline navigator](../03-web-panel/navigator.md)
+  → [Atlas (navigator)](../03-web-panel/navigator.md)
+
+Pause
+: Holding a running job at the next table boundary (between checks for
+  health runs) until it is resumed or cancelled.
+  → [Pause and resume](../04-running-jobs/monitoring.md#pause-and-resume)
 
 Pipeline (package)
 : A Python package under `ovid2_pipelines.<name>` holding one source's

@@ -2,11 +2,13 @@
 
 Ovid2 runs a pipeline on one of four engines. Choose one per run with
 `ovid2 etl --engine <name>`, the **Engine** field on the web Submit page, or
-MCP `submit_run(engine=...)`. The default is `pyspark`.
+MCP `submit_run(engine=...)`. The default is `pyspark`. Every engine runs
+every pipeline on every storage driver — see
+[Engine universality](#engine-universality).
 
 | Engine | Family | Where compute runs | Best for |
 |---|---|---|---|
-| `pyspark` | spark | local `local[N]` or an isolated per-run Spark cluster | every pipeline; very large batches across many workers |
+| `pyspark` | spark | local `local[N]` or an isolated per-run Spark cluster | very large batches across many workers |
 | `databricks_spark` | spark | a Databricks cluster (Connect) | data already in Databricks |
 | `snowpark` | snowpark | inside Snowflake | Snowflake ↔ Snowflake routes |
 | `duckdb` | duckdb | in-process, vectorised, one host | batches that fit on one host (fastest start; no JVM / cluster) |
@@ -29,47 +31,30 @@ but it uses only one host.
 | `database_path` | — | in-memory |
 | `preserve_insertion_order` | — | `false` |
 | `stage_sources` | `OVID2_DUCKDB_STAGE_SOURCES` | `true` (parse each text source once into scratch Parquet) |
-| `table_concurrency` | `OVID2_DUCKDB_TABLE_CONCURRENCY` | the job's **Workers** (`--workers`), else `min(tables, CPUs)`; `1` = one table at a time |
 | — | `OVID2_DUCKDB_MAX_LINE_SIZE` | 8 MiB (longest CSV record) |
 | `scratch_codec` | `OVID2_DUCKDB_SCRATCH_CODEC` | `zstd` (scratch Parquet codec) |
-| — | `OVID2_DUCKDB_PRESTAGE` | off — stage every source before the parallel phase |
 
-**Container sizing and Workers.** DuckDB is one process, so a DuckDB
-run is always **one** driver container — there are no worker containers
-to add. That container is sized from the host, not from Spark's driver
-heap: `--memory` = 75% of host RAM (`OVID2_DUCKDB_MEMORY_FRACTION`),
-`--cpus` = every CPU (`OVID2_DUCKDB_CPUS`), and DuckDB's `memory_limit`
-is 85% of that. The job's **Workers** field is the number of tables run
-at once inside it (Spark: the number of worker containers). On a
-96-core / 958 GB host with Workers = 25 that is a 718 GB container,
-610 GB `memory_limit`, 96 threads, 25 concurrent tables. `ovid2 etl`
-prints the chosen shape (`duckdb sizing: …`).
+**Container sizing.** DuckDB is one process, so a DuckDB run is always
+**one** driver container — there are no worker containers and no
+*Workers* knob (the submit form hides it). The container is sized from the
+host, not from Spark's driver heap: `--memory` = 75% of host RAM
+(`OVID2_DUCKDB_MEMORY_FRACTION`), `--cpus` = every CPU
+(`OVID2_DUCKDB_CPUS`), and DuckDB's `memory_limit` is 85% of that. On a
+96-core / 958 GB host that is a 718 GB container, 610 GB `memory_limit`,
+96 threads. `ovid2 etl` prints the chosen shape (`duckdb sizing: …`).
 
-**Parallel tables.** A single DuckDB query rarely keeps every core
-busy: CSV text writes, `DISTINCT ON` and small tables use only part of
-the thread pool. `ovid2 etl` and the scheduler therefore run a DuckDB
-batch in two phases:
-
-1. **Reference tables first, one at a time, in CDM order.** These are
-   the CDM's `reference_tables` (PCORnet: `demographic`, `provider`,
-   `harvest`, `encounter`, `death`; OMOP: `location`, `care_site`,
-   `provider`, `person`, `visit_occurrence`). Later tables' cross-table
-   fixers (`patid_orphans`, `encounterid_orphans`, `replication`, …) read
-   them by name, so they must be finished before anything else starts.
-2. **Every other table at the same time, largest source first.** Each
-   table runs on its own cursor of the shared database. Tables start in
-   descending order of their formatter's source size (`table_sizes`, a
-   file `stat` / object listing, never a scan), so the biggest table
-   starts first instead of last. Up to `table_concurrency` tables run at
-   once; all of them share one thread pool and one `memory_limit`.
-
-Identical sources and checkpoints shared by several tables (the
-PCORnet→OMOP `common` fan-in) are still built once. The first table
-builds it and the others wait for it. Set `table_concurrency=1` to get
-the old sequential loop, e.g. when very wide tables spill too much.
-Spark, Snowpark and `legacy_ovid` pipelines always run sequentially in
-CDM order. On the 2 GB PCORnet→OMOP batch (18 tables, 96 cores) a run
-took 28 s sequentially and 18 s in parallel, with identical row sets.
+**One table at a time, on every engine (2026-11-24).** Every engine —
+`pyspark`, `databricks_spark`, `snowpark`, `duckdb` — runs a pipeline's
+tables sequentially in CDM order (reference tables first by construction).
+So do `copy`, `move`, legacy ports and the scheduler. The running table
+gets the engine's whole capacity: on DuckDB every thread and the whole
+`memory_limit`, on Spark the whole cluster, on Snowpark the whole
+warehouse. Engines therefore report the same order and the same per-table
+timings on the run page. `core/table_runner.TABLE_CONCURRENCY` is `1`,
+pinned by `tests/contract/test_tables_run_serially.py`. *Workers* sizes
+only a Spark cluster (`config.engines.engine_uses_workers`). Identical
+sources and checkpoints shared by several tables (the PCORnet→OMOP
+`common` fan-in) are still built once.
 
 **Performance notes.**
 
@@ -119,12 +104,12 @@ took 28 s sequentially and 18 s in parallel, with identical row sets.
 | snowflake | ✓ (Arrow) | ✓ CDM-typed table (`VARCHAR(N)`, `DATE`, `NUMBER`) |
 | postgres | ✓ (DuckDB `postgres` extension) | ✓ |
 | mssql, databricks | ✓ | ✓ (row batches; for moderate tables) |
-| access | ✓ | — (read-only, as on Spark) |
+| access | ✓ | — (read-only on every engine) |
 
 **Semantics.** DuckDB reproduces the Spark production SQL semantics:
 ANSI off, `timeParserPolicy=LEGACY` date parsing, lenient casts, and the
-disc CSV read/write contract. A given table produces the same rows on both
-engines, with two exceptions:
+disc CSV read/write contract. A given table produces the same rows on every
+engine, with two exceptions:
 
 - **Surrogate ids** from `stable_hash` (OMOP `*_id` columns built from a
   hash) differ between engines. Do not switch an existing route's engine
@@ -133,17 +118,168 @@ engines, with two exceptions:
   example which duplicate row a dedup keeps, or which of several
   equally-dated `Maps to` targets is chosen.
 
-**Pipelines that need Spark.** Pipelines whose custom formatters use
-Spark-only APIs declare `REQUIRES_FAMILY = "spark"` in
-`pipeline_settings.py` and are refused on DuckDB at plan time. A single
-formatter can declare `requires_family = "spark"` instead, which fails
-only that table with a clear message. A surrogate built from
-`monotonically_increasing_id` is unique on both engines, but the values
-differ between them.
+**Residual differences.** A surrogate built from
+`monotonically_increasing_id` is unique on every engine, but the values
+differ between them. See [Engine universality](#engine-universality) for
+the full list.
 
 **Writing portable code.** Import column functions from
 `ovid2.core.engines.dsl` (`from ovid2.core.engines.dsl import col, when`;
-`Window` comes from the same module),
+`Window`, `udf` and `pandas_udf` come from the same module),
 or use `context.functions`, not `pyspark.sql.functions`. Use
 `engine.union_by_name` / `drop_duplicates` / `checkpoint` for
 DataFrame-shape helpers.
+
+## Engine universality
+
+**Every engine runs every pipeline on every storage driver.** That covers
+YAML and custom formatters, transforms, mappers, fixers, health checks and
+the generated `legacy_ovid` byte-parity ports. There are no engine-family
+gates: pipelines, formatters and transforms do not declare a required
+family, and no run is refused because of its engine
+(`tests/contract/test_no_engine_family_gates.py` forbids reintroducing
+`REQUIRES_FAMILY` / `requires_family`). The one storage rule left is that
+**Access is read-only**: it is accepted as an input on every engine and
+refused as an output on every engine (`Driver.read_only = True`).
+
+This works because all shared and pipeline code is written against one
+PySpark-shaped surface, `src/ovid2/core/engines/surface.py` (column
+`FUNCTIONS` plus the DataFrame / Column / GroupedData / Window / Session /
+Reader methods). Shared code imports it from `ovid2.core.engines.dsl`;
+pipeline packages never import `pyspark`. Generated legacy ports import
+`ovid2.core.engines.sparkapi`, a portable `pyspark` stand-in (the legacy
+migrator rewrites the imports). Every engine implements the whole surface
+(`tests/contract/test_engine_surface_complete.py`).
+
+### Engine × storage
+
+| Driver | `pyspark` | `databricks_spark` | `duckdb` | `snowpark` |
+|---|---|---|---|---|
+| disc | native | bridge | native | native read, bridge write |
+| s3 | native¹ | native¹ | native | native |
+| azure_blob | native¹ | native¹ | native | native |
+| gcs | bridge | bridge | native | native |
+| snowflake | native¹ | native¹ | native | native |
+| databricks | bridge | bridge | native | native |
+| postgres | bridge | bridge | native | bridge |
+| mssql | bridge | bridge | native | bridge |
+| access | native¹ read; read-only output | bridge read; read-only output | native read; read-only output | bridge read; read-only output |
+
+¹ Native only when the connector's JVM class is on the session classpath
+(hadoop-aws, hadoop-azure, spark-snowflake, UCanAccess — all baked into the
+Ovid2 image). A bare `pip install pyspark` host without the jars bridges
+that driver instead of failing with `ClassNotFoundException`.
+
+*Native* means the engine's own data plane: for Spark the driver's
+`spark.py` (`spark_capable` drivers); for DuckDB the driver's
+`duckdb.py`; for Snowpark a server-side staging strategy under
+`drivers/snowflake/staging/` (disc, s3, azure_blob, databricks, gcs) or
+the Snowflake driver itself. `databricks_spark` and `snowpark` set
+`supports_local_files = False` — a remote session cannot see this host's
+files — so disc and access go through the bridge. Snowpark disc *writes*
+always take the bridge, which writes the same bytes as Spark's CSV writer.
+
+`tests/contract/test_engine_storage_matrix_complete.py` checks that every
+engine × driver pair is accepted by the stagers and by the plan-time
+compatibility check (named engine configs resolve to their type).
+
+### The Arrow bridge
+
+`src/ovid2/core/engines/bridge.py` fills every gap in the native matrix.
+It attaches a private DuckDB *sidecar* engine to the running engine and
+uses the driver's DuckDB strategy (`drivers/<type>/duckdb.py`):
+
+- **Read** — the DuckDB strategy materialises the source with the usual
+  read contract (all `VARCHAR`, trimmed, empty → NULL) and streams it as
+  Arrow record batches into the engine (`createDataFrame` on Spark, a
+  transient table on Snowpark).
+- **Write** — the engine's frame is exported as Arrow into a DuckDB frame
+  and persisted by the DuckDB strategy, so the output bytes / typed DDL
+  are the same whichever engine produced them.
+
+The bridge moves data through the driver container's memory, so a native
+path is preferred whenever one exists; it is a reach mechanism, not a
+fast path.
+
+### Residual differences between engines
+
+Engines agree row-for-row except for choices that are arbitrary on Spark
+too:
+
+- **Dedup ties** — "first in file order" between key-identical rows can
+  keep a different row.
+- **Surrogate ids** — `stable_hash` and `monotonically_increasing_id`
+  values differ between engines. Do not switch an existing route's engine
+  without re-deriving downstream ids.
+- **One-to-many `Maps to`** — PCORnet→OMOP `condition_occurrence` breaks
+  ties between equally valid concepts differently (~30 of 1599 rows in the
+  reference batch).
+- **Python UDFs on DuckDB** — a `udf` / `pandas_udf` holds Python's GIL
+  for every batch, so a UDF-heavy query uses one core whatever
+  `OVID2_DUCKDB_THREADS` says. Hot shared helpers have native SQL
+  equivalents instead: the legacy id encryption
+  (`utils.common.encrypt_id_udf`) runs as `_DuckFunctions.xor_base64`
+  (byte-identical; non-string inputs keep the UDF).
+- **Snowpark UDFs** — Python `udf` / `pandas_udf` run as temporary
+  Snowflake Python UDFs (Ovid2 modules are pickled by value), with lower
+  throughput than on Spark or DuckDB. Literal `create_map` lookups with
+  more than 512 entries also become UDF lookups on Snowpark.
+- **Bridged object stores on bare Spark hosts** — without the connector
+  jars, s3 / azure_blob are bridged (correct, but slower).
+
+### Capabilities
+
+Every algorithm declares the engine capabilities it needs (`requires`), and
+every engine declares the capabilities it has (`capabilities()`). The run is
+checked **at plan time** — `ovid2 etl` before any cluster starts (exit code
+`2`) and `jobs_svc.submit()` before the job is queued (HTTP 400) — so a
+runtime `EngineOperationUnsupported` is a bug, not an expected failure.
+
+The vocabulary is the closed enum `Capability`
+(`ovid2.config.capabilities`, re-exported by `ovid2.core.engines.protocols`):
+
+- **Functions** — `fn:<name>`, one per column function in
+  `core/engines/surface.py::FUNCTIONS` plus the Ovid2 extensions
+  (`stable_hash`, `map_from_dict`, `to_double`). Every engine implements all
+  of them, so they never refuse a plan; they make each algorithm's
+  declaration exact.
+- **Features** — behaviours whose support really differs:
+
+| Capability | pyspark | databricks_spark | duckdb | snowpark | Meaning |
+| --- | :-: | :-: | :-: | :-: | --- |
+| `window` | ✓ | ✓ | ✓ | ✓ | Window functions (`.over(...)`) |
+| `regex` | ✓ | ✓ | ✓ | ✓ | `regexp_*` / `rlike` |
+| `checkpoint` | ✓ | ✓ | ✓ | ✓ | `engine.checkpoint(df, name)` |
+| `broadcast_join` | ✓ | ✓ | ✓ | ✓ | `broadcast(df)` join hint (no-op where the planner decides) |
+| `rand_seeded` | ✓ | ✓ | — | — | A seed gives reproducible random draws / samples |
+| `sample_with_replacement` | ✓ | ✓ | — | ✓ | `sample(withReplacement=True)` |
+| `sha2_all_bits` | ✓ | ✓ | — | ✓ | `sha2` with 224 / 384 / 512 bits (SHA-256 is everywhere) |
+| `map_from_columns` | ✓ | ✓ | — | — | `create_map` over non-literal columns (literal maps are everywhere) |
+| `input_file_name` | ✓ | — | ✓ | — | A real per-row source file path |
+
+The per-engine sets live in `ENGINE_CAPABILITIES` (web-safe) and
+`BaseEngine.capabilities()`; contracts keep them equal
+(`test_algorithm_requires_declared.py`).
+
+**Adding a capability.** Add a member to `Capability` (features) — or a name
+to `surface.FUNCTIONS` (functions; the `fn:` member is generated and pinned
+by contract) — add it to `ENGINE_CAPABILITIES` for the engines that have it,
+teach `ovid2.algorithms.requirements` to detect its use if it is
+syntactically visible, and add a row to the table above. An algorithm that
+needs it declares it in `REQUIRES` (or `requires_for(params)` when only some
+parameters need it) and in the web-safe mirror
+`config/algorithm_requirements.py`.
+
+### Adding an engine or a driver
+
+- **New driver:** ship at least a DuckDB staging strategy
+  (`drivers/<type>/duckdb.py`, mapped in
+  `DuckDBEngineStager._STRATEGY_MODULES`). With it, every engine reaches
+  the driver through the bridge; a `spark.py` or a Snowpark staging
+  strategy is an optional native fast path.
+- **New engine:** implement all of `surface.py`, a stager, Arrow import /
+  export in `bridge.py` (`import_arrow` / `export_arrow`), declare its
+  `ENGINE_CAPABILITIES` entry (every `fn:*` plus the features it supports),
+  and pass
+  `test_engine_surface_complete.py` and
+  `test_engine_storage_matrix_complete.py`.

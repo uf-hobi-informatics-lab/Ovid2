@@ -113,9 +113,11 @@ def _locate(name: str) -> Path:
     """Return the package directory for ``name`` after safety checks."""
     if not _NAME_RE.match(name or ""):
         raise DeletePackageError(f"Invalid pipeline package name '{name}'.")
+    from ovid2.config.pipeline_packages import package_visible
+
     roots = _namespace_dirs()
     known = {m.name for m in pkgutil.iter_modules([str(r) for r in roots]) if m.ispkg}
-    if name not in known:
+    if name not in known or not package_visible(name):
         raise DeletePackageError(f"Pipeline package '{name}' not found.")
     for root in roots:
         candidate = root / name

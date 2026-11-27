@@ -64,7 +64,9 @@ def _mk_args(**overrides: Any) -> argparse.Namespace:
     base = argparse.Namespace(
         input_address="disc_input",
         output_address="CHAR_ACME",
-        pipeline="acme",
+        # Not an installed package → portable for the pipeline-family
+        # gate, so these tests exercise only the engine/driver gate.
+        pipeline="tp_driver_compat",
         batch_id="20260610",
         tables=["HASH_TOKEN"],
         transformations=["all"],
@@ -90,13 +92,10 @@ class TestEngineCompatGate:
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """The compat gate refuses ``--engine snowpark`` + postgres.
+        """``--engine snowpark`` + postgres input is dispatched (engine universality).
 
-        Post-Phase-E, ``disc`` / ``s3`` / ``azure_blob`` / ``databricks``
-        are all compatible pairings (Phase C ``@~`` staging for disc;
-        Phase D external stages for the object stores; Phase E
-        S3-bounce for databricks). This test uses ``postgres`` — a
-        driver type whose strategy has not landed.
+        Postgres used to be unreachable from Snowpark; it is now bridged
+        through its DuckDB strategy (Arrow), so the pairing passes the gate.
         """
         _conn(
             config_env,
@@ -130,20 +129,16 @@ class TestEngineCompatGate:
 
         with (
             mock.patch.object(etl_module, "is_inside_docker", return_value=False),
-            mock.patch.object(etl_module, "_run_host_mode") as m_host,
+            mock.patch.object(etl_module, "_wants_inprocess", return_value=False),
+            mock.patch.object(etl_module, "_run_host_mode", return_value=0) as m_host,
             mock.patch.object(etl_module, "_run_container_mode") as m_container,
         ):
             rc = etl_module.main(args)
 
-        assert rc == 2
-        # Neither dispatch path fired.
-        m_host.assert_not_called()
+        assert rc == 0
+        m_host.assert_called_once()
         m_container.assert_not_called()
-        err = capsys.readouterr().err
-        assert "error:" in err
-        assert "snowpark" in err
-        assert "pg_input" in err
-        assert "--engine pyspark" in err
+        del capsys
 
     def test_snowpark_with_disc_input_accepted_since_phase_c(
         self,
@@ -238,38 +233,18 @@ class TestEngineCompatGate:
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """Direct-in-container invocation is also refused (belt+suspenders)."""
-        # Use postgres since disc/s3/azure_blob/databricks are all now
-        # compatible with --engine snowpark.
-        _conn(
-            config_env,
-            "pg_conn",
-            {
-                "type": "postgres",
-                "args": {
-                    "host": "db.example.com",
-                    "database": "d",
-                    "user": "u",
-                },
-            },
-        )
-        _addr(
-            config_env,
-            "pg_input",
-            {
-                "connection": "pg_conn",
-                "location": {"database": "d", "schema": "public"},
-            },
-        )
-        _addr(
-            config_env,
-            "CHAR_ACME",
-            {
-                "src_name": "snowflake",
-                "src_args": {"database": "CHAR_ACME", "schema": "PUBLIC"},
-            },
-        )
-        args = _mk_args(input_address="pg_input")
+        """Direct-in-container invocation is also refused (belt+suspenders).
+
+        The one remaining refusal is a read-only output (Access) — refused
+        for every engine alike.
+        """
+        host = tmp_path / "in"
+        host.mkdir()
+        _conn(config_env, "d_conn", {"type": "disc", "args": {"host_path": str(host)}})
+        _addr(config_env, "disc_input", {"connection": "d_conn", "location": {}})
+        _conn(config_env, "acc_conn", {"type": "access", "args": {"host_path": str(host)}})
+        _addr(config_env, "acc_out", {"connection": "acc_conn", "location": {}})
+        args = _mk_args(input_address="disc_input", output_address="acc_out")
 
         with (
             mock.patch.object(etl_module, "is_inside_docker", return_value=True),
@@ -362,6 +337,33 @@ class TestEngineCompatGate:
 
         assert rc == 0
         m_host.assert_called_once()
+
+    def test_legacy_port_on_duckdb_is_dispatched(
+        self,
+        config_env: Path,
+    ) -> None:
+        """A ``legacy_ovid`` port on duckdb is dispatched (engine universality).
+
+        History: ``ovid2 etl --pipeline acme --engine duckdb`` used to be
+        refused by the engine-family gate. Every engine runs every
+        pipeline now, so the host side must dispatch it.
+        """
+        args = _mk_args(
+            pipeline="acme",
+            engine="duckdb",
+            input_address="not_a_thing_in",
+            output_address="nope_out",
+        )
+        with (
+            mock.patch.object(etl_module, "is_inside_docker", return_value=False),
+            mock.patch.object(etl_module, "_wants_inprocess", return_value=False),
+            mock.patch.object(etl_module, "_run_host_mode", return_value=0) as m_host,
+            mock.patch.object(etl_module, "_run_container_mode") as m_container,
+        ):
+            rc = etl_module.main(args)
+        assert rc == 0
+        m_host.assert_called_once()
+        m_container.assert_not_called()
 
     def test_unresolvable_addresses_are_skipped(
         self,

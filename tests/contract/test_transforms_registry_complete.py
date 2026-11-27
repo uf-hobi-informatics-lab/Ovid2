@@ -6,7 +6,7 @@ Every entry in :data:`ovid2.transforms.registry.TRANSFORMS` must:
 * expose a non-empty ``name`` that matches its registry key,
 * expose a non-empty ``summary``,
 * declare a ``category`` from the known set,
-* declare ``requires_family`` as ``None`` or a known family,
+* declare **no** engine-family restriction (every op runs on every engine),
 * expose a ``params_schema`` that is a JSON-schema object.
 """
 
@@ -15,7 +15,6 @@ from __future__ import annotations
 import pytest
 
 _KNOWN_CATEGORIES = frozenset({"formatting", "correction", "reshape", "sampling"})
-_KNOWN_FAMILIES = frozenset({"spark", "snowpark"})
 
 
 @pytest.mark.contract
@@ -40,8 +39,9 @@ def test_registry_entries_well_formed() -> None:
         assert inst.category in _KNOWN_CATEGORIES, (
             f"Transform '{key}' has unknown category '{inst.category}'."
         )
-        assert inst.requires_family is None or inst.requires_family in _KNOWN_FAMILIES, (
-            f"Transform '{key}' has unknown requires_family '{inst.requires_family}'."
+        assert not hasattr(inst, "requires_family"), (
+            f"Transform '{key}' declares requires_family: engine gating is forbidden "
+            "(adr-engine-universality.md) — implement the op on every engine instead."
         )
         schema = inst.params_schema
         assert isinstance(schema, dict) and schema.get("type") == "object", (

@@ -127,6 +127,13 @@ class EngineStager(ABC):
     #: bare string so the module can stay pyspark-free.
     family: str = ""
 
+    #: Whether :meth:`materialise` / :meth:`persist` accept a legacy
+    #: :class:`~ovid2.core.addresses.base.BaseAddress` (whose ``read`` /
+    #: ``write`` already speak the engine's session) in place of a driver.
+    #: ``True`` only for the Spark stager; the pipeline resolves a driver for
+    #: every other stager.
+    accepts_legacy_address: bool = False
+
     def __init__(self, engine: BaseEngine) -> None:
         self._engine = engine
 
@@ -236,24 +243,42 @@ class EngineStager(ABC):
 
 
 class SparkEngineStager(EngineStager):
-    """Pass-through stager used by ``pyspark`` and ``databricks_spark``.
+    """Stager used by ``pyspark`` and ``databricks_spark``.
 
-    Every driver in :data:`ovid2.drivers.registry.DRIVERS` ships a
-    ``spark.py`` (either native, or via the D2 legacy adapter's
-    :class:`BaseAddress` bridge). :meth:`materialise` and
-    :meth:`persist` are therefore trivial wrappers over
-    :meth:`Driver.read` / :meth:`Driver.write` — zero behaviour
-    change relative to pre-A/B.
+    * **Native** — drivers with a Spark data plane (``spark_capable``:
+      disc, s3, azure_blob, snowflake, access) pass straight through to
+      :meth:`Driver.read` / :meth:`Driver.write`. A remote
+      (Databricks-Connect) session cannot see local files, so local-file
+      drivers are bridged for engines with ``supports_local_files =
+      False``.
+    * **Bridge** — every other driver (postgres, mssql, gcs, databricks,
+      any future type) goes through the Arrow bridge
+      (:mod:`ovid2.core.engines.bridge`) on the driver's DuckDB strategy.
+      So the Spark family reaches every storage type.
     """
 
     family = "spark"
 
+    #: Legacy addresses are the Spark data plane of their driver.
+    accepts_legacy_address = True
+
+    #: Driver types whose native Spark data plane reads local files.
+    _LOCAL_FILE_DRIVERS: frozenset[str] = frozenset({"disc", "access"})
+
+    #: JVM classes a driver's native Spark plane needs. When the session's
+    #: classpath lacks them (a bare ``pip install pyspark`` host without
+    #: the image's hadoop-aws / hadoop-azure / spark-snowflake jars) the
+    #: driver is bridged instead of failing with ``ClassNotFoundException``.
+    _NATIVE_JVM_CLASSES: dict[str, str] = {
+        "s3": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+        "azure_blob": "org.apache.hadoop.fs.azurebfs.SecureAzureBlobFileSystem",
+        "snowflake": "net.snowflake.spark.snowflake.DefaultSource",
+        "access": "net.ucanaccess.jdbc.UcanaccessDriver",
+    }
+
     @classmethod
-    def supports(cls, driver_type: str) -> bool:
-        # A registered driver is Spark-reachable iff it declares a Spark
-        # data plane (``Driver.spark_capable``). The DuckDB-only hybrids
-        # (postgres / mssql / gcs / databricks) declare ``False`` so the
-        # pairing is refused at plan time instead of mid-run.
+    def native_supports(cls, driver_type: str) -> bool:
+        """Return ``True`` when ``driver_type`` has a native Spark data plane."""
         from ovid2.drivers.registry import DRIVERS, load_class
 
         if driver_type not in DRIVERS:
@@ -264,10 +289,44 @@ class SparkEngineStager(EngineStager):
             return False
 
     @classmethod
+    def supports(cls, driver_type: str) -> bool:
+        # Native Spark plane, or the Arrow bridge through the driver's
+        # DuckDB strategy (every registered driver has one).
+        return cls.native_supports(driver_type) or _bridgeable(driver_type)
+
+    @classmethod
     def supported_driver_types(cls) -> frozenset[str]:
         from ovid2.drivers.registry import DRIVERS
 
         return frozenset(t for t in DRIVERS if cls.supports(t))
+
+    def _use_native(self, driver: Driver) -> bool:
+        if _is_legacy_address(driver):
+            return True
+        driver_type = str(getattr(driver, "type_name", "") or "")
+        if not self.native_supports(driver_type):
+            return False
+        local_ok = bool(getattr(self._engine, "supports_local_files", True))
+        if not local_ok and driver_type in self._LOCAL_FILE_DRIVERS:
+            return False
+        return self._jvm_has(self._NATIVE_JVM_CLASSES.get(driver_type))
+
+    def _jvm_has(self, class_name: str | None) -> bool:
+        """Return ``True`` when ``class_name`` loads in the session's JVM (or none is needed)."""
+        if not class_name:
+            return True
+        cache: dict[str, bool] = self._engine.__dict__.setdefault("_jvm_class_cache", {})
+        if class_name in cache:
+            return cache[class_name]
+        ok = True
+        try:
+            jvm = getattr(getattr(self.session(), "_jvm", None), "java", None)
+            if jvm is not None:
+                jvm.lang.Class.forName(class_name)
+        except Exception:
+            ok = False
+        cache[class_name] = ok
+        return ok
 
     def materialise(
         self,
@@ -279,13 +338,19 @@ class SparkEngineStager(EngineStager):
         *,
         table_name: str | None = None,
     ) -> Any:
-        return driver.read(
-            self.session(),
-            pipeline,
-            batch_id,
-            file_name,
-            delimiter,
-            table_name=table_name,
+        if self._use_native(driver):
+            return driver.read(
+                self.session(),
+                pipeline,
+                batch_id,
+                file_name,
+                delimiter,
+                table_name=table_name,
+            )
+        from ovid2.core.engines.bridge import bridge_read
+
+        return bridge_read(
+            self._engine, driver, pipeline, batch_id, file_name, delimiter, table_name=table_name
         )
 
     def persist(
@@ -297,14 +362,33 @@ class SparkEngineStager(EngineStager):
         table_name: str,
         delimiter: str | None = None,
     ) -> None:
-        driver.write(
-            df,
-            self.session(),
-            pipeline,
-            batch_id,
-            table_name,
-            delimiter,
-        )
+        if self._use_native(driver):
+            driver.write(
+                df,
+                self.session(),
+                pipeline,
+                batch_id,
+                table_name,
+                delimiter,
+            )
+            return
+        from ovid2.core.engines.bridge import bridge_write
+
+        bridge_write(self._engine, df, driver, pipeline, batch_id, table_name, delimiter)
+
+
+def _is_legacy_address(obj: Any) -> bool:
+    """Whether ``obj`` is a legacy ``BaseAddress`` (Spark data plane, no ``type_name``)."""
+    from ovid2.core.addresses.base import BaseAddress
+
+    return isinstance(obj, BaseAddress)
+
+
+def _bridgeable(driver_type: str) -> bool:
+    """Return ``True`` when the Arrow bridge can reach ``driver_type`` (DuckDB strategy)."""
+    from ovid2.core.engines.duckdb_stager import DuckDBEngineStager
+
+    return DuckDBEngineStager.supports(driver_type)
 
 
 # ---------------------------------------------------------------------------
@@ -743,18 +827,39 @@ class SnowparkEngineStager(EngineStager):
         "snowflake": _NativeSnowparkStrategy,
     }
 
+    #: Driver types whose *writes* always take the Arrow bridge even
+    #: though a server-side strategy exists. A disc write has to land
+    #: every byte on this host anyway (the native path is COPY INTO @~ +
+    #: GET), and the bridge writes through the DuckDB disc writer, which
+    #: is byte-identical to Spark's univocity output — the native
+    #: Snowflake unload quotes every field and folds the header case.
+    _BRIDGED_WRITES: frozenset[str] = frozenset({"disc"})
+
     @classmethod
-    def supports(cls, driver_type: str) -> bool:
+    def native_supports(cls, driver_type: str) -> bool:
+        """Return ``True`` when ``driver_type`` has a server-side Snowpark strategy."""
+        _load_snowpark_strategies()
         return driver_type in cls._STRATEGIES
 
     @classmethod
-    def supported_driver_types(cls) -> frozenset[str]:
-        return frozenset(cls._STRATEGIES)
+    def supports(cls, driver_type: str) -> bool:
+        # Server-side staging strategy, or the Arrow bridge through the
+        # driver's DuckDB strategy (postgres / mssql / access …).
+        return cls.native_supports(driver_type) or _bridgeable(driver_type)
 
-    def _strategy_for(self, driver: Driver) -> SnowparkStagingStrategy:
+    @classmethod
+    def supported_driver_types(cls) -> frozenset[str]:
+        from ovid2.drivers.registry import DRIVERS
+
+        return frozenset(t for t in DRIVERS if cls.supports(t))
+
+    def _strategy_for(self, driver: Driver) -> SnowparkStagingStrategy | None:
         driver_type = getattr(driver, "type_name", "") or type(driver).__name__
+        _load_snowpark_strategies()
         cls = type(self)._STRATEGIES.get(driver_type)
         if cls is None:
+            if _bridgeable(str(driver_type)):
+                return None  # the Arrow bridge handles it
             raise EngineStagerUnsupported(self.family, driver_type)
         return cls()
 
@@ -769,15 +874,29 @@ class SnowparkEngineStager(EngineStager):
         table_name: str | None = None,
     ) -> Any:
         strategy = self._strategy_for(driver)
-        return strategy.materialise(
-            self.session(),
-            driver,
-            pipeline,
-            batch_id,
-            file_name,
-            delimiter,
-            table_name,
-        )
+        if strategy is None:
+            from ovid2.core.engines.bridge import bridge_read
+
+            native_df = bridge_read(
+                self._engine,
+                driver,
+                pipeline,
+                batch_id,
+                file_name,
+                delimiter,
+                table_name=table_name,
+            )
+        else:
+            native_df = strategy.materialise(
+                self.session(),
+                driver,
+                pipeline,
+                batch_id,
+                file_name,
+                delimiter,
+                table_name,
+            )
+        return _snow_wrap(self._engine, native_df)
 
     def persist(
         self,
@@ -788,7 +907,20 @@ class SnowparkEngineStager(EngineStager):
         table_name: str,
         delimiter: str | None = None,
     ) -> None:
+        from ovid2.core.engines._snow_frame import unwrap
+
+        df = unwrap(df)
+        driver_type = str(getattr(driver, "type_name", "") or "")
+        if driver_type != "snowflake":
+            # Files carry the column names verbatim: restore the CDM's
+            # authored case (Snowflake folds unquoted names to upper).
+            df = _restore_cdm_case(df, driver, table_name)
         strategy = self._strategy_for(driver)
+        if strategy is None or driver_type in self._BRIDGED_WRITES:
+            from ovid2.core.engines.bridge import bridge_write
+
+            bridge_write(self._engine, df, driver, pipeline, batch_id, table_name, delimiter)
+            return
         strategy.persist(
             self.session(),
             df,
@@ -798,6 +930,56 @@ class SnowparkEngineStager(EngineStager):
             table_name,
             delimiter,
         )
+
+
+def _restore_cdm_case(df: Any, driver: Any, table_name: str) -> Any:
+    """Rename a native Snowpark frame's columns to the CDM's authored case.
+
+    Snowflake folds unquoted identifiers to upper case, so an OMOP frame
+    built with ``alias("care_site_id")`` comes back as ``CARE_SITE_ID``.
+    Spark and DuckDB keep the authored name, and file outputs carry it
+    in the header — so before a file write the frame is renamed to the
+    CDM YAML spelling (matched case-insensitively). Columns the CDM does
+    not declare keep their Spark-visible name (quotes stripped). A frame
+    with no CDM stamp on the driver is returned unchanged.
+    """
+    location = getattr(driver, "location", None) or {}
+    cdm_name = str(location.get("cdm") or "").strip()
+    columns = list(getattr(df, "columns", []) or [])
+    if not cdm_name or not columns:
+        return df
+    from ovid2.cdm.yaml_loader import load_table_field_names_as_authored
+
+    authored = {n.upper(): n for n in load_table_field_names_as_authored(cdm_name, table_name)}
+    if not authored:
+        return df
+    targets: list[str] = []
+    for raw in columns:
+        bare = raw[1:-1].replace('""', '"') if raw[:1] == raw[-1:] == '"' else raw
+        targets.append(authored.get(bare.upper(), bare))
+    if all(t == c for t, c in zip(targets, columns, strict=True)):
+        return df
+    quoted = ['"' + t.replace('"', '""') + '"' for t in targets]
+    return df.to_df(*quoted)
+
+
+def _snow_wrap(engine: Any, df: Any) -> Any:
+    """Wrap a native Snowpark frame in the PySpark-shaped :class:`SnowFrame`."""
+    from ovid2.core.engines._snow_frame import SnowFrame
+
+    if isinstance(df, SnowFrame) or df is None:
+        return df
+    if type(df).__module__.startswith("snowflake.snowpark"):
+        return SnowFrame(df, engine)
+    return df
+
+
+def _load_snowpark_strategies() -> None:
+    """Import the self-registering Snowpark staging strategies (idempotent)."""
+    import importlib
+
+    with __import__("contextlib").suppress(ImportError):
+        importlib.import_module("ovid2.drivers.snowflake.staging")
 
 
 # ---------------------------------------------------------------------------

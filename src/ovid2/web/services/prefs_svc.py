@@ -46,6 +46,13 @@ _DERIVED_VARS: dict[str, re.Pattern[str]] = {
 }
 
 
+# Retired theme slugs mapped to their replacements, so a stored document
+# (current theme or a saved theme) keeps working after a theme is renamed
+# instead of failing validation and resetting the whole profile. Mirrors
+# ``LEGACY_ALIASES`` in ``static/theme.js``.
+RETIRED_THEMES: dict[str, str] = {"tatooine": "dune"}
+
+
 class PrefsError(ValueError):
     """Raised when an appearance payload fails validation."""
 
@@ -94,6 +101,8 @@ def _check_theme(value: Any, themes: frozenset[str], *, required: bool) -> str |
     """Validate a theme slug (``None`` allowed unless ``required``)."""
     if value is None and not required:
         return None
+    if isinstance(value, str):
+        value = RETIRED_THEMES.get(value, value)
     if not isinstance(value, str) or value not in themes:
         raise PrefsError(f"unknown theme {value!r}")
     return value

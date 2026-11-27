@@ -18,6 +18,12 @@ class BaseAddress(ABC):
     and loaded through :func:`ovid2.config.addresses.load_address`.
     """
 
+    #: Whether frames read from this address expose per-row local file
+    #: names (``input_file_name()``). Consulted through
+    #: :attr:`ovid2.core.sources.SourceHandle.is_local_path` so algorithms
+    #: never type-check a concrete address class.
+    is_local_path: bool = False
+
     @abstractmethod
     def __init__(self, config: dict[str, Any]) -> None:
         """Construct the address from its JSON ``src_args`` block.

@@ -1,0 +1,61 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params: {}
+tables:
+  input:
+    columns:
+    - NORM_RANGE_LOW
+    - NORM_RANGE_HIGH
+    - NORM_MODIFIER_LOW
+    - NORM_MODIFIER_HIGH
+    rows:
+    - - '1.5'
+      - '9'
+      - NI
+      - NI
+    - - '3'
+      - null
+      - EQ
+      - EQ
+    - - null
+      - '7'
+      - EQ
+      - EQ
+    - - NI
+      - '5'
+      - NI
+      - LT
+    - - '2'
+      - ''
+      - GE
+      - NI
+note: 'numeric detection via cast(''double''); NI / null / empty are ''no value''. KNOWN BUG (pre-existing,
+  pinned on purpose): rule 2b sets NORM_MODIFIER_LOW=NO first, so its MOD_HIGH=LE branch re-evaluates
+  both_eq on the updated column and never fires (row [null,7,EQ,EQ] -> [null,7,NO,EQ], docstring says
+  NO/LE). Same on every engine; fix in the fixer, then update this fixture.'
+expected:
+  columns:
+  - NORM_RANGE_LOW
+  - NORM_RANGE_HIGH
+  - NORM_MODIFIER_LOW
+  - NORM_MODIFIER_HIGH
+  rows:
+  - - null
+    - '5'
+    - 'NO'
+    - LT
+  - - null
+    - '7'
+    - 'NO'
+    - EQ
+  - - '1.5'
+    - '9'
+    - EQ
+    - NI
+  - - '2'
+    - null
+    - GE
+    - 'NO'
+  - - '3'
+    - null
+    - GE
+    - 'NO'

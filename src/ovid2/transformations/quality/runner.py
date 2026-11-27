@@ -30,9 +30,11 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Any
 
+from ovid2.algorithms.registry import registry as algorithms
 from ovid2.core.events import (
     EventBus,
     check_completed,
@@ -41,8 +43,7 @@ from ovid2.core.events import (
     get_default_bus,
     warning_event,
 )
-from ovid2.transformations.quality.ops import OpContext, get_operator
-from ovid2.transformations.quality.registry import CheckSpec, select_specs
+from ovid2.transformations.quality.ops import OpContext
 from ovid2.transformations.quality.results import (
     CheckOutcome,
 )
@@ -52,6 +53,7 @@ if TYPE_CHECKING:
     from ovid2.core.addresses.base import BaseAddress
     from ovid2.core.engines.base import BaseEngine
     from ovid2.drivers.base import Driver
+    from ovid2.transformations.quality.registry import CheckSpec
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +71,8 @@ class HealthCheckRunner:
         instance_id: str = "",
         event_bus: EventBus | None = None,
         run_date: date | None = None,
-        engine: BaseEngine | None = None,
+        engine: BaseEngine,
+        reference_reader: Callable[[str, str], Any] | None = None,
     ) -> None:
         """Create a runner.
 
@@ -81,14 +84,21 @@ class HealthCheckRunner:
             instance_id: Run instance id (also the results ``RUN_ID``).
             event_bus: Bus for check lifecycle events.
             run_date: Reference date for future-date checks.
-            engine: The compute engine. Supplies the column DSL, the
-                typed results frame and the stager used for packaged
-                reference files, so the same checks run on PySpark,
-                Databricks and Snowpark. ``None`` keeps the historical
-                Spark-only behaviour (``session`` must be a
-                ``SparkSession``).
+            engine: The compute engine (required). Supplies the column DSL
+                and the typed results frame, so the same checks run on
+                every engine.
+            reference_reader: ``(path, delimiter) -> frame`` loader for
+                packaged reference CSVs, built by the caller (the CLI binds
+                :func:`ovid2.core.sources.local_file_reader`). The runner
+                never constructs a storage driver itself.
         """
+        if engine is None:
+            raise ValueError(
+                "HealthCheckRunner needs an engine; build one through "
+                "ovid2.core.loaders.load_engine / the engine registry."
+            )
         self.engine = engine
+        self.reference_reader = reference_reader
         self.session = session
         self.cdm = cdm
         self.pipeline = pipeline
@@ -113,8 +123,8 @@ class HealthCheckRunner:
 
     @property
     def _session_is_spark(self) -> bool:
-        """Whether the session is a real ``SparkSession`` (no engine = Spark)."""
-        return self.engine is None or bool(getattr(self.engine, "session_is_spark", True))
+        """Whether the engine reads through the native (legacy address) plane."""
+        return bool(getattr(self.engine, "session_is_spark", True))
 
     def _read_source(self, source: BaseAddress | Driver, table: str) -> Any:
         """Read one table from ``source`` as an engine-native DataFrame.
@@ -128,7 +138,6 @@ class HealthCheckRunner:
         object stores).
         """
         if not self._session_is_spark:
-            assert self.engine is not None  # implied by _session_is_spark
             return self.engine.get_stager().materialise(
                 source,
                 self.pipeline,
@@ -235,34 +244,18 @@ class HealthCheckRunner:
         return n
 
     def _read_reference(self, path: str, delimiter: str) -> Any:
-        """Load a packaged reference CSV through the engine's stager.
+        """Load a packaged reference CSV through the caller-supplied reader.
 
-        A synthetic ``disc`` driver rooted at the file's directory lets every
-        engine family use its own data-plane bridge: Spark reads the CSV
-        directly; Snowpark ``PUT``s it to a stage and ``COPY``s it into a
-        transient table. Mirrors
-        :func:`ovid2.core.pipeline._register_shared_view_from_local_file`.
+        Raises:
+            RuntimeError: When the caller supplied no ``reference_reader``.
         """
-        if self.engine is None:
-            return self.session.read.option("header", True).option("sep", delimiter).csv(path)
-        import os
-
-        from ovid2.drivers.disc.driver import DiscDriver
-
-        parent = os.path.dirname(path)
-        driver = DiscDriver(
-            args={"host_path": parent, "container_path": parent},
-            secrets={},
-            location={"format": "csv"},
-        )
-        return self.engine.get_stager().materialise(
-            driver,
-            self.pipeline,
-            self.batch_id,
-            os.path.basename(path),
-            delimiter,
-            table_name=os.path.splitext(os.path.basename(path))[0],
-        )
+        if self.reference_reader is None:
+            raise RuntimeError(
+                "HealthCheckRunner: this check reads a packaged reference file "
+                "but no reference_reader was supplied "
+                "(bind ovid2.core.sources.local_file_reader(engine))."
+            )
+        return self.reference_reader(path, delimiter)
 
     def _all_empty(
         self,
@@ -306,12 +299,22 @@ class HealthCheckRunner:
             pipeline=self.pipeline,
             run_date=self.run_date,
             prior_tables=prior_tables or {},
-            functions=self.engine.get_functions() if self.engine is not None else None,
+            functions=self.engine.get_functions(),
             frames=self.frames,
             reference_reader=self._read_reference,
         )
         outcomes: list[CheckOutcome] = []
+        from ovid2.core.pause import gate as _pause_gate
+
+        hold = _pause_gate(
+            self.bus,
+            instance_id=self.instance_id,
+            pipeline=str(self.pipeline or ""),
+            batch_id=str(getattr(self, "batch_id", "") or ""),
+        )
         for spec in specs:
+            # Operator pause holds between checks, never inside one.
+            hold()
             outcome = CheckOutcome(
                 check_id=spec.id,
                 check_name=spec.name,
@@ -350,7 +353,7 @@ class HealthCheckRunner:
                     part=spec.part,
                 )
             )
-            op = get_operator(spec.operator)
+            op = algorithms.health_operator(spec.operator)
             started = time.monotonic()
             if op is None:
                 outcome.status = "error"
@@ -419,11 +422,7 @@ class HealthCheckRunner:
         for outcome in outcomes:
             for metric in outcome.rows:
                 rows.append(metric.as_table_row(self.run_id))
-        if self.engine is not None:
-            return self.engine.create_typed_dataframe(rows, RESULTS_SCHEMA)
-        from ovid2.core.engines.pyspark import create_typed_dataframe
-
-        return create_typed_dataframe(self.session, rows, RESULTS_SCHEMA)
+        return self.engine.create_typed_dataframe(rows, RESULTS_SCHEMA)
 
 
 def all_candidate_tables(specs: list[CheckSpec], cdm_name: str | None = None) -> list[str]:
@@ -491,7 +490,7 @@ def select_health_specs(
     packages: list[str] | None = None,
 ) -> list[CheckSpec]:
     """Thin wrapper over the registry selector for the CLI."""
-    return select_specs(parts=parts, checks=checks, packages=packages)
+    return algorithms.select_health_checks(parts=parts, checks=checks, packages=packages)
 
 
 __all__ = [

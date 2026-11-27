@@ -1,0 +1,25 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  src1: DX_DATE
+  src2: REFRESH_DEMOGRAPHIC_DATE
+tables:
+  input:
+    columns:
+    - DX_DATE
+    rows:
+    - - '2023-06-30'
+    - - '2023-07-01'
+    - - null
+  harvest:
+    columns:
+    - REFRESH_DEMOGRAPHIC_DATE
+    rows:
+    - - '2023-06-30'
+note: 'time-zone trap: date-only comparison (to_date) must not shift across a day boundary'
+expected:
+  columns:
+  - DX_DATE
+  rows:
+  - - '2023-06-30'
+  - - null
+  - - null

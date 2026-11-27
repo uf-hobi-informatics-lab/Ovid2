@@ -57,6 +57,7 @@
           <th>Name</th>
           <th>Role</th>
           <th>Status</th>
+          <th>Workspaces {% call help.tip_block() %}Each person sees only the workspaces they belong to. A newly activated user joins <code>default</code>; manage memberships from each workspace's page.{% endcall %}</th>
           <th>Last login</th>
           <th>Actions</th>
         </tr>
@@ -68,6 +69,9 @@
             <td>{{ u.name or "&mdash;" | safe }}</td>
             <td><span class="badge status-{{ u.role }}">{{ u.role }}</span></td>
             <td><span class="badge status-{{ u.status }}">{{ u.status }}</span></td>
+            <td class="small">
+              {% for w in memberships.get(u.user_id, []) %}<a href="/workspaces/{{ w.workspace_id }}">{{ w.display_name }}</a>{% if not loop.last %}, {% endif %}{% else %}&mdash;{% endfor %}
+            </td>
             <td class="small">{% if u.last_login_at %}{{ u.last_login_at | localtime }}{% else %}&mdash;{% endif %}</td>
             <td>
               <form action="/users/{{ u.user_id }}/role" method="post" style="display: inline;">

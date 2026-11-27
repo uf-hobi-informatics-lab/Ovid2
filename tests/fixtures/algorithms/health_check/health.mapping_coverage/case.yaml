@@ -1,0 +1,53 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+dataset: pcornet_small
+expected:
+  columns:
+  - source_table
+  - metric
+  - value_num
+  - value_str
+  - exception_flag
+  rows:
+  - - DEMOGRAPHIC
+    - TOTAL_ROWS
+    - 3.0
+    - null
+    - false
+  - - DEMOGRAPHIC
+    - TOTAL_ROWS
+    - 5.0
+    - null
+    - false
+  - - DEMOGRAPHIC
+    - UNMAPPED_DISTINCT
+    - 1.0
+    - null
+    - false
+  - - DEMOGRAPHIC
+    - UNMAPPED_DISTINCT
+    - 1.0
+    - null
+    - false
+  - - DEMOGRAPHIC
+    - UNMAPPED_PCT
+    - 20.0
+    - null
+    - true
+  - - DEMOGRAPHIC
+    - UNMAPPED_PCT
+    - 66.6667
+    - null
+    - true
+  - - DEMOGRAPHIC
+    - UNMAPPED_ROWS
+    - 1.0
+    - null
+    - false
+  - - DEMOGRAPHIC
+    - UNMAPPED_ROWS
+    - 2.0
+    - null
+    - false
+pipeline: example_pcornet
+note: "mapping coverage against a real pipeline dictionaries module \u2014 expected = PySpark reference,\
+  \ identical on DuckDB when recorded"

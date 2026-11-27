@@ -7,7 +7,7 @@
  * / appearance overrides, which the SERVER renders into the page as
  * ``window.OVID2_APPEARANCE``. That prevents a flash of the wrong
  * theme on navigation. This deferred script is the
- * shared THEME LIBRARY: it owns the seven base-theme definitions, the
+ * shared THEME LIBRARY: it owns the eight base-theme definitions, the
  * WCAG colour maths, and the ``applyTheme`` / ``applyCustomOverrides``
  * primitives. The interactive UI (the right-rail Appearance panel that
  * lets a user pick a theme, restyle component groups, and save named
@@ -46,35 +46,39 @@
 
   // slug -> full theme metadata. swatch colours mirror the palette
   // token values authored in ovid2.css so the switcher preview matches
-  // what a click actually applies. The eight shipped themes; the
-  // first (Data Factory) is the default.
+  // what a click actually applies. The eight shipped themes, listed
+  // alphabetically by label (the default is DEFAULT_THEME, not the
+  // first entry).
   var THEMES = [
-    { slug: "data-factory", label: "Data Factory", mode: "light",
-      swatch: { bg: "#eceff3", surface: "#ffffff", accent: "#1a5ad7", fg: "#11161d" } },
     { slug: "clinical", label: "Clinical", mode: "light",
       swatch: { bg: "#f4f7fa", surface: "#ffffff", accent: "#08759a", fg: "#0e1a24" } },
-    { slug: "matrix", label: "Matrix", mode: "dark",
-      swatch: { bg: "#000300", surface: "#020b04", accent: "#00ff41", fg: "#a8ffb8" } },
-    { slug: "super-mario-world", label: "Super Mario World", mode: "light",
-      swatch: { bg: "#5c94fc", surface: "#fffdf4", accent: "#d8000f", fg: "#231a12" } },
-    { slug: "tatooine", label: "Star Wars / Tatooine", mode: "dark",
-      swatch: { bg: "#170f0a", surface: "#22170f", accent: "#ff8a3d", fg: "#f6e6c8" } },
+    { slug: "data-factory", label: "Data Factory", mode: "light",
+      swatch: { bg: "#e8e3d8", surface: "#fbf9f4", accent: "#c43e0c", fg: "#1c1a16" } },
+    { slug: "dune", label: "Dune", mode: "light",
+      swatch: { bg: "#efe5d2", surface: "#fbf6ec", accent: "#1d3fce", fg: "#1a1510" } },
     { slug: "financial", label: "Financial", mode: "dark",
       swatch: { bg: "#07090c", surface: "#0e1218", accent: "#ffb000", fg: "#e6edf3" } },
     { slug: "lego", label: "LEGO", mode: "light",
       swatch: { bg: "#f6f5f0", surface: "#ffffff", accent: "#c8102e", fg: "#1a1a1a" } },
+    { slug: "matrix", label: "Matrix", mode: "dark",
+      swatch: { bg: "#000300", surface: "#020b04", accent: "#00ff41", fg: "#a8ffb8" } },
     { slug: "spaceship", label: "Spaceship", mode: "dark",
-      swatch: { bg: "#04080a", surface: "#08141a", accent: "#2ee6c8", fg: "#d4f3ec" } }
+      swatch: { bg: "#04080a", surface: "#08141a", accent: "#2ee6c8", fg: "#d4f3ec" } },
+    { slug: "super-mario-world", label: "Super Mario World", mode: "light",
+      swatch: { bg: "#5c94fc", surface: "#fffdf4", accent: "#d8000f", fg: "#231a12" } }
   ];
+  // Keep the list alphabetical even if a theme is appended out of order.
+  THEMES.sort(function (a, b) {
+    return a.label.localeCompare(b.label, undefined, { sensitivity: "base" });
+  });
 
   // Legacy slugs that predate the shipped-theme rename. Mapped to their
-  // modern equivalents so an old localStorage value still resolves.
-  // dune -> tatooine and industry -> lego cover the themes that were
-  // replaced in the "movie/game" pass.
+  // modern equivalents so an old saved value still resolves.
+  // tatooine (Star Wars, retired 2026-11-26) -> dune; industry -> lego.
   var LEGACY_ALIASES = {
     light: "clinical",
     dark: "matrix",
-    dune: "tatooine",
+    tatooine: "dune",
     industry: "lego"
   };
 

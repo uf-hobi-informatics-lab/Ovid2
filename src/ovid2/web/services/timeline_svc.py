@@ -153,6 +153,12 @@ def _apply_event(
         error = ev.get("error")
         if isinstance(error, str):
             table.error = error
+        ended_ts = ev.get("ts")
+        if isinstance(ended_ts, str):
+            table.ended_at = ended_ts
+        elapsed = ev.get("elapsed_ms")
+        if isinstance(elapsed, (int, float)):
+            table.elapsed_ms = int(elapsed)
         stage_counts[stage]["failed"] += 1
     elif kind == "fix.applied":
         fix_name = ev.get("fix")

@@ -1369,3 +1369,50 @@ def test_worker_ignores_drafts_until_launched(stub_pipeline: str) -> None:
         worker.tick()
         time.sleep(0.05)
     _wait_status(draft.job_id, "done")
+
+
+def test_db_lock_in_tick_does_not_stop_the_worker(
+    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A ``database is locked`` tick is logged and retried, never fatal.
+
+    Exiting ``run_forever`` drains (SIGTERMs) every running job, so one
+    overlapping write used to cancel a two-hour ETL run.
+    """
+    import sqlite3
+
+    worker = Worker(max_parallel=1, poll_seconds=0.0, ovid2_bin=["/bin/true"])
+    calls = {"n": 0}
+
+    def flaky_tick() -> None:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise sqlite3.OperationalError("database is locked")
+        worker._stop = True
+
+    drained: list[bool] = []
+    monkeypatch.setattr(worker, "tick", flaky_tick)
+    monkeypatch.setattr(worker, "_drain", lambda: drained.append(True))
+    monkeypatch.setattr("signal.signal", lambda *_a: None)
+    worker.run_forever()
+    assert calls["n"] == 2 and drained == [True]
+
+
+def test_web_db_waits_for_a_busy_writer(isolated_xdg: Path) -> None:
+    """Connections wait for another writer instead of failing at once."""
+    import sqlite3
+    import threading
+    import time
+
+    from ovid2.web import db as web_db
+
+    web_db.ensure_schema()
+    holder = sqlite3.connect(web_db.web_db_path(), isolation_level=None, check_same_thread=False)
+    holder.execute("BEGIN IMMEDIATE")
+    threading.Timer(0.5, lambda: holder.execute("COMMIT")).start()
+    t0 = time.monotonic()
+    with web_db.connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute("COMMIT")
+    assert time.monotonic() - t0 >= 0.4
+    holder.close()

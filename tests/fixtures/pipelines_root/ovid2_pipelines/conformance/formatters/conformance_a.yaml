@@ -1,0 +1,10 @@
+v: 1
+formatter: conformance_a
+adapter: source_passthrough
+input_file_name: a.txt
+sources:
+  a:
+    glob: a.txt
+projections:
+  ID: id
+  V: v

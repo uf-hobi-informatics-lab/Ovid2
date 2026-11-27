@@ -32,15 +32,18 @@ import logging
 import os
 import re
 import signal
+import sqlite3
 import subprocess
 import sys
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import IO, Any
 
+from ovid2 import workspaces
 from ovid2.config.executor_env import ScopedSecrets, env_key_allowed, prepare_scoped_secrets
 from ovid2.config.executor_env import build_minimal_env as _build_minimal_env
 from ovid2.config.secret_refs import SecretScope
@@ -120,6 +123,7 @@ class _Running:
     process: subprocess.Popen[bytes]
     log_handle: IO[bytes] | None = field(default=None)
     scoped_secrets: ScopedSecrets | None = field(default=None)
+    workspace_id: str = field(default=workspaces.DEFAULT_WORKSPACE)
 
 
 class Worker:
@@ -167,7 +171,13 @@ class Worker:
         )
         try:
             while not self._stop:
-                self.tick()
+                try:
+                    self.tick()
+                except sqlite3.OperationalError:
+                    # A transient lock / I/O error on the shared DB must
+                    # never take the worker down: exiting drains (SIGTERMs)
+                    # every running job. Log it and retry next tick.
+                    logger.exception("worker tick failed on the web DB; retrying")
                 time.sleep(self.poll_seconds)
         finally:
             self._drain()
@@ -179,6 +189,7 @@ class Worker:
         """
         self._reap_finished()
         self._handle_cancel_requests()
+        self._sync_pause_flags()
         self._dispatch_due_pipelines()
         self._dispatch_watch_pipelines()
         self._dispatch_workflows()
@@ -189,7 +200,40 @@ class Worker:
                 break
             self._spawn(job)
 
+    @staticmethod
+    def _workspace_ids() -> list[str]:
+        """Return every active workspace (``default`` first; never raises)."""
+        try:
+            from ovid2.web.services import workspaces_svc
+
+            ids = [w["workspace_id"] for w in workspaces_svc.list_workspaces()]
+        except Exception:
+            logger.exception("workspaces_svc.list_workspaces failed; using default only.")
+            return [workspaces.DEFAULT_WORKSPACE]
+        return ids or [workspaces.DEFAULT_WORKSPACE]
+
+    def _for_each_workspace(self, fn: Callable[[], None]) -> None:
+        """Run ``fn`` once per active workspace, with that workspace active."""
+        for slug in self._workspace_ids():
+            with workspaces.use_workspace(slug):
+                try:
+                    fn()
+                except Exception:
+                    logger.exception("Dispatch in workspace %s failed.", slug)
+
     def _dispatch_due_pipelines(self) -> None:
+        """Clock-dispatch every workspace's due pipelines."""
+        self._for_each_workspace(self._dispatch_due_pipelines_here)
+
+    def _dispatch_watch_pipelines(self) -> None:
+        """Watch-dispatch every workspace's watch pipelines."""
+        self._for_each_workspace(self._dispatch_watch_pipelines_here)
+
+    def _dispatch_workflows(self) -> None:
+        """Start due / watch-triggered workflows in every workspace."""
+        self._for_each_workspace(self._dispatch_workflows_here)
+
+    def _dispatch_due_pipelines_here(self) -> None:
         """Fire every enabled pipeline whose ``next_fire_at`` is in the past.
 
         Reads the ``worker.route_dispatch_enabled`` flag from
@@ -222,7 +266,7 @@ class Worker:
             except pipelines_svc.PipelineError:
                 logger.exception("Pipeline %s failed to fire.", detail.name)
 
-    def _dispatch_watch_pipelines(self) -> None:
+    def _dispatch_watch_pipelines_here(self) -> None:
         """Scan every enabled ``watch`` pipeline and fire one job per new batch.
 
         For each enabled ``watch`` pipeline, poll its input storage account
@@ -290,7 +334,7 @@ class Worker:
 
     # ------------------------------------------------------------ workflows
 
-    def _dispatch_workflows(self) -> None:
+    def _dispatch_workflows_here(self) -> None:
         """Start runs of due clock-triggered and watch-triggered workflows.
 
         Gated on the same ``worker.route_dispatch_enabled`` flag as
@@ -436,6 +480,11 @@ class Worker:
     # -------------------------------------------------------------- dispatch
 
     def _spawn(self, job: JobDetail) -> None:
+        """Spawn the executor for ``job`` inside the job's workspace."""
+        with workspaces.use_workspace(job.workspace_id):
+            self._spawn_in_workspace(job)
+
+    def _spawn_in_workspace(self, job: JobDetail) -> None:
         """Spawn ``ovid2 etl`` for ``job`` and record the child PID."""
         argv = self._build_argv(job)
         env = self._build_env(job)
@@ -499,6 +548,7 @@ class Worker:
             process=process,
             log_handle=log_handle,
             scoped_secrets=scoped,
+            workspace_id=job.workspace_id,
         )
         logger.info(
             "Spawned pid=%d for job=%s instance=%s pipeline=%s batch=%s",
@@ -841,6 +891,14 @@ class Worker:
         # straight through — the worker log then showed host-side steps
         # *after* "Health complete". Unbuffered keeps the log in order.
         env["PYTHONUNBUFFERED"] = "1"
+        # The executor resolves every name (addresses, connections,
+        # engines, salts, packages) inside the job's workspace
+        # (adr-workspaces.md); a workspace's own pipeline packages go first
+        # on the child's import path.
+        env[workspaces.WORKSPACE_ENV] = job.workspace_id
+        packages = workspaces.packages_dir(job.workspace_id)
+        if packages is not None:
+            env["OVID2_WORKSPACE_PACKAGES_DIR"] = str(packages)
         return env
 
     # ---------------------------------------------------------------- reaping
@@ -893,6 +951,30 @@ class Worker:
             #    contributing to address-pool exhaustion). ``compose
             #    down`` on an already-gone project is a harmless no-op.
             self._stop_cluster_async(record.instance_id)
+
+    def _sync_pause_flags(self) -> None:
+        """Mirror every running job's ``pause_requested`` into its pause flag.
+
+        The executor (host process or driver container) polls the flag at
+        each table boundary (:mod:`ovid2.core.pause`); ``WORK_DIR`` is
+        bind-mounted at the same path, so one file serves both sides.
+        Never raises: a flag error must not stop the poll loop.
+        """
+        from ovid2.config import run_control
+
+        try:
+            requests = jobs_svc.pause_requests()
+        except sqlite3.Error:
+            logger.exception("reading pause requests failed")
+            return
+        for instance_id, paused in requests:
+            try:
+                if paused:
+                    run_control.request_pause(instance_id)
+                else:
+                    run_control.clear_pause(instance_id)
+            except (OSError, ValueError) as exc:
+                logger.warning("pause flag for %s: %s", instance_id, exc)
 
     def _stop_driver_container_async(self, instance_id: str | None) -> None:
         """Stop the named driver container off the poll thread.
@@ -987,14 +1069,30 @@ class Worker:
         cancelled: bool,
     ) -> None:
         """Update the DB and close the log handle for a finished child."""
+        with workspaces.use_workspace(record.workspace_id):
+            self._finalize_in_workspace(record, returncode=returncode, cancelled=cancelled)
+
+    def _finalize_in_workspace(
+        self,
+        record: _Running,
+        *,
+        returncode: int,
+        cancelled: bool,
+    ) -> None:
+        """Body of :meth:`_finalize`, run with the job's workspace active."""
         with contextlib.suppress(Exception):
             if record.log_handle is not None:
                 record.log_handle.close()
+        if record.instance_id:
+            from ovid2.config import run_control
+
+            with contextlib.suppress(OSError):
+                run_control.clear_pause(record.instance_id)
         if record.scoped_secrets is not None:
             record.scoped_secrets.cleanup()
         # Refresh cancel_requested from the DB so a race between the
         # SIGTERM and the exit is still attributed correctly.
-        detail = jobs_svc.get_job(record.job_id)
+        detail = jobs_svc.get_job_any_workspace(record.job_id)
         was_cancel = cancelled or (detail is not None and detail.cancel_requested)
         if detail is not None and _RESULT_KINDS & {str(detail.extra_args.get("kind") or "")}:
             jobs_svc.record_result(
@@ -1027,7 +1125,36 @@ class Worker:
             returncode,
             was_cancel,
         )
+        final = jobs_svc.get_job_any_workspace(record.job_id)
+        _save_run_item_times(
+            record.instance_id,
+            job_status=final.status if final is not None else None,
+            ended_at=final.ended_at if final is not None else None,
+        )
         _ingest_report_sources(record.instance_id)
+
+
+def _save_run_item_times(
+    instance_id: str, *, job_status: str | None = None, ended_at: str | None = None
+) -> None:
+    """Save the run's per-table / per-check timings (best-effort, never raises).
+
+    ``WORK_DIR`` is tmpfs; the saved rows let the run page show every
+    item's duration the moment it opens, long after the log is gone. When
+    the job is terminal the run is also *closed*: a missing
+    ``instance.finished`` is appended to the log and every item still
+    running / waiting is ended at the job's end, so no clock on any open
+    run page keeps ticking after the job is over.
+    """
+    try:
+        from ovid2.web.services import run_items_svc
+
+        if job_status in ("done", "failed", "cancelled"):
+            run_items_svc.finalize_run(instance_id, job_status=job_status, ended_at=ended_at)
+        else:
+            run_items_svc.sync_from_log(instance_id)
+    except Exception as exc:
+        logger.warning("Saving run item times for %s failed: %s", instance_id, exc)
 
 
 def _ingest_report_sources(instance_id: str) -> None:

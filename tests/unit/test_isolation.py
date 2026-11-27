@@ -166,6 +166,49 @@ def test_cleanup_stale_reaps_spark_work_and_logs(
     assert not stale_logs.exists()
 
 
+@pytest.mark.unit
+def test_cleanup_stale_reaps_legacy_scratch(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Legacy tmpfs scratch of dead runs is reaped; a live run's is kept.
+
+    Regression: ``legacy_rt_*`` / ``legacy_scratch/<instance>`` dirs were
+    never reaped and filled the ``WORK_DIR`` tmpfs until every later run
+    failed with ``No space left on device``.
+    """
+    import ovid2.core.isolation as iso
+
+    work_root = tmp_path / "work"
+    (work_root / "docker_data").mkdir(parents=True)
+    monkeypatch.setattr(iso, "WORK_DIR", work_root)
+    monkeypatch.setattr(iso, "LEGACY_SCRATCH_ROOT", work_root)
+    monkeypatch.setattr(iso, "DOCKER_DATA_DIR", work_root / "docker_data")
+    monkeypatch.setattr(iso, "_reap_orphaned_networks", lambda *a, **k: None)
+    old = 1_000_000
+    dead, live = "20250101-000000-deadbe", "20250101-000000-11fe00"
+
+    def _old_dir(path: Path) -> Path:
+        path.mkdir(parents=True)
+        os.utime(path, (old, old))
+        return path
+
+    dead_rt = _old_dir(work_root / f"legacy_rt-{dead}")
+    live_rt = _old_dir(work_root / f"legacy_rt-{live}")
+    dead_sc = _old_dir(work_root / "legacy_scratch" / "acme" / "b" / dead)
+    live_sc = _old_dir(work_root / "legacy_scratch" / "acme" / "b" / live)
+    flat = _old_dir(work_root / "legacy_rt_abc123")
+    (work_root / f"events-{live}.jsonl").write_text("{}\n", encoding="utf-8")  # fresh = live
+
+    iso.cleanup_stale_instances(max_age_hours=1)
+    assert not dead_rt.exists() and not dead_sc.exists()
+    assert live_rt.exists() and live_sc.exists()
+    assert flat.exists(), "flat dirs carry no instance id: kept while any run is live"
+
+    (work_root / f"events-{live}.jsonl").unlink()
+    iso.cleanup_stale_instances(max_age_hours=1)
+    assert not live_rt.exists() and not live_sc.exists() and not flat.exists()
+
+
 def _make_fake_docker(
     networks: dict[str, tuple[int, str]],
     removed: list[str],
@@ -273,3 +316,31 @@ def _iso_ts(epoch: float) -> str:
     from datetime import datetime
 
     return datetime.fromtimestamp(epoch).astimezone().isoformat()
+
+
+@pytest.mark.unit
+def test_cleanup_stale_reaps_legacy_scratch_on_disk_root(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Dead-run scratch under the real-disk ``LEGACY_SCRATCH_ROOT`` is reaped too."""
+    import ovid2.core.isolation as iso
+
+    work_root = tmp_path / "work"
+    disk_root = tmp_path / "disk"
+    (work_root / "docker_data").mkdir(parents=True)
+    monkeypatch.setattr(iso, "WORK_DIR", work_root)
+    monkeypatch.setattr(iso, "LEGACY_SCRATCH_ROOT", disk_root)
+    monkeypatch.setattr(iso, "DOCKER_DATA_DIR", work_root / "docker_data")
+    monkeypatch.setattr(iso, "_reap_orphaned_networks", lambda *a, **k: None)
+    old = 1_000_000
+    dead = "20250101-000000-deadbe"
+    paths = [
+        disk_root / f"legacy_rt-{dead}",
+        disk_root / "legacy_scratch" / "acme" / "b" / dead,
+        work_root / f"legacy_rt-{dead}",  # leftovers of older images
+    ]
+    for path in paths:
+        path.mkdir(parents=True)
+        os.utime(path, (old, old))
+    iso.cleanup_stale_instances(max_age_hours=1)
+    assert not any(p.exists() for p in paths)

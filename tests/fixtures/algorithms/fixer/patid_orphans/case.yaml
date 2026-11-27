@@ -1,0 +1,33 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  src1: demographic
+  src2: PATID
+tables:
+  input:
+    columns:
+    - PATID
+    - V
+    rows:
+    - - P1
+      - a
+    - - P9
+      - b
+    - - null
+      - c
+  demographic:
+    columns:
+    - PATID
+    - BIRTH_DATE
+    rows:
+    - - P1
+      - '2000-01-01'
+    - - P2
+      - null
+note: orphan and null PATIDs are dropped (inner semantics against the reference)
+expected:
+  columns:
+  - PATID
+  - V
+  rows:
+  - - P1
+    - a

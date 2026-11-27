@@ -123,6 +123,9 @@ class DiscAddress(BaseAddress):
     only file in the disc package permitted to import pyspark.
     """
 
+    #: Rows carry their source file path (``input_file_name()``).
+    is_local_path: bool = True
+
     def __init__(self, config: dict[str, Any]) -> None:
         try:
             self.root_path: str = str(config["path"])

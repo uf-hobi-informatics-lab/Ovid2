@@ -3,15 +3,15 @@ add_row_number / rank / dense_rank.
 
 These change the row/column shape of a DataFrame. Aggregations and the
 group-by ``reduce`` use the portable DataFrame API. Window-based ops
-(``add_row_number``, ``rank``, ``dense_rank``) declare
-``requires_family = "spark"`` because Snowpark's window idiom diverges
-enough that we gate rather than silently mis-run.
+(``add_row_number``, ``rank``, ``dense_rank``) build ANSI window SQL that
+every engine accepts (``adr-engine-universality.md``).
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
+from ovid2.config.capabilities import Capability
 from ovid2.transforms.base import BaseTransform, DataFrame, TransformContext
 
 #: Aggregation functions accepted by ``reduce`` / ``head_by_group``.
@@ -89,6 +89,9 @@ class ReduceTransform(BaseTransform):
 class ExplodeTransform(BaseTransform):
     """Explode an array/map column into one row per element."""
 
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset({Capability.FN_COL, Capability.FN_EXPR})
+
     category = "reshape"
 
     @property
@@ -123,7 +126,9 @@ class ExplodeTransform(BaseTransform):
         alias = str(params.get("alias", column))
         f = ctx.functions
         # explode via the portable expr entry; keep all other columns.
-        others = [c for c in df.columns if c != column]
+        # Column names are case-insensitive (Spark semantics; Snowpark reports
+        # them upper-cased).
+        others = [c for c in df.columns if c.lower() != column.lower()]
         select_cols = [f.col(c) for c in others]
         select_cols.append(f.expr(f"explode(`{column}`)").alias(alias))
         return df.select(*select_cols)
@@ -135,6 +140,9 @@ class UnpivotTransform(BaseTransform):
     Implemented as a portable union of per-column projections so it runs
     on any family without relying on a native ``melt``/``unpivot``.
     """
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset({Capability.FN_COL, Capability.FN_LIT})
 
     category = "reshape"
 
@@ -241,8 +249,10 @@ class PivotTransform(BaseTransform):
 class AddRowNumberTransform(BaseTransform):
     """Add a 1-based row number within partitions, ordered by columns."""
 
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset({Capability.WINDOW})
+
     category = "reshape"
-    requires_family = "spark"
 
     @property
     def name(self) -> str:
@@ -291,8 +301,10 @@ class AddRowNumberTransform(BaseTransform):
 class RankTransform(BaseTransform):
     """Add a rank (with gaps) within partitions."""
 
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset({Capability.WINDOW})
+
     category = "reshape"
-    requires_family = "spark"
 
     @property
     def name(self) -> str:
@@ -321,8 +333,10 @@ class RankTransform(BaseTransform):
 class DenseRankTransform(BaseTransform):
     """Add a dense rank (no gaps) within partitions."""
 
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset({Capability.WINDOW})
+
     category = "reshape"
-    requires_family = "spark"
 
     @property
     def name(self) -> str:

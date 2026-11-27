@@ -66,12 +66,15 @@ class LlmGrant:
         role: Effective (capped) role.
         email: The user's email when known.
         expires_at: ``time.monotonic()`` deadline.
+        workspace_id: The workspace the user chatted from; the assistant
+            can never leave it (adr-workspaces.md).
     """
 
     user_id: str
     role: Role
     email: str | None
     expires_at: float
+    workspace_id: str = "default"
 
 
 def cap_role(role: Role) -> Role:
@@ -90,7 +93,14 @@ def _purge(now: float) -> None:
         _GRANTS.pop(key, None)
 
 
-def mint(user_id: str, role: Role, *, email: str | None, ttl_seconds: float) -> str:
+def mint(
+    user_id: str,
+    role: Role,
+    *,
+    email: str | None,
+    ttl_seconds: float,
+    workspace_id: str = "default",
+) -> str:
     """Mint a token for one chat turn and return its plaintext.
 
     Args:
@@ -98,6 +108,7 @@ def mint(user_id: str, role: Role, *, email: str | None, ttl_seconds: float) -> 
         role: The chatting user's role (capped here).
         email: Optional email for audit attribution.
         ttl_seconds: Lifetime; clamp to the turn timeout.
+        workspace_id: The workspace the turn runs in (pinned).
     """
     token = _TOKEN_PREFIX + secrets.token_urlsafe(32)
     now = time.monotonic()
@@ -106,6 +117,7 @@ def mint(user_id: str, role: Role, *, email: str | None, ttl_seconds: float) -> 
         role=cap_role(role),
         email=email,
         expires_at=now + max(1.0, float(ttl_seconds)),
+        workspace_id=workspace_id,
     )
     with _LOCK:
         _purge(now)

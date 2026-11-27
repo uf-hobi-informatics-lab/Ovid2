@@ -1,0 +1,31 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+spec:
+  formatter: conformance_union
+  adapter: union_of_specs
+  sub_specs:
+  - spec: conformance_a
+  - spec: conformance_b
+files:
+  a.txt: 'id|v
+
+    1|x
+
+    '
+  b.txt: 'id|w
+
+    2|y
+
+    '
+note: unionByName(allowMissingColumns) of two sub-specs (missing columns are null)
+expected:
+  columns:
+  - ID
+  - V
+  - W
+  rows:
+  - - '1'
+    - x
+    - null
+  - - '2'
+    - null
+    - y

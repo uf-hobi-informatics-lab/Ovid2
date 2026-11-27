@@ -1,0 +1,102 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+dataset: pcornet_small
+expected:
+  columns:
+  - source_table
+  - metric
+  - value_num
+  - value_str
+  - exception_flag
+  rows:
+  - - DIAGNOSIS
+    - FUTURE_DATE_PCT
+    - 0.0
+    - null
+    - false
+  - - DIAGNOSIS
+    - FUTURE_DATE_ROWS
+    - 0.0
+    - null
+    - false
+  - - DIAGNOSIS
+    - TOTAL_ROWS
+    - 4.0
+    - null
+    - false
+  - - ENCOUNTER
+    - FUTURE_DATE_PCT
+    - 16.6667
+    - null
+    - true
+  - - ENCOUNTER
+    - FUTURE_DATE_ROWS
+    - 1.0
+    - null
+    - false
+  - - ENCOUNTER
+    - TOTAL_ROWS
+    - 6.0
+    - null
+    - false
+  - - LAB_RESULT_CM
+    - FUTURE_DATE_PCT
+    - 0.0
+    - null
+    - false
+  - - LAB_RESULT_CM
+    - FUTURE_DATE_ROWS
+    - 0.0
+    - null
+    - false
+  - - LAB_RESULT_CM
+    - TOTAL_ROWS
+    - 3.0
+    - null
+    - false
+  - - PRESCRIBING
+    - FUTURE_DATE_PCT
+    - 0.0
+    - null
+    - false
+  - - PRESCRIBING
+    - FUTURE_DATE_ROWS
+    - 0.0
+    - null
+    - false
+  - - PRESCRIBING
+    - TOTAL_ROWS
+    - 3.0
+    - null
+    - false
+  - - PROCEDURES
+    - FUTURE_DATE_PCT
+    - 0.0
+    - null
+    - false
+  - - PROCEDURES
+    - FUTURE_DATE_ROWS
+    - 0.0
+    - null
+    - false
+  - - PROCEDURES
+    - TOTAL_ROWS
+    - 2.0
+    - null
+    - false
+  - - VITAL
+    - FUTURE_DATE_PCT
+    - 33.3333
+    - null
+    - true
+  - - VITAL
+    - FUTURE_DATE_ROWS
+    - 1.0
+    - null
+    - false
+  - - VITAL
+    - TOTAL_ROWS
+    - 3.0
+    - null
+    - false
+note: "metric rows on the shared pcornet_small dataset \u2014 expected = PySpark reference, identical\
+  \ on DuckDB when recorded"

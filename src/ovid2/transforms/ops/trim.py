@@ -6,13 +6,17 @@ Params:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
+from ovid2.config.capabilities import Capability
 from ovid2.transforms.base import BaseTransform, DataFrame, TransformContext
 
 
 class TrimTransform(BaseTransform):
     """Strip leading and trailing whitespace from one or more columns."""
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset({Capability.FN_COL, Capability.FN_TRIM})
 
     category = "formatting"
 
@@ -60,6 +64,16 @@ class NormalizeWhitespaceTransform(BaseTransform):
 
     Turns ``"  Mr   John  "`` into ``"Mr John"``.
     """
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.FN_COL,
+            Capability.FN_REGEXP_REPLACE,
+            Capability.FN_TRIM,
+            Capability.REGEX,
+        }
+    )
 
     category = "formatting"
 

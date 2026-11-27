@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, cast
 
+from ovid2.core.sources import SourceHandle
 from ovid2.formatters.spec import SourceSpec
 
 if TYPE_CHECKING:
@@ -16,7 +17,6 @@ if TYPE_CHECKING:
 
     from ovid2.core.addresses.base import BaseAddress
     from ovid2.core.engines.base import BaseEngine
-    from ovid2.drivers.disc import DiscAddress
 
 logger = logging.getLogger(__name__)
 
@@ -30,19 +30,16 @@ def read_source(
     batch_id: str,
     engine: BaseEngine | None = None,
     input_address_name: str | None = None,
+    source_handle: SourceHandle | None = None,
 ) -> DataFrame:
     """Read one source block into a lazy DataFrame.
 
     Steps:
 
-    1. Read the source. On the Spark path this delegates straight to the
-       input address (disc / Snowflake / …). When ``engine`` is supplied
-       and is **not** Spark-compatible (Snowpark), the read routes through
-       the engine's stager instead — ``input_address_name`` is resolved to
-       a native :class:`Driver` and materialised into an engine-native
-       DataFrame, so the JVM-less session never hits
-       ``spark.read.format('snowflake')``.
-    2. Apply optional glob exclusions on file basenames (disc only).
+    1. Read the source through the run's :class:`SourceHandle` (native
+       data plane or the engine's stager — the handle decides).
+    2. Apply optional glob exclusions on file basenames (handles with
+       ``is_local_path`` only).
     3. Lowercase column names when requested (default).
     4. Apply the ``filter`` predicate.
 
@@ -56,6 +53,11 @@ def read_source(
             read path. ``None`` (default) keeps the classic Spark path.
         input_address_name: Address config name — required for the
             non-Spark stager read path.
+        source_handle: The pipeline-built :class:`~ovid2.core.sources.SourceHandle`
+            (``ctx.source``). When given, the other endpoint arguments are
+            ignored; otherwise a handle is assembled from them. Storage
+            resolution (driver lookup, stager vs. native plane) lives on the
+            handle, never here.
 
     Returns:
         A lazy DataFrame with the source columns.
@@ -64,24 +66,16 @@ def read_source(
         FileNotFoundError: When the source is not optional and no files
             match the glob.
     """
-    use_stager = engine is not None and not getattr(engine, "session_is_spark", True)
+    handle = source_handle or SourceHandle(
+        session=spark,
+        input_address=input_address,
+        pipeline=pipeline,
+        batch_id=batch_id,
+        engine=engine,
+        input_address_name=input_address_name,
+    )
     try:
-        if use_stager:
-            df = _read_via_stager(
-                source,
-                engine=engine,  # type: ignore[arg-type]
-                pipeline=pipeline,
-                batch_id=batch_id,
-                input_address_name=input_address_name,
-            )
-        else:
-            df = input_address.read(
-                spark,
-                pipeline,
-                batch_id,
-                source.glob,
-                table_name=source.name,
-            )
+        df = handle.read(source.glob, table_name=source.name)
     except FileNotFoundError:
         if source.optional:
             logger.info(
@@ -89,15 +83,20 @@ def read_source(
                 source.name,
                 source.glob,
             )
-            return _empty_df(spark)
+            return _empty_df(handle.session)
         raise
 
     # Case-insensitive exclusions on the resolved *base name* of every file
-    # the DataFrame is reading. This works on disc addresses only; other
-    # address types return a DataFrame with no exposed input path, so
-    # excludes silently become a no-op there.
-    if source.exclude and not use_stager:
-        df = _apply_exclude_patterns(df, patterns=source.exclude, input_address=input_address)
+    # the DataFrame is reading. Only handles whose rows expose a local file
+    # path support it; elsewhere excludes are a documented no-op.
+    if source.exclude:
+        if handle.is_local_path:
+            df = _apply_exclude_patterns(df, patterns=source.exclude)
+        elif not handle.uses_stager:
+            logger.info(
+                "Exclude patterns %s ignored: input address does not expose file names.",
+                source.exclude,
+            )
 
     if source.lowercase_columns:
         df = df.toDF(*[c.lower() for c in df.columns])
@@ -108,40 +107,10 @@ def read_source(
     return cast("DataFrame", df)
 
 
-def _read_via_stager(
-    source: SourceSpec,
-    *,
-    engine: BaseEngine,
-    pipeline: str,
-    batch_id: str,
-    input_address_name: str | None,
-) -> Any:
-    """Materialise a source through the engine's stager (non-Spark path)."""
-    if not input_address_name:
-        raise ValueError(
-            "read_source: a non-Spark engine reads through the stager and "
-            "needs the input address name, but 'input_address_name' was not "
-            "supplied. Thread ctx.input_address_name through the adapter "
-            "context (run_pipeline / load_formatter do this automatically)."
-        )
-    from ovid2.drivers.registry import driver_from_address
-
-    driver = driver_from_address(input_address_name, pipeline=pipeline)
-    stager = engine.get_stager()
-    return stager.materialise(
-        driver,
-        pipeline,
-        batch_id,
-        source.glob,
-        table_name=source.name,
-    )
-
-
 def _apply_exclude_patterns(
     df: DataFrame,
     *,
     patterns: tuple[str, ...],
-    input_address: BaseAddress,
 ) -> DataFrame:
     """Best-effort exclusion: filters rows by ``input_file_name()`` when
     the reader supports it.
@@ -152,15 +121,6 @@ def _apply_exclude_patterns(
     the exclusion silently becomes a no-op (documented behaviour).
     """
     from ovid2.core.engines.dsl import expr, input_file_name
-
-    # Only meaningful for filesystem-based sources.
-    disc_address = _maybe_disc(input_address)
-    if disc_address is None:
-        logger.info(
-            "Exclude patterns %s ignored: input address does not expose file names.",
-            patterns,
-        )
-        return df
 
     # Build a predicate: keep rows whose basename matches NONE of the patterns.
     # We compare on a normalised lowercase basename to align with the
@@ -180,13 +140,6 @@ def _apply_exclude_patterns(
         )
     predicate = " AND ".join(keep_expression_parts)
     return df_with_source.filter(expr(predicate)).drop("__ovid2_source_file__")
-
-
-def _maybe_disc(input_address: BaseAddress) -> DiscAddress | None:
-    """Return ``input_address`` if it is a :class:`DiscAddress`, else ``None``."""
-    from ovid2.drivers.disc import DiscAddress
-
-    return input_address if isinstance(input_address, DiscAddress) else None
 
 
 #: Column carried by an "absent optional source" frame on engines that

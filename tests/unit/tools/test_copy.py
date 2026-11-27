@@ -818,16 +818,8 @@ class TestTableSpecWiring:
                 copy_module._run_container_mode(args)
 
 
-class TestConcurrentCopy:
-    """The per-table copy loop fans out across a thread pool.
-
-    Regression guard for the single-worker bottleneck: an Access
-    ``.accdb`` (and any single-partition source) reads one table on one
-    Spark executor, so the serial per-table loop left 24 of 25 workers
-    idle. ``_copy_tables_concurrently`` submits several tables'
-    ``persist`` actions from independent driver threads so Spark runs
-    the single-task jobs in parallel.
-    """
+class TestSerialCopy:
+    """Copy runs one table at a time on every engine (engine consistency)."""
 
     def _stager(self) -> Any:
         """A pass-through stager whose materialise/persist are recorded."""
@@ -840,38 +832,45 @@ class TestConcurrentCopy:
 
         return [TableSpec(table_name=n, file_name=n) for n in names]
 
-    def test_all_tables_copied_under_concurrency(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "4")
+    def test_all_tables_copied_in_order(self) -> None:
         stager = self._stager()
-        src = mock.MagicMock()
-        dst = mock.MagicMock()
         specs = self._specs([f"t{i}" for i in range(20)])
-        args = _mk_args()
-
-        failures = copy_module._copy_tables_concurrently(
-            specs,
-            stager,
-            src,
-            dst,
-            args,
+        failures = copy_module._copy_tables(
+            specs, stager, mock.MagicMock(), mock.MagicMock(), _mk_args()
         )
-
         assert failures == 0
-        # Every table materialised + persisted exactly once.
-        assert stager.materialise.call_count == 20
-        assert stager.persist.call_count == 20
-        persisted = {c.args[4] for c in stager.persist.call_args_list}
-        assert persisted == {f"t{i}" for i in range(20)}
+        persisted = [c.args[4] for c in stager.persist.call_args_list]
+        assert persisted == [f"t{i}" for i in range(20)]
 
-    def test_concurrent_failures_are_counted_not_fatal(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """A failing table increments the count; others still copy."""
-        monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "4")
+    def test_never_two_tables_at_once(self) -> None:
+        import threading
+
+        active = {"now": 0, "peak": 0}
+        threads: set[int] = set()
+        stager = mock.MagicMock()
+
+        def _mat(*a: Any, **kw: Any) -> Any:
+            active["now"] += 1
+            active["peak"] = max(active["peak"], active["now"])
+            threads.add(threading.get_ident())
+            return "df"
+
+        def _persist(*a: Any, **kw: Any) -> None:
+            active["now"] -= 1
+
+        stager.materialise.side_effect = _mat
+        stager.persist.side_effect = _persist
+        copy_module._copy_tables(
+            self._specs(["a", "b", "c", "d"]),
+            stager,
+            mock.MagicMock(),
+            mock.MagicMock(),
+            _mk_args(),
+        )
+        assert active["peak"] == 1
+        assert threads == {threading.get_ident()}
+
+    def test_failures_are_counted_not_fatal(self) -> None:
         stager = self._stager()
 
         def _persist(
@@ -886,93 +885,22 @@ class TestConcurrentCopy:
                 raise RuntimeError(f"boom {table_name}")
 
         stager.persist.side_effect = _persist
-        src = mock.MagicMock()
-        dst = mock.MagicMock()
-        specs = self._specs([f"t{i}" for i in range(10)])
-        args = _mk_args()
-
-        failures = copy_module._copy_tables_concurrently(
-            specs,
+        failures = copy_module._copy_tables(
+            self._specs([f"t{i}" for i in range(10)]),
             stager,
-            src,
-            dst,
-            args,
+            mock.MagicMock(),
+            mock.MagicMock(),
+            _mk_args(),
         )
-
         assert failures == 2
-        # All 10 were attempted despite the 2 failures.
         assert stager.persist.call_count == 10
 
-    def test_concurrency_one_uses_serial_path(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """Concurrency 1 keeps the original thread-free serial behaviour."""
-        monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "1")
-        stager = self._stager()
-        src = mock.MagicMock()
-        dst = mock.MagicMock()
-        specs = self._specs(["a", "b", "c"])
-        args = _mk_args()
+    def test_no_concurrency_knob(self) -> None:
+        assert not hasattr(copy_module, "_copy_table_concurrency")
+        assert not hasattr(copy_module, "ThreadPoolExecutor")
 
-        with mock.patch("ovid2.tools.copy.ThreadPoolExecutor") as m_pool:
-            failures = copy_module._copy_tables_concurrently(
-                specs,
-                stager,
-                src,
-                dst,
-                args,
-            )
-
-        assert failures == 0
-        # Serial path must NOT construct a thread pool.
-        m_pool.assert_not_called()
-        # Serial order is preserved.
-        persisted = [c.args[4] for c in stager.persist.call_args_list]
-        assert persisted == ["a", "b", "c"]
-
-    def test_concurrency_capped_at_table_count(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """A single table caps concurrency to 1 → serial, no pool built."""
-        monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "32")
-        stager = self._stager()
-        src = mock.MagicMock()
-        dst = mock.MagicMock()
-        specs = self._specs(["only"])
-        args = _mk_args()
-
-        with mock.patch("ovid2.tools.copy.ThreadPoolExecutor") as m_pool:
-            copy_module._copy_tables_concurrently(specs, stager, src, dst, args)
-        m_pool.assert_not_called()
-
-    def test_env_override_parsing(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """The concurrency knob honours the env var and clamps sanely."""
-        monkeypatch.delenv("OVID2_COPY_TABLE_CONCURRENCY", raising=False)
-        assert copy_module._copy_table_concurrency() == copy_module._DEFAULT_COPY_TABLE_CONCURRENCY
-        monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "16")
-        assert copy_module._copy_table_concurrency() == 16
-        monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "0")
-        assert copy_module._copy_table_concurrency() == 1
-        monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "not-a-number")
-        assert copy_module._copy_table_concurrency() == copy_module._DEFAULT_COPY_TABLE_CONCURRENCY
-
-    def test_emits_per_table_events_for_live_console(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """Each copied table must emit table.started + table.completed.
-
-        This is what makes a copy run's live console fill its per-table
-        roster (the copy has no CDM roster to pre-seed, so these events
-        are how the run page discovers the tables). A failing table must
-        emit table.failed instead of completed.
-        """
-        monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "4")
+    def test_emits_per_table_events_with_elapsed(self) -> None:
+        """Each table emits started + completed/failed, both carrying ``elapsed_ms``."""
         stager = self._stager()
 
         def _persist(
@@ -987,47 +915,38 @@ class TestConcurrentCopy:
                 raise RuntimeError("boom t2")
 
         stager.persist.side_effect = _persist
-        src = mock.MagicMock()
-        dst = mock.MagicMock()
-        specs = self._specs(["t0", "t1", "t2", "t3"])
-        args = _mk_args()
-
         events: list[Any] = []
         bus = mock.MagicMock()
         bus.emit.side_effect = lambda ev: events.append(ev)
-
-        failures = copy_module._copy_tables_concurrently(
-            specs,
+        failures = copy_module._copy_tables(
+            self._specs(["t0", "t1", "t2", "t3"]),
             stager,
-            src,
-            dst,
-            args,
+            mock.MagicMock(),
+            mock.MagicMock(),
+            _mk_args(),
             bus=bus,
             instance_id="inst-1",
         )
-
         assert failures == 1
-        by_kind: dict[str, set[str]] = {}
+        kinds = [(ev.kind, ev.payload["table"]) for ev in events]
+        assert kinds == [
+            ("table.started", "t0"),
+            ("table.completed", "t0"),
+            ("table.started", "t1"),
+            ("table.completed", "t1"),
+            ("table.started", "t2"),
+            ("table.failed", "t2"),
+            ("table.started", "t3"),
+            ("table.completed", "t3"),
+        ]
         for ev in events:
-            by_kind.setdefault(ev.kind, set()).add(ev.payload["table"])
-        # Every table announces a start.
-        assert by_kind.get("table.started") == {"t0", "t1", "t2", "t3"}
-        # The three good tables complete; the failing one fails.
-        assert by_kind.get("table.completed") == {"t0", "t1", "t3"}
-        assert by_kind.get("table.failed") == {"t2"}
+            if ev.kind != "table.started":
+                assert ev.payload["elapsed_ms"] >= 0
 
-    def test_no_bus_means_no_events(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """Omitting the bus keeps the loop event-free (back-compat)."""
-        monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "2")
-        stager = self._stager()
-        specs = self._specs(["a", "b"])
-        # Should not raise despite no bus.
-        failures = copy_module._copy_tables_concurrently(
-            specs,
-            stager,
+    def test_no_bus_means_no_events(self) -> None:
+        failures = copy_module._copy_tables(
+            self._specs(["a", "b"]),
+            self._stager(),
             mock.MagicMock(),
             mock.MagicMock(),
             _mk_args(),
@@ -1049,7 +968,6 @@ class TestLargestFirstAndFolderExpansion:
         args: argparse.Namespace,
         monkeypatch: pytest.MonkeyPatch,
     ) -> tuple[int, Any]:
-        monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "1")  # deterministic order
         monkeypatch.delenv("OVID2_COPY_ORDER", raising=False)
         with (
             mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
@@ -1092,23 +1010,21 @@ class TestLargestFirstAndFolderExpansion:
         src.type_name = "snowflake"
         src.table_sizes.return_value = {"b": 99}
         monkeypatch.setenv("OVID2_COPY_ORDER", "as_given")
-        with mock.patch.dict("os.environ", {"OVID2_COPY_ORDER": "as_given"}):
-            monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "1")
-            with (
-                mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
-                mock.patch("ovid2.config.settings.WORK_DIR", tmp_path),
-                mock.patch("ovid2.drivers.registry.driver_from_address") as m_df,
-                mock.patch("ovid2.core.loaders.load_engine") as m_engine,
-                mock.patch("ovid2.display.bus.JsonlEventBus"),
-            ):
-                m_inst.return_value.instance_id = "20261023-000000-abcdef"
-                m_df.side_effect = [src, mock.MagicMock()]
-                from ovid2.core.engines.stager import SparkEngineStager
+        with (
+            mock.patch("ovid2.core.isolation.OvidInstance") as m_inst,
+            mock.patch("ovid2.config.settings.WORK_DIR", tmp_path),
+            mock.patch("ovid2.drivers.registry.driver_from_address") as m_df,
+            mock.patch("ovid2.core.loaders.load_engine") as m_engine,
+            mock.patch("ovid2.display.bus.JsonlEventBus"),
+        ):
+            m_inst.return_value.instance_id = "20261023-000000-abcdef"
+            m_df.side_effect = [src, mock.MagicMock()]
+            from ovid2.core.engines.stager import SparkEngineStager
 
-                m_engine.return_value.get_stager.return_value = SparkEngineStager(
-                    m_engine.return_value,
-                )
-                copy_module._run_container_mode(args)
+            m_engine.return_value.get_stager.return_value = SparkEngineStager(
+                m_engine.return_value,
+            )
+            copy_module._run_container_mode(args)
         assert [c.args[3] for c in src.read.call_args_list] == ["a", "b"]
         src.table_sizes.assert_not_called()
 
@@ -1179,54 +1095,14 @@ class TestSnowparkSkipsSparkCluster:
         assert cmd[-cmd[::-1].index("--engine") :][0] == "snowpark"
 
 
-class TestConcurrentCopyDuckDB:
-    """Parallel copy tables on DuckDB each get a private engine cursor.
+class TestDuckDBWorkerCursor:
+    """DuckDB's ``table_worker`` cursor stays a thread-safe primitive.
 
-    Regression guard: the thread pool used to share the root DuckDB
-    connection across table threads, intermittently failing with
-    "Attempting to execute an unsuccessful or closed pending query result"
-    (seen live on a 2-table disc → disc DuckDB copy driven by a workflow).
+    Pipelines run tables one at a time, but callers touching the engine
+    from another thread must use a private cursor (a shared connection
+    intermittently failed with "Attempting to execute an unsuccessful or
+    closed pending query result").
     """
-
-    def test_each_table_runs_inside_table_worker(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        import contextlib
-        import threading
-
-        monkeypatch.setenv("OVID2_COPY_TABLE_CONCURRENCY", "4")
-        scopes: list[int] = []
-        inside = threading.local()
-
-        class Eng:
-            def table_concurrency(self) -> int:
-                return 4
-
-            @contextlib.contextmanager
-            def table_worker(self):  # type: ignore[no-untyped-def]
-                inside.on = True
-                scopes.append(threading.get_ident())
-                try:
-                    yield
-                finally:
-                    inside.on = False
-
-        stager = mock.MagicMock()
-
-        def _mat(*a: Any, **kw: Any) -> Any:
-            assert getattr(inside, "on", False), "materialise ran outside table_worker()"
-            return "df"
-
-        stager.materialise.side_effect = _mat
-        specs = [
-            __import__("ovid2.tools.table_specs", fromlist=["TableSpec"]).TableSpec(
-                table_name=f"t{i}", file_name=f"t{i}"
-            )
-            for i in range(6)
-        ]
-        failures = copy_module._copy_tables_concurrently(
-            specs, stager, mock.MagicMock(), mock.MagicMock(), _mk_args(), engine=Eng()
-        )
-        assert failures == 0
-        assert len(scopes) == 6
 
     def test_real_duckdb_parallel_reads_are_stable(self) -> None:
         """Many parallel staged reads on one DuckDBEngine never trip the shared-cursor race."""

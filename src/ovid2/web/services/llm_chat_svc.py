@@ -40,6 +40,7 @@ from ovid2.web.auth import llm_token
 from ovid2.web.auth.roles import Capability, Role, has_capability
 from ovid2.web.models import LlmChatRequest
 from ovid2.web.services import llm_exec, llm_sessions_svc, llms_svc, settings_svc
+from ovid2.workspaces import active_workspace
 
 logger = logging.getLogger(__name__)
 
@@ -232,6 +233,7 @@ def sse_stream(
             principal.role,
             email=principal.email,
             ttl_seconds=float(llm.chat_timeout_seconds) + 5.0,
+            workspace_id=active_workspace(),
         )
         extra_env = {"OVID2_LLM_API_URL": principal.api_url, "OVID2_LLM_API_TOKEN": token}
 

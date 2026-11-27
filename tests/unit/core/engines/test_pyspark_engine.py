@@ -220,3 +220,64 @@ def test_test_reports_unreachable_when_pyspark_missing(monkeypatch: pytest.Monke
     assert result.ok is False
     assert result.code == "unreachable"
     assert "pyspark not importable" in result.message
+
+
+# ---------------------------------------------------------------------------
+# Executor request fitted to ovid2-launched workers
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_get_session_shrinks_executor_cores_to_managed_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Engine arg ``spark.executor.cores=32`` on 8-core workers becomes 8.
+
+    Regression for a run whose Spark app sat ``WAITING`` ("requires more
+    resource than any of Workers could have") with stage 0 at ``(0 + 0)``.
+    """
+    captured: dict[str, str] = {}
+    builder = MagicMock()
+    builder.appName.return_value = builder
+    builder.master.return_value = builder
+
+    def _config(key: str, value: str) -> MagicMock:
+        captured[key] = value
+        return builder
+
+    builder.config.side_effect = _config
+    pyspark_sql = types.ModuleType("pyspark.sql")
+    pyspark_sql.SparkSession = MagicMock(builder=builder)  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "pyspark", types.ModuleType("pyspark"))
+    monkeypatch.setitem(sys.modules, "pyspark.sql", pyspark_sql)
+    monkeypatch.setenv("OVID2_SPARK_WORKER_CORES", "8")
+    monkeypatch.setenv("OVID2_SPARK_WORKER_MEMORY_GB", "56")
+
+    PySparkEngine(args={"spark.executor.cores": "32"}).get_session()
+    assert captured["spark.executor.cores"] == "8"
+
+
+@pytest.mark.unit
+def test_get_session_keeps_executor_cores_without_worker_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With no managed-cluster shape (external cluster), args pass as-is."""
+    captured: dict[str, str] = {}
+    builder = MagicMock()
+    builder.appName.return_value = builder
+    builder.master.return_value = builder
+
+    def _config(key: str, value: str) -> MagicMock:
+        captured[key] = value
+        return builder
+
+    builder.config.side_effect = _config
+    pyspark_sql = types.ModuleType("pyspark.sql")
+    pyspark_sql.SparkSession = MagicMock(builder=builder)  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "pyspark", types.ModuleType("pyspark"))
+    monkeypatch.setitem(sys.modules, "pyspark.sql", pyspark_sql)
+    monkeypatch.delenv("OVID2_SPARK_WORKER_CORES", raising=False)
+    monkeypatch.delenv("OVID2_SPARK_WORKER_MEMORY_GB", raising=False)
+
+    PySparkEngine(args={"spark.executor.cores": "32"}).get_session()
+    assert captured["spark.executor.cores"] == "32"

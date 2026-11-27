@@ -72,7 +72,7 @@ class DatabricksDriver(build_legacy_driver_class("databricks")):  # type: ignore
 
     def _sql(self) -> Any:
         try:
-            from databricks import sql  # type: ignore[import-not-found]
+            from databricks import sql  # type: ignore[import-not-found,attr-defined,unused-ignore]
         except ImportError as exc:
             raise NotImplementedError(
                 "databricks-sql-connector is not installed (pip install 'ovid2[databricks]')."

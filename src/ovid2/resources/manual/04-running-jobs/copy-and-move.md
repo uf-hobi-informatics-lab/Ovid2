@@ -36,10 +36,10 @@ list the real tables.
 
 ## Largest table first
 
-`copy` runs tables in parallel (`OVID2_COPY_TABLE_CONCURRENCY`, default
-8), starting with the largest source tables. Sizes come from metadata, not
-scans. Total time is then close to the time of the single largest table.
-Set `OVID2_COPY_ORDER=as_given` to keep your order.
+`copy` runs tables one at a time (every engine), starting with the largest
+source tables. Sizes come from metadata, not scans. Each table gets the
+engine's whole capacity. Set `OVID2_COPY_ORDER=as_given` to keep your
+order.
 
 ## Snowflake → Snowflake without leaving Snowflake
 

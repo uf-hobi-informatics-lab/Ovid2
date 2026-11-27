@@ -32,9 +32,9 @@ Column-expression work goes through :attr:`TransformContext.functions`
 (the :class:`~ovid2.core.engines.protocols.EngineFunctions` DSL);
 DataFrame-shape work (``dropDuplicates``, ``sample``, ``groupBy`` …)
 uses the portable DataFrame API that both PySpark and Snowpark expose.
-An op that genuinely needs a Spark-only feature declares
-``requires_family = "spark"`` so the engine gates it up front rather
-than failing deep in execution.
+Every op runs on every engine; there is no family gate. A feature an
+engine lacks is added to that engine (see
+``ovid2.core.engines.surface``), never worked around per op.
 """
 
 from __future__ import annotations
@@ -67,8 +67,8 @@ class TransformContext:
             (:class:`~ovid2.core.engines.protocols.EngineFunctions`).
             All column work goes through this so transforms run under
             either compute family.
-        engine_family: ``'spark'`` or ``'snowpark'`` — used by the
-            engine to gate ops that declare ``requires_family``.
+        engine_family: The active engine family — context only (used to
+            pick the SQL dialect); it never gates an op.
         pipeline: Optional owning pipeline name (``None`` for a
             shared-library chain run outside a pipeline).
         secrets: Optional pipeline-scoped secret bag. Transforms rarely
@@ -94,12 +94,6 @@ class BaseTransform(ABC):
     in the web-safe catalogue (:mod:`ovid2.config.transforms_catalogue`)
     for discovery by users and agents.
     """
-
-    #: Compute family this transform requires, or ``None`` when it runs
-    #: on any family. When set (e.g. ``'spark'``), the engine refuses to
-    #: run the transform on a different family with a clear error rather
-    #: than letting it fail mid-execution.
-    requires_family: str | None = None
 
     #: Coarse grouping for the catalogue UI. One of ``'formatting'``,
     #: ``'correction'``, ``'reshape'``, ``'sampling'``.

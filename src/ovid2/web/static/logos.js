@@ -56,6 +56,21 @@ export const LOGOS = {
   access:
     '<rect x="3" y="3" width="18" height="18" rx="3"/>' +
     '<path d="M8 17l4-10 4 10M9.5 13.5h5"/>',
+  // ---- engine types (config/engines.py::_KNOWN_TYPES) -----------------
+  // Pinned by tests/contract/test_engine_logos.py.
+  pyspark:
+    '<path d="M12 2.5l2.2 6.3 6.3 2.2-6.3 2.2L12 19.5l-2.2-6.3L3.5 11l6.3-2.2z"/>' +
+    '<path d="M18.5 17.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/>',
+  duckdb:
+    '<circle cx="11" cy="12" r="8.5"/>' +
+    '<circle cx="9.5" cy="10.5" r="3.2"/>' +
+    '<path d="M14 10.5h5.5a1.6 1.6 0 0 1 0 3.2H14"/>',
+  snowpark:
+    '<path d="M12 3v11M7.2 5.8l9.6 5.4M7.2 11.2l9.6-5.4"/>' +
+    '<path d="M3 21c2.5-3.5 5.5-5 9-5s6.5 1.5 9 5"/>',
+  databricks_spark:
+    '<path d="M3 13.5l9 5 9-5"/><path d="M3 18l9 5 9-5"/>' +
+    '<path d="M12 1.5l1.7 4.6 4.6 1.7-4.6 1.7L12 14.1l-1.7-4.6L5.7 7.8l4.6-1.7z"/>',
   // ---- tree nodes ---------------------------------------------------
   folder:
     '<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2z"/>',
@@ -109,6 +124,20 @@ export const LOGOS = {
 export function logoForType(type) {
   const t = String(type || "").toLowerCase();
   return Object.prototype.hasOwnProperty.call(LOGOS, t) ? t : "unknown";
+}
+
+/* Engine TYPE (+ family fallback) -> logo name; unknown → generic chip. */
+const ENGINE_FAMILY_LOGO = { spark: "pyspark", duckdb: "duckdb", snowpark: "snowpark" };
+export function logoForEngine(type, family) {
+  const t = String(type || "").toLowerCase();
+  if (["pyspark", "duckdb", "snowpark", "databricks_spark"].includes(t)) return t;
+  return ENGINE_FAMILY_LOGO[String(family || "").toLowerCase()] || "engine";
+}
+
+/* Run KIND -> logo name; unknown → generic pipeline mark. */
+export function logoForKind(kind) {
+  const k = String(kind || "").toLowerCase();
+  return ["etl", "analysis", "dq_checks", "health", "copy", "move", "export"].includes(k) ? k : "pipeline";
 }
 
 /* Legacy address ``src_name`` (disc / snowflake / …) -> logo name. */

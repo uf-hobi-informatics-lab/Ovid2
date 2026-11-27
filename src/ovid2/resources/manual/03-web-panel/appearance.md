@@ -5,25 +5,27 @@ audience: [user]
 ---
 
 Open the **Appearance** panel from the paint-palette button on the right
-rail.
+rail. The assistant, Appearance and search (Ctrl-K) panels all open from
+the right edge at the same width; opening one closes the others.
 
 ## Themes
 
-The panel ships eight themes, each with its own colours, fonts and small
-effects:
+The panel ships eight themes, listed alphabetically, each with its own
+colours, fonts and small effects:
 
 | Theme | Mode | Feel |
 | --- | --- | --- |
-| *Data Factory* (default) | light | industrial line control: steel grey, a dark machine-side menu, drive-blue accent, condensed telemetry type |
 | *Clinical* | light | calm hospital teal, IBM Plex |
+| *Data Factory* (default) | light | a working factory floor: concrete, a safety-yellow gantry, conveyor belts that move while a job runs, stencilled titles, hazard tape, QC stamps |
+| *Dune* | light | the deep desert at noon: bleached sand, basalt menu, electric-blue accent, carved capitals, wind ripples and thumper pulses |
+| *Financial* | dark | amber trading terminal, dense tables, prompt-marked menu |
 | *LEGO* | light | toy bricks |
-| *Super Mario World* | light | 16-bit sky and bricks |
 | *Matrix* | dark | phosphor-green digital rain |
-| *Financial* | dark | amber trading terminal, dense tables |
 | *Spaceship* | dark | sci-fi console, teal glow |
-| *Star Wars / Tatooine* | dark | desert dusk, cut-corner panels |
+| *Super Mario World* | light | 16-bit sky and bricks |
 
-Until you pick a theme, the panel uses **Data Factory**.
+Until you pick a theme, the panel uses **Data Factory**. A look saved with
+the retired *Star Wars / Tatooine* theme now opens in *Dune*.
 
 ## Customise
 
@@ -38,8 +40,10 @@ Overrides are validated. A change that would make body text unreadable
 
 ## Saved looks
 
-Click **Save** to name the current theme and overrides, then re-apply them
-later from the list.
+Type a name under **Your themes** and click **Save** to keep the current
+theme and overrides. Saved looks appear in the same theme list as the
+built-in themes (alphabetically, with their own colour swatch and the
+theme they are based on); click one to apply it, or **×** to delete it.
 
 ## Where it is stored
 

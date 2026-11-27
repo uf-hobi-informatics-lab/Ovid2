@@ -57,10 +57,10 @@ unknown ops. Schema: `resources/schemas/transform_spec.v1.json`.
 | **reshape** | `select_columns`, `drop_columns`, `reduce`, `explode`, `unpivot`, `pivot`, `add_row_number`, `rank`, `dense_rank` |
 | **sampling** | `random_sample`, `limit`, `stratified_sample`, `head_by_group` |
 
-Ops marked `requires_family: spark` (`add_row_number`, `rank`,
-`dense_rank`, `stratified_sample`, `head_by_group`) are gated to the
-Spark family; the engine refuses them on another family with a clear
-error.
+Every op runs on every engine (`pyspark`, `databricks_spark`, `duckdb`,
+`snowpark`), including the window-based ones (`add_row_number`, `rank`,
+`dense_rank`, `stratified_sample`, `head_by_group`). There is no
+engine-family gate — see [Engine universality](engines.md#engine-universality).
 
 Per-op parameters are published in each op's `params_schema` — see the
 catalogue endpoint below or the op module docstrings.
@@ -71,8 +71,7 @@ The library is **queryable** — the point is that you don't have to read
 the source to know what exists.
 
 - **HTTP**: `GET /api/v1/transforms` (optionally `?category=sampling`)
-  returns every transform's name / summary / category / requires_family /
-  params_schema. `POST /api/v1/transforms:validate` validates a
+  returns every transform's name / summary / category / params_schema. `POST /api/v1/transforms:validate` validates a
   candidate spec (schema + op-name check) before you save it.
 - **MCP**: the `list_transforms` and `validate_transform` tools wrap
   those endpoints for Agent Ovid.
@@ -112,17 +111,30 @@ ops:
 ## Writing a new transform
 
 1. Add a `BaseTransform` subclass under `src/ovid2/transforms/ops/`.
-   Declare `name`, `summary`, `category`, `params_schema`, and (if it
-   needs a Spark-only feature) `requires_family`.
-2. Do **not** `import pyspark`. Use `ctx.functions` (the portable
-   `EngineFunctions` DSL) for column work and the portable DataFrame API
-   for shape changes. This keeps the library Snowpark-ready and passes
-   `tests/contract/test_no_pyspark_outside_engine.py`.
-3. Register it in `ovid2.transforms.registry.TRANSFORMS`.
-4. Add its metadata to `ovid2.config.transforms_catalogue.TRANSFORM_CATALOGUE`
+   Declare `name`, `summary`, `category` and `params_schema`. There is no
+   engine-family field: every transform must run on every engine.
+2. Do **not** `import pyspark`. Use `ctx.functions` / `ovid2.core.engines.dsl`
+   (the portable column DSL, including `Window`, `udf`, `pandas_udf`) for
+   column work and the portable DataFrame API (`core/engines/surface.py`)
+   for shape changes. This passes
+   `tests/contract/test_no_pyspark_outside_engine.py` and
+   `test_engine_surface_complete.py`.
+3. Declare what it needs from the engine in `REQUIRES` (a
+   `frozenset[Capability]` from `ovid2.config.capabilities`): every DSL
+   function it calls (`Capability.FN_UPPER`, …) and any feature
+   (`Capability.WINDOW`, `Capability.REGEX`, …). When only some parameters
+   need a feature, add a `requires_for(cls, params)` classmethod — for
+   example `random_sample` needs `rand_seeded` only with a `seed`.
+   `test_algorithm_requires_declared.py` AST-checks the declaration against
+   the source, and features must be mirrored in
+   `ovid2.config.algorithm_requirements` (web-safe, used by the plan-time
+   check). See `docs/engines.md` → *Capabilities*.
+4. Register it in `ovid2.transforms.registry.TRANSFORMS` (it is then reachable
+   through `ovid2.algorithms.registry.AlgorithmRegistry`).
+5. Add its metadata to `ovid2.config.transforms_catalogue.TRANSFORM_CATALOGUE`
    (the contract test `test_transforms_catalogue_synchronised.py` will
    fail until you do).
-5. Add a unit test under `tests/unit/transforms/`.
+6. Add a unit test under `tests/unit/transforms/`.
 
 See the adr-public-transforms-library design note for the
 design rationale.

@@ -35,6 +35,7 @@ from datetime import UTC, datetime
 
 from ovid2.web import db as web_db
 from ovid2.web.models import ApprovalDecision, ApprovalListResponse, ApprovalSummary
+from ovid2.workspaces import active_workspace
 
 __all__ = [
     "DESTRUCTIVE_ACTIONS",
@@ -81,6 +82,10 @@ DESTRUCTIVE_ACTIONS: frozenset[str] = frozenset(
         # An agent adding a workflow data probe with a row filter: a count
         # under an arbitrary filter can reveal row values bit by bit.
         "workflow.data_probe",
+        # Archiving / deleting a workspace (adr-workspaces.md): members lose
+        # access to its pipelines, jobs, reports and credentials.
+        "workspace.archive",
+        "workspace.delete",
     }
 )
 
@@ -122,11 +127,11 @@ def _row_to_summary(row: sqlite3.Row) -> ApprovalSummary:
 
 def list_approvals(status: str | None = None) -> ApprovalListResponse:
     """Return approval rows, optionally filtered by status."""
-    query = "SELECT * FROM web_approvals"
-    params: tuple[object, ...] = ()
+    query = "SELECT * FROM web_approvals WHERE workspace_id = ?"
+    params: tuple[object, ...] = (active_workspace(),)
     if status:
-        query += " WHERE status = ?"
-        params = (status,)
+        query += " AND status = ?"
+        params = (active_workspace(), status)
     query += " ORDER BY created_at DESC"
     with web_db.connect() as conn:
         rows = conn.execute(query, params).fetchall()
@@ -137,7 +142,8 @@ def get_approval(approval_id: str) -> ApprovalSummary | None:
     """Return a single approval row, or ``None`` when it does not exist."""
     with web_db.connect() as conn:
         row = conn.execute(
-            "SELECT * FROM web_approvals WHERE approval_id = ?", (approval_id,)
+            "SELECT * FROM web_approvals WHERE approval_id = ? AND workspace_id = ?",
+            (approval_id, active_workspace()),
         ).fetchone()
     return _row_to_summary(row) if row is not None else None
 
@@ -167,24 +173,24 @@ def require_approval(
     with web_db.connect() as conn:
         approved = conn.execute(
             "SELECT approval_id FROM web_approvals "
-            "WHERE action = ? AND (target IS ? OR target = ?) "
+            "WHERE workspace_id = ? AND action = ? AND (target IS ? OR target = ?) "
             "AND status = 'approved' ORDER BY decided_at DESC LIMIT 1",
-            (action, target, target),
+            (active_workspace(), action, target, target),
         ).fetchone()
         if approved is not None:
             conn.execute(
                 "UPDATE web_approvals SET status = 'consumed', "
-                "decided_at = ? WHERE approval_id = ?",
-                (_now(), approved["approval_id"]),
+                "decided_at = ? WHERE approval_id = ? AND workspace_id = ?",
+                (_now(), approved["approval_id"], active_workspace()),
             )
             return
 
         # No approval yet — reuse an existing pending row or create one.
         pending = conn.execute(
             "SELECT approval_id FROM web_approvals "
-            "WHERE action = ? AND (target IS ? OR target = ?) "
+            "WHERE workspace_id = ? AND action = ? AND (target IS ? OR target = ?) "
             "AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
-            (action, target, target),
+            (active_workspace(), action, target, target),
         ).fetchone()
         if pending is not None:
             approval_id = pending["approval_id"]
@@ -193,7 +199,7 @@ def require_approval(
             conn.execute(
                 "INSERT INTO web_approvals "
                 "(approval_id, created_at, requested_by, action, target, "
-                "detail_json, status) VALUES (?, ?, ?, ?, ?, ?, 'pending')",
+                "detail_json, status, workspace_id) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)",
                 (
                     approval_id,
                     _now(),
@@ -201,6 +207,7 @@ def require_approval(
                     action,
                     target,
                     json.dumps(detail or {}),
+                    active_workspace(),
                 ),
             )
 
@@ -227,7 +234,8 @@ def decide(
     new_status = "approved" if approve else "denied"
     with web_db.connect() as conn:
         row = conn.execute(
-            "SELECT * FROM web_approvals WHERE approval_id = ?", (approval_id,)
+            "SELECT * FROM web_approvals WHERE approval_id = ? AND workspace_id = ?",
+            (approval_id, active_workspace()),
         ).fetchone()
         if row is None:
             raise KeyError(f"Approval '{approval_id}' not found.")
@@ -235,8 +243,15 @@ def decide(
             raise ValueError(f"Approval '{approval_id}' is '{row['status']}', not pending.")
         conn.execute(
             "UPDATE web_approvals SET status = ?, decided_at = ?, "
-            "decided_by = ?, reason = ? WHERE approval_id = ?",
-            (new_status, _now(), payload.decided_by, payload.reason, approval_id),
+            "decided_by = ?, reason = ? WHERE approval_id = ? AND workspace_id = ?",
+            (
+                new_status,
+                _now(),
+                payload.decided_by,
+                payload.reason,
+                approval_id,
+                active_workspace(),
+            ),
         )
 
     web_db.audit(

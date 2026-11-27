@@ -9,9 +9,12 @@
 {% set _terminal = job.status in ["done", "failed", "cancelled"] %}
 {# Machine-readable status marker: live.js reads it after every poll
    swap and syncs the *visible* console label + queue note, so the
-   operator sees draft -> queued -> running without a reload. #}
+   operator sees draft -> queued -> running without a reload. Once the
+   job is terminal ``data-ended-at-ms`` freezes every console clock at
+   the job's real end. #}
 <span class="job-status-marker" hidden
       data-job-status="{{ job.status }}"
+      {% if ended_at_ms %}data-ended-at-ms="{{ ended_at_ms }}"{% endif %}
       {% if queue %}data-queue-running="{{ queue.running }}" data-queue-ahead="{{ queue.ahead }}"{% endif %}></span>
 <div class="job-actions">
   <span class="badge status-{{ job.status }}">job: {{ job.status }}</span>

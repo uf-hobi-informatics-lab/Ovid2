@@ -1,0 +1,226 @@
+# Shared conformance dataset (data only).
+run_date: '2025-01-01'
+note: shared fixture CDM for the health-check conformance cases (same rows as tests/unit/quality/test_health_engine_parity.py)
+tables:
+  demographic:
+    columns:
+    - PATID
+    - SEX
+    - BIRTH_DATE
+    - HISPANIC
+    rows:
+    - - P1
+      - M
+      - '1980-01-01'
+      - N
+    - - P1
+      - F
+      - '1980-01-01'
+      - N
+    - - P2
+      - ZZ
+      - '1990-05-05'
+      - Y
+    - - P3
+      - F
+      - null
+      - NI
+    - - P4
+      - M
+      - '2001-07-07'
+      - ''
+  encounter:
+    columns:
+    - ENCOUNTERID
+    - PATID
+    - ADMIT_DATE
+    - DISCHARGE_DATE
+    - ENC_TYPE
+    - FACILITY_LOCATION
+    rows:
+    - - E1
+      - P1
+      - '2024-01-10'
+      - '2024-01-12'
+      - IP
+      - '32601'
+    - - E2
+      - P1
+      - '2024-01-10'
+      - '2024-01-09'
+      - IP
+      - 3260A
+    - - E3
+      - P2
+      - '2024-02-01'
+      - null
+      - AV
+      - '326'
+    - - E4
+      - P9
+      - '2099-01-01'
+      - null
+      - ED
+      - null
+    - - E5
+      - P3
+      - '2024-03-03'
+      - '2024-03-04'
+      - AV
+      - '32607'
+    - - E6
+      - P3
+      - bogus
+      - null
+      - OT
+      - '32607'
+  diagnosis:
+    columns:
+    - DIAGNOSISID
+    - PATID
+    - ENCOUNTERID
+    - DX
+    - DX_TYPE
+    - ADMIT_DATE
+    rows:
+    - - D1
+      - P1
+      - E1
+      - I10
+      - '10'
+      - '2024-01-10'
+    - - D2
+      - P1
+      - E2
+      - E11.9
+      - '10'
+      - '2024-01-10'
+    - - D3
+      - P2
+      - E3
+      - '250.00'
+      - 09
+      - '2024-02-01'
+    - - D4
+      - P2
+      - E99
+      - X
+      - ZZ
+      - '2024-02-01'
+  procedures:
+    columns:
+    - PROCEDURESID
+    - PATID
+    - ENCOUNTERID
+    - PX
+    - PX_TYPE
+    - PX_DATE
+    rows:
+    - - X1
+      - P1
+      - E1
+      - '99213'
+      - CH
+      - '2024-01-10'
+    - - X2
+      - P2
+      - E3
+      - '0016070'
+      - '10'
+      - '2024-02-01'
+  vital:
+    columns:
+    - VITALID
+    - PATID
+    - ENCOUNTERID
+    - HT
+    - WT
+    - MEASURE_DATE
+    rows:
+    - - V1
+      - P1
+      - E1
+      - '70'
+      - '180'
+      - '2024-01-10'
+    - - V2
+      - P2
+      - E3
+      - abc
+      - '9999'
+      - '2024-02-01'
+    - - V3
+      - P3
+      - E5
+      - '12'
+      - '150'
+      - '2030-01-01'
+  lab_result_cm:
+    columns:
+    - LAB_RESULT_CM_ID
+    - PATID
+    - LAB_LOINC
+    - RESULT_DATE
+    - RESULT_UNIT
+    - RESULT_NUM
+    rows:
+    - - L1
+      - P1
+      - 2345-7
+      - '2024-01-10'
+      - mg/dL
+      - '95'
+    - - L2
+      - P1
+      - 24323-8
+      - '2024-01-11'
+      - null
+      - '1'
+    - - L3
+      - P2
+      - ''
+      - '2024-02-01'
+      - NI
+      - null
+  prescribing:
+    columns:
+    - PRESCRIBINGID
+    - PATID
+    - RXNORM_CUI
+    - RX_ORDER_DATE
+    rows:
+    - - R1
+      - P1
+      - '38'
+      - '2024-01-10'
+    - - R2
+      - P2
+      - '44'
+      - '2024-02-01'
+    - - R3
+      - P3
+      - nope
+      - '2024-03-03'
+  harvest:
+    columns:
+    - NETWORKID
+    - REFRESH_DEMOGRAPHIC_DATE
+    rows:
+    - - N1
+      - '2024-04-01'
+prior:
+  demographic:
+    columns:
+    - PATID
+    rows:
+    - - P1
+    - - P2
+    - - P3
+    - - P4
+    - - P5
+    - - P6
+  encounter:
+    columns:
+    - ENCOUNTERID
+    rows:
+    - - E1

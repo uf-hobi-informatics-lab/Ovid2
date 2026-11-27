@@ -27,25 +27,9 @@ def engine_context_for(df: Any, engine: Any = None) -> tuple[Any, str]:
         The engine's ``EngineFunctions`` and its family value
         (``'spark'`` / ``'duckdb'`` / ``'snowpark'``).
     """
-    from ovid2.core.engines.dsl import active_engine
+    from ovid2.core.engines.dsl import functions_and_family_for_frame
 
-    engine = engine if engine is not None else active_engine()
-    if engine is not None:
-        family = getattr(engine, "family", "spark")
-        family_name = str(getattr(family, "value", family))
-        return engine.get_functions(), family_name
-    module = type(df).__module__
-    if module.startswith("ovid2.core.engines._duck"):
-        from ovid2.core.engines.duckdb import _DuckFunctions
-
-        return _DuckFunctions(), "duckdb"
-    if module.startswith("snowflake.snowpark"):
-        from ovid2.core.engines.snowpark import _SnowparkFunctions
-
-        return _SnowparkFunctions(), "snowpark"
-    from ovid2.core.engines.pyspark import spark_functions
-
-    return spark_functions(), "spark"
+    return functions_and_family_for_frame(df, engine)
 
 
 if __name__ == "__main__":  # pragma: no cover

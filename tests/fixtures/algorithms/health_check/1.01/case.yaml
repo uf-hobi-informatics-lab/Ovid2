@@ -1,0 +1,162 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+dataset: pcornet_small
+expected:
+  columns:
+  - source_table
+  - metric
+  - value_num
+  - value_str
+  - exception_flag
+  rows:
+  - - CONDITION
+    - TABLE_EXISTS_FLAG
+    - 0.0
+    - null
+    - false
+  - - DEATH
+    - TABLE_EXISTS_FLAG
+    - 0.0
+    - null
+    - false
+  - - DEATH_CAUSE
+    - TABLE_EXISTS_FLAG
+    - 0.0
+    - null
+    - false
+  - - DEMOGRAPHIC
+    - MISSING_REQUIRED_TABLE_FLAG
+    - 0.0
+    - null
+    - false
+  - - DEMOGRAPHIC
+    - TABLE_EXISTS_FLAG
+    - 1.0
+    - null
+    - false
+  - - DIAGNOSIS
+    - MISSING_REQUIRED_TABLE_FLAG
+    - 0.0
+    - null
+    - false
+  - - DIAGNOSIS
+    - TABLE_EXISTS_FLAG
+    - 1.0
+    - null
+    - false
+  - - ENCOUNTER
+    - MISSING_REQUIRED_TABLE_FLAG
+    - 0.0
+    - null
+    - false
+  - - ENCOUNTER
+    - TABLE_EXISTS_FLAG
+    - 1.0
+    - null
+    - false
+  - - ENROLLMENT
+    - MISSING_REQUIRED_TABLE_FLAG
+    - 1.0
+    - null
+    - true
+  - - ENROLLMENT
+    - TABLE_EXISTS_FLAG
+    - 0.0
+    - null
+    - false
+  - - EXTERNAL_MEDS
+    - TABLE_EXISTS_FLAG
+    - 0.0
+    - null
+    - false
+  - - HARVEST
+    - MISSING_REQUIRED_TABLE_FLAG
+    - 0.0
+    - null
+    - false
+  - - HARVEST
+    - TABLE_EXISTS_FLAG
+    - 1.0
+    - null
+    - false
+  - - HASH_TOKEN
+    - TABLE_EXISTS_FLAG
+    - 0.0
+    - null
+    - false
+  - - IMMUNIZATION
+    - TABLE_EXISTS_FLAG
+    - 0.0
+    - null
+    - false
+  - - LAB_HISTORY
+    - TABLE_EXISTS_FLAG
+    - 0.0
+    - null
+    - false
+  - - LAB_RESULT_CM
+    - TABLE_EXISTS_FLAG
+    - 1.0
+    - null
+    - false
+  - - LDS_ADDRESS_HISTORY
+    - TABLE_EXISTS_FLAG
+    - 0.0
+    - null
+    - false
+  - - MED_ADMIN
+    - TABLE_EXISTS_FLAG
+    - 0.0
+    - null
+    - false
+  - - OBS_CLIN
+    - TABLE_EXISTS_FLAG
+    - 0.0
+    - null
+    - false
+  - - OBS_GEN
+    - TABLE_EXISTS_FLAG
+    - 0.0
+    - null
+    - false
+  - - PAT_RELATIONSHIP
+    - TABLE_EXISTS_FLAG
+    - 0.0
+    - null
+    - false
+  - - PCORNET_TRIAL
+    - TABLE_EXISTS_FLAG
+    - 0.0
+    - null
+    - false
+  - - PRESCRIBING
+    - TABLE_EXISTS_FLAG
+    - 1.0
+    - null
+    - false
+  - - PROCEDURES
+    - MISSING_REQUIRED_TABLE_FLAG
+    - 0.0
+    - null
+    - false
+  - - PROCEDURES
+    - TABLE_EXISTS_FLAG
+    - 1.0
+    - null
+    - false
+  - - PROVIDER
+    - TABLE_EXISTS_FLAG
+    - 0.0
+    - null
+    - false
+  - - PRO_CM
+    - TABLE_EXISTS_FLAG
+    - 0.0
+    - null
+    - false
+  - - VITAL
+    - TABLE_EXISTS_FLAG
+    - 1.0
+    - null
+    - false
+note: "metric rows on the shared pcornet_small dataset \u2014 expected = PySpark reference, identical\
+  \ on DuckDB when recorded"

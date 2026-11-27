@@ -64,7 +64,9 @@ def test_inspect_template_lists_tables_and_identity(web_client) -> None:  # type
     assert identity["DATAMARTID"]["current"] == "NET01EXAMPLE"
     ids = {b["id"]: b for b in body["bindings"]}
     assert ids["cdm"]["status"] == "ok"
-    assert ids["engine.tables"]["status"] == "warn"  # geocode formatter is Spark-only
+    # Every engine runs every table: no engine-family bindings any more.
+    assert not any(k.startswith("engine.") for k in ids)
+    assert "requires_family" not in body
     assert body["summary"]["configured"] == sum(1 for t in body["tables"] if t["configured"])
 
 

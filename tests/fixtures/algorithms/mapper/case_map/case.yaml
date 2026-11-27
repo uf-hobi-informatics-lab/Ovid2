@@ -1,0 +1,20 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  column: s
+  mode: title
+tables:
+  input:
+    columns:
+    - s
+    rows:
+    - - hELLO wORLD
+    - - null
+    - - ''
+note: 'string case: title-case is per word on every engine'
+expected:
+  columns:
+  - s
+  rows:
+  - - Hello World
+  - - null
+  - - ''

@@ -50,11 +50,10 @@ Map → Fix → Engine → Output*) redraws as you go.
    elsewhere (HARVEST network / datamart ids, warehouse databases, Datavant
    key), pre-filled with name-derived defaults, plus the
    cross-configuration checks (salt keys, dictionaries, fixer references,
-   class paths, engine family).
+   class paths).
 4. **Source** — input storage. For ETL, each table's file pattern is
    matched against the chosen folder.
-5. **Engine** — engines whose family the template can't run on are
-   disabled.
+5. **Engine** — any configured engine; every engine runs every package.
 6. **Destination**, 7. **Automation**, 8. **Review**.
 
 What step 2 asks depends on the kind:

@@ -8,8 +8,9 @@ composes a window (Spark-family gated) with a filter.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
+from ovid2.config.capabilities import Capability
 from ovid2.transforms.base import BaseTransform, DataFrame, TransformContext
 
 
@@ -17,6 +18,20 @@ class RandomSampleTransform(BaseTransform):
     """Take a random fraction of rows (Bernoulli sampling)."""
 
     category = "sampling"
+
+    @classmethod
+    def requires_for(cls, params: dict[str, Any]) -> frozenset[Capability]:
+        """Return the capabilities a step with ``params`` needs.
+
+        A ``seed`` asks for reproducible draws (``rand_seeded``);
+        ``with_replacement`` needs ``sample_with_replacement``.
+        """
+        out: set[Capability] = set()
+        if params.get("seed") is not None:
+            out.add(Capability.RAND_SEEDED)
+        if params.get("with_replacement"):
+            out.add(Capability.SAMPLE_WITH_REPLACEMENT)
+        return frozenset(out)
 
     @property
     def name(self) -> str:
@@ -96,7 +111,13 @@ class StratifiedSampleTransform(BaseTransform):
     """Sample by fraction-per-key using ``sampleBy``."""
 
     category = "sampling"
-    requires_family = "spark"
+
+    @classmethod
+    def requires_for(cls, params: dict[str, Any]) -> frozenset[Capability]:
+        """A ``seed`` asks for reproducible draws (``rand_seeded``)."""
+        return (
+            frozenset({Capability.RAND_SEEDED}) if params.get("seed") is not None else frozenset()
+        )
 
     @property
     def name(self) -> str:
@@ -153,8 +174,16 @@ class HeadByGroupTransform(BaseTransform):
     because it uses a window.
     """
 
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.FN_COL,
+            Capability.FN_LIT,
+            Capability.WINDOW,
+        }
+    )
+
     category = "sampling"
-    requires_family = "spark"
 
     @property
     def name(self) -> str:

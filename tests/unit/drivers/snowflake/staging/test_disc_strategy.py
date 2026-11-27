@@ -406,19 +406,20 @@ class TestMaterialise:
         assert len(drops) == 1
         assert "OVID2_STG_" in drops[0]
 
-    def test_non_csv_format_raises(self, strategy, tmp_path) -> None:
+    def test_non_csv_format_is_bridged(self, strategy, tmp_path, monkeypatch) -> None:
+        """Engine universality: Parquet / JSON disc reads go through the Arrow bridge."""
+        from ovid2.core.engines import bridge
+
+        calls: list[tuple[Any, ...]] = []
+        monkeypatch.setattr(bridge, "bridge_read", lambda *a, **k: calls.append(a) or "df")
         driver = _FakeDiscDriver(str(tmp_path), fmt="parquet")
         session = _FakeSession()
-        with pytest.raises(ValueError, match="only supports fmt='csv'"):
-            strategy.materialise(
-                session,
-                driver,
-                "test",
-                "20260806",
-                "sample.parquet",
-                delimiter=None,
-                table_name=None,
-            )
+        session._engine = object()
+        result = strategy.materialise(
+            session, driver, "test", "20260806", "sample.parquet", delimiter=None, table_name=None
+        )
+        assert result == "df"
+        assert calls and calls[0][1] is driver
 
     def test_missing_file_raises(self, strategy, tmp_path) -> None:
         tmp_path.mkdir(parents=True, exist_ok=True)
@@ -435,25 +436,26 @@ class TestMaterialise:
                 table_name=None,
             )
 
-    def test_directory_read_not_supported(
+    def test_directory_read_is_bridged(
         self,
         strategy,
         tmp_path,
+        monkeypatch,
     ) -> None:
         # Create a directory that matches a glob.
         (tmp_path / "adir").mkdir(parents=True)
+        from ovid2.core.engines import bridge
+
+        calls: list[tuple[Any, ...]] = []
+        monkeypatch.setattr(bridge, "bridge_read", lambda *a, **k: calls.append(a) or "df")
         driver = _FakeDiscDriver(str(tmp_path))
         session = _FakeSession()
-        with pytest.raises(ValueError, match="directory reads"):
-            strategy.materialise(
-                session,
-                driver,
-                "test",
-                "20260806",
-                "adir",
-                delimiter=None,
-                table_name=None,
-            )
+        session._engine = object()
+        result = strategy.materialise(
+            session, driver, "test", "20260806", "adir", delimiter=None, table_name=None
+        )
+        assert result == "df"
+        assert calls
 
     def test_empty_file_raises(self, strategy, tmp_path) -> None:
         root = tmp_path / "src"
@@ -672,24 +674,46 @@ class TestPersist:
                 delimiter=None,
             )
 
-    def test_non_csv_target_raises(
+    def test_empty_frame_writes_header_only_file(
         self,
         strategy,
         disc_target_root,
+        monkeypatch,
     ) -> None:
+        """An empty frame unloads no file (GET → 253006): write the header only."""
+        driver = _FakeDiscDriver(str(disc_target_root))
+        df = self._make_df_stub({})
+        df.columns = ["A_ID", '"lower_col"']
+        session = _FakeSession()
+        real_sql = session.sql
+
+        def _sql(query: str) -> Any:
+            if query.startswith("GET "):
+                raise RuntimeError(
+                    "253006: While getting file(s) there was an error: the file does not exist."
+                )
+            return real_sql(query)
+
+        monkeypatch.setattr(session, "sql", _sql)
+        strategy.persist(session, df, driver, "test", "20260806", "sample", delimiter="\t")
+        assert (disc_target_root / "sample.csv").read_text() == "A_ID\tlower_col\n"
+
+    def test_non_csv_target_is_bridged(
+        self,
+        strategy,
+        disc_target_root,
+        monkeypatch,
+    ) -> None:
+        from ovid2.core.engines import bridge
+
+        calls: list[tuple[Any, ...]] = []
+        monkeypatch.setattr(bridge, "bridge_write", lambda *a, **k: calls.append(a))
         driver = _FakeDiscDriver(str(disc_target_root), fmt="parquet")
         df = MagicMock()
         session = _FakeSession()
-        with pytest.raises(ValueError, match="only supports fmt='csv'"):
-            strategy.persist(
-                session,
-                df,
-                driver,
-                "test",
-                "20260806",
-                "sample",
-                delimiter=None,
-            )
+        session._engine = object()
+        strategy.persist(session, df, driver, "test", "20260806", "sample", delimiter=None)
+        assert calls and calls[0][1] is df
 
     def test_output_directory_created(
         self,

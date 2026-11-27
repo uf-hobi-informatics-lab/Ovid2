@@ -22,6 +22,10 @@ name, e-mail, role, status and last login. New SSO sign-ins appear under
 The last active `system_admin` can't be demoted or disabled; the panel
 returns `409` so you can't lock yourself out.
 
+A newly activated user joins the `default` workspace. The **Workspaces**
+column links to each workspace's members page; see
+[Workspaces](workspaces.md).
+
 ### Roles and capabilities
 
 | Capability | guest | viewer | operator | admin |
@@ -29,7 +33,7 @@ returns `409` so you can't lock yourself out.
 | View CDMs, health, this manual, API docs | ✓ | ✓ | ✓ | ✓ |
 | View runs and reports; use the assistant | | ✓ | ✓ | ✓ |
 | View pipeline data, submit and cancel jobs | | | ✓ | ✓ |
-| Manage config, secrets, users, LLMs, settings, install | | | | ✓ |
+| Manage config, secrets, users, workspaces, LLMs, settings, install | | | | ✓ |
 
 ## Approvals
 

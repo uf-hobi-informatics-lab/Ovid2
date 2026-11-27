@@ -28,6 +28,7 @@ reaches these strings.
 
 from __future__ import annotations
 
+import contextlib
 import itertools
 import re
 from collections.abc import Iterable, Sequence
@@ -173,15 +174,6 @@ class DuckFrame:
         """Return the engine session adapter (``createDataFrame`` etc.)."""
         return self._engine.get_session()
 
-    @property
-    def write(self) -> Any:
-        """Unsupported: DuckDB frames are written through the stager."""
-        from ovid2.core.engines.protocols import EngineOperationUnsupported
-
-        raise EngineOperationUnsupported(
-            "duckdb", "DataFrame.write", "persist through engine.get_stager().persist(...)"
-        )
-
     def _ctx(self) -> RenderCtx:
         return RenderCtx(self._scope)
 
@@ -235,6 +227,14 @@ class DuckFrame:
         """Spark ``select`` (columns, names, ``"*"``, ``"alias.*"``)."""
         items = self._expand(columns_from_args(cols))
         return self._derive(self._project(items or ["*"]))
+
+    def select_native(self, items: list[str]) -> DuckFrame:
+        """Project raw **DuckDB** SQL items (``"<expr> AS <ident>"``), no transpiling.
+
+        For engine-internal fast paths that build trusted SQL from column
+        names (never user text): ``#<n>`` refers to the n-th column.
+        """
+        return self._derive(self._project(items))
 
     def selectExpr(self, *exprs: str) -> DuckFrame:  # noqa: N802 — PySpark API
         """Spark ``selectExpr`` with Spark SQL strings."""
@@ -631,11 +631,181 @@ class DuckFrame:
         return self._derive(rel)
 
     # ------------------------------------------------------------------
+    # Portable surface (``ovid2.core.engines.surface.DATAFRAME_METHODS``)
+    # ------------------------------------------------------------------
+
+    @property
+    def schema(self) -> Any:
+        """Return a portable :class:`~ovid2.core.engines.types.StructType`."""
+        from ovid2.core.engines.types import StructField, StructType
+
+        return StructType(
+            [StructField(name, _spark_type_of(duck_type)) for name, duck_type in self.dtypes]
+        )
+
+    def printSchema(self) -> None:  # noqa: N802 — PySpark API
+        """Print the schema tree (diagnostics)."""
+        lines = ["root"] + [
+            f" |-- {f.name}: {f.dataType.simpleString()} (nullable = true)" for f in self.schema
+        ]
+        print("\n".join(lines))  # noqa: T201 — PySpark API prints by contract
+
+    def show(self, n: int = 20, truncate: Any = True, vertical: bool = False) -> None:
+        """Print the first ``n`` rows (diagnostics)."""
+        del truncate, vertical
+        print(self._rel.limit(int(n)))  # noqa: T201 — PySpark API prints by contract
+
+    def hint(self, *_args: Any, **_kwargs: Any) -> DuckFrame:
+        """Join hints are planner advice on Spark; DuckDB plans joins itself."""
+        return self
+
+    def repartition(self, *_args: Any, **_kwargs: Any) -> DuckFrame:
+        """Partitioning is a Spark execution detail; a no-op here."""
+        return self
+
+    def coalesce(self, *_args: Any) -> DuckFrame:
+        """Partition count is a Spark execution detail; a no-op here."""
+        return self
+
+    def transform(self, func: Any, *args: Any, **kwargs: Any) -> DuckFrame:
+        """``df.transform(f)`` → ``f(df)``."""
+        return func(self, *args, **kwargs)  # type: ignore[no-any-return]
+
+    def checkpoint(self, eager: bool = True) -> DuckFrame:
+        """Materialise into scratch Parquet (Spark ``checkpoint``)."""
+        del eager
+        return self.cache()
+
+    localCheckpoint = checkpoint  # noqa: N815 — PySpark API
+
+    def subtract(self, other: DuckFrame) -> DuckFrame:
+        """``EXCEPT DISTINCT`` (Spark ``subtract``)."""
+        return self._derive(self._rel.except_(other._aligned(self.columns)._rel).distinct())
+
+    def exceptAll(self, other: DuckFrame) -> DuckFrame:  # noqa: N802 — PySpark API
+        """``EXCEPT ALL``."""
+        name_l, name_r = _fresh_alias("__ovq"), _fresh_alias("__ovr")
+        right = other._aligned(self.columns)
+        right._rel.create_view(name_r, replace=True)
+        rel = self._rel.query(
+            name_l, f"SELECT * FROM {ident(name_l)} EXCEPT ALL SELECT * FROM {ident(name_r)}"
+        )
+        return self._derive(rel)
+
+    def intersect(self, other: DuckFrame) -> DuckFrame:
+        """``INTERSECT DISTINCT``."""
+        return self._derive(self._rel.intersect(other._aligned(self.columns)._rel).distinct())
+
+    def intersectAll(self, other: DuckFrame) -> DuckFrame:  # noqa: N802 — PySpark API
+        """``INTERSECT ALL``."""
+        name_l, name_r = _fresh_alias("__ovq"), _fresh_alias("__ovr")
+        right = other._aligned(self.columns)
+        right._rel.create_view(name_r, replace=True)
+        rel = self._rel.query(
+            name_l, f"SELECT * FROM {ident(name_l)} INTERSECT ALL SELECT * FROM {ident(name_r)}"
+        )
+        return self._derive(rel)
+
+    def fillna(self, value: Any, subset: Any = None) -> DuckFrame:
+        """Spark ``fillna``: replace NULLs in type-compatible columns."""
+        if isinstance(value, dict):
+            mapping = {str(k).lower(): v for k, v in value.items()}
+        else:
+            targets = (
+                [subset] if isinstance(subset, str) else list(subset) if subset else self.columns
+            )
+            mapping = {str(c).lower(): value for c in targets}
+        items: list[str] = []
+        for idx, (name, duck_type) in enumerate(self.dtypes, start=1):
+            fill = mapping.get(name.lower(), _NO_FILL)
+            if fill is not _NO_FILL and _fill_applies(fill, duck_type):
+                lit_sql = DuckColumn.literal(fill).sql(self._ctx())
+                items.append(f"COALESCE(#{idx}, CAST({lit_sql} AS {duck_type})) AS {ident(name)}")
+            else:
+                items.append(f"#{idx} AS {ident(name)}")
+        return self._derive(self._project(items))
+
+    def dropna(self, how: str = "any", thresh: int | None = None, subset: Any = None) -> DuckFrame:
+        """Spark ``dropna``."""
+        cols = [subset] if isinstance(subset, str) else list(subset) if subset else self.columns
+        refs = [ident(c) for c in cols]
+        non_null = " + ".join(f"CASE WHEN {r} IS NOT NULL THEN 1 ELSE 0 END" for r in refs) or "0"
+        if thresh is not None:
+            cond = f"({non_null}) >= {int(thresh)}"
+        elif how == "all":
+            cond = f"({non_null}) > 0"
+        else:
+            cond = f"({non_null}) = {len(refs)}"
+        return self._derive(self._rel.filter(cond), keep_scope=True)
+
+    def replace(self, to_replace: Any, value: Any = None, subset: Any = None) -> DuckFrame:
+        """Spark ``replace`` for scalar / list / dict replacements."""
+        if isinstance(to_replace, dict):
+            pairs = list(to_replace.items())
+        elif isinstance(to_replace, (list, tuple)):
+            values = value if isinstance(value, (list, tuple)) else [value] * len(to_replace)
+            pairs = list(zip(to_replace, values, strict=True))
+        else:
+            pairs = [(to_replace, value)]
+        targets = {
+            c.lower()
+            for c in (
+                [subset] if isinstance(subset, str) else list(subset) if subset else self.columns
+            )
+        }
+        ctx = self._ctx()
+        items: list[str] = []
+        for idx, (name, duck_type) in enumerate(self.dtypes, start=1):
+            usable = [(a, b) for a, b in pairs if _fill_applies(a, duck_type)]
+            if name.lower() not in targets or not usable:
+                items.append(f"#{idx} AS {ident(name)}")
+                continue
+            whens = " ".join(
+                f"WHEN #{idx} = {DuckColumn.literal(a).sql(ctx)} THEN "
+                f"CAST({DuckColumn.literal(b).sql(ctx)} AS {duck_type})"
+                for a, b in usable
+            )
+            items.append(f"CASE {whens} ELSE #{idx} END AS {ident(name)}")
+        return self._derive(self._project(items))
+
+    @property
+    def na(self) -> _DuckNaFunctions:
+        """``df.na.fill`` / ``df.na.drop`` / ``df.na.replace``."""
+        return _DuckNaFunctions(self)
+
+    @property
+    def stat(self) -> _DuckStat:
+        """``df.stat`` (``sampleBy``)."""
+        return _DuckStat(self)
+
+    def sampleBy(self, col: Any, fractions: dict[Any, float], seed: int | None = None) -> DuckFrame:  # noqa: N802
+        """Stratified Bernoulli sample: keep each row with its key's fraction."""
+        return _DuckStat(self).sampleBy(col, fractions, seed)
+
+    @property
+    def rdd(self) -> _DuckRdd:
+        """A small, eager ``RDD`` stand-in (``map`` / ``collect`` / ``flatMap``)."""
+        return _DuckRdd(self._fetch_rows)
+
+    @property
+    def write(self) -> _DuckWriter:
+        """Spark ``DataFrameWriter`` for *local paths* (Parquet / CSV / text / JSON).
+
+        Pipeline output goes through the engine stager (any storage type);
+        this writer serves code that writes scratch files itself (legacy
+        fix-chain checkpoints, diagnostics).
+        """
+        return _DuckWriter(self)
+
+    # ------------------------------------------------------------------
     # Actions (explicit; never called by lazy pipeline code)
     # ------------------------------------------------------------------
 
     def collect(self) -> list[DuckRow]:
         """Execute and return every row."""
+        return self._fetch_rows()
+
+    def _fetch_rows(self) -> list[DuckRow]:
         fields = self.columns
         return [DuckRow(r, fields) for r in self._rel.fetchall()]
 
@@ -665,8 +835,36 @@ class DuckFrame:
         return self._rel.df()
 
     def to_arrow(self) -> Any:
-        """Execute into a ``pyarrow.Table``."""
-        return self._rel.arrow()
+        """Execute into a ``pyarrow.Table``.
+
+        DuckDB >= 1.4 made ``relation.arrow()`` return a
+        ``RecordBatchReader``; ``fetch_arrow_table`` is a ``Table`` on every
+        supported version.
+        """
+        return self._rel.fetch_arrow_table()
+
+    def to_arrow_batches(self, batch_size: int = 65_536) -> Any:
+        """Execute and stream ``pyarrow.RecordBatch`` es (bounded memory).
+
+        The reader is always closed, also when the consumer stops early or
+        the query is interrupted: an open DuckDB reader pins its pending
+        query, and with it the connection's catalog (a later
+        ``create_function`` of a just-removed UDF then fails with
+        "already exists").
+        """
+        to_reader = getattr(self._rel, "to_arrow_reader", None)
+        reader = to_reader(batch_size) if callable(to_reader) else None
+        if reader is None:
+            reader = self._rel.fetch_record_batch(batch_size)
+        try:
+            while True:
+                try:
+                    yield reader.read_next_batch()
+                except StopIteration:
+                    return
+        finally:
+            with contextlib.suppress(Exception):
+                reader.close()
 
     def explain(self, *_args: Any) -> str:
         """Return DuckDB's physical plan."""
@@ -717,28 +915,68 @@ def _strip_alias(text: str) -> str:
 
 
 class DuckGroupedData:
-    """Result of :meth:`DuckFrame.groupBy`."""
+    """Result of :meth:`DuckFrame.groupBy` (optionally pivoted)."""
 
-    def __init__(self, frame: DuckFrame, keys: list[DuckColumn]) -> None:
+    def __init__(
+        self,
+        frame: DuckFrame,
+        keys: list[DuckColumn],
+        pivot: tuple[DuckColumn, list[Any]] | None = None,
+    ) -> None:
         self._frame = frame
         self._keys = keys
+        self._pivot = pivot
+
+    def _items(self, exprs: tuple[Any, ...]) -> list[DuckColumn]:
+        if len(exprs) == 1 and isinstance(exprs[0], dict):
+            return [
+                DuckColumn.raw(f"{fn_name}({ident(column)})", name=f"{fn_name}({column})")
+                for column, fn_name in exprs[0].items()
+            ]
+        return columns_from_args(exprs)
 
     def agg(self, *exprs: Any) -> DuckFrame:
         """Aggregate with columns (``max(c).alias(...)``) or a ``{col: fn}`` dict."""
         ctx = self._frame._ctx()
-        items: list[DuckColumn] = []
-        if len(exprs) == 1 and isinstance(exprs[0], dict):
-            for column, fn_name in exprs[0].items():
-                items.append(
-                    DuckColumn.raw(f"{fn_name}({ident(column)})", name=f"{fn_name}({column})")
-                )
-        else:
-            items = columns_from_args(exprs)
+        items = self._items(exprs)
+        if self._pivot is not None:
+            return self._pivot_agg(items, ctx)
         key_sql = [k.projection_sql(ctx) for k in self._keys]
         agg_sql = [c.projection_sql(ctx) for c in items]
         group_sql = ", ".join(k.sql(ctx) for k in self._keys)
         rel = self._frame._rel.aggregate(", ".join(key_sql + agg_sql), group_sql)
         return self._frame._derive(rel)
+
+    def _pivot_agg(self, items: list[DuckColumn], ctx: RenderCtx) -> DuckFrame:
+        """Spark pivot: one output column per (value[, aggregate]) via ``FILTER``."""
+        pivot_col, values = self._pivot  # type: ignore[misc]
+        pivot_sql = pivot_col.sql(ctx)
+        key_sql = [k.projection_sql(ctx) for k in self._keys]
+        cols: list[str] = []
+        for value in values:
+            label = "null" if value is None else str(value)
+            cond = (
+                f"{pivot_sql} IS NULL"
+                if value is None
+                else f"{pivot_sql} = {DuckColumn.literal(value).sql(ctx)}"
+            )
+            for item in items:
+                inner = item.sql(ctx)
+                name = label if len(items) == 1 else f"{label}_{item.output_name or inner}"
+                filtered = re.sub(r"\)\s*$", f") FILTER (WHERE {cond})", inner, count=1)
+                cols.append(f"{filtered} AS {ident(name)}")
+        group_sql = ", ".join(k.sql(ctx) for k in self._keys)
+        rel = self._frame._rel.aggregate(", ".join(key_sql + cols), group_sql)
+        return self._frame._derive(rel)
+
+    def pivot(self, pivot_col: Any, values: list[Any] | None = None) -> DuckGroupedData:
+        """Spark ``pivot``; without ``values`` the distinct values are collected (as Spark does)."""
+        column = to_column(pivot_col)
+        if values is None:
+            ctx = self._frame._ctx()
+            rel = self._frame._rel.project(f"{column.sql(ctx)} AS __pv").distinct().order("__pv")
+            values = [r[0] for r in rel.fetchall()]  # Spark pivot without values runs the same job
+        return DuckGroupedData(self._frame, self._keys, (column, list(values)))
 
     def count(self) -> DuckFrame:
         """``count(*)`` per group as column ``count``."""
@@ -759,29 +997,41 @@ class DuckGroupedData:
         """Per-group sum."""
         return self._simple("sum", cols)
 
-    def pivot(self, *_args: Any, **_kwargs: Any) -> Any:
-        """Unsupported on DuckDB (``pivot`` transform is Spark-gated)."""
-        from ovid2.core.engines.protocols import EngineOperationUnsupported
+    def avg(self, *cols: str) -> DuckFrame:
+        """Per-group mean."""
+        return self._simple("avg", cols)
 
-        raise EngineOperationUnsupported("duckdb", "GroupedData.pivot")
+    mean = avg
 
 
 class DuckWindowSpec:
-    """Minimal ``Window`` spec (``partitionBy`` / ``orderBy``)."""
+    """``Window`` spec (``partitionBy`` / ``orderBy`` / ``rowsBetween`` / ``rangeBetween``)."""
 
     def __init__(
-        self, partition: list[DuckColumn] | None = None, order: list[DuckColumn] | None = None
+        self,
+        partition: list[DuckColumn] | None = None,
+        order: list[DuckColumn] | None = None,
+        frame: str | None = None,
     ) -> None:
         self._partition = partition or []
         self._order = order or []
+        self._frame = frame
 
     def partitionBy(self, *cols: Any) -> DuckWindowSpec:  # noqa: N802
         """Set the partition keys."""
-        return DuckWindowSpec(columns_from_args(cols), self._order)
+        return DuckWindowSpec(columns_from_args(cols), self._order, self._frame)
 
     def orderBy(self, *cols: Any) -> DuckWindowSpec:  # noqa: N802
         """Set the ordering."""
-        return DuckWindowSpec(self._partition, columns_from_args(cols))
+        return DuckWindowSpec(self._partition, columns_from_args(cols), self._frame)
+
+    def rowsBetween(self, start: int, end: int) -> DuckWindowSpec:  # noqa: N802
+        """``ROWS BETWEEN start AND end`` (Spark offsets; ``Window.unbounded*``)."""
+        return DuckWindowSpec(self._partition, self._order, "ROWS " + _frame_bounds(start, end))
+
+    def rangeBetween(self, start: int, end: int) -> DuckWindowSpec:  # noqa: N802
+        """``RANGE BETWEEN start AND end``."""
+        return DuckWindowSpec(self._partition, self._order, "RANGE " + _frame_bounds(start, end))
 
     def sql(self, ctx: RenderCtx) -> str:
         """Render the ``OVER (...)`` body."""
@@ -790,11 +1040,39 @@ class DuckWindowSpec:
             parts.append("PARTITION BY " + ", ".join(c.sql(ctx) for c in self._partition))
         if self._order:
             parts.append("ORDER BY " + ", ".join(c.order_sql(ctx) for c in self._order))
+        if self._frame:
+            parts.append(self._frame)
         return " ".join(parts)
+
+
+#: Spark ``Window.unboundedPreceding`` / ``unboundedFollowing`` / ``currentRow``.
+UNBOUNDED_PRECEDING: int = -(1 << 63)
+UNBOUNDED_FOLLOWING: int = (1 << 63) - 1
+CURRENT_ROW: int = 0
+
+
+def _frame_bound(value: int, *, start: bool) -> str:
+    v = int(value)
+    if v <= -(1 << 62):
+        return "UNBOUNDED PRECEDING"
+    if v >= (1 << 62):
+        return "UNBOUNDED FOLLOWING"
+    if v == 0:
+        return "CURRENT ROW"
+    del start
+    return f"{-v} PRECEDING" if v < 0 else f"{v} FOLLOWING"
+
+
+def _frame_bounds(start: int, end: int) -> str:
+    return f"BETWEEN {_frame_bound(start, start=True)} AND {_frame_bound(end, start=False)}"
 
 
 class DuckWindow:
     """``Window`` entry point (``DuckWindow.partitionBy(...)``)."""
+
+    unboundedPreceding = UNBOUNDED_PRECEDING  # noqa: N815 — PySpark API
+    unboundedFollowing = UNBOUNDED_FOLLOWING  # noqa: N815 — PySpark API
+    currentRow = CURRENT_ROW  # noqa: N815 — PySpark API
 
     @staticmethod
     def partitionBy(*cols: Any) -> DuckWindowSpec:  # noqa: N802
@@ -805,3 +1083,298 @@ class DuckWindow:
     def orderBy(*cols: Any) -> DuckWindowSpec:  # noqa: N802
         """Start a window spec with an ordering."""
         return DuckWindowSpec().orderBy(*cols)
+
+    @staticmethod
+    def rowsBetween(start: int, end: int) -> DuckWindowSpec:  # noqa: N802
+        """Start a window spec with a ROWS frame."""
+        return DuckWindowSpec().rowsBetween(start, end)
+
+    @staticmethod
+    def rangeBetween(start: int, end: int) -> DuckWindowSpec:  # noqa: N802
+        """Start a window spec with a RANGE frame."""
+        return DuckWindowSpec().rangeBetween(start, end)
+
+
+_NO_FILL = object()
+
+#: DuckDB type prefix -> Spark simple type (``DuckFrame.schema``).
+_DUCK_TO_SPARK: tuple[tuple[str, str], ...] = (
+    ("VARCHAR", "string"),
+    ("BIGINT", "bigint"),
+    ("HUGEINT", "decimal(38,0)"),
+    ("INTEGER", "int"),
+    ("SMALLINT", "smallint"),
+    ("TINYINT", "tinyint"),
+    ("DOUBLE", "double"),
+    ("FLOAT", "float"),
+    ("BOOLEAN", "boolean"),
+    ("TIMESTAMP", "timestamp"),
+    ("DATE", "date"),
+    ("BLOB", "binary"),
+)
+
+
+def _spark_type_of(duck_type: str) -> Any:
+    from ovid2.core.engines.types import _as_type
+
+    upper = duck_type.upper()
+    if upper.startswith("DECIMAL"):
+        return _as_type(upper.lower())
+    for prefix, spark in _DUCK_TO_SPARK:
+        if upper.startswith(prefix):
+            return _as_type(spark)
+    if upper == '"NULL"':
+        return _as_type("void")
+    return _as_type("string")
+
+
+def _fill_applies(value: Any, duck_type: str) -> bool:
+    """Spark ``fillna`` only fills columns whose type matches the value's type."""
+    upper = duck_type.upper()
+    if isinstance(value, bool):
+        return upper == "BOOLEAN"
+    if isinstance(value, (int, float)):
+        return any(
+            upper.startswith(t)
+            for t in (
+                "INT",
+                "BIGINT",
+                "SMALLINT",
+                "TINYINT",
+                "HUGEINT",
+                "DOUBLE",
+                "FLOAT",
+                "DECIMAL",
+            )
+        )
+    if isinstance(value, str):
+        return upper.startswith("VARCHAR")
+    return value is None
+
+
+class _DuckStat:
+    """``DataFrame.stat`` namespace."""
+
+    def __init__(self, frame: DuckFrame) -> None:
+        self._frame = frame
+
+    def sampleBy(self, col: Any, fractions: dict[Any, float], seed: int | None = None) -> DuckFrame:  # noqa: N802
+        """Keep each row with probability ``fractions[key]`` (0 for unlisted keys)."""
+        frame = self._frame
+        key = to_column(col).sql(frame._ctx())
+        whens = " ".join(
+            f"WHEN CAST({key} AS VARCHAR) = {DuckColumn.literal(str(k)).sql(frame._ctx())} "
+            f"THEN {float(v)}"
+            for k, v in fractions.items()
+        )
+        rnd = (
+            f"(hash(*COLUMNS(*), {int(seed)}) % 1000000) / 1000000.0"
+            if seed is not None
+            else "random()"
+        )
+        cond = f"{rnd} < (CASE {whens} ELSE 0.0 END)" if whens else "FALSE"
+        return frame._derive(frame._rel.filter(cond), keep_scope=True)
+
+
+class _DuckNaFunctions:
+    """``DataFrame.na`` namespace."""
+
+    def __init__(self, frame: DuckFrame) -> None:
+        self._frame = frame
+
+    def fill(self, value: Any, subset: Any = None) -> DuckFrame:
+        """Alias of :meth:`DuckFrame.fillna`."""
+        return self._frame.fillna(value, subset)
+
+    def drop(self, how: str = "any", thresh: int | None = None, subset: Any = None) -> DuckFrame:
+        """Alias of :meth:`DuckFrame.dropna`."""
+        return self._frame.dropna(how, thresh, subset)
+
+    def replace(self, to_replace: Any, value: Any = None, subset: Any = None) -> DuckFrame:
+        """Alias of :meth:`DuckFrame.replace`."""
+        return self._frame.replace(to_replace, value, subset)
+
+
+class _DuckRdd:
+    """Eager, driver-side ``RDD`` stand-in for small lookup tables.
+
+    Spark code in legacy ports builds Python dicts with
+    ``dict(df.rdd.map(lambda r: (r[0], r[1])).collect())``. This class
+    supports exactly that family (``map`` / ``flatMap`` / ``filter`` /
+    ``collect`` / ``collectAsMap`` / ``count`` / ``take`` / ``isEmpty``):
+    the frame is collected once, on the first terminal call.
+    """
+
+    def __init__(self, source: Any, steps: tuple[tuple[str, Any], ...] = ()) -> None:
+        self._source = source
+        self._steps = steps
+
+    def _chain(self, kind: str, fn: Any) -> _DuckRdd:
+        return _DuckRdd(self._source, (*self._steps, (kind, fn)))
+
+    def map(self, fn: Any) -> _DuckRdd:
+        """Lazy ``map``."""
+        return self._chain("map", fn)
+
+    def flatMap(self, fn: Any) -> _DuckRdd:  # noqa: N802 — PySpark API
+        """Lazy ``flatMap``."""
+        return self._chain("flat", fn)
+
+    def filter(self, fn: Any) -> _DuckRdd:
+        """Lazy ``filter``."""
+        return self._chain("filter", fn)
+
+    def mapPartitions(self, fn: Any) -> _DuckRdd:  # noqa: N802 — PySpark API
+        """One partition: ``fn(iter(rows))``."""
+        return self._chain("parts", fn)
+
+    def _rows(self) -> list[Any]:
+        rows: list[Any] = list(self._source())
+        for kind, fn in self._steps:
+            if kind == "map":
+                rows = [fn(r) for r in rows]
+            elif kind == "flat":
+                rows = [x for r in rows for x in fn(r)]
+            elif kind == "filter":
+                rows = [r for r in rows if fn(r)]
+            else:
+                rows = list(fn(iter(rows)))
+        return rows
+
+    def collect(self) -> list[Any]:
+        """Run the chain and return the rows."""
+        return self._rows()
+
+    def collectAsMap(self) -> dict[Any, Any]:  # noqa: N802 — PySpark API
+        """``dict(collect())``."""
+        return dict(self._rows())
+
+    def count(self) -> int:
+        """Number of rows."""
+        return len(self._rows())
+
+    def take(self, n: int) -> list[Any]:
+        """First ``n`` rows."""
+        return self._rows()[: int(n)]
+
+    def first(self) -> Any:
+        """First row."""
+        rows = self._rows()[:1]
+        return rows[0] if rows else None
+
+    def isEmpty(self) -> bool:  # noqa: N802 — PySpark API
+        """Whether there are no rows."""
+        return not self._rows()[:1]
+
+    def getNumPartitions(self) -> int:  # noqa: N802 — PySpark API
+        """Always one partition."""
+        return 1
+
+
+class _DuckWriter:
+    """Local-path ``DataFrameWriter`` (Spark part-directory layout)."""
+
+    def __init__(self, frame: DuckFrame) -> None:
+        self._frame = frame
+        self._mode = "errorifexists"
+        self._format = "parquet"
+        self._options: dict[str, Any] = {}
+
+    def mode(self, mode: str) -> _DuckWriter:
+        self._mode = str(mode).lower()
+        return self
+
+    def format(self, fmt: str) -> _DuckWriter:
+        self._format = str(fmt).lower()
+        return self
+
+    def option(self, key: str, value: Any) -> _DuckWriter:
+        self._options[str(key).lower()] = value
+        return self
+
+    def options(self, **kwargs: Any) -> _DuckWriter:
+        for k, v in kwargs.items():
+            self.option(k, v)
+        return self
+
+    def partitionBy(self, *_cols: Any) -> _DuckWriter:  # noqa: N802 — PySpark API
+        return self
+
+    def save(
+        self, path: str | None = None, format: str | None = None, mode: str | None = None
+    ) -> None:
+        if format:
+            self._format = format.lower()
+        if mode:
+            self._mode = mode.lower()
+        self._write(str(path))
+
+    def parquet(self, path: str, mode: str | None = None, compression: str | None = None) -> None:
+        if compression:
+            self._options["compression"] = compression
+        self._format = "parquet"
+        self.save(path, mode=mode)
+
+    def csv(self, path: str, mode: str | None = None, **kwargs: Any) -> None:
+        self.options(**{k: v for k, v in kwargs.items() if v is not None})
+        self._format = "csv"
+        self.save(path, mode=mode)
+
+    def text(self, path: str) -> None:
+        self._format = "text"
+        self.save(path)
+
+    def json(self, path: str, mode: str | None = None) -> None:
+        self._format = "json"
+        self.save(path, mode=mode)
+
+    def _write(self, path: str) -> None:
+        import os
+        import shutil
+        import uuid
+
+        from ovid2.core.engines.duckdb_stager import write_csv_file
+
+        engine = self._frame._engine
+        if os.path.exists(path):
+            if self._mode in ("overwrite",):
+                shutil.rmtree(path, ignore_errors=True) if os.path.isdir(path) else os.remove(path)
+            elif self._mode == "ignore":
+                return
+            elif self._mode != "append":
+                raise FileExistsError(f"[PATH_ALREADY_EXISTS] Path {path} already exists.")
+        os.makedirs(path, exist_ok=True)
+        part = f"part-{uuid.uuid4().hex[:12]}"
+        if self._format == "csv":
+            header = str(self._options.get("header", "false")).lower() == "true"
+            delimiter = str(self._options.get("sep") or self._options.get("delimiter") or ",")
+            write_csv_file(
+                engine,
+                self._frame,
+                os.path.join(path, part + ".csv"),
+                delimiter=delimiter,
+                header=header,
+            )
+        elif self._format == "text":
+            from ovid2.legacy.text_io import write_text_file
+
+            write_text_file(self._frame, path, part + ".txt", header=False)
+        else:
+            from ovid2.core.engines._java_datetime import sql_string
+
+            ext = "parquet" if self._format == "parquet" else "json"
+            target = os.path.join(path, f"{part}.{ext}")
+            view = f"__ovid2_w_{uuid.uuid4().hex[:8]}"
+            self._frame.relation.create_view(view, replace=True)
+            codec = str(self._options.get("compression") or "zstd")
+            opts = (
+                f"FORMAT parquet, COMPRESSION {sql_string(codec)}"
+                if ext == "parquet"
+                else "FORMAT json"
+            )
+            conn = engine.connection()
+            try:
+                conn.execute(f"COPY (SELECT * FROM {ident(view)}) TO {sql_string(target)} ({opts})")
+            finally:
+                conn.execute(f"DROP VIEW IF EXISTS {ident(view)}")
+        open(os.path.join(path, "_SUCCESS"), "wb").close()

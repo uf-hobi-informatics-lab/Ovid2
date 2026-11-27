@@ -13,27 +13,34 @@ of each recipe tells you if you missed one.
    - `metadata.py`: form and location fields; **no heavy imports**;
    - `driver.py`: the `Driver` subclass, covering control, row access and
      data plane;
-   - optional `probe.py` (connection test), `spark.py` (the only file
-     allowed to `import pyspark`) and `duckdb.py` (a
-     `DuckDBStagingStrategy`).
+   - `duckdb.py`: a `DuckDBStagingStrategy`. This is the **minimum** data
+     plane — through the Arrow bridge it makes the driver reachable by
+     every engine;
+   - optional `probe.py` (connection test) and `spark.py` (a native Spark
+     path; the only file allowed to `import pyspark`).
 2. Register it in `drivers/registry.py::DRIVERS`,
    `connections/registry.py::CONNECTION_TYPE_MAP` and `_FIELD_SPECS`,
    plus the remaining catalogues.
-3. Declare `spark_capable`, and map the DuckDB strategy in
-   `DuckDBEngineStager._STRATEGY_MODULES`.
+3. Declare `spark_capable` (and `read_only` if it can't be written), and
+   map the DuckDB strategy in `DuckDBEngineStager._STRATEGY_MODULES`.
 
 → `test_driver_protocol_complete.py`, `test_connection_catalogues_synchronised.py`,
-`test_driver_metadata_import_safe.py`
+`test_driver_metadata_import_safe.py`, `test_engine_storage_matrix_complete.py`
 
 ## Add an engine
 
 1. Create `src/ovid2/core/engines/<type>.py` implementing
-   `EngineSession` / `EngineFunctions`.
+   `EngineSession` / `EngineFunctions` and **the whole portable surface**
+   in `core/engines/surface.py` (functions plus DataFrame / Column /
+   GroupedData / Window / Session / Reader methods).
 2. Register it in `ENGINE_TYPE_MAP` **and** in the web-safe
    `config/engines.py::_KNOWN_TYPES` plus `_FIELD_SPECS`.
-3. Provide stager coverage for the drivers it supports.
+3. Provide a stager that reaches **every** driver: native strategies where
+   worthwhile, the Arrow bridge (`core/engines/bridge.py`: Arrow import /
+   export for the engine) for the rest.
 
-→ `test_engine_registry_complete.py`, `test_engine_stager_covers_engines.py`
+→ `test_engine_registry_complete.py`, `test_engine_stager_covers_engines.py`,
+`test_engine_surface_complete.py`, `test_engine_storage_matrix_complete.py`
 
 ## Add a CDM
 
@@ -93,8 +100,8 @@ A CDM for a new domain can also ship outside the core tree, in a
 ## Add a transform
 
 1. Create a `BaseTransform` subclass in `src/ovid2/transforms/ops/` with
-   `name`, `summary`, `category`, `params_schema` and, if needed,
-   `requires_family`.
+   `name`, `summary`, `category` and `params_schema`. It must run on every
+   engine (no engine-family field).
 2. Register it in `transforms/registry.py::TRANSFORMS` **and** mirror its
    metadata in `config/transforms_catalogue.py`.
 3. Declare its column role in

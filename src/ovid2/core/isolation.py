@@ -62,7 +62,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from ovid2.config.settings import SPARK_LOCAL_ROOT, WORK_DIR
+from ovid2.config.settings import LEGACY_SCRATCH_ROOT, SPARK_LOCAL_ROOT, WORK_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -420,6 +420,94 @@ def _reap_orphaned_networks(max_age_hours: int, now: float | None = None) -> Non
             logger.debug("Could not remove network %s: %s", name, exc)
 
 
+#: Window in which an event-log write marks a run as live (engines sample
+#: ``engine.metrics`` every few seconds while a run is in flight).
+_LIVE_LOG_WINDOW_SECONDS: int = 600
+
+
+def _idle_for(path: str, now: float) -> float | None:
+    """Seconds since ``path`` was modified, or ``None`` if it is missing."""
+    try:
+        return now - os.path.getmtime(path)
+    except OSError:
+        return None
+
+
+def _instance_is_stale(instance_id: str, now: float, max_age_seconds: float) -> bool:
+    """Whether ``instance_id``'s event log is gone or idle beyond ``max_age``."""
+    idle = _idle_for(str(WORK_DIR / f"events-{instance_id}.jsonl"), now)
+    return idle is None or idle > max_age_seconds
+
+
+def _legacy_scratch_roots() -> list[Path]:
+    """Roots that may hold legacy scratch: the real-disk root, then ``WORK_DIR``.
+
+    ``WORK_DIR`` (tmpfs) is kept so leftovers of images from before
+    :data:`~ovid2.config.settings.LEGACY_SCRATCH_ROOT` are still reaped.
+    """
+    roots = [LEGACY_SCRATCH_ROOT]
+    if os.path.abspath(WORK_DIR) != os.path.abspath(LEGACY_SCRATCH_ROOT):
+        roots.append(WORK_DIR)
+    return roots
+
+
+def _reap_legacy_scratch(now: float, max_age_seconds: float) -> None:
+    """Reap ``legacy_ovid`` scratch left behind by crashed runs.
+
+    The legacy runner removes its own scratch on exit; a crashed / killed
+    run leaves it behind (tens of GB per run on a full feed), which
+    eventually fails every later run with ``No space left on device``.
+    Looked for under every :func:`_legacy_scratch_roots` entry. Reaped
+    when *both* the folder and its run's event log are idle beyond
+    ``max_age_seconds``:
+
+    * ``legacy_rt-<instance>/`` — the run's round-trip / inference dirs;
+    * ``legacy_scratch/<pipeline>/<batch>/<instance>/`` — mapper / fixer
+      outputs;
+    * flat ``legacy_rt_*`` / ``legacy_infer_*`` dirs (images before the
+      per-run folder) — only while *no* run is live, since they carry no
+      instance id.
+    """
+    roots = _legacy_scratch_roots()
+    for dirpath in [d for r in roots for d in glob.glob(str(r / "legacy_rt-*"))]:
+        instance_id = os.path.basename(dirpath)[len("legacy_rt-") :]
+        idle = _idle_for(dirpath, now)
+        if idle is None or idle <= max_age_seconds:
+            continue
+        if not _instance_is_stale(instance_id, now, max_age_seconds):
+            continue
+        logger.warning("Cleaning stale legacy scratch dir: %s", dirpath)
+        shutil.rmtree(dirpath, ignore_errors=True)
+
+    for dirpath in [
+        d for r in roots for d in glob.glob(str(r / "legacy_scratch" / "*" / "*" / "*"))
+    ]:
+        instance_id = os.path.basename(dirpath)
+        if not _INSTANCE_ID_PATTERN.match(instance_id) or not os.path.isdir(dirpath):
+            continue
+        idle = _idle_for(dirpath, now)
+        if idle is None or idle <= max_age_seconds:
+            continue
+        if not _instance_is_stale(instance_id, now, max_age_seconds):
+            continue
+        logger.warning("Cleaning stale legacy scratch dir: %s", dirpath)
+        shutil.rmtree(dirpath, ignore_errors=True)
+
+    any_live = any(
+        (_idle_for(p, now) or float("inf")) <= _LIVE_LOG_WINDOW_SECONDS
+        for p in glob.glob(str(WORK_DIR / "events-*.jsonl"))
+    )
+    if any_live:
+        return
+    for pattern in ("legacy_rt_*", "legacy_infer_*"):
+        for dirpath in [d for r in roots for d in glob.glob(str(r / pattern))]:
+            idle = _idle_for(dirpath, now)
+            if idle is None or idle <= max_age_seconds or not os.path.isdir(dirpath):
+                continue
+            logger.warning("Cleaning stale legacy scratch dir: %s", dirpath)
+            shutil.rmtree(dirpath, ignore_errors=True)
+
+
 def cleanup_stale_instances(max_age_hours: int = DEFAULT_MAX_AGE_HOURS) -> None:
     """Reap orphaned isolation resources left behind by crashed runs.
 
@@ -471,6 +559,8 @@ def cleanup_stale_instances(max_age_hours: int = DEFAULT_MAX_AGE_HOURS) -> None:
             Path(filepath).unlink()
         except OSError as exc:
             logger.debug("Could not remove %s: %s", filepath, exc)
+
+    _reap_legacy_scratch(now, max_age_seconds)
 
     if not DOCKER_DATA_DIR.is_dir():
         return

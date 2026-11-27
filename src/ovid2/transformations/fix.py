@@ -9,7 +9,7 @@ of lazy Spark transformations. Fixes are declared in the pipeline's
 Contract:
 
 - Any fix registered in
-  :data:`ovid2.transformations.fixers.common.registry.COMMON_FIXES` runs.
+  :class:`~ovid2.algorithms.registry.AlgorithmRegistry` (kind ``fixer``) runs.
 - Unknown fix names are skipped with a warning.
 - If any fix raises, the pre-fix DataFrame is preserved and the pipeline
   continues; the error is emitted on the event bus (P3) — currently
@@ -17,7 +17,7 @@ Contract:
 - Named-field aliases (``reference_table``, ``target_column``,
   ``list_name``, …) are normalised to the legacy ``src1``/``src2`` shape
   before ``BaseFixer.apply`` is called — see
-  :func:`ovid2.transformations.fixers.common.registry.normalise_fix_config`.
+  :meth:`ovid2.algorithms.registry.AlgorithmRegistry.normalise_fix_config`.
 - Cross-table fixes declared in
   ``ovid2_pipelines.<pipeline>.fixer_configs.MULTI_TABLE_FIXES`` are
   applied by :meth:`FixTransformer.apply_multi_table_fixes`, which the
@@ -30,9 +30,10 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from ovid2.algorithms.protocol import AlgorithmKind
+from ovid2.algorithms.registry import registry as algorithms
 from ovid2.core.events import fix_applied, fix_failed
 from ovid2.transformations.base import BaseTransformer
-from ovid2.transformations.fixers.common.registry import COMMON_FIXES, normalise_fix_config
 
 if TYPE_CHECKING:
     from pyspark.sql import DataFrame, SparkSession
@@ -42,6 +43,8 @@ logger = logging.getLogger(__name__)
 
 class FixTransformer(BaseTransformer):
     """Apply a pipeline's declarative fix chain to a table."""
+
+    stage_name = "fix"
 
     # Fixes that read a reference file from ``material/lists/<src1>.csv``.
     _FILE_BASED_FIXES: frozenset[str] = frozenset({"list_remover", "patterns_remover"})
@@ -65,7 +68,7 @@ class FixTransformer(BaseTransformer):
         total_fixes = len(fix_chain)
 
         for fix_index, raw_config in enumerate(fix_chain, start=1):
-            fix_config = normalise_fix_config(raw_config)
+            fix_config = algorithms.normalise_fix_config(raw_config)
             fix_name = str(fix_config.get("fix", ""))
             src1_value = fix_config.get("src1", "")
             src2_value = fix_config.get("src2", "")
@@ -78,7 +81,7 @@ class FixTransformer(BaseTransformer):
                 )
                 continue
 
-            is_common = fix_name in COMMON_FIXES
+            is_common = algorithms.has(AlgorithmKind.FIXER, fix_name)
             fix_type = "common" if is_common else "custom"
             if not is_common:
                 logger.warning(
@@ -94,7 +97,7 @@ class FixTransformer(BaseTransformer):
             )
 
             fix_context = {**context, **fix_config}
-            fixer = COMMON_FIXES[fix_name]()
+            fixer = algorithms.get(AlgorithmKind.FIXER, fix_name)
 
             try:
                 df = fixer.apply(df, fix_context)
@@ -230,11 +233,11 @@ class FixTransformer(BaseTransformer):
 
         total = len(fixes)
         for index, raw_config in enumerate(fixes, start=1):
-            fix_config = normalise_fix_config(raw_config)
+            fix_config = algorithms.normalise_fix_config(raw_config)
             fix_name = str(fix_config.get("fix", ""))
             table_name = str(fix_config.get("table", "")) or fix_name
 
-            if fix_name not in COMMON_FIXES:
+            if not algorithms.has(AlgorithmKind.FIXER, fix_name):
                 logger.warning(
                     "Unknown multi-table fix '%s' for pipeline '%s'; skipping",
                     fix_name,
@@ -242,7 +245,7 @@ class FixTransformer(BaseTransformer):
                 )
                 continue
 
-            fixer = COMMON_FIXES[fix_name]()
+            fixer = algorithms.get(AlgorithmKind.FIXER, fix_name)
             context: dict[str, Any] = {
                 "spark": spark,
                 "input_address": input_address,

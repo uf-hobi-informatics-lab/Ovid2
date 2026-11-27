@@ -37,9 +37,10 @@ import re
 import tempfile
 import threading
 import time
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ovid2.core.engines import _java_datetime as jd
 from ovid2.core.engines._duck_column import DuckColumn, ident, literal_sql
@@ -157,6 +158,32 @@ class DuckMapLiteral:
         return DuckColumn(_render_case, kind)
 
     getItem = __getitem__  # noqa: N815 — PySpark API
+
+
+#: ``key bytes -> (id(connection) -> SQL function name)`` for :meth:`_DuckFunctions.xor_base64`.
+_XOR_KEY_FUNCTIONS: dict[bytes, dict[int, str]] = {}
+_XOR_KEY_LOCK = threading.Lock()
+
+
+def _xor_key_function(key: bytes) -> Any:
+    """Return ``register(conn) -> name`` for a zero-arg SQL function yielding ``key`` as hex.
+
+    The key stays out of the SQL text Ovid2 renders and logs; DuckDB folds
+    the constant function once per query, so it costs nothing per row.
+    """
+    hex_key = key.hex()
+
+    def _register(conn: Any) -> str:
+        with _XOR_KEY_LOCK:
+            per_conn = _XOR_KEY_FUNCTIONS.setdefault(key, {})
+            name = per_conn.get(id(conn))
+            if name is None:
+                name = f"__ovid2_xor_key_{uuid.uuid4().hex[:12]}"
+                conn.create_function(name, lambda: hex_key, [], "VARCHAR", side_effects=False)
+                per_conn[id(conn)] = name
+            return name
+
+    return _register
 
 
 class _DuckFunctions:
@@ -434,6 +461,51 @@ class _DuckFunctions:
     def md5(self, c: Any) -> DuckColumn:
         return DuckColumn.template(lambda a: f"md5(CAST({a} AS VARCHAR))", self._c(c), kind="str")
 
+    def xor_base64(self, c: Any, prefix: str, key: bytes, fallback: Any = None) -> DuckColumn:
+        """``base64(xor(utf8(prefix || c), cyclic key))`` in native SQL (Ovid2 extension).
+
+        The legacy id encryption (``ovid2.utils.common.encrypt_id_udf``)
+        run as one vectorised DuckDB expression instead of a Python UDF —
+        Python UDFs serialise on the GIL, so on a many-core host they are
+        the whole run's bottleneck. Byte-identical to the Python
+        ``b64encode(bytes(p[i] ^ key[i % len(key)] …))`` for string inputs
+        (pinned by ``tests/unit/core/engines/test_duckdb_xor_base64.py``).
+
+        The key is not spliced into the SQL Ovid2 builds (or logs): it is
+        served by a zero-argument SQL function registered on the connection.
+
+        Args:
+            c: Input column (rendered with ``CAST(… AS VARCHAR)``).
+            prefix: Non-empty plaintext prefix.
+            key: Non-empty key bytes (cycled).
+            fallback: Column used instead when ``c`` is not a string column
+                (Python renders non-strings differently from DuckDB's cast).
+        """
+        if not prefix or not key:
+            raise ValueError("xor_base64 needs a non-empty prefix and key")
+        col = self._c(c)
+        key_fn = _xor_key_function(key)
+        key_len = len(key)
+        prefix_sql = literal_sql(prefix)[0]
+
+        def _render(ctx: Any) -> str:
+            if fallback is not None and col.kind(ctx) not in ("str", "null"):
+                # Unknown / non-string input: Python's ``f"{prefix}{v}"``
+                # renders ints, floats … differently from a SQL cast.
+                return cast("str", fallback.sql(ctx))
+            from ovid2.core.engines.dsl import active_engine
+
+            engine = active_engine()
+            conn_fn = getattr(engine, "_root_connection", None)
+            if conn_fn is None:
+                raise RuntimeError("xor_base64 used without an active DuckDB engine")
+            name = key_fn(conn_fn())
+            p = f"encode({prefix_sql} || CAST({col.sql(ctx)} AS VARCHAR))"
+            ks = f"unhex(substr(repeat({name}(), octet_length({p}) // {key_len} + 1), 1, 2 * octet_length({p})))"
+            return f"to_base64(CAST(xor(CAST({p} AS BIT), CAST({ks} AS BIT)) AS BLOB))"
+
+        return DuckColumn(_render, "str")
+
     # ---- portable extensions -------------------------------------------
 
     def concat(self, *cols: Any) -> DuckColumn:
@@ -538,6 +610,516 @@ class _DuckFunctions:
             lambda a: f"CAST(year({a}) AS INTEGER)", self.to_date(c), kind="num"
         )
 
+    # ---- portable surface (``ovid2.core.engines.surface``) --------------
+
+    def udf(self, f: Any = None, returnType: Any = "string", **kwargs: Any) -> Any:  # noqa: N803
+        """Spark ``udf`` (callable, decorator, or ``udf(returnType=...)``)."""
+        from ovid2.core.engines._duck_udf import DuckUdf
+
+        returnType = kwargs.pop("return_type", returnType)  # noqa: N806
+        if f is None or not callable(f):
+            rt = f if f is not None else returnType
+            return lambda fn: DuckUdf(fn, rt)
+        return DuckUdf(f, returnType)
+
+    def pandas_udf(self, f: Any = None, returnType: Any = None, functionType: Any = None) -> Any:  # noqa: N803
+        """Spark scalar ``pandas_udf`` (vectorised: Series in, Series out)."""
+        from ovid2.core.engines._duck_udf import DuckUdf
+
+        del functionType
+        if f is None or not callable(f):
+            rt = f if f is not None else (returnType or "string")
+            return lambda fn: DuckUdf(fn, rt, vectorised=True)
+        return DuckUdf(f, returnType or "string", vectorised=True)
+
+    def lag(self, c: Any, offset: int = 1, default: Any = None) -> DuckColumn:
+        col = self._c(c)
+        dflt = "" if default is None else f", {literal_sql(default)[0]}"
+        return DuckColumn(lambda ctx: f"lag({col.sql(ctx)}, {int(offset)}{dflt})", col.kind)
+
+    def lead(self, c: Any, offset: int = 1, default: Any = None) -> DuckColumn:
+        col = self._c(c)
+        dflt = "" if default is None else f", {literal_sql(default)[0]}"
+        return DuckColumn(lambda ctx: f"lead({col.sql(ctx)}, {int(offset)}{dflt})", col.kind)
+
+    def rank(self) -> DuckColumn:
+        return DuckColumn.raw("rank()", "num")
+
+    def dense_rank(self) -> DuckColumn:
+        return DuckColumn.raw("dense_rank()", "num")
+
+    def percent_rank(self) -> DuckColumn:
+        return DuckColumn.raw("percent_rank()", "num")
+
+    def cume_dist(self) -> DuckColumn:
+        return DuckColumn.raw("cume_dist()", "num")
+
+    def ntile(self, n: int) -> DuckColumn:
+        return DuckColumn.raw(f"ntile({int(n)})", "num")
+
+    def last(self, c: Any, ignorenulls: bool = False) -> DuckColumn:
+        col = self._c(c)
+        fn = "last" if not ignorenulls else "arg_max_null"
+        if ignorenulls:
+            return DuckColumn(lambda ctx: f"last({col.sql(ctx)} IGNORE NULLS)", col.kind)
+        del fn
+        return DuckColumn(lambda ctx: f"last({col.sql(ctx)})", col.kind)
+
+    def lpad(self, c: Any, length: int, pad: str) -> DuckColumn:
+        p = jd.sql_string(pad)
+        # Spark: pad / truncate to ``length``; DuckDB ``lpad`` matches.
+        return DuckColumn.template(
+            lambda a: f"lpad(CAST({a} AS VARCHAR), {int(length)}, {p})", self._c(c), kind="str"
+        )
+
+    def rpad(self, c: Any, length: int, pad: str) -> DuckColumn:
+        p = jd.sql_string(pad)
+        return DuckColumn.template(
+            lambda a: f"rpad(CAST({a} AS VARCHAR), {int(length)}, {p})", self._c(c), kind="str"
+        )
+
+    def instr(self, c: Any, substr: str) -> DuckColumn:
+        s_ = jd.sql_string(substr)
+        return DuckColumn.template(
+            lambda a: f"CAST(instr(CAST({a} AS VARCHAR), {s_}) AS INTEGER)", self._c(c), kind="num"
+        )
+
+    def locate(self, substr: str, c: Any, pos: int = 1) -> DuckColumn:
+        s_ = jd.sql_string(substr)
+        start = max(1, int(pos))
+        return DuckColumn.template(
+            lambda a: (
+                f"CASE WHEN {a} IS NULL THEN NULL ELSE CAST(COALESCE(NULLIF(instr("
+                f"substring(CAST({a} AS VARCHAR), {start}), {s_}), 0) + {start - 1}, 0) AS INTEGER) END"
+            ),
+            self._c(c),
+            kind="num",
+        )
+
+    def isnan(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(
+            lambda a: f"COALESCE(isnan(TRY_CAST({a} AS DOUBLE)), FALSE)", self._c(c), kind="bool"
+        )
+
+    def isnull(self, c: Any) -> DuckColumn:
+        return self._c(c).isNull()
+
+    def nanvl(self, a: Any, b: Any) -> DuckColumn:
+        x, y = self._c(a), self._c(b)
+        return DuckColumn(
+            lambda ctx: f"CASE WHEN isnan({x.sql(ctx)}) THEN {y.sql(ctx)} ELSE {x.sql(ctx)} END",
+            "num",
+        )
+
+    def nvl(self, a: Any, b: Any) -> DuckColumn:
+        return self.coalesce(a, b)
+
+    ifnull = nvl
+
+    def nullif(self, a: Any, b: Any) -> DuckColumn:
+        x, y = self._c(a), DuckColumn.literal(b) if not isinstance(b, DuckColumn) else b
+        return DuckColumn(lambda ctx: f"NULLIF({x.sql(ctx)}, {y.sql(ctx)})", x.kind)
+
+    def greatest(self, *cols: Any) -> DuckColumn:
+        columns = [self._c(c) for c in cols]
+        return DuckColumn(lambda ctx: "greatest(" + ", ".join(c.sql(ctx) for c in columns) + ")")
+
+    def least(self, *cols: Any) -> DuckColumn:
+        columns = [self._c(c) for c in cols]
+        return DuckColumn(lambda ctx: "least(" + ", ".join(c.sql(ctx) for c in columns) + ")")
+
+    def floor(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(
+            lambda a: f"CAST(floor(TRY_CAST({a} AS DOUBLE)) AS BIGINT)", self._c(c), kind="num"
+        )
+
+    def ceil(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(
+            lambda a: f"CAST(ceil(TRY_CAST({a} AS DOUBLE)) AS BIGINT)", self._c(c), kind="num"
+        )
+
+    ceiling = ceil
+
+    def sqrt(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(
+            lambda a: f"sqrt(TRY_CAST({a} AS DOUBLE))", self._c(c), kind="num"
+        )
+
+    def pow(self, a: Any, b: Any) -> DuckColumn:
+        x, y = self._c(a), to_col_or_lit(b)
+        return DuckColumn(
+            lambda ctx: f"pow(TRY_CAST({x.sql(ctx)} AS DOUBLE), TRY_CAST({y.sql(ctx)} AS DOUBLE))",
+            "num",
+        )
+
+    def exp(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(
+            lambda a: f"exp(TRY_CAST({a} AS DOUBLE))", self._c(c), kind="num"
+        )
+
+    def log(self, *args: Any) -> DuckColumn:
+        if len(args) == 2:
+            base, c = args
+            return DuckColumn.template(
+                lambda a: f"(ln(TRY_CAST({a} AS DOUBLE)) / ln({float(base)}))",
+                self._c(c),
+                kind="num",
+            )
+        return DuckColumn.template(
+            lambda a: f"ln(TRY_CAST({a} AS DOUBLE))", self._c(args[0]), kind="num"
+        )
+
+    def bround(self, c: Any, scale: int = 0) -> DuckColumn:
+        return DuckColumn.template(
+            lambda a: f"round_even(TRY_CAST({a} AS DOUBLE), {int(scale)})", self._c(c), kind="num"
+        )
+
+    def signum(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(
+            lambda a: f"CAST(sign(TRY_CAST({a} AS DOUBLE)) AS DOUBLE)", self._c(c), kind="num"
+        )
+
+    def collect_list(self, c: Any) -> DuckColumn:
+        col = self._c(c)
+        return DuckColumn(
+            lambda ctx: f"list({col.sql(ctx)}) FILTER (WHERE {col.sql(ctx)} IS NOT NULL)"
+        )
+
+    def collect_set(self, c: Any) -> DuckColumn:
+        col = self._c(c)
+        return DuckColumn(
+            lambda ctx: f"list(DISTINCT {col.sql(ctx)}) FILTER (WHERE {col.sql(ctx)} IS NOT NULL)"
+        )
+
+    def array_contains(self, c: Any, value: Any) -> DuckColumn:
+        col, v = self._c(c), DuckColumn.literal(value)
+        return DuckColumn(lambda ctx: f"list_contains({col.sql(ctx)}, {v.sql(ctx)})", "bool")
+
+    def size(self, c: Any) -> DuckColumn:
+        col = self._c(c)
+        return DuckColumn(lambda ctx: f"CAST(COALESCE(len({col.sql(ctx)}), -1) AS INTEGER)", "num")
+
+    def array_join(self, c: Any, delimiter: str, null_replacement: str | None = None) -> DuckColumn:
+        col = self._c(c)
+        d = jd.sql_string(delimiter)
+        if null_replacement is None:
+            return DuckColumn(
+                lambda ctx: (
+                    f"array_to_string(list_filter({col.sql(ctx)}, x -> x IS NOT NULL), {d})"
+                ),
+                "str",
+            )
+        r = jd.sql_string(null_replacement)
+        return DuckColumn(
+            lambda ctx: (
+                f"array_to_string(list_transform({col.sql(ctx)}, x -> COALESCE(CAST(x AS VARCHAR), {r})), {d})"
+            ),
+            "str",
+        )
+
+    def struct(self, *cols: Any) -> DuckColumn:
+        if len(cols) == 1 and isinstance(cols[0], (list, tuple)):
+            cols = tuple(cols[0])
+        columns = [self._c(c) for c in cols]
+
+        def _render(ctx: Any) -> str:
+            parts = []
+            for i, c in enumerate(columns):
+                name = c.output_name or f"col{i + 1}"
+                parts.append(f"{ident(name)} := {c.sql(ctx)}")
+            return "struct_pack(" + ", ".join(parts) + ")"
+
+        return DuckColumn(_render)
+
+    named_struct = struct
+
+    def format_string(self, fmt: str, *cols: Any) -> DuckColumn:
+        columns = [self._c(c) for c in cols]
+        f = jd.sql_string(fmt)
+        return DuckColumn(
+            lambda ctx: f"printf({f}" + "".join(", " + c.sql(ctx) for c in columns) + ")", "str"
+        )
+
+    printf = format_string
+
+    def translate(self, c: Any, matching: str, replace: str) -> DuckColumn:
+        m, r = jd.sql_string(matching), jd.sql_string(replace)
+        return DuckColumn.template(
+            lambda a: f"translate(CAST({a} AS VARCHAR), {m}, {r})", self._c(c), kind="str"
+        )
+
+    def reverse(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(
+            lambda a: f"reverse(CAST({a} AS VARCHAR))", self._c(c), kind="str"
+        )
+
+    def repeat(self, c: Any, n: int) -> DuckColumn:
+        return DuckColumn.template(
+            lambda a: f"repeat(CAST({a} AS VARCHAR), {int(n)})", self._c(c), kind="str"
+        )
+
+    def ascii(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(lambda a: f"ascii(CAST({a} AS VARCHAR))", self._c(c), kind="num")
+
+    def base64(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(
+            lambda a: f"to_base64(encode(CAST({a} AS VARCHAR)))", self._c(c), kind="str"
+        )
+
+    def hash(self, *cols: Any) -> DuckColumn:
+        columns = [self._c(c) for c in cols]
+        return DuckColumn(
+            lambda ctx: "CAST(hash(" + ", ".join(c.sql(ctx) for c in columns) + ") AS BIGINT)",
+            "num",
+        )
+
+    def xxhash64(self, *cols: Any) -> DuckColumn:
+        return self.hash(*cols)
+
+    def crc32(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(
+            lambda a: f"CAST(hash(CAST({a} AS VARCHAR)) % 4294967296 AS BIGINT)",
+            self._c(c),
+            kind="num",
+        )
+
+    def sha1(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(lambda a: f"sha1(CAST({a} AS VARCHAR))", self._c(c), kind="str")
+
+    def month(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(
+            lambda a: f"CAST(month({a}) AS INTEGER)", self.to_date(c), kind="num"
+        )
+
+    def dayofmonth(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(
+            lambda a: f"CAST(day({a}) AS INTEGER)", self.to_date(c), kind="num"
+        )
+
+    day = dayofmonth
+
+    def hour(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(
+            lambda a: f"CAST(hour({a}) AS INTEGER)", self.to_timestamp(c), kind="num"
+        )
+
+    def minute(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(
+            lambda a: f"CAST(minute({a}) AS INTEGER)", self.to_timestamp(c), kind="num"
+        )
+
+    def second(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(
+            lambda a: f"CAST(second({a}) AS INTEGER)", self.to_timestamp(c), kind="num"
+        )
+
+    def dayofweek(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(
+            lambda a: f"CAST(dayofweek({a}) + 1 AS INTEGER)", self.to_date(c), kind="num"
+        )
+
+    def dayofyear(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(
+            lambda a: f"CAST(dayofyear({a}) AS INTEGER)", self.to_date(c), kind="num"
+        )
+
+    def quarter(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(
+            lambda a: f"CAST(quarter({a}) AS INTEGER)", self.to_date(c), kind="num"
+        )
+
+    def weekofyear(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(
+            lambda a: f"CAST(weekofyear({a}) AS INTEGER)", self.to_date(c), kind="num"
+        )
+
+    def date_sub(self, c: Any, days: int) -> DuckColumn:
+        return self.date_add(c, -int(days))
+
+    def add_months(self, c: Any, months: int) -> DuckColumn:
+        return DuckColumn.template(
+            lambda a: f"CAST({a} + INTERVAL ({int(months)}) MONTH AS DATE)",
+            self.to_date(c),
+            kind="date",
+        )
+
+    def months_between(self, end: Any, start: Any, roundOff: bool = True) -> DuckColumn:  # noqa: N803
+        e, s_ = self.to_timestamp(end), self.to_timestamp(start)
+        digits = 8 if roundOff else 15
+        return DuckColumn(
+            lambda ctx: f"round((date_diff('day', {s_.sql(ctx)}, {e.sql(ctx)})) / 31.0, {digits})",
+            "num",
+        )
+
+    def last_day(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(lambda a: f"last_day({a})", self.to_date(c), kind="date")
+
+    def trunc(self, c: Any, fmt: str) -> DuckColumn:
+        unit = {
+            "year": "year",
+            "yyyy": "year",
+            "yy": "year",
+            "month": "month",
+            "mon": "month",
+            "mm": "month",
+            "quarter": "quarter",
+            "week": "week",
+        }.get(fmt.lower(), "month")
+        return DuckColumn.template(
+            lambda a: f"CAST(date_trunc('{unit}', {a}) AS DATE)", self.to_date(c), kind="date"
+        )
+
+    def date_trunc(self, fmt: str, c: Any) -> DuckColumn:
+        unit = {"yyyy": "year", "yy": "year", "mon": "month", "mm": "month", "dd": "day"}.get(
+            fmt.lower(), fmt.lower()
+        )
+        return DuckColumn.template(
+            lambda a: f"date_trunc('{unit}', {a})", self.to_timestamp(c), kind="ts"
+        )
+
+    def unix_timestamp(self, c: Any = None, fmt: str = "yyyy-MM-dd HH:mm:ss") -> DuckColumn:
+        if c is None:
+            return DuckColumn.raw("CAST(epoch(current_localtimestamp()) AS BIGINT)", "num")
+        return DuckColumn.template(
+            lambda a: f"CAST(epoch({a}) AS BIGINT)", self.to_timestamp(c, fmt), kind="num"
+        )
+
+    def from_unixtime(self, c: Any, fmt: str = "yyyy-MM-dd HH:mm:ss") -> DuckColumn:
+        f = jd.sql_string(jd.strftime_format(fmt))
+        return DuckColumn.template(
+            lambda a: f"strftime(to_timestamp(TRY_CAST({a} AS BIGINT))::TIMESTAMP, {f})",
+            self._c(c),
+            kind="str",
+        )
+
+    def from_utc_timestamp(self, c: Any, tz: str) -> DuckColumn:
+        z = jd.sql_string(tz)
+        return DuckColumn.template(
+            lambda a: (
+                f"CAST(timezone({z}, CAST({a} AS TIMESTAMP) AT TIME ZONE 'UTC') AS TIMESTAMP)"
+            ),
+            self.to_timestamp(c),
+            kind="ts",
+        )
+
+    def to_utc_timestamp(self, c: Any, tz: str) -> DuckColumn:
+        z = jd.sql_string(tz)
+        return DuckColumn.template(
+            lambda a: (
+                f"CAST(timezone('UTC', CAST({a} AS TIMESTAMP) AT TIME ZONE {z}) AS TIMESTAMP)"
+            ),
+            self.to_timestamp(c),
+            kind="ts",
+        )
+
+    def to_csv(self, c: Any, options: dict[str, str] | None = None) -> DuckColumn:
+        """Spark ``to_csv(struct(...))`` (univocity writer rules, every field as text)."""
+        from ovid2.core.engines._duck_udf import DuckUdf
+
+        opts = dict(options or {})
+        sep = str(opts.get("sep") or opts.get("delimiter") or ",")
+        quote = opts.get("quote", '"')
+        if quote not in ("", "\x00"):
+            raise EngineOperationUnsupported(
+                "duckdb", "to_csv", "only quote='' (Spark's unquoted writer) is portable"
+            )
+        line_start = str(opts.get("comment", "#")) == "#"
+        col = self._c(c)
+        writer = DuckUdf(lambda row: _to_csv_row(row, sep, line_start), "string")
+        return writer(col)
+
+    def sort_array(self, c: Any, asc: bool = True) -> DuckColumn:
+        col = self._c(c)
+        order = "'ASC'" if asc else "'DESC'"
+        return DuckColumn(lambda ctx: f"list_sort({col.sql(ctx)}, {order}, 'NULLS FIRST')")
+
+    def element_at(self, c: Any, idx: Any) -> DuckColumn:
+        col = self._c(c)
+        if isinstance(idx, int):
+            return DuckColumn(lambda ctx: f"({col.sql(ctx)})[{int(idx)}]")
+        key = DuckColumn.literal(idx) if not isinstance(idx, DuckColumn) else idx
+        return DuckColumn(lambda ctx: f"element_at({col.sql(ctx)}, {key.sql(ctx)})[1]")
+
+    def asc(self, name: str) -> DuckColumn:
+        return self.col(name).asc()
+
+    def desc(self, name: str) -> DuckColumn:
+        return self.col(name).desc()
+
+    def asc_nulls_last(self, name: str) -> DuckColumn:
+        return self.col(name).asc_nulls_last()
+
+    def desc_nulls_first(self, name: str) -> DuckColumn:
+        return self.col(name).desc_nulls_first()
+
+    def desc_nulls_last(self, name: str) -> DuckColumn:
+        return self.col(name).desc()
+
+    def asc_nulls_first(self, name: str) -> DuckColumn:
+        return self.col(name).asc()
+
+    def mean(self, c: Any) -> DuckColumn:
+        return self.avg(c)
+
+    def stddev(self, c: Any) -> DuckColumn:
+        col = self._c(c)
+        return DuckColumn(lambda ctx: f"stddev_samp(TRY_CAST({col.sql(ctx)} AS DOUBLE))", "num")
+
+    stddev_samp = stddev
+
+    def variance(self, c: Any) -> DuckColumn:
+        col = self._c(c)
+        return DuckColumn(lambda ctx: f"var_samp(TRY_CAST({col.sql(ctx)} AS DOUBLE))", "num")
+
+    var_samp = variance
+
+    def approx_count_distinct(self, c: Any, rsd: float = 0.05) -> DuckColumn:
+        del rsd
+        col = self._c(c)
+        return DuckColumn(
+            lambda ctx: f"CAST(approx_count_distinct({col.sql(ctx)}) AS BIGINT)", "num"
+        )
+
+    def sumDistinct(self, c: Any) -> DuckColumn:  # noqa: N802 — PySpark API
+        col = self._c(c)
+        return DuckColumn(lambda ctx: f"sum(DISTINCT TRY_CAST({col.sql(ctx)} AS DOUBLE))", "num")
+
+    sum_distinct = sumDistinct
+
+    def count_distinct(self, *cols: Any) -> DuckColumn:
+        return self.countDistinct(*cols)
+
+    def bool_and(self, c: Any) -> DuckColumn:
+        col = self._c(c)
+        return DuckColumn(lambda ctx: f"bool_and({col.sql(ctx)})", "bool")
+
+    def bool_or(self, c: Any) -> DuckColumn:
+        col = self._c(c)
+        return DuckColumn(lambda ctx: f"bool_or({col.sql(ctx)})", "bool")
+
+    def flatten(self, c: Any) -> DuckColumn:
+        col = self._c(c)
+        return DuckColumn(lambda ctx: f"flatten({col.sql(ctx)})")
+
+    def array_distinct(self, c: Any) -> DuckColumn:
+        col = self._c(c)
+        return DuckColumn(lambda ctx: f"list_distinct({col.sql(ctx)})")
+
+    def posexplode(self, c: Any) -> DuckColumn:
+        col = self._c(c)
+        return DuckColumn(lambda ctx: f"unnest({col.sql(ctx)})")
+
+    def explode_outer(self, c: Any) -> DuckColumn:
+        col = self._c(c)
+        return DuckColumn(
+            lambda ctx: (
+                f"unnest(CASE WHEN len({col.sql(ctx)}) > 0 THEN {col.sql(ctx)} ELSE [NULL] END)"
+            )
+        )
+
+    def typeof(self, c: Any) -> DuckColumn:
+        return DuckColumn.template(lambda a: f"lower(typeof({a}))", self._c(c), kind="str")
+
     # ---- helpers -------------------------------------------------------
 
     @staticmethod
@@ -550,6 +1132,27 @@ class _DuckFunctions:
     Window = DuckWindow
 
 
+def to_col_or_lit(value: Any) -> DuckColumn:
+    """A column for ``value``: columns pass through, everything else is a literal."""
+    return value if isinstance(value, DuckColumn) else DuckColumn.literal(value)
+
+
+def _to_csv_row(row: Any, sep: str, line_start: bool) -> str | None:
+    """``to_csv`` of one struct row (Spark writer rules; values rendered as Spark text)."""
+    from ovid2.core.engines._duck_udf import python_value_text
+    from ovid2.core.engines.csv_text import write_cell
+
+    if row is None:
+        return None
+    values = list(row.values()) if isinstance(row, dict) else [row]
+    out = []
+    for i, v in enumerate(values):
+        text = python_value_text(v)
+        cell = write_cell(text, delimiter=sep, line_start=line_start and i == 0)
+        out.append("" if cell is None else cell)
+    return sep.join(out)
+
+
 def _expr_output_name(text: str) -> str | None:
     match = re.search(r"\s+AS\s+`?([A-Za-z_][A-Za-z0-9_]*)`?\s*$", text, re.IGNORECASE)
     if match:
@@ -560,7 +1163,20 @@ def _expr_output_name(text: str) -> str | None:
 
 
 class _DuckReader:
-    """``session.read`` stand-in: ``csv`` / ``parquet`` / ``load`` of local files."""
+    """``session.read`` stand-in: ``csv`` / ``parquet`` / ``load`` of local files.
+
+    Option semantics follow Spark's ``DataFrameReader``:
+
+    * **Disc-driver reads** (``ignoreLeadingWhiteSpace`` and
+      ``ignoreTrailingWhiteSpace`` both true — the Ovid2 disc contract)
+      use DuckDB's parallel CSV scanner (values trimmed, empty → NULL).
+    * **Every other CSV read** (Spark defaults: no trimming,
+      ``multiLine=false``, ``escape='\\'`` unless set,
+      ``inferSchema=false``) goes through the univocity model
+      (:mod:`ovid2.core.engines.csv_text`), byte-exact with Spark.
+    * ``inferSchema=true`` applies Spark's CSV schema inference
+      (:mod:`ovid2.legacy.spark33_infer`) and returns typed columns.
+    """
 
     def __init__(self, engine: DuckDBEngine) -> None:
         self._engine = engine
@@ -580,22 +1196,73 @@ class _DuckReader:
         self._format = fmt.lower()
         return self
 
+    def schema(self, schema: Any) -> _DuckReader:
+        self._options["__schema"] = schema
+        return self
+
+    def _flag(self, key: str, default: bool = False) -> bool:
+        value = self._options.get(key.lower())
+        if value is None:
+            return default
+        return str(value).lower() == "true"
+
     def csv(self, path: Any, **kwargs: Any) -> DuckFrame:
         for k, v in kwargs.items():
-            self.option(k, v)
-        header = str(self._options.get("header", "false")).lower() == "true"
+            if v is not None:
+                self.option(k, v)
+        header = self._flag("header")
         delimiter = str(self._options.get("sep") or self._options.get("delimiter") or ",")
-        return self._engine.read_csv(path, delimiter=delimiter, header=header)
+        if self._flag("ignoreleadingwhitespace") and self._flag("ignoretrailingwhitespace"):
+            return self._engine.read_csv(path, delimiter=delimiter, header=header)
+        from ovid2.core.engines.duckdb_stager import read_spark_default_csv
+
+        paths = [str(p) for p in path] if isinstance(path, (list, tuple)) else [str(path)]
+        escape = str(self._options.get("escape") or "\\")
+        quote = str(self._options.get("quote", '"') or "\x00")
+        frames = [
+            read_spark_default_csv(
+                self._engine,
+                p,
+                delimiter=delimiter,
+                quote=quote,
+                escape=escape,
+                header=header,
+                ignore_leading=self._flag("ignoreleadingwhitespace"),
+                ignore_trailing=self._flag("ignoretrailingwhitespace"),
+            )
+            for p in paths
+        ]
+        frame = frames[0]
+        for extra in frames[1:]:
+            frame = frame.union(extra)
+        if self._flag("inferschema"):
+            from ovid2.legacy.spark33_infer import infer_typed
+
+            frame = infer_typed(frame)
+        return frame
 
     def parquet(self, *paths: Any) -> DuckFrame:
         return self._engine.read_parquet(list(paths) if len(paths) > 1 else paths[0])
 
+    def text(self, path: Any) -> DuckFrame:
+        from ovid2.legacy.text_io import read_lines
+
+        return cast(DuckFrame, read_lines(self._engine.get_session(), str(path)))
+
+    def json(self, path: Any) -> DuckFrame:
+        return self._engine.wrap(self._engine.connection().read_json(str(path)))
+
     def load(self, path: Any = None, format: str | None = None, **kwargs: Any) -> DuckFrame:
         fmt = (format or self._format).lower()
         for k, v in kwargs.items():
-            self.option(k, v)
+            if v is not None:
+                self.option(k, v)
         if fmt == "parquet":
             return self.parquet(path)
+        if fmt == "json":
+            return self.json(path)
+        if fmt == "text":
+            return self.text(path)
         return self.csv(path)
 
 
@@ -614,6 +1281,29 @@ class DuckDBEngineSession:
     def createDataFrame(self, data: Any, schema: Any = None) -> DuckFrame:  # noqa: N802
         return self._engine.create_dataframe(data, schema)
 
+    def from_arrow(self, table: Any) -> DuckFrame:
+        """Wrap a ``pyarrow.Table`` (kept alive for the engine's lifetime)."""
+        self._engine._arrow_refs.append(table)
+        return self._engine.wrap(self._engine.connection().from_arrow(table))
+
+    @property
+    def udf(self) -> _DuckUdfRegistration:
+        """``spark.udf.register(name, fn)`` — SQL-callable Python functions."""
+        return _DuckUdfRegistration(self._engine)
+
+    @property
+    def conf(self) -> _DuckConf:
+        """``spark.conf`` stand-in (``get`` / ``set`` / ``unset`` of plain keys)."""
+        return self._engine._conf
+
+    @property
+    def sparkContext(self) -> _DuckSparkContext:  # noqa: N802 — PySpark API
+        """Minimal ``SparkContext`` (``broadcast`` / ``emptyRDD`` / ``setLogLevel``)."""
+        return _DuckSparkContext()
+
+    def stop(self) -> None:
+        """Sessions are owned by the engine; ``stop`` is a no-op."""
+
     @property
     def read(self) -> _DuckReader:
         return _DuckReader(self._engine)
@@ -625,6 +1315,75 @@ class DuckDBEngineSession:
     @property
     def native(self) -> Any:
         return self._engine.connection()
+
+
+class _DuckUdfRegistration:
+    """``session.udf`` for DuckDB: register a Python UDF as a SQL function."""
+
+    def __init__(self, engine: DuckDBEngine) -> None:
+        self._engine = engine
+
+    def register(self, name: str, f: Any, returnType: Any = None) -> Any:  # noqa: N803
+        """Register ``f`` under ``name`` (any arity; Spark ``udf.register``)."""
+        from ovid2.core.engines._duck_udf import DuckUdf
+
+        udf = (
+            f
+            if isinstance(f, DuckUdf)
+            else DuckUdf(getattr(f, "func", f), returnType or getattr(f, "returnType", "string"))
+        )
+        udf.register_as(self._engine._root_connection(), name)
+        self._engine._sql_udfs[name.lower()] = udf
+        return udf
+
+
+class _DuckConf:
+    """``spark.conf``: a plain key/value store (no engine semantics)."""
+
+    def __init__(self) -> None:
+        self._values: dict[str, str] = {}
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._values.get(key, default)
+
+    def set(self, key: str, value: Any) -> None:
+        self._values[key] = str(value)
+
+    def unset(self, key: str) -> None:
+        self._values.pop(key, None)
+
+    def getAll(self) -> dict[str, str]:  # noqa: N802 — PySpark API
+        return dict(self._values)
+
+
+class _Broadcast:
+    """``SparkContext.broadcast`` result: ``.value`` holds the object."""
+
+    def __init__(self, value: Any) -> None:
+        self.value = value
+
+    def unpersist(self, blocking: bool = False) -> None:
+        del blocking
+
+    def destroy(self) -> None:
+        """No-op (driver-side object)."""
+
+
+class _DuckSparkContext:
+    """The parts of ``SparkContext`` driver code touches."""
+
+    def broadcast(self, value: Any) -> _Broadcast:
+        return _Broadcast(value)
+
+    def emptyRDD(self) -> list[Any]:  # noqa: N802 — PySpark API
+        return []
+
+    def setLogLevel(self, level: str) -> None:  # noqa: N802 — PySpark API
+        del level
+
+    @property
+    def defaultParallelism(self) -> int:  # noqa: N802 — PySpark API
+        return _default_threads()
 
 
 class _CatalogTable:
@@ -654,7 +1413,7 @@ def transpile_statement(query: str) -> str:
     return str(tree.transform(_rewrite).sql(dialect="duckdb"))
 
 
-_ALIAS_RE = re.compile(r"\b__ovq?\d+\b")
+_ALIAS_RE = re.compile(r"\b(?:__ovq?\d+|unnamed_relation_[0-9a-f]+)\b")
 
 
 def _plan_key(frame: DuckFrame) -> str:
@@ -764,6 +1523,10 @@ class DuckDBEngine(BaseEngine):
         self._shared_ckpts: dict[str, tuple[str, frozenset[str]]] = {}
         #: ``(id(connection), mapping signature) -> lookup table`` (``create_map``).
         self._lookup_tables: dict[tuple[int, str], str] = {}
+        #: ``spark.conf`` stand-in shared by every session handle.
+        self._conf = _DuckConf()
+        #: SQL-registered Python UDFs (``session.udf.register``).
+        self._sql_udfs: dict[str, Any] = {}
 
     # ------------------------------------------------------------------
     # Thread-aware state (parallel tables)
@@ -797,32 +1560,17 @@ class DuckDBEngine(BaseEngine):
             self._local.checkpoints = handles
         return handles
 
-    def table_concurrency(self, n_tables: int) -> int:
-        """Return how many tables may run at once (see ``table_concurrency``).
-
-        DuckDB runs every query of a database on one shared thread pool,
-        but many steps (CSV text writes, ``DISTINCT ON``, small tables)
-        use a fraction of it. Running tables side by side on their own
-        cursors keeps the pool busy. Default: ``min(n_tables, CPUs)``;
-        ``table_concurrency`` / ``$OVID2_DUCKDB_TABLE_CONCURRENCY``
-        overrides (``1`` = sequential).
-        """
-        raw = self.args.get("table_concurrency") or os.environ.get("OVID2_DUCKDB_TABLE_CONCURRENCY")
-        try:
-            wanted = int(raw) if raw not in (None, "") else _default_threads()
-        except (TypeError, ValueError):
-            _log.warning("Ignoring invalid table_concurrency=%r", raw)
-            wanted = _default_threads()
-        return max(1, min(wanted, max(1, int(n_tables))))
-
     @contextlib.contextmanager
     def table_worker(self) -> Iterator[None]:
         """Run the block on a private cursor of the run's database.
 
-        Cursors share the catalog, scratch files and thread pool of the
-        root connection but execute independently, so tables can run in
-        parallel. Frames built on another connection are rebound on
-        access (:meth:`view`, the staged / checkpoint caches).
+        Pipelines run tables one at a time on the root connection; this
+        scope exists for callers that touch the engine from another
+        thread (a DuckDB connection must not be shared by threads running
+        queries at once). Cursors share the catalog, scratch files and
+        thread pool of the root connection. Frames built on another
+        connection are rebound on access (:meth:`view`, the staged /
+        checkpoint caches).
         """
         root = self.connection()
         if getattr(self._local, "active", False):
@@ -834,6 +1582,11 @@ class DuckDBEngine(BaseEngine):
         cursor = getattr(self._local, "conn", None)
         if cursor is None or getattr(self._local, "generation", -1) != self._generation:
             cursor = root.cursor()
+            # TEMP macros are connection-local: a cursor does not see the
+            # root's ``__ovid2_java_double`` (``CAST(double AS STRING)``).
+            from ovid2.core.engines.duckdb_stager import _shortest_double_text
+
+            _shortest_double_text(cursor)
             with self._lock:
                 token = next(self._token_counter)
                 self._cursors[token] = cursor
@@ -907,6 +1660,11 @@ class DuckDBEngine(BaseEngine):
             Path(self._temp_dir).mkdir(parents=True, exist_ok=True)
             config["temp_directory"] = self._temp_dir
             self._conn = duckdb.connect(database, config=config)
+            from ovid2.core.engines.duckdb_stager import _shortest_double_text
+
+            # ``CAST(double AS STRING)`` renders Java ``Double.toString``
+            # through this macro (``_duck_expr._to_string_sql``).
+            _shortest_double_text(self._conn)
             self._conn.execute("SET enable_progress_bar = true")
             self._conn.execute("SET enable_progress_bar_print = false")
             self._started_ms = int(time.monotonic() * 1000)
@@ -924,7 +1682,10 @@ class DuckDBEngine(BaseEngine):
         from ovid2.core.engines.stager import run_session_cleanups
 
         if self._conn is not None:
+            from ovid2.core.engines._duck_udf import forget_connection
+
             run_session_cleanups(self)
+            forget_connection(self._conn)
             with self._lock:
                 cursors = list(self._cursors.values())
                 self._cursors.clear()
@@ -1136,6 +1897,16 @@ class DuckDBEngine(BaseEngine):
                     self._inflight.pop(slot, None)
                 event.set()
 
+    def warm_reference(self, session: Any, df: Any, name: str) -> Any:
+        """Execute a reference table once into scratch Parquet (see :meth:`materialise`).
+
+        DuckDB re-runs a plan per consumer (no shared DAG), so without this
+        every clinical table re-ran the reference table's whole plan inside
+        its own write.
+        """
+        del session
+        return self.materialise(df, f"ref_{name}")
+
     def materialise(self, frame: DuckFrame, name: str | None = None) -> DuckFrame:
         """Execute ``frame`` once into scratch Parquet and return a frame over it.
 
@@ -1286,7 +2057,9 @@ class DuckDBEngine(BaseEngine):
 
         return self.wrap(self.connection().read_parquet(parquet_glob(path)))
 
-    def read_shared_view_file(self, source: Path, *, delimiter: str, header: bool) -> DuckFrame:
+    def read_shared_view_file(
+        self, source: Path, *, delimiter: str, header: bool, bus: Any = None
+    ) -> DuckFrame:
         """Read a file-sourced shared view (OMOP vocabulary) via the Parquet cache.
 
         Reuses the cache directory Spark builds (``part-*.parquet``) and
@@ -1344,11 +2117,15 @@ class DuckDBEngine(BaseEngine):
         arrow_types = {
             "VARCHAR": pa.string(),
             "DOUBLE": pa.float64(),
+            "FLOAT": pa.float32(),
             "BOOLEAN": pa.bool_(),
             "BIGINT": pa.int64(),
             "INTEGER": pa.int32(),
+            "SMALLINT": pa.int16(),
+            "TINYINT": pa.int8(),
             "DATE": pa.date32(),
             "TIMESTAMP": pa.timestamp("us"),
+            "BLOB": pa.binary(),
         }
         columns: list[list[Any]] = [[] for _ in names]
         for row in rows:
@@ -1359,10 +2136,16 @@ class DuckDBEngine(BaseEngine):
             )
             for i, v in enumerate(values):
                 columns[i].append(v)
-        arrays = [
-            pa.array(col, type=arrow_types.get(t.upper(), pa.string()))
-            for col, t in zip(columns, types, strict=True)
-        ]
+
+        def _arrow_type(duck: str) -> Any:
+            upper = duck.upper()
+            if upper.startswith("DECIMAL"):
+                inner = upper[len("DECIMAL") :].strip("() ")
+                p_, _, s_ = inner.partition(",")
+                return pa.decimal128(int(p_ or 38), int(s_ or 0))
+            return arrow_types.get(upper, pa.string())
+
+        arrays = [pa.array(col, type=_arrow_type(t)) for col, t in zip(columns, types, strict=True)]
         table = pa.Table.from_arrays(arrays, names=names)
         # ``from_arrow`` scans the Arrow buffers lazily; keep the table
         # alive for the engine's lifetime so the relation stays valid.
@@ -1473,23 +2256,70 @@ def _scratch_root() -> str | None:
 _SPARK_TYPE_TO_DUCK = {
     "string": "VARCHAR",
     "str": "VARCHAR",
+    "void": "VARCHAR",
+    "tinyint": "TINYINT",
+    "smallint": "SMALLINT",
     "int": "INTEGER",
     "integer": "INTEGER",
     "bigint": "BIGINT",
     "long": "BIGINT",
     "double": "DOUBLE",
-    "float": "DOUBLE",
+    "float": "FLOAT",
     "boolean": "BOOLEAN",
     "date": "DATE",
     "timestamp": "TIMESTAMP",
+    "timestamp_ntz": "TIMESTAMP",
+    "binary": "BLOB",
 }
 
 
+def _infer_duck_type(values: list[Any]) -> str:
+    """Spark ``createDataFrame`` schema inference from Python values → DuckDB type."""
+    import datetime as _dt
+    from decimal import Decimal
+
+    seen = [v for v in values if v is not None]
+    if not seen:
+        return "VARCHAR"
+    v = seen[0]
+    if isinstance(v, bool):
+        return "BOOLEAN"
+    if isinstance(v, int):
+        return "BIGINT"
+    if isinstance(v, float):
+        return "DOUBLE"
+    if isinstance(v, Decimal):
+        return "DECIMAL(38,18)"
+    if isinstance(v, _dt.datetime):
+        return "TIMESTAMP"
+    if isinstance(v, _dt.date):
+        return "DATE"
+    return "VARCHAR"
+
+
+def _row_values(row: Any, names: list[str]) -> list[Any]:
+    if hasattr(row, "asDict"):
+        return list(row.asDict().values())
+    if isinstance(row, dict):
+        return [row.get(n) for n in names]
+    return list(row)
+
+
 def _schema_columns(schema: Any, data: Any) -> tuple[list[str], list[str]]:
-    """Return ``(names, duck types)`` for a ``createDataFrame`` schema argument."""
-    if schema is None:
-        rows = list(data or [])
-        if rows and hasattr(rows[0], "asDict"):
+    """Return ``(names, duck types)`` for a ``createDataFrame`` schema argument.
+
+    Mirrors Spark: a name list / no schema infers each column's type from
+    the Python values (``bool`` → boolean, ``int`` → bigint, ``float`` →
+    double, ``datetime`` → timestamp …); a DDL string or a
+    ``StructType`` (portable or PySpark) gives the types explicitly.
+    """
+    rows = list(data or [])
+    if schema is None or (
+        isinstance(schema, (list, tuple)) and all(isinstance(s, str) for s in schema)
+    ):
+        if schema is not None:
+            names = [str(s) for s in schema]
+        elif rows and hasattr(rows[0], "asDict"):
             names = list(rows[0].asDict())
         elif rows and isinstance(rows[0], dict):
             # Spark infers a schema from a dict row with *sorted* keys.
@@ -1497,29 +2327,54 @@ def _schema_columns(schema: Any, data: Any) -> tuple[list[str], list[str]]:
         else:
             width = len(rows[0]) if rows else 0
             names = [f"_{i + 1}" for i in range(width)]
-        return names, ["VARCHAR"] * len(names)
-    if isinstance(schema, str):
-        names, types = [], []
-        for part in schema.split(","):
-            bits = part.strip().replace(":", " ").split()
+        columns = [_row_values(r, names) for r in rows]
+        types = [_infer_duck_type([c[i] for c in columns if i < len(c)]) for i in range(len(names))]
+        return names, types
+    fields = getattr(schema, "fields", None)
+    if fields is None and isinstance(schema, str):
+        from ovid2.core.engines.types import StructField, StructType, _as_type
+
+        parsed = []
+        for part in _split_ddl(schema):
+            bits = part.strip().replace(":", " ", 1).split(None, 1)
             if not bits:
                 continue
-            names.append(bits[0].strip("`"))
-            types.append(
-                _SPARK_TYPE_TO_DUCK.get(bits[1].lower() if len(bits) > 1 else "string", "VARCHAR")
+            parsed.append(
+                StructField(bits[0].strip("`"), _as_type(bits[1] if len(bits) > 1 else "string"))
             )
-        return names, types
-    if isinstance(schema, (list, tuple)):
-        return [str(s) for s in schema], ["VARCHAR"] * len(schema)
-    fields = getattr(schema, "fields", None)
+        fields = StructType(parsed).fields
     if fields is not None:
         names = [f.name for f in fields]
-        types = [
-            _SPARK_TYPE_TO_DUCK.get(str(f.dataType.simpleString()).lower(), "VARCHAR")
-            for f in fields
-        ]
+        types = [_duck_type_for_spark(str(f.dataType.simpleString())) for f in fields]
         return names, types
     raise TypeError(f"Unsupported createDataFrame schema {schema!r}")
+
+
+def _split_ddl(text: str) -> list[str]:
+    """Split ``"a string, b decimal(10,2)"`` on top-level commas."""
+    parts: list[str] = []
+    depth = 0
+    cur: list[str] = []
+    for ch in text:
+        if ch in "(<":
+            depth += 1
+        elif ch in ")>":
+            depth -= 1
+        if ch == "," and depth == 0:
+            parts.append("".join(cur))
+            cur = []
+        else:
+            cur.append(ch)
+    if cur:
+        parts.append("".join(cur))
+    return parts
+
+
+def _duck_type_for_spark(spark_type: str) -> str:
+    t = spark_type.strip().lower()
+    if t.startswith("decimal"):
+        return t.upper()
+    return _SPARK_TYPE_TO_DUCK.get(t, "VARCHAR")
 
 
 __all__ = ["DuckDBEngine", "DuckDBEngineSession", "transpile_statement"]

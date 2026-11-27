@@ -18,6 +18,11 @@ def cdm():
 
 
 def _ctx(spark, cdm, available, *, run_date=None, prior_tables=None):
+    from ovid2.core.engines.registry import load_engine_class
+    from ovid2.core.sources import local_file_reader
+
+    engine = load_engine_class("pyspark")()
+    engine._session = spark
     return OpContext(
         session=spark,
         cdm=cdm,
@@ -26,6 +31,8 @@ def _ctx(spark, cdm, available, *, run_date=None, prior_tables=None):
         pipeline="test",
         run_date=run_date,
         prior_tables=prior_tables,
+        functions=engine.get_functions(),
+        reference_reader=local_file_reader(engine),
     )
 
 
@@ -179,7 +186,7 @@ def test_null_rate(spark, cdm) -> None:
     assert sex and pytest.approx(sex[0].value_num, abs=0.01) == 75.0
 
 
-def test_runner_end_to_end_status_and_dataframe(spark, cdm) -> None:
+def test_runner_end_to_end_status_and_dataframe(spark, spark_engine, cdm) -> None:
     _register(
         spark,
         "DEMOGRAPHIC",
@@ -192,6 +199,7 @@ def test_runner_end_to_end_status_and_dataframe(spark, cdm) -> None:
         pipeline="test",
         batch_id="b1",
         instance_id="20260101-000000-abcdef",
+        engine=spark_engine,
     )
     specs = [
         s

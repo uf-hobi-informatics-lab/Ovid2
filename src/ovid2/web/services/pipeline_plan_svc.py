@@ -76,6 +76,10 @@ def _module_exists(dotted_name: str) -> bool:
 
 def _pipeline_pkg_paths(pipeline: str) -> list[Path]:
     """Return the on-disk search dirs of a pipeline package (may be empty)."""
+    from ovid2.config.pipeline_packages import package_visible
+
+    if not package_visible(pipeline):
+        return []
     try:
         pkg = importlib.import_module(f"ovid2_pipelines.{pipeline}")
     except ModuleNotFoundError:

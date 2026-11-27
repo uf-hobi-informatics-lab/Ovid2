@@ -63,7 +63,20 @@ class NewPipelineError(ValueError):
 
 
 def _pipelines_root() -> Path:
-    """Return the first writable ``ovid2_pipelines`` namespace directory."""
+    """Return the ``ovid2_pipelines`` directory new packages are written to.
+
+    In a non-default workspace that is the workspace's own
+    ``packages/ovid2_pipelines`` (created on demand, put on ``sys.path``);
+    otherwise the first on-disk directory of the shared namespace.
+    """
+    from ovid2.config.pipeline_packages import ensure_workspace_packages_on_path
+    from ovid2.workspaces import packages_dir
+
+    ws_root = packages_dir()
+    if ws_root is not None:
+        (ws_root / "ovid2_pipelines").mkdir(parents=True, exist_ok=True)
+        ensure_workspace_packages_on_path(ws_root)
+        return ws_root / "ovid2_pipelines"
     try:
         pkg = importlib.import_module("ovid2_pipelines")
     except ModuleNotFoundError as exc:  # pragma: no cover — defensive
@@ -77,8 +90,29 @@ def _pipelines_root() -> Path:
     raise NewPipelineError("No on-disk 'ovid2_pipelines' directory found on sys.path.")
 
 
+def _is_shared_or_workspace_root(root: Path) -> bool:
+    """Return ``True`` when ``root`` is a real namespace dir on ``sys.path``."""
+    import sys
+
+    resolved = root.resolve()
+    return any((Path(entry or ".") / "ovid2_pipelines").resolve() == resolved for entry in sys.path)
+
+
+def _name_taken_anywhere(name: str) -> bool:
+    """Return ``True`` when ``ovid2_pipelines.<name>`` exists in any workspace."""
+    from ovid2.config.pipeline_packages import all_workspace_package_dirs, package_dirs
+
+    if package_dirs(name):
+        return True
+    return any((root / "ovid2_pipelines" / name).exists() for root in all_workspace_package_dirs())
+
+
 def _source_pipeline_path(source_pipeline: str) -> Path:
     """Return the on-disk directory for an existing pipeline package."""
+    from ovid2.config.pipeline_packages import package_visible
+
+    if not package_visible(source_pipeline):
+        raise NewPipelineError(f"Source pipeline '{source_pipeline}' is not installed.")
     try:
         pkg = importlib.import_module(f"ovid2_pipelines.{source_pipeline}")
     except ModuleNotFoundError as exc:
@@ -230,6 +264,17 @@ def scaffold_pipeline(
     dest = root / new_name
     if dest.exists():
         raise NewPipelineError(f"Pipeline package '{new_name}' already exists at {dest}.")
+    if (
+        pipelines_root is None
+        and _is_shared_or_workspace_root(root)
+        and _name_taken_anywhere(new_name)
+    ):
+        # Package names are unique across every workspace: the long-lived
+        # web process imports all of them into one module namespace.
+        raise NewPipelineError(
+            f"Pipeline package name '{new_name}' is already used (possibly in another "
+            "workspace); choose a different name."
+        )
 
     if not new_name.isidentifier():
         raise NewPipelineError(

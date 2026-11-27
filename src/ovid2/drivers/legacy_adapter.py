@@ -254,8 +254,9 @@ def build_legacy_driver_class(type_name: str) -> type[Driver]:
 
             if not type(self).spark_capable:
                 raise NotImplementedError(
-                    f"Driver '{self.type_name}' has no Spark data plane; "
-                    "run it with --engine duckdb."
+                    f"Driver '{self.type_name}' has no native Spark data plane; read / write "
+                    "it through the engine stager (engine.get_stager()), which bridges "
+                    "it for every engine."
                 )
             src_name, src_args = self.as_legacy_src_args()
             if src_name not in ADDRESS_TYPE_MAP:

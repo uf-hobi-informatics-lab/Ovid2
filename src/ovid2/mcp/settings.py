@@ -60,3 +60,9 @@ MCP_ACTOR: str = os.environ.get("OVID2_MCP_ACTOR", "mcp")
 #: client sends no auth header — matching the network-perimeter-only
 #: default. The token is a plaintext credential and is never logged.
 MCP_API_TOKEN: str | None = os.environ.get("OVID2_MCP_API_TOKEN")
+
+#: Workspace the MCP server acts in (adr-workspaces.md). Sent as the
+#: ``X-Ovid2-Workspace`` header on every upstream request; the token must be
+#: bound to it (``auth_service_tokens.json`` → ``workspaces``). Unset → the
+#: token's first workspace (``default`` for a legacy role-only token).
+MCP_WORKSPACE: str | None = os.environ.get("OVID2_MCP_WORKSPACE") or None

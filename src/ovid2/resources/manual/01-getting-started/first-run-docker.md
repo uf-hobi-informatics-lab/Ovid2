@@ -57,7 +57,7 @@ ovid2 etl \
 | --- | --- |
 | `--tables all` | every table the pipeline has a formatter for |
 | `--transformations all` | format → deduplicate → transform → map → fix → write |
-| `--workers 4` | four Spark worker containers (for DuckDB: four tables at once) |
+| `--workers 4` | four Spark worker containers (ignored by DuckDB / Snowpark) |
 | `--engine duckdb` | optional: one container, no cluster, often fastest for one host |
 
 ## 5. Watch it live

@@ -10,7 +10,7 @@ Covers the theming feature layered on top of the v2 shell:
 - ``ovid2.css`` declares a ``[data-theme]`` block for each shipped
   named theme.
 - The pre-paint script honours any known slug, remaps the retired
-  ``dune`` / ``industry`` slugs, and re-applies the server-rendered
+  ``tatooine`` / ``industry`` slugs, and re-applies the server-rendered
   custom colour overrides before first paint.
 - Appearance is stored per user on the server under ``/api/v1/me/appearance``
   (no other theme route exists).
@@ -23,29 +23,29 @@ import pytest
 # The eight shipped themes (movie/game pass + Spaceship + Data Factory).
 _SLUGS = [
     "clinical",
-    "matrix",
-    "super-mario-world",
-    "tatooine",
+    "data-factory",
+    "dune",
     "financial",
     "lego",
+    "matrix",
     "spaceship",
-    "data-factory",
+    "super-mario-world",
 ]
 _LABELS = [
     "Clinical",
-    "Matrix",
-    "Super Mario World",
-    "Star Wars / Tatooine",
+    "Data Factory",
+    "Dune",
     "Financial",
     "LEGO",
+    "Matrix",
     "Spaceship",
-    "Data Factory",
+    "Super Mario World",
 ]
 # Named themes that are not also the light/dark baseline aliases.
-_PALETTE_SLUGS = ["super-mario-world", "tatooine", "financial", "lego", "spaceship", "data-factory"]
+_PALETTE_SLUGS = ["data-factory", "dune", "financial", "lego", "spaceship", "super-mario-world"]
 # Retired slugs remapped to their replacements (both in theme.js and
 # the base.html pre-paint snippet).
-_RETIRED_ALIASES = {"dune": "tatooine", "industry": "lego"}
+_RETIRED_ALIASES = {"tatooine": "dune", "industry": "lego"}
 
 
 @pytest.mark.unit
@@ -127,6 +127,8 @@ def test_css_declares_bundled_theme_fonts(web_client: object) -> None:
         "Share Tech Mono",
         "Press Start 2P",
         "Michroma",
+        "Big Shoulders Stencil",
+        "Cinzel",
     ):
         assert f'font-family: "{family}"' in body, f"missing @font-face for {family!r}"
 
@@ -155,6 +157,48 @@ def test_appearance_route_is_the_only_theme_surface(web_client: object) -> None:
     assert set(paths["/api/v1/me/appearance"]) == {"get", "put"}
     for path in paths:
         assert "theme" not in path.lower(), f"unexpected theme route {path!r}"
+
+
+# Decorative pseudo-elements per theme that must never swallow clicks.
+_DECORATIONS = {
+    "data-factory": (
+        ".topbar::after",
+        ".drawer::after",
+        ".side-group::before",
+        ".nav-item::after",
+        ".page-header h1::before",
+        ".page-header h1::after",
+        ".card::before",
+        ".card h2::before",
+        ".card h2::after",
+        ".kpi::after",
+        ".flash::before",
+        ".cooking-now .cooking-now-label::before",
+        ".live-banner::before",
+        ".site-footer::before",
+        "body.login-body::before",
+        ".login-card::before",
+        ".login-card::after",
+    ),
+    "dune": (
+        ".topbar::after",
+        ".drawer::after",
+        ".side-group::before",
+        ".nav-item::after",
+        ".page-header h1::after",
+        ".card h2::before",
+        ".card h2::after",
+        ".kpi::before",
+        ".flash::before",
+        ".cooking-now .cooking-now-label::before",
+        ".live-banner::before",
+        ".site-footer::before",
+        "body.login-body::before",
+        "body.login-body::after",
+        ".login-card::before",
+        ".login-card::after",
+    ),
+}
 
 
 def _rule_body(css: str, selector: str) -> str:
@@ -200,38 +244,43 @@ def test_prepaint_knows_data_factory(web_client: object) -> None:
 
 
 @pytest.mark.unit
-def test_data_factory_signatures_never_block_clicks(web_client: object) -> None:
-    """The line rail, title index and flow sweep are click-through decorations."""
+def test_theme_signatures_never_block_clicks(web_client: object) -> None:
+    """Belts, beacons, ripples, thumper rings and login art are click-through."""
     body = web_client.get("/static/ovid2.css").text  # type: ignore[attr-defined]
-    for selector in (
-        'html[data-theme="data-factory"] .topbar::after',
-        'html[data-theme="data-factory"] .page-header h1::after',
-        'html[data-theme="data-factory"] .cooking-now .cooking-now-label::after',
-        'html[data-theme="data-factory"] .login-card::after',
-    ):
-        assert "pointer-events: none" in _rule_body(body, selector), selector
+    for slug, selectors in _DECORATIONS.items():
+        for sel in selectors:
+            selector = f'html[data-theme="{slug}"] {sel}'
+            assert "pointer-events: none" in _rule_body(body, selector), selector
 
 
 @pytest.mark.unit
 def test_data_factory_effects_follow_the_accent(web_client: object) -> None:
     """Sweep / focus helpers derive from ``--accent`` so user overrides recolour them."""
     body = web_client.get("/static/ovid2.css").text  # type: ignore[attr-defined]
-    assert "--df-sweep: color-mix(in srgb, var(--accent) 70%, #ffffff);" in body
-    assert "--df-focus-on-dark: color-mix(in srgb, var(--accent) 45%, #ffffff);" in body
+    assert "--df-steel: color-mix(in srgb, var(--accent) 6%, #8c8472);" in body
+    assert "--df-accent-wash: color-mix(in srgb, var(--accent) 14%, #fbf9f4);" in body
+    assert "--df-cleat: var(--accent);" in body
+    assert "--dn-eye: color-mix(in srgb, var(--accent) 62%, #ffffff);" in body
+    assert "--dn-tint: color-mix(in srgb, var(--accent) 22%, #efe5d2);" in body
 
 
 @pytest.mark.unit
-def test_data_factory_animations_have_reduced_motion_off_switch(web_client: object) -> None:
-    """Every Data Factory keyframe animation is switched off under reduced motion."""
+def test_theme_animations_have_reduced_motion_off_switch(web_client: object) -> None:
+    """Every Data Factory / Dune animated selector is switched off under reduced motion."""
+    import re
+
     body = web_client.get("/static/ovid2.css").text  # type: ignore[attr-defined]
     start = body.index("15.z  Reduced motion")
     block = body[start : body.index("Flow graph", start)]
-    for selector in (
-        ".cooking-now .cooking-now-label::after",
-        ".login-card::after",
-        ".badge.status-stopping::before",
-    ):
-        assert selector in block, selector
+    for slug in ("data-factory", "dune"):
+        layer_start = body.index(f" * 15.{slug} ")
+        layer = body[layer_start : body.index("/* ---", layer_start + 10)]
+        for selector, decls in re.findall(r"([^{}]+)\{([^{}]*)\}", layer):
+            if "animation:" not in decls or "@keyframes" in selector:
+                continue
+            for sel in (s.strip() for s in selector.split(",")):
+                if sel.startswith("html["):
+                    assert sel in block, f"no reduced-motion off switch for {sel!r}"
 
 
 @pytest.mark.unit
@@ -244,5 +293,16 @@ def test_data_factory_is_the_default_theme(web_client: object) -> None:
     js = web_client.get("/static/theme.js").text  # type: ignore[attr-defined]
     assert 'var DEFAULT_THEME = "data-factory";' in js
     assert "return DEFAULT_THEME;" in js
-    themes = js[js.index("var THEMES = [") :]
-    assert themes.index('"data-factory"') < themes.index('"clinical"'), "default listed first"
+
+
+@pytest.mark.unit
+def test_themes_are_listed_alphabetically(web_client: object) -> None:
+    """``THEMES`` (and the catalogue enum) are sorted by label, A to Z."""
+    import re
+
+    js = web_client.get("/static/theme.js").text  # type: ignore[attr-defined]
+    block = js[js.index("var THEMES = [") : js.index("];", js.index("var THEMES = ["))]
+    labels = re.findall(r'label: "([^"]+)"', block)
+    assert labels == sorted(labels, key=str.casefold)
+    assert "THEMES.sort(" in js
+    assert "localeCompare" in js

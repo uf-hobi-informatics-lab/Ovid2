@@ -19,7 +19,8 @@ Docker so that each run gets its own isolated cluster.
 ### Which engine should I use?
 
 DuckDB if the batch fits on one host, Snowpark for Snowflake → Snowflake,
-PySpark for very large data or Spark-only custom code. See
+PySpark for very large data. Every engine runs every pipeline on every
+storage driver, so the choice is about speed and where compute runs. See
 [Engines](../02-concepts/engines.md).
 
 ### Why did my run refuse to write?

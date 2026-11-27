@@ -1,0 +1,25 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  src1: pats
+  src2: TXT
+lists:
+  pats: 'pattern
+
+    secret
+
+    '
+tables:
+  input:
+    columns:
+    - TXT
+    rows:
+    - - a SECRET note
+    - - fine
+    - - null
+note: case-insensitive (?i) regex match on any pattern; null kept
+expected:
+  columns:
+  - TXT
+  rows:
+  - - fine
+  - - null

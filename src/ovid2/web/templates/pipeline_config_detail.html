@@ -20,7 +20,7 @@
       {% if ks.tables_mode != 'none' %}<tr><th>Tables</th><td class="mono small">{% if pipeline_config.tables %}{{ pipeline_config.tables | join(' ') }}{% else %}<span class="badge">open &mdash; chosen at run time</span>{% endif %}</td></tr>{% endif %}
       {% if ks.uses_transformations %}<tr><th>Transformations</th><td class="mono small">{{ pipeline_config.transformations | join(' ') }}</td></tr>{% endif %}
       <tr><th>Warehouse</th><td>{{ pipeline_config.engine }}</td></tr>
-      {% if ks.uses_engine_overrides %}<tr><th>Workers</th><td>{{ pipeline_config.workers }}</td></tr>{% endif %}
+      {% if ks.uses_engine_overrides and uses_workers %}<tr><th>Workers</th><td>{{ pipeline_config.workers }}</td></tr>{% endif %}
       {% if ks.uses_engine_overrides and pipeline_config.sf_account %}<tr><th>SF account</th><td class="mono">{{ pipeline_config.sf_account }}</td></tr>{% endif %}
       <tr><th>Enabled</th><td>{{ 'yes' if pipeline_config.enabled else 'no' }}</td></tr>
       <tr><th>Trigger type</th><td>{{ pipeline_config.trigger.type }}</td></tr>

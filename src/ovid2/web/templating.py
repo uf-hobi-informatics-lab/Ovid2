@@ -274,6 +274,35 @@ def user_appearance(request: object) -> dict[str, Any]:
         return prefs_svc.default_appearance()
 
 
+def workspace_menu(request: object) -> dict[str, Any]:
+    """Return the top-bar workspace switcher model (Jinja global).
+
+    ``{"active": {...} | None, "entries": [...], "can_manage": bool}``.
+    Unresolved visitors and agent principals get an empty menu; any
+    storage failure degrades to an empty menu rather than breaking the page
+    chrome. adr-workspaces.md.
+    """
+    from ovid2.web.auth.roles import Role
+    from ovid2.web.services import workspaces_svc
+
+    empty: dict[str, Any] = {"active": None, "entries": [], "can_manage": False}
+    ctx = _current_ctx(request)
+    if ctx is None or ctx.user_id.startswith(("llm:", "mcp:")):
+        return empty
+    try:
+        views = workspaces_svc.visible_workspaces(
+            ctx.user_id, is_system_admin=ctx.role == Role.SYSTEM_ADMIN
+        )
+        manage = workspaces_svc.can_manage_members(
+            ctx.workspace_id, ctx.user_id, is_system_admin=ctx.role == Role.SYSTEM_ADMIN
+        )
+    except Exception:
+        return empty
+    items = [v.to_dict() for v in views]
+    active = next((i for i in items if i["workspace_id"] == ctx.workspace_id), None)
+    return {"active": active, "entries": items, "can_manage": manage}
+
+
 def _register_globals() -> None:
     """Register template globals that must be imported lazily.
 
@@ -293,6 +322,7 @@ def _register_globals() -> None:
     templates.env.globals["auth_enabled"] = _auth_enabled
     templates.env.globals["user_appearance"] = user_appearance
     templates.env.globals["kind_spec"] = kind_spec
+    templates.env.globals["workspace_menu"] = workspace_menu
 
 
 def kind_spec(kind: str | None) -> dict[str, Any]:

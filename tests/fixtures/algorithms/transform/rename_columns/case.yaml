@@ -1,0 +1,19 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  map:
+    sex: gender
+tables:
+  input:
+    columns:
+    - id
+    - sex
+    rows:
+    - - '1'
+      - F
+expected:
+  columns:
+  - id
+  - gender
+  rows:
+  - - '1'
+    - F

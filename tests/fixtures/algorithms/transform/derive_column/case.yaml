@@ -1,0 +1,26 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  column: c
+  expr: concat(a, '-', b)
+tables:
+  input:
+    columns:
+    - a
+    - b
+    rows:
+    - - '1'
+      - x
+    - - '2'
+      - null
+expected:
+  columns:
+  - a
+  - b
+  - c
+  rows:
+  - - '1'
+    - x
+    - 1-x
+  - - '2'
+    - null
+    - null

@@ -68,7 +68,7 @@ def test_public_mirror_ships_the_script() -> None:
 
 _BITBUCKET = _ROOT / "bitbucket-pipelines.yml"
 _HEAVY = _ROOT / ".github" / "workflows" / "heavy.yml"
-_HEAVY_GATES = ("integration", "io_matrix")
+_HEAVY_GATES = ("integration", "io_matrix", "conformance")
 
 
 def _bitbucket_steps() -> list[dict[str, object]]:
@@ -119,13 +119,12 @@ def test_heavy_gates_are_change_triggered_not_nightly() -> None:
         for block in data["pipelines"]["default"]
         for b in block.get("parallel", {}).get("steps", [])
         if any(
-            "ci_checks.sh integration" in str(x) or "ci_checks.sh io_matrix" in str(x)
-            for x in b["step"]["script"]
+            f"ci_checks.sh {gate}" in str(x) for gate in _HEAVY_GATES for x in b["step"]["script"]
         )
     ]
-    assert len(default_heavy) == 2
+    assert len(default_heavy) == len(_HEAVY_GATES)
     bb_paths = [set(s["condition"]["changesets"]["includePaths"]) for s in default_heavy]
-    assert bb_paths[0] == bb_paths[1]
+    assert all(p == bb_paths[0] for p in bb_paths)
     gh = yaml.safe_load(_HEAVY.read_text(encoding="utf-8"))[True]
     gh_paths = set(gh["push"]["paths"]) - {".github/workflows/heavy.yml"}
     assert gh_paths == bb_paths[0] - {"bitbucket-pipelines.yml"}, "heavy-path lists drifted"

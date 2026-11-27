@@ -24,7 +24,7 @@ produce CDM tables. The stages are explained in
 | Tables | `--tables` | `all` | names from the CDM, e.g. `demographic encounter` |
 | Stages | `--transformations` | `all` | any of `format deduplicate transform map fix`, applied in canonical order (`transform` runs the chains in `transforms/assignments.yaml`; a no-op when none) |
 | Engine | `--engine` | `pyspark` | or a named engine config. See [Engines](../02-concepts/engines.md). |
-| Workers | `--workers` | 25 | Spark: worker containers. DuckDB: tables at once. |
+| Workers | `--workers` | 25 | Spark worker containers. Ignored by DuckDB / Snowpark. |
 | CDM | `--cdm` | from `pipeline_settings.cdm` | override, rarely needed |
 | Overwrite | `--overwrite` | off | required if the output already holds tables |
 | Local | `--local` | off | in-process, no Docker (development) |
@@ -40,8 +40,8 @@ ovid2 etl --pipeline mysite --input_address … --output_address … \
 # Format only, to inspect raw shaping without mapping or fixes
 ovid2 etl … --transformations format --tables demographic
 
-# Small batch, single host, fastest start
-ovid2 etl … --engine duckdb --workers 8
+# Small batch, single host, fastest start (no Workers: one host-sized container)
+ovid2 etl … --engine duckdb
 ```
 
 ## What you get
@@ -55,9 +55,10 @@ ovid2 etl … --engine duckdb --workers 8
   console.
 
 > [!TIP]
-> A pipeline that declares `REQUIRES_FAMILY = "spark"` is refused on
-> DuckDB **at plan time**, before any container starts. The message names
-> the reason.
+> Every pipeline, `legacy_ovid` ports included, runs on every engine and
+> every storage driver. The only pairing refused **at submit time** is a
+> read-only output (an Access database). See
+> [Engines](../02-concepts/engines.md#engine-and-storage-compatibility).
 
 ## Before production
 

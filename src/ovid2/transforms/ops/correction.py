@@ -8,8 +8,9 @@ column predicate, never string-formatted data.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
+from ovid2.config.capabilities import Capability
 from ovid2.transforms.base import BaseTransform, DataFrame, TransformContext
 
 
@@ -22,6 +23,16 @@ class NullIfTransform(BaseTransform):
     * ``pattern``: regex — a full match becomes null.
     * ``less_than`` / ``greater_than``: numeric bounds.
     """
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.FN_COL,
+            Capability.FN_LIT,
+            Capability.FN_WHEN,
+            Capability.REGEX,
+        }
+    )
 
     category = "correction"
 
@@ -91,6 +102,15 @@ class ClampTransform(BaseTransform):
     ``max``. Either bound may be omitted.
     """
 
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.FN_COL,
+            Capability.FN_LIT,
+            Capability.FN_WHEN,
+        }
+    )
+
     category = "correction"
 
     @property
@@ -139,6 +159,17 @@ class StandardizeNullTransform(BaseTransform):
     Default sentinels: ``""``, ``"NULL"``, ``"NA"``, ``"N/A"``, ``"."``.
     Comparison is case-insensitive after trimming.
     """
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.FN_COL,
+            Capability.FN_LIT,
+            Capability.FN_TRIM,
+            Capability.FN_UPPER,
+            Capability.FN_WHEN,
+        }
+    )
 
     category = "correction"
 
@@ -264,6 +295,9 @@ class FilterExprTransform(BaseTransform):
     sub-queries, no ``reflect`` / ``java_method`` / UDF calls.
     """
 
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset({Capability.FN_EXPR})
+
     category = "correction"
 
     @property
@@ -314,6 +348,9 @@ class DeriveColumnTransform(BaseTransform):
     ``functions.expr`` (Spark natively, DuckDB via the sqlglot
     transpiler, Snowpark via ``sql_expr``).
     """
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset({Capability.FN_EXPR})
 
     category = "formatting"
 

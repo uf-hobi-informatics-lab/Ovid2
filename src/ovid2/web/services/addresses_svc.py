@@ -125,11 +125,12 @@ def _locate(name: str) -> Path | None:
 def _writable_path(name: str) -> Path:
     """Return the write target for an address config.
 
-    Always resolves to the user-scoped ``configs_dir()`` — writes never
-    mutate ``/etc/ovid2/configs`` (system-wide) even when a shadowing
-    file lives there. Parent directories are created on demand.
+    Always resolves to the active workspace's ``configs`` directory
+    (:func:`ovid2.config.addresses.addresses_dir`) — writes never mutate
+    ``/etc/ovid2/configs`` (system-wide) even when a shadowing file lives
+    there. Parent directories are created on demand.
     """
-    directory = _paths.configs_dir()
+    directory = _addresses.addresses_dir()
     directory.mkdir(parents=True, exist_ok=True)
     return directory / f"{name}.json"
 

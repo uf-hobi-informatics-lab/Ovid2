@@ -89,7 +89,7 @@ class RouteConfig:
     confidence_threshold: float = 0.7
     fallback_to_general: bool = True
     tools: tuple[str, ...] = ()
-    max_tool_iterations: int = 6
+    max_tool_iterations: int = 10
     tool_result_max_chars: int = 8000
 
     @classmethod
@@ -105,7 +105,7 @@ class RouteConfig:
             confidence_threshold=max(0.0, min(1.0, threshold)),
             fallback_to_general=bool(raw.get("fallback_to_general", True)),
             tools=tuple(str(t) for t in (raw.get("tools") or []) if isinstance(t, str)),
-            max_tool_iterations=max(1, min(20, _int(raw.get("max_tool_iterations"), 6))),
+            max_tool_iterations=max(1, min(20, _int(raw.get("max_tool_iterations"), 10))),
             tool_result_max_chars=max(
                 256, min(200000, _int(raw.get("tool_result_max_chars"), 8000))
             ),

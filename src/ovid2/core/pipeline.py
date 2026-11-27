@@ -1,8 +1,8 @@
 """ETL pipeline execution.
 
-Contains :func:`run_pipeline`, which chains lazy Spark transformations
-end-to-end, and the helpers that register shared and auxiliary tables as
-Spark temporary views.
+Contains :func:`run_pipeline`, which chains lazy transformations end-to-end
+on **one code path for every engine** (:func:`_run_pipeline`), and the
+helpers that register shared and auxiliary tables as engine temp views.
 
 Key invariants (enforced by contract tests):
 
@@ -11,16 +11,20 @@ Key invariants (enforced by contract tests):
 - Pipeline code never imports a CDM-specific module. Every CDM concern
   is reached through :func:`ovid2.cdm.registry.resolve_cdm_for_pipeline`
   and the :class:`~ovid2.cdm.handle.CdmHandle` it returns.
-- Every step is lazy. The **only** deliberate materialisation is the
-  ``.count()`` used to warm the cache for the CDM's ``reference_tables``
-  set — this is gated by an explicit ``# noqa: OVID2001`` marker so
-  contract tests can allow it while banning everything else.
+- Every step is lazy until the final write. Reference tables are handed
+  to ``engine.warm_reference`` (Spark persist, DuckDB scratch Parquet).
+- No engine branching: engine-specific steps are engine / stager methods
+  (``register_temp_view``, ``warm_reference``, ``read_shared_view_file``,
+  ``prepare_workspace``, ``release_checkpoints``,
+  ``EngineStager.accepts_legacy_address``). This module imports no
+  ``pyspark``.
 """
 
 from __future__ import annotations
 
 import importlib
 import logging
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -29,6 +33,7 @@ from ovid2.core.events import (
     Event,
     EventBus,
     get_default_bus,
+    stage_entered,
     table_completed,
     table_started,
     warning_event,
@@ -74,25 +79,13 @@ def run_pipeline(
     Engine portability
     ------------------
 
-    The read and write legs route through ``engine.get_stager()`` so the
-    choice of compute engine (``pyspark`` / ``databricks_spark`` /
-    ``snowpark``) is orthogonal to the storage backend. Two behaviours:
-
-    * **Spark-family** engines (``engine.session_is_spark`` is ``True``):
-      the path is byte-identical to the pre-portability world — the
-      :class:`~ovid2.core.engines.stager.SparkEngineStager` passes
-      straight through to :meth:`Driver.read` / :meth:`Driver.write`,
-      which post-D3 is the same code every pipeline has always run.
-      Auxiliary-table registration, the per-pipeline read hook (Datavant),
-      and the reference-table ``persist().count()`` warm-up all run
-      exactly as before.
-
-    * **Non-Spark** engines (Snowpark): the read/write legs go through
-      the family's stager (``materialise`` / ``persist``); the Spark-only
-      warm-up + Datavant + filesystem-glob aux-table steps are skipped in
-      favour of engine-appropriate equivalents. Requires the address
-      *names* (``input_address_name`` / ``output_address_name``) so the
-      driver can be resolved via :func:`driver_from_address`.
+    One path for every engine (:func:`_run_pipeline`): read and write go
+    through ``engine.get_stager()``, so the compute engine (``pyspark`` /
+    ``databricks_spark`` / ``duckdb`` / ``snowpark``) is orthogonal to the
+    storage backend. The stager reads a Spark-native legacy address
+    directly when it can (``accepts_legacy_address``); otherwise the
+    address *name* (``input_address_name`` / ``output_address_name``) is
+    resolved to a driver.
 
     Args:
         engine: Compute engine (provides a session + a stager).
@@ -107,13 +100,12 @@ def run_pipeline(
         instance_id: Owning :class:`OvidInstance` id. Attached to every
             emitted event.
         input_address_name: Filename stem of the input address config.
-            Required for the non-Spark (Snowpark) read path so the driver
-            can be resolved. On the Spark path it is optional (the
-            already-loaded ``input_address`` is used directly).
-        output_address_name: Filename stem of the output address config.
-            Required for the non-Spark write path.
+            Resolved to a driver whenever the stager cannot read
+            ``input_address`` directly.
+        output_address_name: Filename stem of the output address config
+            (same rule for the write).
         sf_overrides: CLI-provided Snowflake overrides threaded to
-            :func:`driver_from_address` on the non-Spark path.
+            :func:`driver_from_address`.
         cdm_name: Active CDM stamp threaded to :func:`driver_from_address`.
     """
     bus = event_bus if event_bus is not None else get_default_bus()
@@ -124,11 +116,12 @@ def run_pipeline(
             instance_id=instance_id, pipeline=pipeline, batch_id=batch_id, table=table_name
         )
     )
+    started = time.monotonic()
 
     from ovid2.core.engines.dsl import use_engine
 
     with use_engine(engine):
-        _run_pipeline_dispatch(
+        _run_pipeline(
             engine=engine,
             input_address=input_address,
             output_address=output_address,
@@ -148,12 +141,74 @@ def run_pipeline(
 
     bus.emit(
         table_completed(
-            instance_id=instance_id, pipeline=pipeline, batch_id=batch_id, table=table_name
+            instance_id=instance_id,
+            pipeline=pipeline,
+            batch_id=batch_id,
+            table=table_name,
+            elapsed_ms=(time.monotonic() - started) * 1000.0,
         )
     )
 
 
-def _run_pipeline_dispatch(
+def _resolve_endpoint(
+    engine: BaseEngine,
+    address: Any,
+    name: str | None,
+    *,
+    pipeline: str,
+    sf_overrides: dict[str, Any] | None,
+    cdm_name: str | None,
+    role: str,
+) -> Any:
+    """Return the data-plane object the stager reads / writes for one endpoint.
+
+    The already-loaded address when there is one (Spark-native drivers:
+    ``driver.read`` / ``write`` on it is the historical data plane),
+    otherwise the native :class:`~ovid2.drivers.base.Driver` resolved from
+    the address *name* — whichever the engine's stager consumes
+    (:func:`stager_reads_address`).
+
+    Raises:
+        ValueError: When neither an address nor a name is available.
+    """
+    if address is not None and _is_native_address(address) and stager_reads_address(engine):
+        return address
+    if not name:
+        raise ValueError(
+            f"run_pipeline: the {role} has no Spark data plane and no address name; "
+            f"pass '{role}_address_name' (the cli/etl.py and scheduler call sites "
+            "do this automatically)."
+        )
+    from ovid2.drivers.registry import driver_from_address
+
+    return driver_from_address(
+        name, pipeline=pipeline, sf_overrides=sf_overrides, cdm_name=cdm_name
+    )
+
+
+def stager_reads_address(engine: BaseEngine) -> bool:
+    """Whether ``engine``'s stager reads / writes a legacy address directly.
+
+    Asks the stager (``accepts_legacy_address``), never the engine family:
+    the Spark stager passes a legacy address straight to its Spark data
+    plane; every other stager needs a driver.
+    """
+    stager_cls = type(engine.get_stager())
+    return bool(getattr(stager_cls, "accepts_legacy_address", False))
+
+
+def _is_native_address(address: Any) -> bool:
+    """Whether ``address`` is a legacy address the engine reads through directly.
+
+    Legacy addresses (``BaseAddress``) carry no ``type_name``; they are the
+    Spark-native data plane of their driver. Driver objects carry one.
+    """
+    from ovid2.core.addresses.base import BaseAddress
+
+    return isinstance(address, BaseAddress)
+
+
+def _run_pipeline(
     *,
     engine: BaseEngine,
     input_address: BaseAddress,
@@ -171,99 +226,73 @@ def _run_pipeline_dispatch(
     sf_overrides: dict[str, Any] | None,
     cdm_name: str | None,
 ) -> None:
-    """Route one table to the Spark or the staged (non-Spark) leg."""
-    _assert_formatter_family(engine, formatter)
-    if engine.session_is_spark:
-        _run_pipeline_spark(
-            engine=engine,
-            input_address=input_address,
-            output_address=output_address,
-            table_name=table_name,
-            formatter=formatter,
-            transformations=transformations,
-            pipeline=pipeline,
-            batch_id=batch_id,
-            bus=bus,
-            instance_id=instance_id,
-            cdm=cdm,
-        )
-    else:
-        _run_pipeline_staged(
-            engine=engine,
-            input_address=input_address,
-            output_address=output_address,
-            table_name=table_name,
-            formatter=formatter,
-            transformations=transformations,
-            pipeline=pipeline,
-            batch_id=batch_id,
-            bus=bus,
-            instance_id=instance_id,
-            cdm=cdm,
-            input_address_name=input_address_name,
-            output_address_name=output_address_name,
-            sf_overrides=sf_overrides,
-            cdm_name=cdm_name,
-        )
+    """The one pipeline path, for every engine and every storage type.
 
+    read (stager) → format → transform chain → register view → reference
+    warm-up (``engine.warm_reference``) → write (stager) → release
+    checkpoints. Engine-specific behaviour lives behind engine / stager
+    methods, never in a branch here:
 
-def _assert_formatter_family(engine: BaseEngine, formatter: BaseFormatter) -> None:
-    """Refuse a formatter whose ``requires_family`` differs from the engine's.
+    * **Read / write** — ``engine.get_stager().materialise`` / ``persist``.
+      Spark engines with a Spark-native address read / write through it
+      (``SparkEngineStager`` → ``Driver.read`` / ``write``, the historical
+      data plane); everything else is resolved to a driver and staged
+      natively or through the Arrow bridge.
+    * **Views** — ``engine.register_view`` (Spark / DuckDB / Snowpark
+      spellings).
+    * **Reference warm-up** — ``engine.warm_reference`` (Spark persist +
+      count; DuckDB scratch Parquet; no-op on Snowpark).
+    * **Workspace** — ``engine.prepare_workspace()`` re-binds Snowpark's
+      scratch schema before formatting (no-op elsewhere).
 
-    YAML specs with ``adapter: custom`` are checked again inside the
-    adapter; this covers class-only formatters loaded straight from
-    ``formatters_custom``.
+    The per-pipeline read hook (``READ_HOOKS`` / legacy Datavant) runs
+    first when declared, on every engine.
     """
-    from ovid2.core.engines.protocols import EngineOperationUnsupported
+    session = engine.get_session()
+    stager = engine.get_stager()
+    input_endpoint = _resolve_endpoint(
+        engine,
+        input_address,
+        input_address_name,
+        pipeline=pipeline,
+        sf_overrides=sf_overrides,
+        cdm_name=cdm_name,
+        role="input",
+    )
+    output_endpoint = _resolve_endpoint(
+        engine,
+        output_address,
+        output_address_name,
+        pipeline=pipeline,
+        sf_overrides=sf_overrides,
+        cdm_name=cdm_name,
+        role="output",
+    )
 
-    required = getattr(formatter, "requires_family", None)
-    if not required:
-        return
-    family = getattr(engine.family, "value", engine.family)
-    if str(required).lower() != str(family).lower():
-        raise EngineOperationUnsupported(
-            engine.type_name,
-            f"formatter {type(formatter).__name__}",
-            f"requires engine family '{required}'; run this table on a {required} engine",
-        )
-
-
-def _run_pipeline_spark(
-    *,
-    engine: BaseEngine,
-    input_address: BaseAddress,
-    output_address: BaseAddress,
-    table_name: str,
-    formatter: BaseFormatter,
-    transformations: list[BaseTransformer],
-    pipeline: str,
-    batch_id: str,
-    bus: EventBus,
-    instance_id: str,
-    cdm: CdmHandle,
-) -> None:
-    """Spark-family pipeline leg — byte-identical to the pre-portability path.
-
-    Reads route through the engine's :class:`SparkEngineStager`, which is
-    a pure pass-through to :meth:`Driver.read` / :meth:`Driver.write`; the
-    resulting DataFrames are the same objects a direct
-    ``input_address.read`` / ``output_address.write`` produced before D3.
-    Auxiliary tables, the per-pipeline read hook, and the reference-table
-    warm-up all run exactly as they always have.
-    """
-    from pyspark import StorageLevel
-
-    # Spark-family leg: the engine session *is* a ``SparkSession``.
-    spark = cast("SparkSession", engine.get_session())
+    chain = [t for t in transformations if not isinstance(t, FormatTransformer)]
+    stages = _chain_stages(chain)
+    step = _StageEmitter(
+        bus,
+        instance_id=instance_id,
+        pipeline=pipeline,
+        batch_id=batch_id,
+        table=table_name,
+        stages=stages,
+    )
+    step("read")
 
     # Register auxiliary tables (lazy — no data read yet).
     _register_auxiliary_tables(
-        spark, input_address, formatter, pipeline, batch_id, bus, instance_id
+        engine, session, stager, input_endpoint, formatter, pipeline, batch_id, bus, instance_id
     )
 
-    # Per-pipeline / per-table read hook (Datavant is the shipping example).
-    df = _read_with_pipeline_hook(
-        spark=spark,
+    # Main source: per-pipeline read hook (Datavant is the shipping
+    # example), else the stager.
+    df = _read_primary(
+        engine=engine,
+        session=session,
+        stager=stager,
+        input_endpoint=input_endpoint,
         input_address=input_address,
         table_name=table_name,
         formatter=formatter,
@@ -273,14 +302,28 @@ def _run_pipeline_spark(
         instance_id=instance_id,
     )
 
+    # Re-bind the engine's writable workspace namespace before formatting.
+    #
+    # On Snowpark the shared views registered by ``register_shared_tables``
+    # (e.g. the OMOP ``concept`` / ``concept_relationship`` views a
+    # PCORnet→OMOP formatter resolves via an *unqualified*
+    # ``session.table("concept")``) live in the session's current schema —
+    # the workspace schema bound by ``prepare_workspace`` at run start.
+    # But the previous table's ``stager.persist`` issues ``USE SCHEMA
+    # <output_schema>``, which leaves the session pointed at the output
+    # schema; the next table's formatter would then fail with ``Object
+    # 'CONCEPT' does not exist``. No-op on Spark and DuckDB.
+    engine.prepare_workspace()
+
     # Pipeline formatting.
+    step("format")
     df = formatter.format(df)
 
     context: dict[str, Any] = {
         "table_name": table_name,
         "pipeline": pipeline,
         "input_address": input_address,
-        "spark": spark,
+        "spark": session,
         "engine": engine,
         "batch_id": batch_id,
         "event_bus": bus,
@@ -288,139 +331,141 @@ def _run_pipeline_spark(
         "cdm": cdm,
     }
 
-    for transform in transformations:
-        if isinstance(transform, FormatTransformer):
-            continue
+    for transform in chain:
+        stage = getattr(transform, "stage_name", None)
+        if stage:
+            step(stage)
         df = transform.transform(df, context)
 
-    # Register the finished table so cross-table fixers can reference it.
-    df.createOrReplaceTempView(table_name)
+    # Reference tables are read back by later tables' cross-table fixers:
+    # the engine materialises them once (Spark persist + count, DuckDB
+    # scratch Parquet) and the warmed frame is what is registered *and*
+    # written, so the plan runs exactly once.
+    if table_name in (getattr(cdm, "reference_tables", None) or ()):
+        df = engine.warm_reference(session, df, table_name)
 
-    if table_name in cdm.reference_tables:
-        cached_df = spark.table(table_name).persist(StorageLevel.MEMORY_AND_DISK)
-        # Materialise now so downstream ``spark.table(name)`` calls hit
-        # the cache instead of recomputing the plan. This is the ONE
-        # deliberate action in the pipeline.
-        cached_df.count()  # noqa: OVID2001 deliberate reference-table warm-up
-        cached_df.createOrReplaceTempView(table_name)
-        df = cached_df
+    # Register the finished table so cross-table fixers / concept joins can
+    # reference it by name.
+    engine.register_temp_view(session, table_name, df)
 
+    step("write")
     try:
-        output_address.write(df, spark, pipeline, batch_id, table_name)
+        stager.persist(df, output_endpoint, pipeline, batch_id, table_name)
     finally:
-        # Per-table checkpoints (``engine.checkpoint``) are never reused
-        # by the next table; free their cached blocks now. Reference
-        # tables stay persisted — later tables' cross-table fixers read them.
-        _release_checkpoints(engine)
+        # Per-table checkpoints (``engine.checkpoint``) are never reused by
+        # the next table; free them now. Reference tables stay warm — later
+        # tables' cross-table fixers read them.
+        engine.release_checkpoints()
 
 
-def _release_checkpoints(engine: Any) -> None:
-    """Call ``engine.release_checkpoints()`` when the engine provides it."""
-    release = getattr(engine, "release_checkpoints", None)
-    if callable(release):
-        release()
+def _chain_stages(chain: list[BaseTransformer]) -> list[str]:
+    """Return the ordered stages a table passes through (``read`` … ``write``).
 
-
-def _materialise_reference(engine: Any, df: Any, table_name: str) -> Any:
-    """Materialise a reference table on engines that expose ``materialise``.
-
-    Only the DuckDB engine defines ``materialise`` (execute once into
-    scratch Parquet, return a frame scanning it). Snowpark already
-    persists into a real table that later fixers read, so it is left
-    untouched. The returned frame is what gets both registered as the
-    view *and* persisted, so the plan runs exactly once.
+    Only transformers that declare a ``stage_name`` contribute; a stage
+    appears once even if two transformers share it.
     """
-    materialise = getattr(engine, "materialise", None)
-    if not callable(materialise):
-        return df
-    return materialise(df, f"ref_{table_name}")  # noqa: OVID2001 deliberate reference-table warm-up
+    stages = ["read", "format"]
+    for transform in chain:
+        stage = getattr(transform, "stage_name", None)
+        if stage and stage not in stages:
+            stages.append(stage)
+    stages.append("write")
+    return stages
 
 
-def _run_pipeline_staged(
+class _StageEmitter:
+    """Emit one ``stage.progress`` *enter* event per pipeline stage of a table.
+
+    Every stage before ``write`` only builds the lazy plan; ``write`` is
+    where the engine executes it. The events carry that distinction
+    (``extra.lazy``) so the live views never pretend a lazy step took work.
+    Emitting never raises: a broken bus must not fail the table.
+    """
+
+    def __init__(
+        self,
+        bus: EventBus,
+        *,
+        instance_id: str,
+        pipeline: str,
+        batch_id: str,
+        table: str,
+        stages: list[str],
+    ) -> None:
+        self._bus = bus
+        self._ids = {"instance_id": instance_id, "pipeline": pipeline, "batch_id": batch_id}
+        self._table = table
+        self._stages = stages
+        self._seen: set[str] = set()
+
+    def __call__(self, stage: str) -> None:
+        if stage in self._seen or stage not in self._stages:
+            return
+        self._seen.add(stage)
+        try:
+            self._bus.emit(
+                stage_entered(
+                    table=self._table,
+                    stage=stage,
+                    index=self._stages.index(stage) + 1,
+                    total=len(self._stages),
+                    lazy=stage != "write",
+                    **self._ids,
+                )
+            )
+        except Exception as exc:  # pragma: no cover - display only
+            logger.debug("stage event for %s/%s failed: %s", self._table, stage, exc)
+
+
+def _read_primary(
     *,
     engine: BaseEngine,
-    input_address: BaseAddress,
-    output_address: BaseAddress,
+    session: Any,
+    stager: Any,
+    input_endpoint: Any,
+    input_address: Any,
     table_name: str,
     formatter: BaseFormatter,
-    transformations: list[BaseTransformer],
     pipeline: str,
     batch_id: str,
     bus: EventBus,
     instance_id: str,
-    cdm: CdmHandle,
-    input_address_name: str | None,
-    output_address_name: str | None,
-    sf_overrides: dict[str, Any] | None,
-    cdm_name: str | None,
-) -> None:
-    """Non-Spark (Snowpark) pipeline leg — reads/writes through the stager.
+) -> Any:
+    """Read the table's primary source: a pipeline read hook, else the stager.
 
-    The engine's session is not Spark-compatible, so the filesystem-glob
-    auxiliary-table registration, the Datavant read hook, and the
-    ``persist().count()`` reference-table warm-up (all of which call
-    ``spark.read`` / ``StorageLevel``) are skipped. The source is
-    materialised into an engine-native DataFrame through the stager; the
-    formatted result is persisted the same way.
-
-    Requires the address *names* so :func:`driver_from_address` can resolve
-    each endpoint to a native :class:`Driver` the stager can bridge.
+    An absent primary source whose formatter declares it optional yields
+    an empty frame (the self-reading adapters honour ``optional: true``
+    themselves) instead of failing the table.
     """
-    from ovid2.drivers.registry import driver_from_address
-
-    if not input_address_name or not output_address_name:
-        raise ValueError(
-            f"run_pipeline: engine '{engine.type_name}' is not Spark-"
-            "compatible, so it reads/writes through the stager and needs "
-            "the address names. Pass 'input_address_name' and "
-            "'output_address_name' (the cli/etl.py and scheduler call "
-            "sites do this automatically)."
-        )
-
-    session = engine.get_session()
-    stager = engine.get_stager()
-
-    input_driver = driver_from_address(
-        input_address_name,
+    hooked = _read_with_pipeline_hook(
+        spark=session,
+        input_address=input_address,
+        table_name=table_name,
+        formatter=formatter,
         pipeline=pipeline,
-        sf_overrides=sf_overrides,
-        cdm_name=cdm_name,
+        batch_id=batch_id,
+        bus=bus,
+        instance_id=instance_id,
     )
-    output_driver = driver_from_address(
-        output_address_name,
-        pipeline=pipeline,
-        sf_overrides=sf_overrides,
-        cdm_name=cdm_name,
-    )
-
-    # Register auxiliary tables through the stager (engine-native views).
-    _register_auxiliary_tables_staged(
-        engine,
-        session,
-        stager,
-        input_driver,
-        formatter,
-        pipeline,
-        batch_id,
-        bus,
-        instance_id,
-    )
-
-    # Materialise the main source into an engine-native DataFrame.
+    if hooked is not None:
+        return hooked
     try:
-        df = stager.materialise(
-            input_driver,
+        return stager.materialise(
+            input_endpoint,
             pipeline,
             batch_id,
             formatter.input_file_name,
             table_name=table_name,
         )
     except FileNotFoundError:
-        # Same contract as the Spark placeholder read
-        # (:func:`_read_primary_input`): an optional primary source that
-        # is absent for this batch yields an empty CDM-shaped table, not
-        # a failed one. The formatter's own ``read_source`` honours
-        # ``optional: true`` and returns the empty-source placeholder.
+        # The eager read is only a placeholder for self-reading adapters
+        # (``source_passthrough`` / ``union_of_specs`` / ``custom``): they
+        # re-read their own sources in ``execute_spec`` and already honour
+        # ``optional: true`` there. An optional primary source that is
+        # absent for this batch (e.g. an ACME delivery with no
+        # ``*PREVENTABLE*`` trial extract) degrades to an empty frame so the
+        # table produces an empty CDM-shaped output. Non-optional primaries
+        # keep the hard failure.
         if not getattr(formatter, "primary_source_optional", False):
             raise
         bus.emit(
@@ -436,65 +481,8 @@ def _run_pipeline_staged(
         )
         from ovid2.formatters.adapters._sources import _empty_df
 
-        df = _empty_df(session)  # type: ignore[arg-type]
-
-    # Re-bind the engine's writable workspace namespace before formatting.
-    #
-    # On Snowpark the shared views registered by ``register_shared_tables``
-    # (e.g. the OMOP ``concept`` / ``concept_relationship`` views a
-    # PCORnet→OMOP formatter resolves via an *unqualified*
-    # ``session.table("concept")``) live in the session's current schema —
-    # the workspace schema bound by ``prepare_workspace`` at run start.
-    # But the previous table's ``stager.persist`` issues ``USE SCHEMA
-    # <output_schema>`` (see ``_NativeSnowparkStrategy.persist``), which
-    # leaves the session pointed at the output schema. The next table's
-    # ``formatter.format`` then resolves ``session.table("concept")``
-    # against that output schema, where the temp view does not exist, and
-    # Snowflake raises ``Object 'CONCEPT' does not exist or not
-    # authorized``. Re-binding here restores the workspace schema so
-    # unqualified shared-view references resolve for every table. No-op on
-    # Spark (session-scoped catalogue; ``prepare_workspace`` returns
-    # immediately).
-    engine.prepare_workspace()
-
-    # Pipeline formatting.
-    df = formatter.format(df)
-
-    context: dict[str, Any] = {
-        "table_name": table_name,
-        "pipeline": pipeline,
-        "input_address": input_address,
-        "spark": session,
-        "engine": engine,
-        "batch_id": batch_id,
-        "event_bus": bus,
-        "instance_id": instance_id,
-        "cdm": cdm,
-    }
-
-    for transform in transformations:
-        if isinstance(transform, FormatTransformer):
-            continue
-        df = transform.transform(df, context)
-
-    # Reference tables (demographic / encounter / provider / harvest /
-    # death) are read back by later tables' cross-table fixers. Engines
-    # whose plans are re-executed per consumer (DuckDB: no shared DAG)
-    # materialise them once here — the analogue of the Spark leg's
-    # ``persist().count()`` warm-up. Without it every clinical table
-    # re-ran ``encounter``'s full format/map/fix/dedup plan (which itself
-    # embeds ``demographic`` and ``provider``) inside its own write.
-    if table_name in (getattr(cdm, "reference_tables", None) or ()):
-        df = _materialise_reference(engine, df, table_name)
-
-    # Register the finished table so cross-table fixers / concept joins can
-    # reference it by name. Snowpark exposes ``create_or_replace_temp_view``.
-    _register_engine_view(session, table_name, df)
-
-    try:
-        stager.persist(df, output_driver, pipeline, batch_id, table_name)
-    finally:
-        _release_checkpoints(engine)
+        del engine
+        return _empty_df(session)
 
 
 def register_shared_tables(
@@ -512,13 +500,11 @@ def register_shared_tables(
     Iterates over :attr:`CdmHandle.shared_views` and registers each source
     as an engine temp view. Two source shapes are handled:
 
-    * ``source_kind == 'file'`` — read directly from the filesystem.
-      Under a Spark-family session this uses ``spark.read.csv``
-      (byte-identical to the pre-portability behaviour). Under a
-      non-Spark engine (Snowpark) the file is routed through the
-      engine's stager via a synthetic ``disc`` driver, so the CSV is
-      staged into the compute layer engine-natively. Missing files
-      raise when ``required=True``, warn otherwise.
+    * ``source_kind == 'file'`` — read through
+      ``engine.read_shared_view_file`` (Spark / DuckDB: the columnar
+      vocabulary cache); engines without a local reader (Snowpark) stage
+      the file through the stager with a synthetic ``disc`` driver.
+      Missing files raise when ``required=True``, warn otherwise.
     * ``source_kind == 'address'`` — resolve the named address to a
       :class:`Driver` and materialise it through the active engine's
       stager, then register the result as a view. Works under both Spark
@@ -533,10 +519,9 @@ def register_shared_tables(
         cdm: CDM handle whose ``shared_views`` should be registered.
             Defaults to ``pcornet_7_0`` for backwards compatibility with
             call sites that predate P10.
-        engine: Active compute engine. Required to register any
-            ``source_kind == 'address'`` view (it drives the stager).
-            When ``None``, only file-sourced views are registered on the
-            assumption that ``spark`` is a real Spark session.
+        engine: Active compute engine (drives every read). ``None`` keeps
+            the historical call shape — a bare Spark session — by wrapping it
+            in a ``pyspark`` engine from the engine registry.
         pipeline: Pipeline name (threaded to the stager for address views).
         batch_id: Batch identifier (threaded to the stager).
         sf_overrides: Optional Snowflake overrides for address resolution.
@@ -548,11 +533,14 @@ def register_shared_tables(
 
         cdm = get_cdm("pcornet_7_0")
 
-    session_is_spark = engine is None or getattr(engine, "session_is_spark", True)
+    if engine is None:
+        from ovid2.core.engines.registry import load_engine_class
 
-    registered: set[str] = set()
-    if session_is_spark:
-        registered = {t.name.lower() for t in spark.catalog.listTables() if t.isTemporary}
+        # Historical call shape: a bare Spark session and no engine.
+        engine = load_engine_class("pyspark")()
+        engine._session = spark  # type: ignore[attr-defined]
+
+    registered = engine.registered_view_names(spark)
 
     for view in cdm.shared_views:
         if view.view_name.lower() in registered:
@@ -579,33 +567,27 @@ def register_shared_tables(
             bus.emit(warning_event(instance_id="", message=message))
             continue
 
-        engine_reader = getattr(engine, "read_shared_view_file", None)
-        if not session_is_spark and callable(engine_reader):
-            # Engines that read local files natively (DuckDB) go through
-            # the columnar vocabulary cache instead of the stager.
-            df = engine_reader(Path(view.source_path), delimiter=view.delimiter, header=view.header)
-            df = df.toDF(*[column.lower() for column in df.columns])
-            _register_engine_view(spark, view.view_name, df)
-            continue
-
-        if not session_is_spark:
-            # Non-Spark engines (Snowpark) have no ``spark.read.csv``.
-            # Route the local file through the engine's stager using a
-            # synthetic disc driver rooted at the file's parent dir, so
-            # the CSV is staged into the compute layer engine-natively
-            # (e.g. Snowflake ``PUT`` + ``COPY INTO``).
-            _register_shared_view_from_local_file(
-                view=view,
-                engine=engine,
-                session=spark,
-                bus=bus,
+        # The engine reads the local vocabulary file its own way: Spark and
+        # DuckDB through the columnar vocabulary cache (multi-GB CONCEPT text
+        # parsed once per file version), Snowpark by staging it (``PUT`` +
+        # ``COPY INTO``). ``None`` means "no engine-native file reader": fall
+        # back to the stager with a synthetic disc driver.
+        try:
+            df = engine.read_shared_view_file(
+                Path(view.source_path), delimiter=view.delimiter, header=view.header, bus=bus
             )
+        except Exception as exc:
+            message = (
+                f"Shared view '{view.view_name}' from file "
+                f"'{view.source_path}' failed to materialise: {exc}"
+            )
+            if view.required:
+                raise RuntimeError(message) from exc
+            bus.emit(warning_event(instance_id="", message=message))
             continue
-
-        # The classic Spark path — through the columnar vocabulary cache
-        # so multi-GB CONCEPT / CONCEPT_RELATIONSHIP text is parsed once
-        # per file version, not once per table per run.
-        df = _read_shared_view_spark(spark, view, bus)
+        if df is None:
+            _register_shared_view_from_local_file(view=view, engine=engine, session=spark, bus=bus)
+            continue
         # OMOP shared views (e.g. the Athena CONCEPT.csv export) ship with
         # UPPERCASE headers (CONCEPT_ID, DOMAIN_ID, CONCEPT_CODE, …), but the
         # semantic-layer vocabularies and every ``semantic_join`` /
@@ -615,53 +597,7 @@ def register_shared_tables(
         # behaviour so pipeline formatters can rely on lowercase columns
         # regardless of the source file's header casing.
         df = df.toDF(*[column.lower() for column in df.columns])
-        df.createOrReplaceTempView(view.view_name)
-
-
-def _read_shared_view_spark(spark: Any, view: Any, bus: EventBus) -> Any:
-    """Read a file-sourced shared view on Spark, via the Parquet cache.
-
-    Returns a lazy DataFrame over the cached Parquet directory when one
-    exists for the file's current ``(size, mtime)``; otherwise converts
-    the CSV once (a deliberate one-time write — the cache build is the
-    only eager action here, and it replaces N later full-text parses)
-    and reads the result. Any cache failure falls back to the plain CSV
-    read, so a read-only material directory never breaks a run.
-    """
-    from ovid2.core import vocab_cache
-
-    source = Path(view.source_path)
-
-    def _csv() -> Any:
-        return spark.read.csv(
-            str(source),
-            header=view.header,
-            sep=view.delimiter,
-            inferSchema=False,
-        )
-
-    cached = vocab_cache.cached_parquet(source, delimiter=view.delimiter, header=view.header)
-    if cached is not None:
-        return spark.read.parquet(str(cached))
-
-    target = vocab_cache.build_target(source, delimiter=view.delimiter, header=view.header)
-    if target is None:
-        return _csv()
-    temp, final = target
-    try:
-        _csv().write.mode("overwrite").parquet(str(temp))
-        published = vocab_cache.publish(temp, final)
-    except Exception as exc:
-        vocab_cache.discard(temp)
-        bus.emit(
-            warning_event(
-                instance_id="",
-                message=f"Vocabulary Parquet cache build failed for {source.name}: {exc}; "
-                "reading the CSV directly.",
-            )
-        )
-        return _csv()
-    return spark.read.parquet(str(published))
+        engine.register_temp_view(spark, view.view_name, df)
 
 
 def _register_shared_view_from_address(
@@ -815,24 +751,31 @@ def _register_shared_view_from_local_file(
 
 
 def _register_auxiliary_tables(
-    spark: SparkSession,
-    input_address: BaseAddress,
+    engine: BaseEngine,
+    session: Any,
+    stager: Any,
+    input_endpoint: Any,
     formatter: BaseFormatter,
     pipeline: str,
     batch_id: str,
     bus: EventBus,
     instance_id: str,
 ) -> None:
-    """Register each aux table declared by the formatter as a temp view."""
+    """Register each aux table declared by the formatter as a temp view.
+
+    Materialised through the engine's stager and registered with
+    ``engine.register_view``; a view already registered on the session is
+    left alone.
+    """
     if not formatter.auxiliary_tables:
         return
-    registered = {t.name.lower() for t in spark.catalog.listTables() if t.isTemporary}
+    registered = engine.registered_view_names(session)
     for aux_table in formatter.auxiliary_tables:
         if aux_table.lower() in registered:
             continue
         try:
-            aux_df = input_address.read(
-                spark,
+            aux_df = stager.materialise(
+                input_endpoint,
                 pipeline,
                 batch_id,
                 f"*{aux_table}*",
@@ -846,25 +789,20 @@ def _register_auxiliary_tables(
                 )
             )
             continue
-        aux_df.createOrReplaceTempView(aux_table)
+        engine.register_temp_view(session, aux_table, aux_df)
 
 
 def _register_engine_view(session: Any, table_name: str, df: Any) -> None:
     """Register ``df`` as a temp view under ``table_name``, engine-agnostically.
 
-    Spark exposes ``createOrReplaceTempView``; Snowpark's DataFrame
-    exposes ``create_or_replace_temp_view``. Prefer the Spark spelling
-    (it exists on Databricks-Connect sessions too) and fall back to the
-    Snowpark spelling.
+    Kept for the shared-view registration helpers; the per-table path uses
+    ``engine.register_view``.
     """
-    create_spark = getattr(df, "createOrReplaceTempView", None)
-    if callable(create_spark):
-        create_spark(table_name)
-        return
-    create_snowpark = getattr(df, "create_or_replace_temp_view", None)
-    if callable(create_snowpark):
-        create_snowpark(table_name)
-        return
+    for method in ("createOrReplaceTempView", "create_or_replace_temp_view"):
+        create = getattr(df, method, None)
+        if callable(create):
+            create(table_name)
+            return
     raise AttributeError(
         f"DataFrame of type {type(df).__name__!r} exposes neither "
         "'createOrReplaceTempView' nor 'create_or_replace_temp_view'; "
@@ -872,49 +810,8 @@ def _register_engine_view(session: Any, table_name: str, df: Any) -> None:
     )
 
 
-def _register_auxiliary_tables_staged(
-    engine: BaseEngine,
-    session: Any,
-    stager: Any,
-    input_driver: Any,
-    formatter: BaseFormatter,
-    pipeline: str,
-    batch_id: str,
-    bus: EventBus,
-    instance_id: str,
-) -> None:
-    """Register each aux table via the stager as an engine-native view.
-
-    The non-Spark analogue of :func:`_register_auxiliary_tables`: instead
-    of ``input_address.read`` + ``createOrReplaceTempView`` on a Spark
-    session, the source is materialised through the engine's stager and
-    registered with the engine-agnostic view helper.
-    """
-    del engine  # session is enough; kept for signature symmetry
-    if not formatter.auxiliary_tables:
-        return
-    for aux_table in formatter.auxiliary_tables:
-        try:
-            aux_df = stager.materialise(
-                input_driver,
-                pipeline,
-                batch_id,
-                f"*{aux_table}*",
-                table_name=aux_table,
-            )
-        except Exception as exc:
-            bus.emit(
-                warning_event(
-                    instance_id=instance_id,
-                    message=f"Auxiliary table '{aux_table}' not loaded: {exc}",
-                )
-            )
-            continue
-        _register_engine_view(session, aux_table, aux_df)
-
-
 def _read_with_pipeline_hook(
-    spark: SparkSession,
+    spark: Any,
     input_address: BaseAddress,
     table_name: str,
     formatter: BaseFormatter,
@@ -922,8 +819,8 @@ def _read_with_pipeline_hook(
     batch_id: str,
     bus: EventBus,
     instance_id: str,
-) -> DataFrame:
-    """Read the main input, optionally routing through a per-pipeline hook.
+) -> DataFrame | None:
+    """Return the main input from a per-pipeline hook, or ``None`` for "no hook".
 
     A pipeline declares hooks via ``pipeline_settings.READ_HOOKS``, a dict
     keyed by table name whose values are callables with the signature::
@@ -931,14 +828,14 @@ def _read_with_pipeline_hook(
         hook(*, spark, input_address, formatter, pipeline, batch_id, bus,
              instance_id) -> DataFrame | None
 
-    A hook returning ``None`` (or raising and being caught by the hook
-    itself) falls back to ``input_address.read(...)``. A hook returning a
-    DataFrame short-circuits the read entirely.
+    A hook returning ``None`` falls back to the stager read
+    (:func:`_read_primary`); a hook that raises is reported as an ``error``
+    event and also falls back. A hook returning a DataFrame short-circuits
+    the read. Hooks receive the engine session, whatever the engine.
 
     The legacy Datavant integration for ``hash_token`` remains wired as a
     default hook when a pipeline sets ``DATAVANT_KEY`` but does not declare
-    ``READ_HOOKS``. This preserves backwards compatibility with every
-    pipeline that shipped before P10.
+    ``READ_HOOKS`` (:func:`_legacy_datavant_read`, disc inputs only).
     """
     try:
         pipeline_settings = importlib.import_module(f"ovid2_pipelines.{pipeline}.pipeline_settings")
@@ -972,13 +869,7 @@ def _read_with_pipeline_hook(
                     instance_id=instance_id,
                 )
             )
-            return input_address.read(
-                spark,
-                pipeline,
-                batch_id,
-                formatter.input_file_name,
-                table_name=table_name,
-            )
+            return None
         if result is not None:
             return cast("DataFrame", result)
 
@@ -995,45 +886,11 @@ def _read_with_pipeline_hook(
             instance_id=instance_id,
             table_name=table_name,
         )
-
-    try:
-        return input_address.read(
-            spark,
-            pipeline,
-            batch_id,
-            formatter.input_file_name,
-            table_name=table_name,
-        )
-    except FileNotFoundError:
-        # The eager read is only a placeholder for self-reading adapters
-        # (``source_passthrough`` / ``union_of_specs`` / ``custom``): they
-        # re-read their own sources in ``execute_spec`` and already honour
-        # ``optional: true`` there. When the table's primary source is
-        # optional and simply absent for this batch (e.g. an ACME delivery
-        # with no ``*PREVENTABLE*`` trial extract), degrade to an empty
-        # DataFrame so the table produces an empty CDM-shaped output
-        # instead of failing the whole run. Non-optional primaries keep
-        # the historical hard-fail behaviour.
-        if getattr(formatter, "primary_source_optional", False):
-            from pyspark.sql.types import StructType
-
-            bus.emit(
-                warning_event(
-                    instance_id=instance_id,
-                    message=(
-                        f"Optional primary source for table '{table_name}' "
-                        f"(glob '{formatter.input_file_name}') not found for "
-                        f"batch '{batch_id}'; producing an empty table."
-                    ),
-                    table=table_name,
-                )
-            )
-            return spark.createDataFrame([], schema=StructType([]))
-        raise
+    return None
 
 
 def _legacy_datavant_read(
-    spark: SparkSession,
+    spark: Any,
     input_address: BaseAddress,
     formatter: BaseFormatter,
     pipeline: str,
@@ -1041,33 +898,33 @@ def _legacy_datavant_read(
     bus: EventBus,
     instance_id: str,
     table_name: str,
-) -> DataFrame:
+) -> DataFrame | None:
     """Legacy Datavant pre-processing for the PCORnet ``hash_token`` table.
 
     Retained for backwards compatibility with pipelines that predate the
     ``READ_HOOKS`` mechanism. Pipelines are encouraged to migrate to
     ``READ_HOOKS = {"hash_token": ovid2.utils.datavant.datavant_read_hook}``.
-    """
-    # Only disc addresses expose the filesystem path Datavant needs.
-    from ovid2.drivers.disc import DiscAddress
 
-    if not isinstance(input_address, DiscAddress):
+    Engine-neutral: needs a local-path input (the address declares
+    ``is_local_path``), reads the transformed tokens through the session's
+    portable ``read.csv``, and returns ``None`` — the normal stager read —
+    whenever pre-processing is skipped or fails.
+    """
+    del table_name
+    # Only local-path inputs expose the filesystem path Datavant needs.
+    if not getattr(input_address, "is_local_path", False):
         bus.emit(
             warning_event(
                 instance_id=instance_id,
-                message="Datavant pre-processing skipped — non-disc input address.",
+                message="Datavant pre-processing skipped — input has no local file path.",
                 table="hash_token",
             )
         )
-        return input_address.read(
-            spark,
-            pipeline,
-            batch_id,
-            formatter.input_file_name,
-            table_name=table_name,
-        )
+        return None
 
-    raw_path = input_address._get_read_path(pipeline, batch_id, formatter.input_file_name)
+    raw_path = input_address._get_read_path(  # type: ignore[attr-defined]
+        pipeline, batch_id, formatter.input_file_name
+    )
     input_dir = raw_path if Path(raw_path).is_dir() else str(Path(raw_path).parent)
     file_glob = "*" if Path(raw_path).is_dir() else Path(raw_path).name
 
@@ -1091,20 +948,12 @@ def _legacy_datavant_read(
                 instance_id=instance_id,
             )
         )
-        return cast(
-            "DataFrame",
-            input_address.read(
-                spark,
-                pipeline,
-                batch_id,
-                formatter.input_file_name,
-                table_name=table_name,
-            ),
-        )
+        return None
 
-    return (
+    return cast(
+        "DataFrame",
         spark.read.option("header", "true")
         .option("inferSchema", "false")
         .option("delimiter", ",")
-        .csv(working_dir)
+        .csv(working_dir),
     )

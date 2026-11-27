@@ -14,6 +14,9 @@
 #        integration  — tests/integration minus io_matrix (needs a JDK)
 #        io_matrix    — DuckDB × driver emulator matrix (needs Docker; pulls
 #                       the digest-pinned images in tests/integration/io_matrix/images.py)
+#        conformance  — every algorithm × every capable engine against its
+#                       fixture (tests/integration/test_algorithm_conformance.py;
+#                       needs a JDK; live Snowpark legs need OVID2_TEST_SNOWPARK_ENGINE)
 # The two heavy gates are opt-in: CI runs them only when engine / driver /
 # pipeline code changes (see bitbucket-pipelines.yml / .github/workflows).
 #
@@ -32,7 +35,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 ALL_GATES=(lint typecheck contract unit)
-KNOWN_GATES=(lint typecheck contract unit integration io_matrix)
+KNOWN_GATES=(lint typecheck contract unit integration io_matrix conformance)
 UNIT_MARKERS="not contract and not integration and not real_connection and not real_cluster and not perf and not endurance"
 
 if [ "${1:-}" = "--docker" ]; then
@@ -133,9 +136,15 @@ for gate in "${gates[@]}"; do
             ;;
         integration)
             pytest -q -p no:cacheprovider -rfEs \
-                -m "integration and not io_matrix and not real_connection and not real_cluster" \
+                -m "integration and not io_matrix and not conformance and not real_connection and not real_cluster" \
                 --junitxml="$junit_dir/integration.xml" tests/integration || rc=$?
             annotate_failures "$junit_dir/integration.xml"
+            ;;
+        conformance)
+            pytest -q -p no:cacheprovider -rfEs -m "conformance and not real_connection" \
+                --junitxml="$junit_dir/conformance.xml" \
+                tests/integration/test_algorithm_conformance.py || rc=$?
+            annotate_failures "$junit_dir/conformance.xml"
             ;;
         io_matrix)
             if ! docker info >/dev/null 2>&1; then

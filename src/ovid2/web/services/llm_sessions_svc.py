@@ -27,6 +27,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from ovid2.web import db as web_db
+from ovid2.workspaces import active_workspace
 
 __all__ = [
     "MAX_TITLE_CHARS",
@@ -132,8 +133,8 @@ def _clean_title(title: str) -> str:
 
 def _owned(conn: sqlite3.Connection, user_id: str, session_id: str) -> sqlite3.Row:
     row = conn.execute(
-        "SELECT * FROM web_llm_sessions WHERE session_id = ? AND user_id = ?",
-        (session_id, user_id),
+        "SELECT * FROM web_llm_sessions WHERE session_id = ? AND user_id = ? AND workspace_id = ?",
+        (session_id, user_id, active_workspace()),
     ).fetchone()
     if row is None:
         raise SessionNotFoundError(session_id)
@@ -166,9 +167,9 @@ def create_session(user_id: str, title: str = "") -> SessionSummary:
     with web_db.connect() as conn:
         conn.execute(
             "INSERT INTO web_llm_sessions "
-            "(session_id, user_id, title, title_source, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (sid, user_id, clean, "user" if clean else "pending", now, now),
+            "(session_id, user_id, title, title_source, created_at, updated_at, workspace_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (sid, user_id, clean, "user" if clean else "pending", now, now, active_workspace()),
         )
         row = _owned(conn, user_id, sid)
     return _summary(row)
@@ -214,22 +215,23 @@ def list_sessions(
             for r in conn.execute(
                 "SELECT m.session_id, COUNT(*) AS n FROM web_llm_messages m "
                 "JOIN web_llm_sessions s ON s.session_id = m.session_id "
-                "WHERE s.user_id = ? GROUP BY m.session_id",
-                (user_id,),
+                "WHERE s.user_id = ? AND s.workspace_id = ? GROUP BY m.session_id",
+                (user_id, active_workspace()),
             )
         }
         if not q:
             rows = conn.execute(
-                "SELECT * FROM web_llm_sessions WHERE user_id = ? "
+                "SELECT * FROM web_llm_sessions WHERE user_id = ? AND workspace_id = ? "
                 "ORDER BY updated_at DESC LIMIT ? OFFSET ?",
-                (user_id, limit, offset),
+                (user_id, active_workspace(), limit, offset),
             ).fetchall()
             return [_summary(r, counts.get(r["session_id"], 0)) for r in rows]
 
         terms = [t for t in re.split(r"\s+", q) if t]
         sessions = conn.execute(
-            "SELECT * FROM web_llm_sessions WHERE user_id = ? ORDER BY updated_at DESC",
-            (user_id,),
+            "SELECT * FROM web_llm_sessions WHERE user_id = ? AND workspace_id = ? "
+            "ORDER BY updated_at DESC",
+            (user_id, active_workspace()),
         ).fetchall()
         # session_id -> snippet source text ("" = matched on title only)
         hits: dict[str, str] = {}

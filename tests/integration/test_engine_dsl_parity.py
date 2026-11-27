@@ -1,4 +1,11 @@
-"""Cross-engine parity: identical expressions on PySpark and DuckDB.
+"""Cross-engine parity: identical expressions on every engine.
+
+PySpark is the reference; DuckDB always runs; Snowpark runs when
+``OVID2_TEST_SNOWPARK_ENGINE=<engine config>`` names a live engine
+(``-m real_connection``). Every name in
+:data:`ovid2.core.engines.surface.FUNCTIONS` used here must give the same
+rows on every engine (engine universality, ``adr-engine-universality.md``).
+
 
 Every case builds the *same* frame and expression through each engine's
 portable surface (``engine.create_typed_dataframe`` +
@@ -10,6 +17,7 @@ no JVM is available (shared ``spark`` fixture).
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable, Iterator
 from typing import Any
 
@@ -42,8 +50,25 @@ def engines(spark: Any) -> Iterator[dict[str, Any]]:
     py = PySparkEngine()
     py._session = spark  # reuse the session-scoped fixture
     duck = DuckDBEngine(args={"threads": 2, "memory_limit": "2GB"})
-    yield {"pyspark": py, "duckdb": duck}
+    out: dict[str, Any] = {"pyspark": py, "duckdb": duck}
+    snow_name = os.environ.get("OVID2_TEST_SNOWPARK_ENGINE", "").strip()
+    snow = None
+    if snow_name:
+        from ovid2.core.loaders import load_engine
+
+        snow = load_engine(snow_name)
+        warehouse = os.environ.get("OVID2_TEST_SNOWPARK_WAREHOUSE", "").strip()
+        if warehouse:
+            snow.native().use_warehouse(warehouse)
+        databases = [
+            d for d in os.environ.get("OVID2_TEST_SNOWPARK_DATABASE", "").split(",") if d.strip()
+        ]
+        snow.prepare_workspace(databases)
+        out["snowpark"] = snow
+    yield out
     duck.stop_session()
+    if snow is not None:
+        snow.stop_session()
     spark.conf.set("spark.sql.legacy.timeParserPolicy", previous)
 
 
@@ -111,6 +136,57 @@ _CASES: dict[str, Callable[[Any, Any], Any]] = {
             fn.col("dx")
         ].alias("o")
     ),
+    # > 512 string entries: Snowpark switches from CASE to a UDF lookup.
+    "create_map_huge": lambda fn, df: df.select(
+        fn.coalesce(
+            fn.create_map([fn.lit(x) for i in range(2000) for x in (f"E{i}.9", f"dx{i}")])[
+                fn.col("dx")
+            ],
+            fn.lit("none"),
+        ).alias("o")
+    ),
+    # Java-only regex (``\p{L}``, ``\b``): Snowpark falls back to a Python UDF.
+    "rlike_unicode_class": lambda fn, df: df.select(
+        fn.col("s").rlike("\\p{L}").alias("l"), fn.col("dx").rlike("\\bE11\\b").alias("b")
+    ),
+    "regexp_replace_unicode_class": lambda fn, df: df.select(
+        fn.regexp_replace(fn.col("s"), "\\p{L}", "[$0]").alias("o")
+    ),
+    "regexp_extract_word_boundary": lambda fn, df: df.select(
+        fn.regexp_extract(fn.col("dx"), "\\b([A-Z])(\\d+)\\b", 2).alias("o")
+    ),
+    # Replacing an existing column keeps its position (Spark semantics).
+    "with_column_replace_keeps_order": lambda fn, df: (
+        df.select("id", "sex", "dx").withColumn("SEX", fn.lower(fn.col("sex"))).toDF("a", "b", "c")
+    ),
+    # Integer-valued map (geocoding RUCA lookups), small (CASE) and huge (UDF).
+    "create_map_int_values": lambda fn, df: df.select(
+        fn.coalesce(
+            fn.create_map(fn.lit("E11.9"), fn.lit(1), fn.lit("I10"), fn.lit(10))[fn.col("dx")].cast(
+                "string"
+            ),
+            fn.lit(""),
+        ).alias("o")
+    ),
+    "create_map_huge_int_values": lambda fn, df: df.select(
+        fn.coalesce(
+            fn.create_map([fn.lit(x) for i in range(2000) for x in (f"E{i}.9", i % 10)])[
+                fn.col("dx")
+            ].cast("string"),
+            fn.lit(""),
+        ).alias("o")
+    ),
+    # Doubles rendered as text: Java ``Double.toString`` (``56.0``, ``1.0E20``).
+    "double_to_string": lambda fn, df: df.select(
+        fn.col("n").cast("double").cast("string").alias("a"),
+        (fn.col("n").cast("double") * fn.lit(1e19)).cast("string").alias("b"),
+        fn.concat(fn.col("n").cast("float"), fn.lit("|")).alias("c"),
+    ),
+    "double_into_udf": lambda fn, df: df.select(
+        fn.udf(lambda v: None if v is None else f"<{v}>", "string")(
+            fn.col("n").cast("double")
+        ).alias("o")
+    ),
     "year": lambda fn, df: df.select(fn.year(fn.to_date(fn.col("d"), "yyyy-MM-dd")).alias("o")),
     "datediff": lambda fn, df: df.select(
         fn.datediff(fn.lit("2023-04-15"), fn.to_date(fn.col("d"), "yyyy-MM-dd")).alias("o")
@@ -124,6 +200,65 @@ _CASES: dict[str, Callable[[Any, Any], Any]] = {
     ),
     "filter_sql": lambda fn, df: df.filter("sex = 'M' OR n > 0").select("id"),
     "drop_dupes": lambda fn, df: df.select("sex").dropDuplicates(["sex"]),
+    # --- engine-universality surface -------------------------------------
+    "udf_row": lambda fn, df: df.select(
+        fn.udf(lambda v: None if v is None else v.strip().upper() + "!", "string")(
+            fn.col("s")
+        ).alias("o")
+    ),
+    "udf_float": lambda fn, df: df.select(
+        fn.udf(
+            lambda v: float(v) if v and v.replace(".", "", 1).lstrip("-").isdigit() else None,
+            "double",
+        )(fn.col("n")).alias("o")
+    ),
+    "pandas_udf": lambda fn, df: df.select(
+        fn.pandas_udf(lambda s: s.map(lambda v: None if v is None else f"<{v}>"), "string")(
+            fn.col("sex")
+        ).alias("o")
+    ),
+    "row_number_window": lambda fn, df: df.select(
+        "id",
+        fn.row_number()
+        .over(fn.Window.partitionBy(fn.col("sex")).orderBy(fn.col("id").desc()))
+        .alias("rn"),
+    ),
+    "rank_dense_rank": lambda fn, df: df.select(
+        "id",
+        fn.rank().over(fn.Window.orderBy(fn.col("sex"))).alias("r"),
+        fn.dense_rank().over(fn.Window.orderBy(fn.col("sex"))).alias("dr"),
+    ),
+    "lag_lead": lambda fn, df: df.select(
+        "id",
+        fn.lag("id").over(fn.Window.orderBy("id")).alias("p"),
+        fn.lead("id").over(fn.Window.orderBy("id")).alias("n"),
+    ),
+    "running_count": lambda fn, df: df.select(
+        "id",
+        fn.count(fn.col("id"))
+        .over(fn.Window.orderBy("id").rowsBetween(fn.Window.unboundedPreceding, 0))
+        .alias("c"),
+    ),
+    "lpad_instr": lambda fn, df: df.select(
+        fn.lpad(fn.col("id"), 3, "0").alias("p"), fn.instr(fn.col("dx"), ".").alias("i")
+    ),
+    "isnan": lambda fn, df: df.select(fn.isnan(fn.col("n")).alias("o")),
+    "floor_ceil": lambda fn, df: df.select(
+        fn.floor(fn.col("n")).alias("f"), fn.ceil(fn.col("n")).alias("c")
+    ),
+    "greatest_least": lambda fn, df: df.select(
+        fn.greatest(fn.col("id"), fn.lit("2")).alias("g"),
+        fn.least(fn.col("id"), fn.lit("2")).alias("l"),
+    ),
+    "fillna": lambda fn, df: df.fillna("Z").select("s", "sex"),
+    "dropna": lambda fn, df: df.dropna(subset=["s"]).select("id"),
+    "subtract": lambda fn, df: df.select("sex").subtract(
+        df.filter(fn.col("sex") == "M").select("sex")
+    ),
+    "collect_rdd_mapping": lambda fn, df: df.sparkSession.createDataFrame(
+        sorted(dict(df.select("id", "sex").rdd.map(lambda r: (r[0], r[1])).collect()).items()),
+        ["k", "v"],
+    ),
 }
 
 
@@ -137,3 +272,5 @@ def test_dsl_parity(engines: dict[str, Any], case: str) -> None:
             df = eng.create_typed_dataframe(_ROWS, _SCHEMA)
             results[name] = _norm(_CASES[case](eng.get_functions(), df).collect())
     assert results["duckdb"] == results["pyspark"], case
+    if "snowpark" in results:
+        assert results["snowpark"] == results["pyspark"], case

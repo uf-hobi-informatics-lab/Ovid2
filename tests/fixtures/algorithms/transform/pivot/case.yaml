@@ -1,0 +1,35 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  group_by:
+  - id
+  pivot_column: k
+  value_column: v
+  agg: max
+tables:
+  input:
+    columns:
+    - id
+    - k
+    - v
+    rows:
+    - - '1'
+      - a
+      - x
+    - - '1'
+      - b
+      - y
+    - - '2'
+      - a
+      - z
+expected:
+  columns:
+  - id
+  - a
+  - b
+  rows:
+  - - '1'
+    - x
+    - y
+  - - '2'
+    - z
+    - null

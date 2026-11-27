@@ -458,10 +458,6 @@ class TransformSummary(BaseModel):
     category: str = Field(
         description="Grouping: `formatting`, `correction`, `reshape`, or `sampling`."
     )
-    requires_family: str | None = Field(
-        default=None,
-        description="Compute family required (e.g. `spark`), or null for any family.",
-    )
     params_schema: dict[str, Any] = Field(
         default_factory=dict,
         description="JSON-schema fragment for this transform's params.",
@@ -591,7 +587,15 @@ class JobSubmitRequest(BaseModel):
         description="Transformations to run, or ``['all']``.",
     )
     engine: str = Field("pyspark", description="Compute engine (default: pyspark).")
-    workers: int = Field(25, ge=1, le=200, description="Spark worker count for isolated cluster.")
+    workers: int = Field(
+        25,
+        ge=1,
+        le=200,
+        description=(
+            "Spark worker containers for the isolated cluster. Ignored by DuckDB / "
+            "Snowpark (tables run one at a time on every engine)."
+        ),
+    )
     sf_database: str | None = Field(
         None,
         description=(
@@ -716,6 +720,13 @@ class JobDetail(BaseModel):
         None, description="Workflow run this job belongs to (null for standalone jobs)."
     )
     workflow_step_id: str | None = None
+    pause_requested: bool = Field(
+        False,
+        description=(
+            "True while the operator asked the job to pause: it finishes the "
+            "table it is on, then holds before the next one until resumed."
+        ),
+    )
     result: dict[str, Any] | None = Field(
         None,
         description=(
@@ -723,6 +734,7 @@ class JobDetail(BaseModel):
             "null for pipeline jobs."
         ),
     )
+    workspace_id: str = Field("default", description="Workspace the job belongs to.")
 
 
 class JobListResponse(BaseModel):
@@ -1772,6 +1784,20 @@ class SettingsWorker(BaseModel):
     route_dispatch_enabled: bool = True
 
 
+class AutomationStatus(BaseModel):
+    """Read-only view of whether automatic triggers fire (``GET /automation``).
+
+    Lets the assistant and the UI warn that a watch / cron / interval
+    trigger will not start anything while route dispatch is off. Changing
+    it stays on the Settings page (admin only).
+    """
+
+    dispatch_enabled: bool = Field(
+        ..., description="worker.route_dispatch_enabled — watch / cron / interval triggers fire."
+    )
+    poll_interval_seconds: float = Field(..., description="Worker tick interval.")
+
+
 class SettingsUi(BaseModel):
     """UI polling knobs (milliseconds) and display preferences."""
 
@@ -2036,7 +2062,7 @@ class SettingsLlm(BaseModel):
         "write tools are shown as proposals the user must run.",
     )
     max_tool_iterations: int = Field(
-        default=6,
+        default=10,
         ge=1,
         le=20,
         description="Upper bound on model round-trips per turn when tools are on.",
@@ -2830,8 +2856,12 @@ class ReportPrivateNoteUpdate(BaseModel):
 class ReportShareRequest(BaseModel):
     """Body of ``PUT /api/v1/reports/{id}/shares``."""
 
-    principal_kind: str = Field(..., pattern="^(user|role)$")
-    principal: str = Field(..., min_length=1, max_length=200)
+    principal_kind: str = Field(
+        ...,
+        pattern="^(user|role|workspace)$",
+        description="user / role / workspace (everyone in this workspace; principal '*').",
+    )
+    principal: str = Field("*", min_length=1, max_length=200)
     permission: str = Field("view", pattern="^(view|edit)$")
 
 
@@ -2889,3 +2919,85 @@ class ReportTrendRequest(BaseModel):
     """Body of ``POST /api/v1/report-sources/trend``."""
 
     source_ids: list[str] = Field(..., min_length=2, max_length=24)
+
+
+# ---------------------------------------------------------------------------
+# Workspaces (adr-workspaces.md)
+# ---------------------------------------------------------------------------
+
+
+class WorkspaceSummary(BaseModel):
+    """One workspace record."""
+
+    workspace_id: str = Field(..., description="Immutable slug (used in paths and headers).")
+    display_name: str
+    description: str = ""
+    status: str = Field(..., description="active / archived.")
+    created_by: str
+    created_at: str
+    updated_at: str
+    member_count: int = 0
+
+
+class WorkspaceCreateRequest(BaseModel):
+    """Body of ``POST /api/v1/workspaces``."""
+
+    workspace_id: str = Field(
+        ...,
+        description="Slug: 2-40 lowercase letters, digits, '-' or '_'.",
+        min_length=2,
+        max_length=40,
+    )
+    display_name: str = Field(..., min_length=1, max_length=80)
+    description: str = Field("", max_length=500)
+
+
+class WorkspaceUpdateRequest(BaseModel):
+    """Body of ``PATCH /api/v1/workspaces/{workspace_id}``."""
+
+    display_name: str | None = Field(None, min_length=1, max_length=80)
+    description: str | None = Field(None, max_length=500)
+
+
+class WorkspaceMember(BaseModel):
+    """One member of a workspace."""
+
+    user_id: str
+    ws_role: str = Field(..., description="member / admin (admin may manage members).")
+    added_by: str
+    added_at: str
+    email: str | None = None
+    name: str | None = None
+    role: str | None = Field(None, description="The user's global role.")
+    status: str | None = None
+
+
+class WorkspaceMemberRequest(BaseModel):
+    """Body of ``POST /api/v1/workspaces/{workspace_id}/members``."""
+
+    user_id: str = Field(..., min_length=1, max_length=200)
+    ws_role: Literal["member", "admin"] = "member"
+
+
+class MyWorkspace(BaseModel):
+    """A workspace the caller may switch into."""
+
+    workspace_id: str
+    display_name: str
+    ws_role: str | None = Field(
+        None, description="Caller's membership role, or null (system-admin visibility)."
+    )
+    active: bool = Field(False, description="True for the workspace this request runs in.")
+
+
+class MyWorkspacesResponse(BaseModel):
+    """Body of ``GET /api/v1/me/workspaces``."""
+
+    active: str = Field(..., description="Slug of the workspace this request runs in.")
+    workspaces: list[MyWorkspace]
+
+
+class ActiveWorkspaceRequest(BaseModel):
+    """Body of ``PUT /api/v1/me/active-workspace``."""
+
+    workspace_id: str = Field(..., min_length=1, max_length=40)

@@ -84,7 +84,7 @@ because the package is imported as `ovid2_pipelines.<name>`.
 
 `GET /api/v1/pipeline-packages/{p}/bindings` (MCP `check_pipeline_bindings`,
 builder → *Name checks*) checks every cross-configuration name statically:
-CDM registration, identity placeholders, the required engine family,
+CDM registration, identity placeholders,
 `hash_id` salt keys in `secrets.d/<pipeline>.json`, `dictionaries.py`
 names, fixer names / scopes / keys / reference tables / list files,
 formatter class paths and join vocabularies, and transform assignments.

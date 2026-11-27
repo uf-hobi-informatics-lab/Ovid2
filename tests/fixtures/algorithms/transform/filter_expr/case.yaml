@@ -1,0 +1,38 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  expr: sex = 'M'
+tables:
+  input:
+    columns:
+    - id
+    - name
+    - sex
+    - n
+    rows:
+    - - '1'
+      - '  alice  smith '
+      - f
+      - '5'
+    - - '2'
+      - BOB
+      - M
+      - '-3.5'
+    - - '3'
+      - ''
+      - UN
+      - null
+    - - '4'
+      - null
+      - m
+      - '12'
+expected:
+  columns:
+  - id
+  - name
+  - sex
+  - n
+  rows:
+  - - '2'
+    - BOB
+    - M
+    - '-3.5'

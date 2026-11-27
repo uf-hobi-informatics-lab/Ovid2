@@ -1,0 +1,47 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+dataset: pcornet_small
+expected:
+  columns:
+  - source_table
+  - metric
+  - value_num
+  - value_str
+  - exception_flag
+  rows:
+  - - DEMOGRAPHIC
+    - MISSING_REFRESH_DATE_FLAG
+    - 0.0
+    - null
+    - false
+  - - DIAGNOSIS
+    - MISSING_REFRESH_DATE_FLAG
+    - 0.0
+    - null
+    - false
+  - - ENCOUNTER
+    - MISSING_REFRESH_DATE_FLAG
+    - 0.0
+    - null
+    - false
+  - - LAB_RESULT_CM
+    - MISSING_REFRESH_DATE_FLAG
+    - 0.0
+    - null
+    - false
+  - - PRESCRIBING
+    - MISSING_REFRESH_DATE_FLAG
+    - 0.0
+    - null
+    - false
+  - - PROCEDURES
+    - MISSING_REFRESH_DATE_FLAG
+    - 0.0
+    - null
+    - false
+  - - VITAL
+    - MISSING_REFRESH_DATE_FLAG
+    - 0.0
+    - null
+    - false
+note: "metric rows on the shared pcornet_small dataset \u2014 expected = PySpark reference, identical\
+  \ on DuckDB when recorded"

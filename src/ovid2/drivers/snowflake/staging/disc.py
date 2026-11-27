@@ -162,7 +162,7 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
             FileNotFoundError: When ``file_name`` does not match
                 any file under the disc root.
         """
-        del table_name  # unused on read side
+        # ``table_name`` is used only by the bridged (directory / non-CSV) read.
 
         # Locally import the disc driver's spark helpers to keep this
         # module pyspark-free at module scope. detect_delimiter /
@@ -174,25 +174,22 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
         merged = cast("DiscDriver", driver)._merged_location_view()
         root = merged["root"]
         fmt = merged["format"]
-        if fmt != "csv":
-            raise ValueError(
-                f"SnowparkDiscStrategy only supports fmt='csv' "
-                f"(got {fmt!r}). Non-CSV disc feeds must run under "
-                "--engine pyspark."
-            )
+        file_path = resolve_read_path(root, file_name) if fmt == "csv" else ""
+        if fmt != "csv" or os.path.isdir(file_path):
+            # Directory (Spark part-dir / ``{TABLE}/`` layout) and non-CSV
+            # (Parquet / JSON) disc reads go through the Arrow bridge on
+            # the disc DuckDB strategy — the exact Spark disc contract —
+            # instead of being refused (engine universality).
+            from ovid2.core.engines.bridge import bridge_read
 
-        file_path = resolve_read_path(root, file_name)
-        if os.path.isdir(file_path):
-            # Disc supports directory reads (Spark loads the whole
-            # dir); Snowpark can too via a stage prefix, but the
-            # implementation is meaningfully different (PUT every
-            # file, read the stage as a prefix). Out of scope for
-            # Phase C; a pipeline needing this should file a
-            # follow-up.
-            raise ValueError(
-                f"SnowparkDiscStrategy does not yet support directory "
-                f"reads (resolved {file_path!r} is a directory). "
-                "Use --engine pyspark for now."
+            return bridge_read(
+                _engine_for(session),
+                driver,
+                pipeline,
+                batch_id,
+                file_name,
+                delimiter,
+                table_name=table_name,
             )
 
         detected_delim = delimiter or detect_delimiter(file_path)
@@ -352,11 +349,14 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
         root = merged["root"]
         fmt = merged["format"]
         if fmt != "csv":
-            raise ValueError(
-                f"SnowparkDiscStrategy only supports fmt='csv' "
-                f"(got {fmt!r}). Non-CSV disc targets must run under "
-                "--engine pyspark."
+            # Parquet / JSON disc targets: Arrow bridge on the disc DuckDB
+            # strategy (same bytes every engine writes; engine universality).
+            from ovid2.core.engines.bridge import bridge_write
+
+            bridge_write(
+                _engine_for(session), df, driver, pipeline, batch_id, table_name, delimiter
             )
+            return
         single_file = bool(merged.get("single_file", True))
         delim = delimiter or CSV_DELIMITER
 
@@ -400,7 +400,17 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
             get_stage_uri,
             get_target_uri,
         )
-        rows = native.sql(f"GET '{get_stage_uri}' '{get_target_uri}'").collect()  # noqa: OVID2001
+        try:
+            rows = native.sql(f"GET '{get_stage_uri}' '{get_target_uri}'").collect()  # noqa: OVID2001
+        except Exception as exc:
+            # ``COPY INTO @~`` of an empty result unloads no file, so the
+            # GET finds nothing (``253006 … file does not exist``). Every
+            # engine writes a header-only file for an empty table (the
+            # Spark / DuckDB disc contract), so do the same here.
+            if "253006" not in str(exc):
+                raise
+            _write_header_only(df, output_dir, table_name, delim)
+            return
         if not rows:
             raise RuntimeError(
                 f"SnowparkDiscStrategy: GET {get_stage_uri} returned "
@@ -513,6 +523,19 @@ class SnowparkDiscStrategy(SnowparkStagingStrategy):
 # ---------------------------------------------------------------------------
 # Module-level helpers (pyspark-free)
 # ---------------------------------------------------------------------------
+
+
+def _engine_for(session: Any) -> Any:
+    """Return the :class:`~ovid2.core.engines.snowpark.SnowparkEngine` behind ``session``."""
+    engine = getattr(session, "_engine", None)
+    if engine is not None:
+        return engine
+    from ovid2.core.engines.dsl import active_engine
+
+    engine = active_engine()
+    if engine is None:
+        raise RuntimeError("Snowpark disc bridge needs the active Snowpark engine")
+    return engine
 
 
 def _current_instance_id() -> str:
@@ -1013,6 +1036,21 @@ def _finalise_multi_part(
         if os.path.exists(dest):
             os.remove(dest)
         os.rename(src, dest)
+
+
+def _write_header_only(df: Any, output_dir: str, table_name: str, delimiter: str) -> None:
+    """Write ``{table_name}.csv`` holding only the header of an empty frame.
+
+    Column names are rendered with the univocity writer rules
+    (:func:`ovid2.core.engines.csv_text.write_line`) so the bytes match
+    what Spark and DuckDB write for the same empty table.
+    """
+    from ovid2.core.engines.csv_text import write_line
+
+    dest = os.path.join(output_dir, f"{table_name}.csv")
+    names = [str(c).strip('"') for c in df.columns]
+    with open(dest, "w", encoding="utf-8", newline="") as fh:
+        fh.write(write_line(list(names), delimiter=delimiter) + "\n")
 
 
 # ---------------------------------------------------------------------------

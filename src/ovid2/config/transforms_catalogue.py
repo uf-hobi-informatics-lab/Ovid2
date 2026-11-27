@@ -27,7 +27,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "add_row_number",
         "summary": "Add a 1-based row_number within partitions, ordered by columns.",
         "category": "reshape",
-        "requires_family": "spark",
         "params_schema": {
             "type": "object",
             "required": ["order_by", "output_column"],
@@ -54,7 +53,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "cast",
         "summary": "Cast columns to target SQL types using a {column: type} map.",
         "category": "formatting",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["types"],
@@ -73,7 +71,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "clamp",
         "summary": "Bound a numeric column to a [min, max] range.",
         "category": "correction",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["column"],
@@ -89,7 +86,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "coalesce_columns",
         "summary": "Write the first non-null of several columns into a target column.",
         "category": "correction",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["target", "columns"],
@@ -104,7 +100,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "dedup",
         "summary": "Drop duplicate rows (optionally keyed on a subset of columns).",
         "category": "correction",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "additionalProperties": False,
@@ -121,7 +116,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "default_value",
         "summary": "Replace nulls in a column with a constant default value.",
         "category": "correction",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["column", "value"],
@@ -136,7 +130,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "derive_column",
         "summary": "Add or replace a column computed from a checked Spark-SQL expression.",
         "category": "formatting",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["column", "expr"],
@@ -165,7 +158,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "dense_rank",
         "summary": "Add a dense rank (no gaps for ties) within partitions.",
         "category": "reshape",
-        "requires_family": "spark",
         "params_schema": {
             "type": "object",
             "required": ["order_by", "output_column"],
@@ -192,14 +184,12 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "distinct",
         "summary": "Keep only distinct rows (full-row uniqueness).",
         "category": "correction",
-        "requires_family": None,
         "params_schema": {"type": "object"},
     },
     {
         "name": "drop_columns",
         "summary": "Remove the listed columns.",
         "category": "reshape",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["columns"],
@@ -213,7 +203,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "explode",
         "summary": "Expand an array or map column into one row per element.",
         "category": "reshape",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["column"],
@@ -231,7 +220,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "filter_expr",
         "summary": "Keep only rows matching a boolean column expression.",
         "category": "correction",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["expr"],
@@ -248,7 +236,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "head_by_group",
         "summary": "Keep the top-N rows per group by an ordering (e.g. latest per key).",
         "category": "sampling",
-        "requires_family": "spark",
         "params_schema": {
             "type": "object",
             "required": ["partition_by", "order_by", "n"],
@@ -275,7 +262,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "limit",
         "summary": "Keep at most N rows.",
         "category": "sampling",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["n"],
@@ -287,7 +273,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "normalize_whitespace",
         "summary": "Collapse repeated whitespace to single spaces and trim the ends.",
         "category": "formatting",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["columns"],
@@ -306,7 +291,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "null_if",
         "summary": "Set a column to null when its value matches a list, pattern, or bound.",
         "category": "correction",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["column"],
@@ -324,7 +308,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "pad",
         "summary": "Pad a column to a fixed width with a fill character (left or right).",
         "category": "formatting",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["column", "width"],
@@ -341,7 +324,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "pivot",
         "summary": "Pivot a key/value column pair into wide columns per key.",
         "category": "reshape",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["group_by", "pivot_column", "value_column"],
@@ -362,7 +344,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "random_sample",
         "summary": "Take a random fraction of rows (optionally seeded, reproducible).",
         "category": "sampling",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["fraction"],
@@ -383,7 +364,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "rank",
         "summary": "Add a rank (with gaps for ties) within partitions.",
         "category": "reshape",
-        "requires_family": "spark",
         "params_schema": {
             "type": "object",
             "required": ["order_by", "output_column"],
@@ -410,7 +390,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "reduce",
         "summary": "Group by key columns and aggregate the rest (one row per group).",
         "category": "reshape",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["group_by", "aggs"],
@@ -433,7 +412,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "regex_replace",
         "summary": "Replace regex matches with a replacement string across columns.",
         "category": "formatting",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["columns", "pattern", "replacement"],
@@ -457,7 +435,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "rename_columns",
         "summary": "Rename columns using an {old: new} mapping.",
         "category": "formatting",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["map"],
@@ -476,7 +453,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "select_columns",
         "summary": "Keep only the listed columns, in the given order.",
         "category": "reshape",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["columns"],
@@ -490,7 +466,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "standardize_null",
         "summary": "Convert sentinel strings (NULL, NA, '.', empty) to true null.",
         "category": "correction",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["columns"],
@@ -509,7 +484,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "stratified_sample",
         "summary": "Sample a per-key fraction of rows, preserving key distribution.",
         "category": "sampling",
-        "requires_family": "spark",
         "params_schema": {
             "type": "object",
             "required": ["key", "fractions"],
@@ -530,7 +504,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "strip_non_alpha",
         "summary": "Remove all non-letter characters from one or more columns.",
         "category": "correction",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["columns"],
@@ -544,7 +517,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "strip_non_numeric",
         "summary": "Remove all non-digit characters from one or more columns.",
         "category": "correction",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["columns"],
@@ -558,7 +530,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "to_lower",
         "summary": "Lowercase the values in one or more columns.",
         "category": "formatting",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["columns"],
@@ -577,7 +548,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "to_title",
         "summary": "Title-case (initcap) the values in one or more columns.",
         "category": "formatting",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["columns"],
@@ -596,7 +566,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "to_upper",
         "summary": "Uppercase the values in one or more columns.",
         "category": "formatting",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["columns"],
@@ -615,7 +584,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "trim",
         "summary": "Strip leading and trailing whitespace from one or more columns.",
         "category": "formatting",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["columns"],
@@ -634,7 +602,6 @@ TRANSFORM_CATALOGUE: list[dict[str, Any]] = [
         "name": "unpivot",
         "summary": "Melt wide value columns into long (name, value) rows.",
         "category": "reshape",
-        "requires_family": None,
         "params_schema": {
             "type": "object",
             "required": ["id_columns", "value_columns", "name_to", "value_to"],

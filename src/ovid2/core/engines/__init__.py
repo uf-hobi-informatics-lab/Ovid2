@@ -5,6 +5,10 @@ Every engine implements :class:`BaseEngine`. Ovid2 ships:
 * :class:`PySparkEngine` — local / cluster Spark (default).
 * :class:`DatabricksSparkEngine` — Databricks Connect.
 * :class:`SnowparkEngine` — Snowflake Snowpark.
+* :class:`DuckDBEngine` — in-process DuckDB.
+
+Every engine runs every pipeline on every storage type (see
+the adr-engine-universality design note).
 
 Load an engine by name through :func:`ovid2.core.loaders.load_engine`;
 enumerate available types through
@@ -14,10 +18,6 @@ enumerate available types through
 from __future__ import annotations
 
 from ovid2.core.engines.base import BaseEngine, EngineTestResult
-from ovid2.core.engines.family import (
-    assert_pipeline_engine_compatible,
-    resolve_pipeline_family,
-)
 from ovid2.core.engines.metrics import EngineMetricsSample
 from ovid2.core.engines.protocols import (
     EngineFamily,
@@ -40,8 +40,6 @@ __all__ = [
     "EngineOperationUnsupported",
     "EngineSession",
     "EngineTestResult",
-    "assert_pipeline_engine_compatible",
     "list_engine_types",
     "load_engine_class",
-    "resolve_pipeline_family",
 ]

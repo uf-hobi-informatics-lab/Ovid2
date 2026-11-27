@@ -28,8 +28,9 @@ panel never sends it back to the browser.
 
 Supported types: `disc`, `s3`, `azure_blob`, `gcs`, `snowflake`,
 `databricks`, `postgres`, `mssql`, `access`. See the
-[driver table](../10-reference/drivers-engines.md) for which are native and
-which are DuckDB-only.
+[driver table](../10-reference/drivers-engines.md). Every engine reaches
+every type, natively or through the Arrow bridge; see
+[Engines](engines.md#engine-and-storage-compatibility).
 
 ## Address — *where* exactly
 

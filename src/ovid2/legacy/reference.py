@@ -17,9 +17,9 @@ import os
 import re
 from functools import lru_cache, reduce
 
-import pyspark.sql.functions as F
+import ovid2.core.engines.dsl as F
 from openpyxl import load_workbook
-from pyspark.sql import Column
+from ovid2.core.engines.sparkapi.sql import Column
 
 GEOCODING_FILE_BASENAME = "FULL_GEOCODING_202603_16"
 

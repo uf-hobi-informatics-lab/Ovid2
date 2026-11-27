@@ -83,6 +83,20 @@ def spark() -> Iterator[object]:
         session.stop()
 
 
+@pytest.fixture(scope="session")
+def spark_engine(spark: object) -> object:
+    """A ``pyspark`` engine from the engine registry bound to the ``spark`` fixture.
+
+    Algorithms take their engine from their context (no implicit Spark
+    fallback), so tests that drive them on Spark build one explicitly.
+    """
+    from ovid2.core.engines.registry import load_engine_class
+
+    engine = load_engine_class("pyspark")()
+    engine._session = spark  # type: ignore[attr-defined]  # reuse the session fixture
+    return engine
+
+
 @pytest.fixture(autouse=True)
 def _default_dev_deployment(monkeypatch: pytest.MonkeyPatch) -> None:
     """Run tests as an ``OVID2_DEPLOYMENT=dev`` instance unless they opt out.

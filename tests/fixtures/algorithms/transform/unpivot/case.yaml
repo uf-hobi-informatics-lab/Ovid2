@@ -1,0 +1,31 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  id_columns:
+  - id
+  value_columns:
+  - a
+  - b
+  name_to: k
+  value_to: v
+tables:
+  input:
+    columns:
+    - id
+    - a
+    - b
+    rows:
+    - - '1'
+      - x
+      - null
+expected:
+  columns:
+  - id
+  - k
+  - v
+  rows:
+  - - '1'
+    - a
+    - x
+  - - '1'
+    - b
+    - null

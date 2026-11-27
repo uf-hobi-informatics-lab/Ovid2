@@ -21,7 +21,6 @@ credentials into the config directory.
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -35,22 +34,20 @@ from ovid2.connections.registry import (
 
 
 def _search_paths() -> list[Path]:
-    """Return the ordered list of directories to search for connection JSONs."""
-    paths: list[Path] = []
-    override = os.environ.get("OVID2_CONNECTIONS_DIR")
-    if override:
-        paths.append(Path(override))
-    xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    paths.append(Path(xdg_cfg) / "ovid2" / "connections")
-    paths.append(Path.cwd() / "connections")
-    paths.append(Path("/etc/ovid2/connections"))
-    return paths
+    """Return the ordered directories searched for connection JSONs.
+
+    Scoped to the active workspace (:func:`ovid2.workspaces.search_dirs`).
+    """
+    from ovid2.workspaces import search_dirs
+
+    return search_dirs("connections", "OVID2_CONNECTIONS_DIR")
 
 
 def connections_dir() -> Path:
-    """Return the user-scoped write target for connection files."""
-    xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(xdg_cfg) / "ovid2" / "connections"
+    """Return the active workspace's write target for connection files."""
+    from ovid2.workspaces import write_dir
+
+    return write_dir("connections", "OVID2_CONNECTIONS_DIR")
 
 
 def locate_connection(name: str) -> Path | None:

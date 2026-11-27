@@ -1,0 +1,33 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  column: code
+  vocabulary: omop_concept
+  target: concept_id
+tables:
+  input:
+    columns:
+    - code
+    rows:
+    - - E11.9
+    - - zz
+    - - null
+  concept:
+    columns:
+    - concept_id
+    - concept_code
+    - domain_id
+    rows:
+    - - '201826'
+      - e11.9
+      - Condition
+    - - '1'
+      - x
+      - Drug
+note: case-insensitive match (upper both sides); unmatched kept
+expected:
+  columns:
+  - code
+  rows:
+  - - '201826'
+  - - zz
+  - - null

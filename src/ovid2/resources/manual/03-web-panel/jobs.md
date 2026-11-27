@@ -26,6 +26,11 @@ The status bar shows the job state and its actions:
 | ▶ **Rerun** | finished | submits an identical job with a new instance id |
 | **Download export** | finished export job | downloads the exported file |
 
+To **pause** a running job at the next table boundary (and resume it), use
+‖ / ▶ on its card in the [Atlas](navigator.md#running-pausing-cancelling) or
+`POST /api/v1/jobs/{id}/pause|resume` — see
+[Pause and resume](../04-running-jobs/monitoring.md#pause-and-resume).
+
 Launch and rerun check the output first. If it already holds tables, an
 in-page dialog lists them and asks you to confirm; *Cancel* sends nothing.
 

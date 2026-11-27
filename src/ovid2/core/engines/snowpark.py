@@ -18,9 +18,9 @@ This engine therefore:
    where possible and raises :class:`EngineOperationUnsupported` for the
    Spark-only names.
 
-Pipelines whose formatters or fixers require Spark family must declare
-``requires_family = "spark"`` on their pipeline_settings; the pipeline
-consults this before dispatching.
+Every pipeline runs on Snowpark (``adr-engine-universality.md``): frames
+and columns are PySpark-shaped (:mod:`._snow_frame`) and Python UDFs
+become temporary Snowflake Python UDFs.
 
 ## Credential sourcing
 
@@ -51,7 +51,7 @@ from __future__ import annotations
 import contextlib
 import logging
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ovid2.core.engines.base import BaseEngine, EngineTestResult
 from ovid2.core.engines.protocols import (
@@ -310,30 +310,214 @@ _PORTABLE_SNOWPARK_TYPES: dict[str, str] = {
 
 
 class SnowparkEngineSession:
-    """Adapter that presents a :class:`snowflake.snowpark.Session` as an
-    :class:`EngineSession`.
+    """PySpark-``SparkSession``-shaped adapter over a Snowpark session.
 
-    Only the subset of session methods the pipeline actually uses is
-    provided. Callers reaching for Spark-specific escape hatches should
-    go through :meth:`SnowparkEngine.native` instead.
+    Frames come back as :class:`~._snow_frame.SnowFrame` (the portable
+    surface). ``read`` serves local-file reads through the DuckDB reader
+    (Spark CSV semantics, byte-exact) and imports the result, so code that
+    reads scratch files itself (legacy ports, fix scripts) works unchanged.
     """
 
-    def __init__(self, native: SnowparkNativeSession) -> None:
+    def __init__(self, native: SnowparkNativeSession, engine: Any = None) -> None:
         self._native = native
+        self._engine = engine
+
+    def _wrap(self, df: Any) -> Any:
+        from ovid2.core.engines._snow_frame import SnowFrame
+
+        return SnowFrame(df, self._engine)
 
     def table(self, name: str) -> Any:
-        return self._native.table(name)
+        return self._wrap(self._native.table(name))
 
     def sql(self, query: str) -> Any:
-        return self._native.sql(query)
+        from ovid2.core.engines._snow_frame import _spark_sql
+
+        return self._wrap(self._native.sql(_spark_sql(query)))
 
     def createDataFrame(self, data: Any, schema: Any = None) -> Any:
-        # Note: Snowpark's create_dataframe signature is `create_dataframe`.
-        return self._native.create_dataframe(data, schema=schema)
+        from ovid2.core.engines._snow_frame import _snow_type
+        from ovid2.core.engines.types import StructField, StructType, _as_type, spark_type_name
+
+        rows = list(data or [])
+        if schema is None or isinstance(schema, (list, tuple)):
+            if not rows:
+                names = list(schema or ["_c0"])
+                schema = StructType([StructField(n, _as_type("string")) for n in names])
+            elif schema is None and isinstance(rows[0], dict):
+                # Spark infers a schema from dict rows with *sorted* keys.
+                names = sorted(rows[0])
+                values = [[r.get(n) for n in names] for r in rows]
+                return self._wrap(self._native.create_dataframe(values, schema=names))
+            else:
+                return self._wrap(self._native.create_dataframe(rows, schema=schema))
+        if isinstance(schema, str):
+            from ovid2.core.engines.duckdb import _split_ddl
+
+            fields = []
+            for part in _split_ddl(schema):
+                bits = part.strip().replace(":", " ", 1).split(None, 1)
+                fields.append(
+                    StructField(
+                        bits[0].strip("`"), _as_type(bits[1] if len(bits) > 1 else "string")
+                    )
+                )
+            schema = StructType(fields)
+        from snowflake.snowpark import types as T
+
+        snow_schema = T.StructType(
+            [
+                T.StructField(f.name, _snow_type(spark_type_name(f.dataType)), True)
+                for f in getattr(schema, "fields", [])
+            ]
+        )
+        return self._wrap(self._native.create_dataframe(rows, schema=snow_schema))
+
+    def from_arrow(self, table: Any) -> Any:
+        from ovid2.core.engines.bridge import import_arrow
+
+        return self._wrap(import_arrow(self._engine, table, name="arrow"))
+
+    @property
+    def read(self) -> Any:
+        return _SnowparkLocalReader(self)
+
+    @property
+    def udf(self) -> Any:
+        session = self
+
+        class _Registrar:
+            def register(self, name: str, f: Any, returnType: Any = None) -> Any:  # noqa: N803
+                fns = session._engine.get_functions()
+                udf = fns.udf(
+                    getattr(f, "func", f), returnType or getattr(f, "returnType", "string")
+                )
+                return udf
+
+        return _Registrar()
+
+    @property
+    def conf(self) -> Any:
+        from ovid2.core.engines.duckdb import _DuckConf
+
+        conf = getattr(self._engine, "_conf", None)
+        if conf is None:
+            conf = _DuckConf()
+            if self._engine is not None:
+                self._engine._conf = conf
+        return conf
+
+    @property
+    def sparkContext(self) -> Any:
+        from ovid2.core.engines.duckdb import _DuckSparkContext
+
+        return _DuckSparkContext()
+
+    @property
+    def catalog(self) -> Any:
+        native = self._native
+        engine = self._engine
+
+        class _Table:
+            def __init__(self, name: str) -> None:
+                self.name = name
+                self.isTemporary = True
+
+        class _Catalog:
+            def listTables(self) -> list[Any]:
+                """Temp views registered on this session (Spark ``isTemporary``).
+
+                Snowflake's ``SHOW VIEWS`` does not flag session-scoped views,
+                so the engine records every name it registers
+                (:meth:`SnowparkEngine.register_temp_view` /
+                ``SnowFrame.createOrReplaceTempView``). Before, this returned
+                ``[]`` and ``providerid_orphans`` silently skipped itself on
+                Snowpark (found by the algorithm conformance matrix).
+                """
+                names = sorted(getattr(engine, "_temp_view_names", set()) or set())
+                return [_Table(n) for n in names]
+
+            def tableExists(self, name: str) -> bool:
+                try:
+                    native.table(name).schema  # noqa: B018 — resolves the name
+                    return True
+                except Exception:
+                    return False
+
+        return _Catalog()
+
+    def stop(self) -> None:
+        """Sessions are owned by the engine; ``stop`` is a no-op."""
 
     @property
     def native(self) -> SnowparkNativeSession:
         return self._native
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._native, name)
+
+
+class _SnowparkLocalReader:
+    """``session.read`` for *local files*: Spark-exact parse (DuckDB), imported as Arrow.
+
+    Stage / table reads use the native Snowpark reader
+    (``session.native.read``).
+    """
+
+    def __init__(self, session: SnowparkEngineSession) -> None:
+        self._session = session
+        self._options: dict[str, Any] = {}
+        self._format = "csv"
+
+    def option(self, key: str, value: Any) -> _SnowparkLocalReader:
+        self._options[key] = value
+        return self
+
+    def options(self, **kwargs: Any) -> _SnowparkLocalReader:
+        self._options.update(kwargs)
+        return self
+
+    def format(self, fmt: str) -> _SnowparkLocalReader:
+        self._format = fmt.lower()
+        return self
+
+    def schema(self, schema: Any) -> _SnowparkLocalReader:
+        self._options["schema"] = schema
+        return self
+
+    def _via_duck(self, method: str, path: Any, **kwargs: Any) -> Any:
+        from ovid2.core.engines import bridge
+
+        car = bridge.sidecar(self._session._engine)
+        reader = (
+            cast(Any, car.engine.get_session()).read.options(**self._options).format(self._format)
+        )
+        frame = getattr(reader, method)(path, **kwargs)
+        return self._session.from_arrow(bridge.arrow_table(frame))
+
+    def csv(self, path: Any, **kwargs: Any) -> Any:
+        return self._via_duck("csv", path, **kwargs)
+
+    def load(self, path: Any = None, format: str | None = None, **kwargs: Any) -> Any:
+        return self._via_duck("load", path, format=format or self._format, **kwargs)
+
+    def parquet(self, *paths: Any) -> Any:
+        return self._via_duck("parquet", *paths)
+
+    def text(self, path: Any) -> Any:
+        return self._via_duck("text", path)
+
+    def json(self, path: Any) -> Any:
+        return self._via_duck("json", path)
+
+
+def _wrap_like(template: Any, native: Any) -> Any:
+    """Wrap ``native`` in a ``SnowFrame`` when ``template`` is one (else return it)."""
+    if type(template).__name__ == "SnowFrame":
+        from ovid2.core.engines._snow_frame import SnowFrame
+
+        return SnowFrame(native, getattr(template, "_engine", None))
+    return native
 
 
 class SnowparkEngine(BaseEngine):
@@ -506,7 +690,7 @@ class SnowparkEngine(BaseEngine):
 
             configs = self._build_configs()
             self._native = Session.builder.configs(configs).create()
-            self._session = SnowparkEngineSession(self._native)
+            self._session = SnowparkEngineSession(self._native, self)
         return self._session
 
     def stop_session(self) -> None:
@@ -664,12 +848,21 @@ class SnowparkEngine(BaseEngine):
                 raise ValueError(f"create_typed_dataframe: unknown portable type {type_name!r}")
             fields.append(T.StructField(name, getattr(T, cls_name)(), True))
         native = self.native()
-        return native.create_dataframe(rows, schema=T.StructType(fields))
+        from ovid2.core.engines._snow_frame import SnowFrame
+
+        return SnowFrame(native.create_dataframe(rows, schema=T.StructType(fields)), self)
 
     def get_functions(self) -> EngineFunctions:
-        """Return the cached Snowpark :class:`EngineFunctions` adapter."""
+        """Return the PySpark-shaped portable function set (:mod:`._snow_frame`).
+
+        Covers :data:`~ovid2.core.engines.surface.FUNCTIONS` with Spark
+        semantics; columns are :class:`~._snow_frame.SnowColumn` wrappers
+        so shared code's PySpark ``Column`` calls work unchanged.
+        """
         if self._functions is None:
-            self._functions = _SnowparkFunctions()
+            from ovid2.core.engines._snow_frame import SnowFunctions
+
+            self._functions = SnowFunctions(self)
         return self._functions
 
     # ---- DataFrame-shape portable helpers (snake_case Snowpark API) ----
@@ -683,8 +876,16 @@ class SnowparkEngine(BaseEngine):
         first: every column present on one side but not the other is
         added as a ``NULL`` literal, then the two are unioned by name.
         """
+        from ovid2.core.engines._snow_frame import unwrap
+
+        # Spark's ``unionByName`` is UNION ALL. Snowpark's ``union_by_name``
+        # is a set UNION (it de-duplicates rows) — that silently dropped the
+        # duplicate null-key rows the deduplicator's passthrough must keep
+        # (found by the algorithm conformance matrix). Use the ALL variant.
+        template = left
         if not allow_missing_columns:
-            return left.union_by_name(right)
+            return _wrap_like(template, unwrap(left).union_all_by_name(unwrap(right)))
+        left, right = unwrap(left), unwrap(right)
 
         left_cols = list(left.columns)
         right_cols = list(right.columns)
@@ -701,10 +902,16 @@ class SnowparkEngine(BaseEngine):
         for name in left_cols:
             if name not in right_set:
                 right_aligned = right_aligned.with_column(name, F.lit(None))
-        return left_aligned.union_by_name(right_aligned)
+        return _wrap_like(template, left_aligned.union_all_by_name(right_aligned))
 
     def drop_duplicates(self, df: Any, cols: list[str] | None = None) -> Any:
-        """Drop duplicate rows, optionally scoped to ``cols`` (Snowpark)."""
+        """Drop duplicate rows, optionally scoped to ``cols`` (Snowpark).
+
+        Accepts the PySpark-shaped ``SnowFrame`` wrapper or a native frame.
+        """
+        dedup = getattr(df, "dropDuplicates", None)
+        if dedup is not None and type(df).__name__ == "SnowFrame":
+            return dedup(cols) if cols is not None else dedup()
         if cols is None:
             return df.drop_duplicates()
         return df.drop_duplicates(cols)
@@ -749,11 +956,16 @@ class SnowparkEngine(BaseEngine):
         # ``save_as_table`` executes the plan and writes the transient
         # table into the session's current (staging) schema. ``overwrite``
         # keeps re-runs of the same table idempotent within a session.
-        df.write.mode("overwrite").save_as_table(
+        from ovid2.core.engines._snow_frame import SnowFrame, unwrap
+
+        unwrap(df).write.mode("overwrite").save_as_table(
             table_name,
             table_type="transient",
         )
-        return native.table(table_name)
+        handle = native.table(table_name)
+        # Keep the caller's shape: a PySpark-shaped ``SnowFrame`` in →
+        # ``SnowFrame`` out (formatter code then keeps using the DSL).
+        return SnowFrame(handle, self) if isinstance(df, SnowFrame) else handle
 
     def native(self) -> SnowparkNativeSession:
         """Return the underlying real Snowpark ``Session``."""

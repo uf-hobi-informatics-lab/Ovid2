@@ -40,7 +40,6 @@ On-disk shape::
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -215,24 +214,23 @@ def llm_field_spec(provider: str) -> dict[str, Any]:
 
 
 def _search_paths() -> list[Path]:
-    """Return the ordered list of directories to search for LLM JSONs."""
-    paths: list[Path] = []
-    override = os.environ.get("OVID2_LLMS_DIR")
-    if override:
-        paths.append(Path(override))
-    paths.append(llms_dir())
-    paths.append(Path.cwd() / "llms")
-    paths.append(Path("/etc/ovid2/llms"))
-    return paths
+    """Return the ordered directories searched for LLM JSONs (workspace-scoped)."""
+    from ovid2.workspaces import search_dirs
+
+    paths = search_dirs("llms", "OVID2_LLMS_DIR")
+    # De-duplicate (the override and the write dir can coincide).
+    seen: list[Path] = []
+    for p in paths:
+        if p not in seen:
+            seen.append(p)
+    return seen
 
 
 def llms_dir() -> Path:
-    """Return the user-scoped write target for LLM connection files."""
-    override = os.environ.get("OVID2_LLMS_DIR")
-    if override:
-        return Path(override)
-    xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(xdg_cfg) / "ovid2" / "llms"
+    """Return the active workspace's write target for LLM connection files."""
+    from ovid2.workspaces import write_dir
+
+    return write_dir("llms", "OVID2_LLMS_DIR")
 
 
 def locate_llm(name: str) -> Path | None:

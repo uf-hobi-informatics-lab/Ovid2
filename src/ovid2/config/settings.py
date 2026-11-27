@@ -209,6 +209,22 @@ SPARK_LOCAL_ROOT: Path = Path(
 )
 SPARK_LOCAL_DIR_IN_CONTAINER: str = "/ovid2-spark-local"
 
+#: Real-disk root for the ``legacy_ovid`` profile's stage-boundary files
+#: (``legacy_scratch/…`` mapper / fixer outputs and the per-run
+#: ``legacy_rt-<instance>`` round-trip folder). These reach tens of GB on a
+#: full feed; on the ``WORK_DIR`` tmpfs they are RAM charged to the driver
+#: container's memory limit, which OOM-killed full acme runs. Defaults to
+#: ``$XDG_CACHE_HOME/ovid2/legacy-scratch`` (``$OVID2_LEGACY_SCRATCH_DIR``
+#: overrides); mounted at the identical path in the driver and every worker.
+LEGACY_SCRATCH_ROOT: Path = Path(
+    os.environ.get("OVID2_LEGACY_SCRATCH_DIR")
+    or (
+        Path(os.environ.get("XDG_CACHE_HOME") or (Path.home() / ".cache"))
+        / "ovid2"
+        / "legacy-scratch"
+    )
+)
+
 # ---------------------------------------------------------------------------
 # CSV
 # ---------------------------------------------------------------------------

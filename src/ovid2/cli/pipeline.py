@@ -31,8 +31,10 @@ def _discover_pipelines() -> list[str]:
     except ModuleNotFoundError:
         return []
     names: list[str] = []
+    from ovid2.config.pipeline_packages import package_visible
+
     for module_info in pkgutil.iter_modules(pkg.__path__):
-        if module_info.ispkg:
+        if module_info.ispkg and package_visible(module_info.name):
             names.append(module_info.name)
     return sorted(names)
 

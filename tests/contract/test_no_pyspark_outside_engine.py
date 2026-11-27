@@ -41,17 +41,12 @@ _PYSPARK_ALLOWED: frozenset[str] = frozenset(
         # Engine-dispatching column DSL: resolves to pyspark.sql.functions
         # only when the active engine is Spark-family (lazy import).
         "src/ovid2/core/engines/dsl.py",
-        # Transitional — runtime pyspark still used; port to EngineFunctions.
-        # See the adr-engines-resource-and-abstraction design note.
-        "src/ovid2/core/pipeline.py",
-        "src/ovid2/utils/common.py",
-        "src/ovid2/transformations/deduplicators/base.py",
     }
 )
 
 #: Frozen upper bound on :data:`_PYSPARK_ALLOWED`. Lower it when an entry
 #: is ported; never raise it without an ADR.
-_PYSPARK_ALLOWED_MAX: int = 6
+_PYSPARK_ALLOWED_MAX: int = 3
 
 #: Directory-tree grace list. Every ``.py`` under one of these
 #: directories is temporarily allowed to import pyspark. Each entry is
@@ -63,8 +58,10 @@ _PYSPARK_ALLOWED_TREES: tuple[str, ...] = (
     # ``test_no_runtime_pyspark_in_shared.py`` forbids runtime ones.
     "src/ovid2/transformations/fixers/common/",
     # Legacy-Ovid byte-parity layer (``ETL_PROFILE = "legacy_ovid"``).
-    # Spark-only by definition: parity is measured against the legacy
-    # Spark CSV writer/reader and legacy Python UDF evaluation. See
+    # Engine-portable since 2026-11-23 (engine universality): every helper
+    # dispatches on the frame's engine; only the *Spark* branches still
+    # import pyspark (Spark is the byte-parity oracle). Shrink-only via the
+    # ``pyspark_tree_runtime_importers`` ratchet. See
     # the adr-legacy-parity-port design note.
     "src/ovid2/legacy/",
 )
@@ -95,6 +92,10 @@ def _is_driver_spark_module(rel: str) -> bool:
 _SNOWPARK_ALLOWED: frozenset[str] = frozenset(
     {
         "src/ovid2/core/engines/snowpark.py",
+        # PySpark-shaped frame / column / functions over Snowpark — the
+        # Snowpark analogue of ``_duck_frame.py`` (engine universality,
+        # ``adr-engine-universality.md``).
+        "src/ovid2/core/engines/_snow_frame.py",
     }
 )
 

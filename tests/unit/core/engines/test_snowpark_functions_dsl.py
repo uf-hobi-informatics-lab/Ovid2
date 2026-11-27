@@ -228,6 +228,12 @@ class _FakeDF:
         self.with_column_calls: list[tuple[str, Any]] = []
 
     def union_by_name(self, other: Any) -> _FakeDF:
+        raise AssertionError(
+            "union_by_name is a set UNION on Snowpark (drops duplicate rows); "
+            "the engine must use union_all_by_name (Spark's unionByName is UNION ALL)"
+        )
+
+    def union_all_by_name(self, other: Any) -> _FakeDF:
         self.union_by_name_arg = other
         return self
 

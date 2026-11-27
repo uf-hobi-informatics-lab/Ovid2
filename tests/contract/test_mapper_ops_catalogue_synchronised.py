@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import pytest
 
+from ovid2.algorithms.registry import registry
 from ovid2.config.mapper_ops_catalogue import MAPPER_OP_CATALOGUE
-from ovid2.mappers.registry import MAP_OPS
+
+MAP_OPS = registry.native_entries("mapper")
 
 
 @pytest.mark.contract
 def test_mapper_op_catalogue_matches_registry() -> None:
     assert set(MAPPER_OP_CATALOGUE) == set(MAP_OPS), (
-        "config/mapper_ops_catalogue.py is out of sync with ovid2.mappers.registry.MAP_OPS"
+        "config/mapper_ops_catalogue.py is out of sync with the AlgorithmRegistry mapper ops"
     )
     for name, entry in MAPPER_OP_CATALOGUE.items():
         assert entry["summary"], name

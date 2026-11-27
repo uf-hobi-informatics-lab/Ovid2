@@ -1,8 +1,10 @@
-"""The fast DuckDB CSV writer is byte-identical to the original renderer.
+"""The DuckDB CSV writer is byte-identical to Spark's CSV writer.
 
-The reference below is the pre-2026-11-07 projection (per-cell
-``list_transform`` wrapping of every column) plus a separately written
-header — the exact bytes the parity waves were validated against.
+String cells are checked against :func:`ovid2.core.engines.csv_text.write_cell`
+(the univocity writer model pinned to real Spark output by
+``test_csv_text.py``); typed cells against the pre-2026-11-07 renderer
+the parity waves were validated against (typed renderings never need
+quoting, so that part is unchanged).
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ pytest.importorskip("duckdb")
 from ovid2.core.engines import dsl
 from ovid2.core.engines._duck_column import ident
 from ovid2.core.engines._java_datetime import sql_string
+from ovid2.core.engines.csv_text import write_cell
 from ovid2.core.engines.duckdb import DuckDBEngine
 from ovid2.core.engines.duckdb_stager import _shortest_double_text, write_csv_file
 
@@ -31,6 +34,13 @@ def engine() -> Iterator[DuckDBEngine]:
     yield eng
     eng.stop_session()
     dsl.set_active_engine(None)
+
+
+def _cell_fn(delimiter: str, *, first: bool) -> object:
+    def _cell(v: str | None) -> str | None:
+        return write_cell(v, delimiter=delimiter, line_start=first)
+
+    return _cell
 
 
 def _reference_bytes(engine: DuckDBEngine, frame: object, delimiter: str, tmp: Path) -> bytes:
@@ -49,13 +59,17 @@ def _reference_bytes(engine: DuckDBEngine, frame: object, delimiter: str, tmp: P
             text = f"strftime({ref}, '%Y-%m-%d')"
         else:
             text = f"CAST({ref} AS VARCHAR)"
-        wrap = (
-            f"CASE WHEN __t IS NULL THEN '' WHEN __t = '' THEN '\"\"' "
-            f"WHEN contains(__t, {sql_string(delimiter)}) OR contains(__t, chr(10)) "
-            f"OR contains(__t, chr(13)) "
-            f"THEN chr(0) || replace(__t, chr(0), '\\' || chr(0)) || chr(0) ELSE __t END"
-        )
-        items.append(f"list_transform([{text}], lambda __t: {wrap})[1] AS {ident(name)}")
+        if t == "VARCHAR":
+            items.append(f"__spark_cell_{idx}({ref}) AS {ident(name)}")
+            conn.create_function(
+                f"__spark_cell_{idx}",
+                _cell_fn(delimiter, first=idx == 1),
+                ["VARCHAR"],
+                "VARCHAR",
+                null_handling="special",
+            )
+            continue
+        items.append(f"{text} AS {ident(name)}")
     rel = frame.relation.project(", ".join(items))  # type: ignore[attr-defined]
     body = tmp / "ref_body.csv"
     rel.create_view("__ref_view", replace=True)

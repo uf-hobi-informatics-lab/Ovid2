@@ -46,7 +46,6 @@ output_columns_from: pcornet_7_0.DEMOGRAPHIC
 | `output_columns_from` | string | optional | `<cdm>.<TABLE>`: validate the output columns against the CDM |
 | `sub_specs` | list | `union_of_specs` | sub-specs to build and union |
 | `class` | string | `custom` | dotted path to a `BaseFormatter` subclass |
-| `requires_family` | string | optional | `spark` for Spark-only custom formatters |
 
 The JSON Schema is at `src/ovid2/resources/schemas/formatter_spec.v1.json`.
 
@@ -94,8 +93,9 @@ and so on. The prefix rules out ambiguous-column bugs.
 
 `custom`
 : Names a `BaseFormatter` subclass. This is the escape hatch for logic
-  YAML can't express. Don't put Spark-only APIs in it unless you set
-  `requires_family: spark`.
+  YAML can't express. Write it with the portable column DSL
+  (`ovid2.core.engines.dsl`) so it runs on every engine — see
+  [Portable code](../09-developers/portable-code.md).
 
 Every adapter, generated from the code: [Formatter adapters](../10-reference/adapters.md).
 

@@ -67,8 +67,9 @@ Deployment:
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
+from ovid2.config.capabilities import Capability
 from ovid2.config.settings import COMMON_LISTS_DIR
 from ovid2.core.engines.dsl import col
 from ovid2.transformations.fixers.base import BaseFixer
@@ -91,6 +92,9 @@ class PatternsRemoverFixer(BaseFixer):
 
     All operations on the main DataFrame are lazy Spark transformations.
     """
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset({Capability.FN_COL, Capability.REGEX})
 
     @property
     def name(self) -> str:

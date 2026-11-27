@@ -20,8 +20,9 @@ Params:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
+from ovid2.config.capabilities import Capability
 from ovid2.mappers.base import BaseMapOp, MapOpContext
 
 if TYPE_CHECKING:
@@ -32,6 +33,17 @@ logger = logging.getLogger(__name__)
 
 class HashIdOp(BaseMapOp):
     """Deterministically hash an identifier column using a per-pipeline salt."""
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.FN_COL,
+            Capability.FN_CONCAT_WS,
+            Capability.FN_LIT,
+            Capability.FN_SHA2,
+            Capability.FN_SUBSTRING,
+        }
+    )
 
     @property
     def name(self) -> str:

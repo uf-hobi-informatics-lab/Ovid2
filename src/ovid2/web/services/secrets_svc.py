@@ -37,7 +37,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ovid2.config import paths as _paths
+from ovid2 import workspaces as ws_paths
 from ovid2.web import db as web_db
 from ovid2.web.models import SecretDetail, SecretSummary, SecretWrite, WriteResult
 
@@ -77,7 +77,7 @@ def _secrets_dir() -> Path:
     ``secrets.d`` subdirectory itself is created with ``0o700`` so a
     misconfigured ``umask`` cannot accidentally leak file listings.
     """
-    directory = _paths.secrets_dir()
+    directory = _dirs_for(None)[0]
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     # Best-effort tighten in case the directory already existed with
     # looser bits — no-op when we do not own it.
@@ -90,9 +90,28 @@ def _secrets_dir() -> Path:
     return directory
 
 
+def _dirs_for(name: str | None) -> list[Path]:
+    """Return the ``secrets.d`` directories a secret name lives in.
+
+    ``auth_*`` secrets are site-wide (sign-in, session key, service tokens)
+    and always live in the flat default tree; every other secret belongs to
+    the active workspace (adr-workspaces.md).
+    """
+    if name is not None and ws_paths.is_global_secret(f"{name}.json"):
+        return ws_paths.shared_secret_dirs()
+    return ws_paths.secret_dirs()
+
+
+def _ensure_private(directory: Path) -> Path:
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    return directory
+
+
 def _target_path(name: str) -> Path:
-    """Return the write target for a secret name (user-scoped)."""
+    """Return the write target for a secret name (workspace- or site-scoped)."""
     _validate_name(name)
+    if ws_paths.is_global_secret(f"{name}.json"):
+        return _ensure_private(ws_paths.shared_secret_dirs()[0]) / f"{name}.json"
     return _secrets_dir() / f"{name}.json"
 
 
@@ -104,11 +123,7 @@ def _existing_path(name: str) -> Path | None:
     single explicit file and is out of scope for the editor).
     """
     _validate_name(name)
-    xdg_config = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    candidates = [
-        Path(xdg_config) / "ovid2" / "secrets.d" / f"{name}.json",
-        Path("/etc/ovid2/secrets.d") / f"{name}.json",
-    ]
+    candidates = [d / f"{name}.json" for d in _dirs_for(name)]
     for candidate in candidates:
         if candidate.is_file():
             return candidate
@@ -343,9 +358,9 @@ def delete_secret(name: str, *, actor: str = "web") -> WriteResult:
     disk. This mirrors the write policy.
     """
     _validate_name(name)
-    target = _secrets_dir() / f"{name}.json"
+    target = _target_path(name)
     if not target.is_file():
-        raise SecretError(f"Secret '{name}' not found under {_secrets_dir()}.")
+        raise SecretError(f"Secret '{name}' not found under {target.parent}.")
     before_hash: str | None = None
     try:
         before_hash = _hash(_read_raw(target))

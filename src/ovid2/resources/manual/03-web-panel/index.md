@@ -12,7 +12,7 @@ the MCP server and scripts use, so nothing is possible only in the browser.
 
 | Region | Contents |
 | --- | --- |
-| **Top bar** | the animated Ovid2 mark and wordmark (home link), your user chip and *Logout* |
+| **Top bar** | the animated Ovid2 mark and wordmark (home link), your user chip, *Logout* and the **full screen** button |
 | **Left drawer** | the menu button, then navigation in five groups (*Operate*, *Explore*, *Configure*, *Access*, *System*); collapsible to an icon rail |
 | **Main area** | the current page |
 | **Right rail** | the command palette, the *Appearance* panel, and the *Agent Ovid* assistant |
@@ -22,6 +22,24 @@ button** (☰) sits at the top of the drawer and switches between full labels
 and a compact icon rail. The button stays in the same place either way, and
 the choice is remembered. On phones the drawer is hidden, and the menu
 button is in the top bar.
+
+### Full screen
+
+The **full screen** button at the right end of the top bar (or
+<kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd>) makes the
+panel fill the whole screen. The browser's tabs and address bar and your
+desktop disappear. The panel itself is unchanged: the top bar, the menu,
+the right rail and the footer all stay, and everything works as usual.
+
+Following a link keeps you in full screen.
+
+To leave, press <kbd>Esc</kbd>, click the same button (now **Exit full
+screen**), or press the shortcut again. You stay on the page you were
+viewing. In full screen <kbd>Esc</kbd> belongs to the browser, so it leaves
+full screen even while a dialog or the palette is open.
+
+*Logout* and signing in always open in the normal window, which ends full
+screen. The button is hidden in browsers without full-screen support.
 
 ### The Ovid2 mark
 
@@ -77,7 +95,7 @@ Which links you see depends on your [role](../08-operations/auth.md).
 | | Pipelines | saved pipeline configs: run, edit, schedule | [Pipelines](pipelines.md) |
 | | Workflows | chain pipelines on a canvas; triggers, runs, rollback | [Workflows](workflows.md) |
 | | Packages | installed pipeline packages, the pipeline builder, **Delete package** | [Pipeline packages](pipelines.md#pipeline-packages) |
-| | Navigator | every pipeline → table → field → function, and UDFs | [Pipeline navigator](navigator.md) |
+| | Navigator | the Atlas: one line per workflow and pipeline, fitted to the page; run, pause, edit, lineage, UDFs | [Atlas](navigator.md) |
 | | Transforms | the reusable transform library (UDFs) | [Transform library](pipelines.md#transform-library) |
 | | Jobs | history, live run pages, reports | [Jobs & runs](jobs.md) |
 | Explore | Data Space | browse, inspect and export any table | [Data Space](dataspace.md) |
@@ -93,9 +111,10 @@ Which links you see depends on your [role](../08-operations/auth.md).
 | Keys | Action |
 | --- | --- |
 | <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>K</kbd> | command palette: jump to any page by name |
+| <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd> | enter or leave full screen |
 | <kbd>/</kbd> | in the manual: focus search |
 | <kbd>↑</kbd> <kbd>↓</kbd> <kbd>→</kbd> <kbd>←</kbd> <kbd>Enter</kbd> | navigate and select in the storage trees |
-| <kbd>Esc</kbd> | close a dialog, palette or tooltip |
+| <kbd>Esc</kbd> | close a dialog, palette or tooltip; in full screen, leave full screen |
 
 ## Help tips
 
@@ -107,7 +126,8 @@ descriptions there, so the forms themselves stay short.
 
 When you create, edit or run a pipeline, the form shows only the fields
 that matter for the job type, engine and trigger you picked. For example,
-*Workers* disappears for copy / move and Snowpark, and *Transformations*
+*Workers* shows only for Spark engines (never for copy / move, DuckDB or
+Snowpark), and *Transformations*
 disappears for data-health jobs. Rarely used options, such as mirroring
 events to stderr or extra bind mounts, sit under **Advanced**. When a field
 must be one of a known set (a CDM, engine, table, column, file format,
@@ -120,7 +140,7 @@ role or secret file), it is a drop-down list rather than a text box.
   <a class="card" href="submit.md"><strong>Submit</strong><span>Build and launch a job visually.</span></a>
   <a class="card" href="pipelines.md"><strong>Pipelines</strong><span>Saved configs and pipeline packages.</span></a>
   <a class="card" href="workflows.md"><strong>Workflows</strong><span>Chain pipelines on a canvas.</span></a>
-  <a class="card" href="navigator.md"><strong>Navigator</strong><span>Field-level lineage and UDFs.</span></a>
+  <a class="card" href="navigator.md"><strong>Navigator</strong><span>The Atlas: the whole workspace as one live board.</span></a>
   <a class="card" href="jobs.md"><strong>Jobs & runs</strong><span>History, live canvas, reports.</span></a>
   <a class="card" href="dataspace.md"><strong>Data Space</strong><span>Browse, inspect and export tables.</span></a>
   <a class="card" href="storage-and-warehouses.md"><strong>Storage & warehouses</strong><span>Connections, addresses, engines.</span></a>

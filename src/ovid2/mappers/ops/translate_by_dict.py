@@ -14,8 +14,9 @@ Params:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
+from ovid2.config.capabilities import Capability
 from ovid2.mappers.base import BaseMapOp, MapOpContext
 
 if TYPE_CHECKING:
@@ -26,6 +27,17 @@ logger = logging.getLogger(__name__)
 
 class TranslateByDictOp(BaseMapOp):
     """Apply a value dictionary to one column."""
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.FN_COALESCE,
+            Capability.FN_COL,
+            Capability.FN_CREATE_MAP,
+            Capability.FN_LIT,
+            Capability.FN_WHEN,
+        }
+    )
 
     @property
     def name(self) -> str:

@@ -36,6 +36,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from ovid2 import workspaces as ws_paths
 from ovid2.config import addresses as _addresses
 from ovid2.config.engines import resolve_engine_type
 from ovid2.run_kinds import get_kind
@@ -109,22 +110,21 @@ class OverwriteRequired(PipelineError):
 
 
 def _search_paths() -> list[Path]:
-    """Return the ordered list of directories to search for pipeline JSONs."""
-    paths: list[Path] = []
-    override = os.environ.get("OVID2_PIPELINES_DIR")
-    if override:
-        paths.append(Path(override))
-    xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    paths.append(Path(xdg_cfg) / "ovid2" / "pipelines")
-    paths.append(Path.cwd() / "pipelines")
-    paths.append(Path("/etc/ovid2/pipelines"))
-    return paths
+    """Return the ordered directories searched for pipeline JSONs (workspace-scoped)."""
+    return ws_paths.search_dirs("pipelines", "OVID2_PIPELINES_DIR")
 
 
 def _writable_dir() -> Path:
-    """Return the user-scoped write target for pipeline JSONs."""
-    xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    directory = Path(xdg_cfg) / "ovid2" / "pipelines"
+    """Return (creating) the active workspace's write target for pipeline JSONs.
+
+    The ``default`` workspace keeps writing to the flat XDG directory even
+    when ``$OVID2_PIPELINES_DIR`` is set (historical behaviour: that
+    variable doubles as a pipeline-*package* root).
+    """
+    if ws_paths.is_default():
+        directory = ws_paths.kind_dir("pipelines")
+    else:
+        directory = ws_paths.write_dir("pipelines")
     directory.mkdir(parents=True, exist_ok=True)
     return directory
 
@@ -311,7 +311,9 @@ def _read_state(name: str) -> dict[str, Any] | None:
     """Return one row of ``web_pipelines_state`` as a dict, or ``None``."""
     _ensure_state_schema()
     with web_db.connect() as conn:
-        row = conn.execute("SELECT * FROM web_pipelines_state WHERE name = ?", (name,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM web_pipelines_state WHERE name = ?", (web_db.state_key(name),)
+        ).fetchone()
     return dict(row) if row is not None else None
 
 
@@ -333,7 +335,7 @@ def _write_state(
                 "INSERT INTO web_pipelines_state "
                 "(name, enabled, last_fired_at, next_fire_at, last_job_id) "
                 "VALUES (?, ?, ?, ?, ?)",
-                (name, row_enabled, last_fired_at, next_fire_at, last_job_id),
+                (web_db.state_key(name), row_enabled, last_fired_at, next_fire_at, last_job_id),
             )
         return
     new_enabled = existing["enabled"] if enabled is None else (1 if enabled else 0)
@@ -344,7 +346,7 @@ def _write_state(
         conn.execute(
             "UPDATE web_pipelines_state SET enabled = ?, last_fired_at = ?, "
             "next_fire_at = ?, last_job_id = ? WHERE name = ?",
-            (new_enabled, new_last, new_next, new_job, name),
+            (new_enabled, new_last, new_next, new_job, web_db.state_key(name)),
         )
 
 
@@ -799,7 +801,7 @@ def delete_pipeline(name: str, *, actor: str = "web") -> WriteResult:
     target.unlink()
     _ensure_state_schema()
     with web_db.connect() as conn:
-        conn.execute("DELETE FROM web_pipelines_state WHERE name = ?", (name,))
+        conn.execute("DELETE FROM web_pipelines_state WHERE name = ?", (web_db.state_key(name),))
     web_db.audit(
         actor=actor,
         action="pipeline.deleted",

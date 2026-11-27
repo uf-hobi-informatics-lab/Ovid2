@@ -28,6 +28,9 @@ class Capability(str, Enum):
     MANAGE_CONFIG = "manage_config"
     MANAGE_SECRETS = "manage_secrets"
     MANAGE_USERS = "manage_users"
+    #: Create / archive / delete workspaces and manage any workspace's
+    #: members (adr-workspaces.md). System admins only.
+    MANAGE_WORKSPACES = "manage_workspaces"
     ADMIN_ALL = "admin_all"
     USE_LLM = "use_llm"
 

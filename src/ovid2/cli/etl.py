@@ -92,9 +92,9 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         type=int,
         default=25,
         help=(
-            "Parallelism budget. Spark engines: number of Spark worker containers "
-            "in the isolated cluster. DuckDB: number of tables run concurrently "
-            "inside the single, host-sized driver container."
+            "Spark engines: number of Spark worker containers in the isolated "
+            "cluster. Ignored by DuckDB / Snowpark. Every engine runs tables one "
+            "at a time."
         ),
     )
     # Snowflake overrides (highest tier of the four-tier resolution).
@@ -201,12 +201,20 @@ def main(args: argparse.Namespace) -> int:
         assert_engine_type_supports_drivers(
             args.engine,
             [args.input_address, args.output_address],
+            output_names=[args.output_address],
         )
     except RuntimeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     except Exception as exc:  # pragma: no cover — defensive
         logger.debug("engine_compat check skipped: %s", exc)
+
+    # Capability plan check: every algorithm the run selects must be
+    # supported by the engine (``ovid2.config.capability_plan``). Refuses
+    # before any cluster starts, like the driver check above.
+    rc = _check_capability_plan(args)
+    if rc:
+        return rc
 
     # In-process bypass (``--local`` / OVID2_EXECUTION_MODE=inprocess):
     # run the pipeline directly on the host without Docker. This reaches
@@ -217,6 +225,36 @@ def main(args: argparse.Namespace) -> int:
     if not is_inside_docker():
         return _run_host_mode(args)
     return _run_container_mode(args)
+
+
+def _check_capability_plan(args: argparse.Namespace) -> int:
+    """Return ``2`` (and print why) when the engine lacks a needed capability."""
+    from ovid2.config.capability_plan import CapabilityPlanError, check_pipeline
+    from ovid2.config.engines import resolve_engine_type
+
+    try:
+        check_pipeline(
+            resolve_engine_type(getattr(args, "engine", None)),
+            args.pipeline,
+            list(getattr(args, "tables", None) or ["all"]),
+            list(getattr(args, "transformations", None) or ["all"]),
+        )
+    except CapabilityPlanError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def _load_address_or_none(
+    name: str, *, sf_overrides: Any, pipeline: str, cdm_name: str | None
+) -> Any:
+    """``load_address`` for legacy-address types; ``None`` for driver-only types."""
+    from ovid2.drivers.engine_compat import _driver_class_for_address
+
+    cls = _driver_class_for_address(name)
+    if cls is not None and not bool(getattr(cls, "spark_capable", True)):
+        return None
+    return load_address(name, sf_overrides=sf_overrides, pipeline=pipeline, cdm_name=cdm_name)
 
 
 def _run_host_mode(args: argparse.Namespace) -> int:
@@ -267,11 +305,11 @@ def _run_host_mode(args: argparse.Namespace) -> int:
         if engine_type is not None and engine_family(engine_type) == "duckdb":
             from ovid2.config import spark_sizing
 
-            sizing = spark_sizing.duckdb_container_sizing(getattr(args, "workers", None))
+            sizing = spark_sizing.duckdb_container_sizing()
             print(
                 f"[ovid2]   duckdb sizing: {sizing['cpus']} CPUs, "
                 f"{sizing['memory_gb']} GB container ({sizing['engine_memory_gb']} GB engine), "
-                f"up to {sizing['table_concurrency']} concurrent tables (Workers)."
+                "one table at a time."
             )
         return submit_to_docker(args, instance)
 
@@ -306,12 +344,6 @@ def _run_container_mode(args: argparse.Namespace) -> int:
     bus.emit(instance_started(instance_id=instance_id, pipeline=pipeline))
 
     engine = load_engine(args.engine)
-    # Fail fast if the pipeline declares a different required family
-    # (e.g. an DEMO custom formatter needs Spark but the user asked
-    # for Snowpark). The check is a cheap import; no session is built.
-    from ovid2.core.engines.family import assert_pipeline_engine_compatible
-
-    assert_pipeline_engine_compatible(engine, pipeline)
     # Spark-typed legacy ``BaseAddress`` / ``register_shared_tables`` take
     # this session; ``cli/`` may not import pyspark (even for typing).
     spark: Any = engine.get_session()
@@ -334,6 +366,9 @@ def _run_container_mode(args: argparse.Namespace) -> int:
         if _cancel_seen["fired"]:
             return
         _cancel_seen["fired"] = True
+        from ovid2.core.cancellation import request_cancel
+
+        request_cancel()
         name = _signal.Signals(signum).name
         print(f"[ovid2] {name} received — cancelling run", file=sys.stderr)
         try:
@@ -377,17 +412,15 @@ def _run_container_mode(args: argparse.Namespace) -> int:
         from ovid2.cdm.registry import resolve_cdm_for_pipeline
 
         cdm_name = resolve_cdm_for_pipeline(pipeline).name
-    input_address = load_address(
-        args.input_address,
-        sf_overrides=sf_overrides,
-        pipeline=pipeline,
-        cdm_name=cdm_name,
+    # Driver-only storage types (postgres / mssql / gcs / databricks) have no
+    # legacy ``BaseAddress``; they are reached through the engine stager
+    # (every engine, engine universality) — ``None`` here routes the run to
+    # the staged leg of :func:`run_pipeline`.
+    input_address = _load_address_or_none(
+        args.input_address, sf_overrides=sf_overrides, pipeline=pipeline, cdm_name=cdm_name
     )
-    output_address = load_address(
-        args.output_address,
-        sf_overrides=sf_overrides,
-        pipeline=pipeline,
-        cdm_name=cdm_name,
+    output_address = _load_address_or_none(
+        args.output_address, sf_overrides=sf_overrides, pipeline=pipeline, cdm_name=cdm_name
     )
     # Overwrite gate: the output address is the exact write location, so a
     # non-empty output needs an explicit ``--overwrite``; an unwritable
@@ -449,22 +482,19 @@ def _run_container_mode(args: argparse.Namespace) -> int:
                 bus=bus,
                 instance_id=instance_id,
                 load_formatter=load_formatter,
+                output_address_name=args.output_address,
+                sf_overrides=sf_overrides,
+                cdm_name=cdm_name,
             )
             failures = len(legacy_result.failed)
             for table, error in legacy_result.failed.items():
                 print(f"[ovid2] ERROR table {table}: {error}", file=sys.stderr)
             tables = legacy_result.succeeded + list(legacy_result.failed)
         if not is_legacy_ovid(pipeline):
-            from ovid2.cdm.registry import get_cdm
-            from ovid2.core.table_runner import (
-                driver_prestage,
-                run_tables,
-                source_sizes_from_driver,
-            )
+            from ovid2.core.table_runner import run_tables
 
-            # Formatters load on the main thread (imports, spec parsing),
-            # which also yields each table's source glob for the size-based
-            # ordering. A load failure fails just that table, as before.
+            # Formatters load up front (imports, spec parsing). A load
+            # failure fails just that table, as before.
             formatters: dict[str, Any] = {}
             load_errors: dict[str, Exception] = {}
             for table in tables:
@@ -481,7 +511,12 @@ def _run_container_mode(args: argparse.Namespace) -> int:
                 except Exception as exc:
                     load_errors[table] = exc
 
+            import time as _time
+
+            table_started_at: dict[str, float] = {}
+
             def _run_one(table: str) -> None:
+                table_started_at[table] = _time.monotonic()
                 if table in load_errors:
                     raise load_errors[table]
                 run_pipeline(
@@ -510,40 +545,28 @@ def _run_container_mode(args: argparse.Namespace) -> int:
                         batch_id=batch_id,
                         table=table,
                         error=str(exc),
+                        elapsed_ms=(
+                            (_time.monotonic() - table_started_at[table]) * 1000.0
+                            if table in table_started_at
+                            else None
+                        ),
                     )
                 )
                 print(f"[ovid2] ERROR table {table}: {exc}", file=sys.stderr)
 
+            # One table at a time on every engine: the running table gets
+            # the engine's whole capacity (AGENTS.md, engine universality).
+            from ovid2.core.pause import gate as _pause_gate
+
             run_result = run_tables(
                 tables,
                 _run_one,
-                engine=engine,
-                reference_tables=get_cdm(cdm_name).reference_tables,
-                table_sizes=source_sizes_from_driver(
-                    args.input_address,
-                    formatters,
-                    pipeline=pipeline,
-                    batch_id=batch_id,
-                    sf_overrides=sf_overrides,
-                    cdm_name=cdm_name,
-                ),
                 on_failure=_on_failure,
-                prestage=driver_prestage(
-                    engine,
-                    args.input_address,
-                    formatters,
-                    pipeline=pipeline,
-                    batch_id=batch_id,
-                    sf_overrides=sf_overrides,
-                    cdm_name=cdm_name,
+                before_table=_pause_gate(
+                    bus, instance_id=instance_id, pipeline=pipeline, batch_id=batch_id
                 ),
             )
             failures = len(run_result.failed)
-            if run_result.concurrency > 1:
-                print(
-                    f"[ovid2]   parallel tables: {run_result.concurrency} workers, "
-                    f"order={run_result.order}"
-                )
 
         try:
             output_address.create_complementary_tables(spark, pipeline, batch_id)
@@ -564,10 +587,13 @@ def _run_container_mode(args: argparse.Namespace) -> int:
         engine.stop_session()
 
     success = failures == 0 and not cancelled
-    print(
-        f"[ovid2] Complete. failed={failures} "
-        f"succeeded={len(tables) - failures}" + (" (cancelled)" if cancelled else "")
-    )
+    if cancelled:
+        # The run unwound before a result was recorded: no per-table
+        # counts to report (``len(tables) - failures`` would claim every
+        # table succeeded).
+        print("[ovid2] Complete. cancelled before all tables finished")
+    else:
+        print(f"[ovid2] Complete. failed={failures} succeeded={len(tables) - failures}")
 
     bus.emit(instance_finished(instance_id=instance_id, success=success))
     jsonl_bus.close()

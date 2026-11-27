@@ -1791,7 +1791,8 @@
     if (!rows.length) { var tr = el("tr"); var td = el("td", "note small", "Only you can see this report."); td.colSpan = 3; tr.appendChild(td); tb.appendChild(tr); }
     rows.forEach(function (s) {
       var tr = el("tr");
-      tr.appendChild(el("td", null, (s.principal_kind === "role" ? "Role: " : "") + s.principal));
+      tr.appendChild(el("td", null, s.principal_kind === "workspace" ? "Everyone in this workspace"
+        : (s.principal_kind === "role" ? "Role: " : "") + s.principal));
       tr.appendChild(el("td", null, s.permission === "edit" ? "can edit" : "can view"));
       var td = el("td"), x = el("button", "button small", "Remove"); x.type = "button";
       x.addEventListener("click", function () {
@@ -1894,7 +1895,7 @@
   $("[data-share-form]").principal_kind.addEventListener("change", function (e) {
     Array.prototype.forEach.call(root.querySelectorAll('[data-share-form] [data-principal]'), function (n) {
       var on = n.getAttribute("data-principal") === e.target.value;
-      n.hidden = !on; n.disabled = !on;
+      n.hidden = !on || n.type === "hidden"; n.disabled = !on;
     });
   });
 

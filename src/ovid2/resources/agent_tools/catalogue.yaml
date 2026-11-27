@@ -34,6 +34,15 @@ tools:
     path: /api/v1/health
     capability: view_public
 
+  - name: list_workspaces
+    description: >-
+      The workspace this conversation runs in (and the user's other
+      workspaces). Every other tool only sees items of the active workspace;
+      the assistant cannot switch it - the user does, from the top bar.
+    method: GET
+    path: /api/v1/me/workspaces
+    capability: view_public
+
   - name: list_cdms
     description: List the registered common data models (PCORnet, OMOP, ...).
     method: GET
@@ -370,6 +379,37 @@ tools:
         pipeline: {type: string}
         table: {type: string}
 
+  - name: atlas_subgraph
+    description: >-
+      The Ovid Atlas around the nodes the user selected (static metadata and
+      links only, never row values or secrets). Node ids look like
+      config:<name>, package:<name>, engine:<name>, address:<name>,
+      account:<name>, workflow:<name>. Returns each node's layer (storage /
+      compute / algorithm), kind, metadata and the beams linking them
+      (reads, writes, runs_on, implements, holds, step, flows). Use it when
+      the user asks about an Atlas selection; propose changes with the
+      existing PROPOSE tools.
+    method: GET
+    path: /api/v1/atlas/subgraph
+    capability: view_pipeline_data
+    params:
+      type: object
+      required: [ids]
+      properties:
+        ids: {type: string, description: "Comma-separated node ids."}
+        depth: {type: integer, minimum: 0, maximum: 2, default: 1}
+
+  - name: atlas_live
+    description: >-
+      What is running in the workspace right now: every queued / running /
+      just-finished job with its run config, pause state, per-table status and
+      timings, and the stage each running table is in (read, format,
+      deduplicate, transform, map, fix, write; steps before write only build
+      the lazy plan).
+    method: GET
+    path: /api/v1/atlas/live
+    capability: view_runs
+
   - name: check_pipeline_bindings
     description: >-
       Every name a pipeline package must match elsewhere (CDM, identity,
@@ -476,6 +516,25 @@ tools:
       properties:
         name: {type: string}
 
+  - name: list_connection_types
+    description: >-
+      Storage account types (disc, s3, azure_blob, snowflake, ...) and the
+      fields each needs (non-secret args and the NAMES of secret fields).
+      Read before create_connection.
+    method: GET
+    path: /api/v1/connections/types
+    capability: view_pipeline_data
+
+  - name: get_automation_status
+    description: >-
+      Whether automatic triggers fire on this server (dispatch_enabled -
+      watch / cron / interval on pipelines and workflows). When it is false a
+      watch workflow will not start by itself; tell the user an administrator
+      must turn on "route dispatch" under Settings.
+    method: GET
+    path: /api/v1/automation
+    capability: view_pipeline_data
+
   - name: list_engines
     description: List compute engines (pyspark, databricks, snowpark ...).
     method: GET
@@ -511,7 +570,12 @@ tools:
     capability: view_pipeline_data
 
   - name: ods_resolve
-    description: Resolve a Data Space path (/<account>/<folder...>) to its storage account, exact location, batch id and matching saved address.
+    description: >-
+      Resolve a Data Space path (/<account>/<folder...>) to its storage
+      account, exact location, batch id and matching saved address. When the
+      account does not exist the error lists close account names and, for
+      folder stores, a suggested new disc account (name + host_path) next to
+      an existing one - propose it with create_connection.
     method: GET
     path: /api/v1/dataspace/resolve
     capability: view_pipeline_data
@@ -580,7 +644,7 @@ tools:
         tables: {type: array, items: {type: string}, description: "copy/move: omit or [\"all\"] to copy every source table (server expands it); explicit names only for a subset."}
         transformations: {type: array, items: {type: string}}
         engine: {type: string, description: "Engine name from list_engines; omit for pyspark."}
-        workers: {type: integer, minimum: 1, maximum: 200}
+        workers: {type: integer, minimum: 1, maximum: 200, description: "Spark worker containers; ignored for DuckDB / Snowpark."}
         packages: {type: array, items: {type: string}}
         parts: {type: array, items: {type: string}}
         checks: {type: array, items: {type: string}}
@@ -653,10 +717,74 @@ tools:
         input_address: {type: string, description: "Saved address name from list_addresses."}
         output_address: {type: string, description: "Saved address name from list_addresses."}
 
+  - name: create_connection
+    description: >-
+      PROPOSE creating a storage account (connection). The user sees an
+      editable form prefilled with what you pass, completes any missing field
+      and clicks Run. Use it whenever a storage account the user names does not
+      exist - never tell the user you cannot create one. Pass type and the
+      non-secret args you know (list_connection_types; ods_resolve suggests a
+      disc host_path next to an existing account). NEVER pass secret values:
+      the user types passwords / keys into the form, you never see them. For
+      a read-only input feed use mount_mode ro.
+    method: POST
+    path: /api/v1/connections/{name}
+    capability: manage_config
+    params:
+      type: object
+      required: [name, type]
+      properties:
+        name: {type: string, description: "Letters, digits, '-', '_', '.', e.g. inboxarchive_nu."}
+        type: {type: string, description: "Storage type from list_connection_types, e.g. disc."}
+        args:
+          type: object
+          description: "Non-secret fields, e.g. {\"host_path\": \"/data/inbox/NU\", \"mount_mode\": \"ro\"}."
+
+  - name: create_address
+    description: >-
+      PROPOSE creating a saved address (an exact location on a storage
+      account) that runs and workflows use as input / output. The user sees
+      an editable form and clicks Run. Folder stores take location
+      {path, format}; warehouses (snowflake ...) take {database, schema}, e.g.
+      {"database": "CHAR_DEMO", "schema": "PUBLIC"}. The connection may be one
+      you propose with create_connection in the same answer.
+    method: POST
+    path: /api/v1/addresses/{name}
+    capability: manage_config
+    params:
+      type: object
+      required: [name, connection]
+      properties:
+        name: {type: string, description: "Letters, digits, '-', '_', e.g. CHAR_DEMO or inbox_demo."}
+        connection: {type: string, description: "Storage account name."}
+        location: {type: object, description: "Exact location under the account; {} = its top."}
+
   - name: cancel_job
     description: PROPOSE cancelling a queued or running job. The user must confirm.
     method: POST
     path: /api/v1/jobs/{job_id}/cancel
+    capability: submit_jobs
+    params:
+      type: object
+      required: [job_id]
+      properties:
+        job_id: {type: string}
+
+  - name: pause_job
+    description: PROPOSE pausing a queued or running job at its next table boundary (the current table finishes first). The user must confirm.
+    method: POST
+    path: /api/v1/jobs/{job_id}/pause
+    capability: submit_jobs
+    params:
+      type: object
+      required: [job_id]
+      properties:
+        job_id: {type: string}
+
+  - name: resume_job
+    description: PROPOSE resuming a paused job; it continues with its next table. The user must confirm.
+    method: POST
+    path: /api/v1/jobs/{job_id}/resume
     capability: submit_jobs
     params:
       type: object
@@ -1087,8 +1215,8 @@ tools:
       properties:
         theme:
           type: string
-          description: "Base theme (default data-factory): clinical (light, calm hospital teal, IBM Plex), matrix (black CRT, phosphor-green digital rain), super-mario-world (16-bit sky blue, cream boxes, brick red + coin gold), tatooine (dark desert dusk, sunset orange + twin suns, cut-corner panels), financial (dark trading terminal, amber + green/red tickers, dense), lego (light toy bricks, primary red/blue/yellow/green, studded cards), spaceship (dark, sci-fi terminal, teal glow), data-factory (light industrial line control: steel-grey, ink-dark drawer, drive-blue accent, condensed telemetry type)."
-          enum: [data-factory, clinical, matrix, super-mario-world, tatooine, financial, lego, spaceship]
+          description: "Base theme (default data-factory): clinical (light, calm hospital teal, IBM Plex), data-factory (light factory floor: concrete ground, safety-yellow gantry topbar, safety-orange accent, conveyor belts, stencilled titles, hazard tape), dune (light noon desert: bleached sand, basalt topbar and drawer, electric eye-blue accent, carved Cinzel capitals, wind ripples), financial (dark trading terminal, amber + green/red tickers, dense), lego (light toy bricks, primary red/blue/yellow/green, studded cards), matrix (black CRT, phosphor-green digital rain), spaceship (dark, sci-fi terminal, teal glow), super-mario-world (16-bit sky blue, cream boxes, brick red + coin gold)."
+          enum: [clinical, data-factory, dune, financial, lego, matrix, spaceship, super-mario-world]
         colors:
           type: object
           description: "Quick colour overrides as #rrggbb. surface = cards and raised panels."

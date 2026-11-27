@@ -12,7 +12,6 @@
  *   tables    — every CDM table x {format, inputs, map, fix, transform}
  *   identity  — identity constants (current value + clone default)
  *   bindings  — every name that must match other configuration, checked
- *   requires_family — the engine family the template needs
  *
  * and drives the "What it runs" table grid (with an optional table
  * subset), the Identity form (``identity__<KEY>`` fields posted to the
@@ -224,8 +223,7 @@ class PipelineBuilder {
           stat("pl-stat-total", "&#9638;", (s.configured || 0) + "/" + (s.tables || 0), "tables configured") +
           stat("pl-stat-ok", "&#8644;", s.with_mapper || 0, "with a mapper") +
           stat("pl-stat-auto", "&#9881;", s.with_fixers || 0, "with fix chains") +
-          stat("pl-stat-total", "&#8645;", ins.cdm || "?", ins.profile === "legacy_ovid" ? "CDM · legacy port" : "CDM") +
-          (ins.requires_family ? stat("pl-stat-auto", "&#9889;", ins.requires_family, "engine family required") : "");
+          stat("pl-stat-total", "&#8645;", ins.cdm || "?", ins.profile === "legacy_ovid" ? "CDM · legacy port" : "CDM");
         const cdmSel = document.getElementById("cdm");
         if (cdmSel && cdmSel.options[0]) cdmSel.options[0].textContent = "(auto — " + (ins.cdm || "from the template") + ")";
       }
@@ -264,14 +262,13 @@ class PipelineBuilder {
       ? items.map((x) => '<span class="nw-chip ' + cls + '">' + esc(x) + "</span>").join("") : '<span class="nw-muted">—</span>';
     tbody.innerHTML = ins.tables.map((t) => {
       const checked = t.configured && (!pick || !chosen.size || chosen.has(t.name));
-      return '<tr class="' + (t.configured ? "" : "is-unconfigured") + (t.requires_family ? " is-gated" : "") + '">' +
+      return '<tr class="' + (t.configured ? "" : "is-unconfigured") + '">' +
         '<td class="nw-col-pick">' + (t.configured
           ? '<input type="checkbox" name="etl_tables" value="' + esc(t.name) + '"' + (checked ? " checked" : "") +
             (pick ? "" : " disabled") + ' aria-label="Run ' + esc(t.name) + '">'
           : "") + "</td>" +
         '<td class="mono"><strong>' + esc(t.name) + "</strong>" +
           (t.is_reference ? ' <span class="nw-chip is-ref" title="Reference table — other tables\' fixers read it">ref</span>' : "") +
-          (t.requires_family ? ' <span class="nw-chip is-warn" title="Custom formatter requires a ' + esc(t.requires_family) + ' engine">' + esc(t.requires_family) + "</span>" : "") +
         "</td>" +
         "<td>" + fmt(t) + "</td>" +
         '<td class="mono small">' + list(t.inputs, "is-file") +
@@ -556,31 +553,6 @@ class PipelineBuilder {
     if (this.nav) this.nav.querySelector("[data-wz-create]").disabled = reqs.length !== 0;
   }
 
-  /* ---------------- engine gating ---------------- */
-
-  renderEngines() {
-    // UI rule U1: engines the template cannot run on are hidden (not
-    // merely disabled) — a flash line says why.
-    const required = this.isScaffold() && this.inspection ? this.inspection.requires_family : "";
-    const hint = this.form.querySelector("[data-engine-hint]");
-    for (const input of this.form.querySelectorAll('input[name="engine"]')) {
-      const fam = input.getAttribute("data-family") || "";
-      const bad = Boolean(required && fam && fam !== required);
-      input.disabled = bad;
-      const tile = input.closest(".nw-engine-tile");
-      if (tile) tile.hidden = bad;
-      if (bad && input.checked) {
-        input.checked = false;
-        const ok = this.form.querySelector('input[name="engine"]:not(:disabled)');
-        if (ok) { ok.checked = true; this.inspectSoon(); }
-      }
-    }
-    if (hint) {
-      hint.hidden = !required;
-      hint.textContent = required ? "This template runs on " + required + "-family engines only." : "";
-    }
-  }
-
   /* ---------------- review + canvas ---------------- */
 
   renderReview(reqs) {
@@ -677,7 +649,6 @@ class PipelineBuilder {
   render() {
     const reqs = this.requirements();
     const complete = reqs.length === 0;
-    this.renderEngines();
     this.renderRail(reqs);
     this.renderCanvas(complete);
     this.renderReview(reqs);

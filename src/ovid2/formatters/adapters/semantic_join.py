@@ -47,8 +47,9 @@ Lazy Spark guarantee:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
+from ovid2.config.capabilities import Capability
 from ovid2.formatters.adapters._sources import read_source
 from ovid2.formatters.adapters.base import AdapterContext, BaseAdapter
 from ovid2.formatters.spec import FormatterSpec, JoinSpec
@@ -61,6 +62,9 @@ logger = logging.getLogger(__name__)
 
 class SemanticJoinAdapter(BaseAdapter):
     """Adapter that joins sources against one or more registered vocabularies."""
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset({Capability.FN_EXPR})
 
     def resolve(self, spec: FormatterSpec, ctx: AdapterContext) -> DataFrame:
         """Read every source, then apply each join. Returns a lazy DataFrame."""
@@ -79,6 +83,7 @@ class SemanticJoinAdapter(BaseAdapter):
                 batch_id=ctx.batch_id,
                 engine=ctx.engine,
                 input_address_name=ctx.input_address_name,
+                source_handle=ctx.source,
             )
             source_views[source.name] = df
             df.createOrReplaceTempView(source.name)

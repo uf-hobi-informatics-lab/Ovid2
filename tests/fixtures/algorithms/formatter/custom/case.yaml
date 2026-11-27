@@ -1,0 +1,23 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+spec:
+  formatter: conformance_custom
+  adapter: custom
+  class: tests.integration._conformance_formatters.UpperFormatter
+files:
+  Demographic_1.txt: 'PATID|SEX|BIRTH_DATE
+
+    1|F|2000-01-01
+
+    2|M|
+
+    '
+note: custom adapter reads the class's input_file_name
+expected:
+  columns:
+  - patid
+  - sex
+  rows:
+  - - '1'
+    - F
+  - - '2'
+    - M

@@ -50,6 +50,46 @@ const STOP_SVG =
   '<rect x="5" y="5" width="14" height="14"/></svg>';
 
 /**
+ * Return the page's CSRF token, or ``""`` when none is available.
+ *
+ * The HTML routes behind the prompt button (``/jobs/<id>/cancel``,
+ * ``/launch``, ``/rerun``) are double-submit CSRF protected. A background
+ * ``fetch`` does not carry the form's hidden ``csrf_token`` field, so it
+ * must send the token in the ``X-CSRF-Token`` header instead — otherwise
+ * the request is rejected 403 and (for ■ Stop) the run keeps going.
+ * Reads ``<body hx-headers>`` first (set by ``base.html``) and falls back
+ * to the hidden input inside ``form``.
+ *
+ * @param {HTMLFormElement|null} [form]
+ * @returns {string}
+ */
+function csrfToken(form) {
+  try {
+    const raw = document.body && document.body.getAttribute("hx-headers");
+    const tok = raw ? JSON.parse(raw)["X-CSRF-Token"] : "";
+    if (tok) return String(tok);
+  } catch (_e) {
+    /* malformed hx-headers — fall through to the form field */
+  }
+  const input = form ? form.querySelector('input[name="csrf_token"]') : null;
+  return input && input.value ? input.value : "";
+}
+
+/**
+ * Headers for a same-origin background POST to an HTML run route.
+ *
+ * @param {HTMLFormElement|null} form
+ * @param {object} [extra]
+ * @returns {object}
+ */
+function fetchPostHeaders(form, extra) {
+  const headers = Object.assign({ "X-Requested-With": "fetch" }, extra || {});
+  const tok = csrfToken(form);
+  if (tok) headers["X-CSRF-Token"] = tok;
+  return headers;
+}
+
+/**
  * Boot the terminal pane inside the given ``.terminal-pane`` element.
  *
  * @param {HTMLElement} pane
@@ -238,15 +278,28 @@ export function mountTerminal(pane, opts) {
   let activeTable = null; // { name, startedMs }
   let frozenCurrentText = "";
 
-  function beginTable(name) {
-    activeTable = { name: String(name || ""), startedMs: performance.now() };
+  // Anchor a table's clock to the event's own (server) ``ts`` rather
+  // than to the moment the browser happened to read it, so replaying the
+  // log on page open does not restart every table at zero.
+  function beginTable(name, tsMs) {
+    const nowPerf = performance.now();
+    let startedMs = nowPerf;
+    if (tsMs != null && tsMs > 0) {
+      const ago = Date.now() - clientSkewMs - tsMs;
+      if (ago > 0) startedMs = nowPerf - ago;
+    }
+    activeTable = { name: String(name || ""), startedMs };
     frozenCurrentText = "";
   }
 
   function endTable(name, elapsedMs) {
     // Only clear if the completed table is the one we're tracking
     // (out-of-order events are rare but cheap to guard against).
-    if (activeTable && (!name || activeTable.name === String(name))) {
+    const n = String(name || "");
+    if (
+      activeTable &&
+      (!n || activeTable.name === n || activeTable.name.endsWith(" \u00b7 " + n))
+    ) {
       const el = Number(elapsedMs);
       const secs = Number.isFinite(el) && el >= 0
         ? el / 1000
@@ -343,17 +396,37 @@ export function mountTerminal(pane, opts) {
       promptBtn.setAttribute("aria-label", "Stopping…");
       promptBtn.setAttribute("title", "Stopping…");
     }
-    try {
-      fetch("/jobs/" + jobId + "/cancel", {
-        method: "POST",
-        headers: { "X-Requested-With": "fetch" },
-        credentials: "same-origin",
-      }).catch(function () {
-        /* best-effort; the run will still stop on its own if this fails */
-      });
-    } catch (_e) {
-      /* fetch unavailable — the plain form submit fallback handles it */
+    if (typeof window.fetch !== "function") {
+      stopFallback();
+      return;
     }
+    fetch("/jobs/" + jobId + "/cancel", {
+      method: "POST",
+      headers: fetchPostHeaders(promptForm),
+      credentials: "same-origin",
+    })
+      .then(function (r) {
+        // A refused cancel (403 CSRF, 400 already-terminal, 5xx) must not
+        // leave the button stuck on "Stopping…" while the run keeps
+        // going: drop the pending lock and hand over to the native form
+        // POST so the server's answer is shown to the operator.
+        if (!r.ok) stopFallback();
+      })
+      .catch(stopFallback);
+  }
+
+  // Undo the pending "stopping" state and submit the ■ form natively
+  // (``HTMLFormElement.submit`` bypasses our submit listener).
+  function stopFallback() {
+    stopRequested = false;
+    if (promptBtn) {
+      promptBtn.removeAttribute("data-pending");
+      promptBtn.disabled = false;
+      promptBtn.setAttribute("aria-label", "Cancel");
+      promptBtn.setAttribute("title", "Cancel");
+    }
+    setStatus("running");
+    if (promptForm) promptForm.submit();
   }
 
   // Rerun the finished run in the background (no full-document reload)
@@ -393,7 +466,7 @@ export function mountTerminal(pane, opts) {
   function postRunAction(url, confirm) {
     const init = {
       method: "POST",
-      headers: { "X-Requested-With": "fetch", Accept: "application/json" },
+      headers: fetchPostHeaders(promptForm, { Accept: "application/json" }),
       credentials: "same-origin",
     };
     if (confirm) {
@@ -697,14 +770,31 @@ export function mountTerminal(pane, opts) {
       // If the operator asked to stop, report the terminal state as a
       // cancellation (purple) regardless of the SIGTERM exit status.
       setStatus(stopRequested ? "cancelled" : ok ? "done" : "failed");
-    } else if (k === "batch.failed" || k === "table.failed") {
-      // Don't override a later terminal status; a table failure does
-      // not necessarily fail the whole run, so only reflect it if the
-      // label is still pre-terminal.
-      const cur = promptLabel ? promptLabel.dataset.status : "";
-      if (cur !== "done" && cur !== "failed" && cur !== "cancelled") {
-        setStatus(stopRequested ? "cancelled" : "failed");
-      }
+    }
+    // ``table.failed`` / ``batch.failed`` are deliberately NOT run-terminal:
+    // the pipeline moves on to the next table after a table failure, so
+    // the run is still in flight and ■ Stop must stay. Only
+    // ``instance.finished``, the end of the event stream (``onFinished``)
+    // or the server job status (``syncServerStatus``) end the run.
+  }
+
+  // Follow the server-side job status (the hidden ``#run-job-status``
+  // shim, polled by HTMX). The server is authoritative: while it says
+  // queued / running the glyph is ■ Stop, once terminal it is ▶ Play.
+  function syncServerStatus(status, endedAtMs) {
+    const s = String(status || "").toLowerCase();
+    if (!s || startedTerminal) return;
+    if (TERMINAL_STATUSES[s] === 1) {
+      setStatus(s);
+      flipPrompt(s);
+      // The server says nothing is running any more: stop every clock
+      // even when the event log never got an ``instance.finished``
+      // (SIGKILLed worker, crashed container, cancelled run).
+      stopClocks(endedAtMs);
+      return;
+    }
+    if ((s === "running" || s === "queued") && !stopRequested && !finished) {
+      setStatus(s);
     }
   }
 
@@ -965,7 +1055,25 @@ export function mountTerminal(pane, opts) {
           // Also a safety-net start anchor: some runs never emit a
           // distinct ``instance.started`` before the first table.
           backfillStartFromEvent(rec);
-          beginTable(rec.table);
+          beginTable(rec.table, parseTsMs(rec.ts));
+        } else if (k === "stage.progress" && rec.table && rec.extra && rec.extra.state) {
+          // Multi-phase runs (legacy_ovid: map every table, *then* fix,
+          // *then* write) re-activate tables per phase. Point the current
+          // clock at "<stage> · <table>" so a later phase never looks
+          // finished just because every table already left phase one.
+          const label = (rec.stage ? rec.stage + " \u00b7 " : "") + rec.table;
+          const sameTable =
+            activeTable &&
+            (activeTable.name === String(rec.table) ||
+              activeTable.name.endsWith(" \u00b7 " + rec.table));
+          if (rec.extra.state === "active") {
+            // Same table moving to its next stage keeps its clock; a table
+            // re-activated by a later phase starts a fresh one.
+            if (sameTable) activeTable.name = label;
+            else beginTable(label, parseTsMs(rec.ts));
+          } else if (rec.extra.state === "waiting" && sameTable) {
+            endTable(rec.table, null);
+          }
         } else if (
           k === TERMINAL_KINDS.TABLE_COMPLETED ||
           k === TERMINAL_KINDS.TABLE_FAILED
@@ -1022,6 +1130,33 @@ export function mountTerminal(pane, opts) {
 
   pane.dataset.mounted = "1";
 
+  // Freeze the total + per-table clocks and stop the event poll. Shared
+  // by the server-status sync; idempotent.
+  function stopClocks(endedAtMs) {
+    if (finished) return;
+    const end = Number(endedAtMs);
+    if (frozenTotalMs == null && startedAtEpochMs > 0) {
+      const endAnchor = Number.isFinite(end) && end > 0 ? end : Date.now() - clientSkewMs;
+      frozenTotalMs = Math.max(0, endAnchor - startedAtEpochMs);
+    }
+    finished = true;
+    if (activeTable) endTable(activeTable.name, null);
+    if (elapsedRaf != null) cancelAnimationFrame(elapsedRaf);
+    elapsedRaf = null;
+    paintElapsed(typeof performance !== "undefined" ? performance.now() : 0);
+    const c = pane.querySelector(".term-cursor");
+    if (c) c.style.animation = "none";
+    // Give the reader one more poll to pick up any trailing events,
+    // then stop it so nothing keeps polling a finished run.
+    setTimeout(() => {
+      try {
+        reader.close();
+      } catch (_e) {
+        /* ignore */
+      }
+    }, Math.max(1500, pollMs || 0));
+  }
+
   function close() {
     reader.close();
     if (elapsedRaf != null) cancelAnimationFrame(elapsedRaf);
@@ -1029,7 +1164,7 @@ export function mountTerminal(pane, opts) {
     delete pane.dataset.mounted;
   }
 
-  return { close };
+  return { close, syncServerStatus };
 }
 
 /* ------------------------------------------------------------------ */

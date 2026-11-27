@@ -1,0 +1,22 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+dataset: pcornet_small
+expected:
+  columns:
+  - source_table
+  - metric
+  - value_num
+  - value_str
+  - exception_flag
+  rows:
+  - - LAB_RESULT_CM
+    - LOINC_ROWS
+    - 2.0
+    - null
+    - false
+  - - LAB_RESULT_CM
+    - PANEL_LOINC_PCT
+    - 50.0
+    - null
+    - true
+note: "metric rows on the shared pcornet_small dataset \u2014 expected = PySpark reference, identical\
+  \ on DuckDB when recorded"

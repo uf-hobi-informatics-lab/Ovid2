@@ -160,7 +160,11 @@ class _Harness:
 
 
 def _spark_harness(spark: Any) -> _Harness:
-    from ovid2.core.engines.pyspark import spark_functions
+    from ovid2.core.engines.registry import load_engine_class
+    from ovid2.core.sources import local_file_reader
+
+    engine = load_engine_class("pyspark")()
+    engine._session = spark  # type: ignore[attr-defined]
 
     frames = {t: spark.createDataFrame(rows, cols) for t, (cols, rows) in _TABLES.items()}
     prior = {t: spark.createDataFrame(rows, cols) for t, (cols, rows) in _PRIOR.items()}
@@ -174,8 +178,9 @@ def _spark_harness(spark: Any) -> _Harness:
             pipeline="test",
             run_date=_RUN_DATE,
             prior_tables=prior,
-            functions=spark_functions(),
+            functions=engine.get_functions(),
             frames=frames,
+            reference_reader=local_file_reader(engine),
         )
 
     return _Harness("spark", _ctx)
@@ -200,7 +205,6 @@ def snowpark_engine() -> Iterator[Any]:
 
 
 def _snowpark_harness(engine: Any) -> _Harness:
-    native = engine.native()
 
     def _table(cols: list[str], rows: list[tuple[Any, ...]]) -> Any:
         rows_s = [tuple(None if v is None else str(v) for v in r) for r in rows]
@@ -209,20 +213,15 @@ def _snowpark_harness(engine: Any) -> _Harness:
         # like a production native read.
         name = f"OVID2_PARITY_{abs(hash(tuple(cols))) % 10**8}"
         df.write.mode("overwrite").save_as_table(name, table_type="temporary")
-        return native.table(name)
+        # The PySpark-shaped session wraps the table in a ``SnowFrame``: the
+        # engine's functions return ``SnowColumn`` wrappers, which a *native*
+        # Snowpark frame rejects ("expected Column or str").
+        return engine.get_session().table(name)
 
     frames = {t: _table(cols, rows) for t, (cols, rows) in _TABLES.items()}
     prior = {t: _table(cols, rows) for t, (cols, rows) in _PRIOR.items()}
 
-    from ovid2.transformations.quality.runner import HealthCheckRunner
-
-    runner = HealthCheckRunner(
-        session=engine.get_session(),
-        cdm=get_cdm("pcornet_7_0"),
-        pipeline="test",
-        batch_id="parity",
-        engine=engine,
-    )
+    from ovid2.core.sources import local_file_reader
 
     def _ctx() -> OpContext:
         return OpContext(
@@ -235,7 +234,7 @@ def _snowpark_harness(engine: Any) -> _Harness:
             prior_tables=prior,
             functions=engine.get_functions(),
             frames=frames,
-            reference_reader=runner._read_reference,
+            reference_reader=local_file_reader(engine),
         )
 
     return _Harness("snowpark", _ctx)

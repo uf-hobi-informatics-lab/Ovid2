@@ -18,6 +18,7 @@ import sqlite3
 from ovid2.scheduler.batch_tracker import _default_sqlite_path
 from ovid2.web import db as web_db
 from ovid2.web.models import RunListResponse, RunSummary
+from ovid2.workspaces import active_workspace, is_default
 
 
 def _report_available(instance_id: str | None) -> bool:
@@ -58,7 +59,8 @@ def _load_web_jobs(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     """
     cursor = conn.execute(
         "SELECT job_id, pipeline, batch_id, status, instance_id, submitted_by, submitted_at "
-        "FROM web_jobs ORDER BY submitted_at DESC"
+        "FROM web_jobs WHERE workspace_id = ? ORDER BY submitted_at DESC",
+        (active_workspace(),),
     )
     return list(cursor.fetchall())
 
@@ -109,7 +111,9 @@ def list_runs(
 
     # Tracker batch rows keyed by batch_id, for enrichment + orphan runs.
     batches: dict[str, sqlite3.Row] = {}
-    if _tracker_db_available():
+    # Scheduler ``data_batch`` rows predate workspaces and carry no
+    # workspace: they enrich / surface only in the ``default`` workspace.
+    if _tracker_db_available() and is_default():
         conn = sqlite3.connect(_default_sqlite_path())
         conn.row_factory = sqlite3.Row
         try:
@@ -177,7 +181,7 @@ def get_run(identifier: str) -> RunSummary | None:
         if run.batch_id == identifier or run.instance_id == identifier:
             return run
     # Fall back to a targeted batch lookup in case pagination missed it.
-    if not _tracker_db_available():
+    if not _tracker_db_available() or not is_default():
         return None
     conn = sqlite3.connect(_default_sqlite_path())
     conn.row_factory = sqlite3.Row

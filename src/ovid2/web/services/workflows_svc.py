@@ -38,6 +38,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
+from ovid2 import workspaces as ws_paths
 from ovid2.config import addresses as _addresses
 from ovid2.run_kinds import get_kind
 from ovid2.web import db as web_db
@@ -86,25 +87,13 @@ class WorkflowError(ValueError):
 
 
 def _search_paths() -> list[Path]:
-    """Ordered directories searched for workflow JSONs."""
-    paths: list[Path] = []
-    override = os.environ.get("OVID2_WORKFLOWS_DIR")
-    if override:
-        paths.append(Path(override))
-    xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    paths.append(Path(xdg_cfg) / "ovid2" / "workflows")
-    paths.append(Path("/etc/ovid2/workflows"))
-    return paths
+    """Ordered directories searched for workflow JSONs (workspace-scoped)."""
+    return ws_paths.search_dirs("workflows", "OVID2_WORKFLOWS_DIR", include_cwd=False)
 
 
 def _writable_dir() -> Path:
-    """Return (creating) the user-scoped workflow directory."""
-    override = os.environ.get("OVID2_WORKFLOWS_DIR")
-    if override:
-        directory = Path(override)
-    else:
-        xdg_cfg = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-        directory = Path(xdg_cfg) / "ovid2" / "workflows"
+    """Return (creating) the active workspace's workflow directory."""
+    directory = ws_paths.write_dir("workflows", "OVID2_WORKFLOWS_DIR")
     directory.mkdir(parents=True, exist_ok=True)
     return directory
 
@@ -488,7 +477,9 @@ def _source_can_expand(address: str) -> bool:
 def _read_state(name: str) -> dict[str, Any]:
     web_db.ensure_schema()
     with web_db.connect() as conn:
-        row = conn.execute("SELECT * FROM web_workflows_state WHERE name = ?", (name,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM web_workflows_state WHERE name = ?", (web_db.state_key(name),)
+        ).fetchone()
     return dict(row) if row is not None else {}
 
 
@@ -514,7 +505,7 @@ def _write_state(name: str, **fields: Any) -> None:
             "enabled = excluded.enabled, last_fired_at = excluded.last_fired_at, "
             "next_fire_at = excluded.next_fire_at, last_run_id = excluded.last_run_id",
             (
-                name,
+                web_db.state_key(name),
                 merged["enabled"],
                 merged["last_fired_at"],
                 merged["next_fire_at"],
@@ -528,7 +519,8 @@ def _last_run_status(run_id: str | None) -> str | None:
         return None
     with web_db.connect() as conn:
         row = conn.execute(
-            "SELECT status FROM web_workflow_runs WHERE run_id = ?", (run_id,)
+            "SELECT status FROM web_workflow_runs WHERE run_id = ? AND workspace_id = ?",
+            (run_id, ws_paths.active_workspace()),
         ).fetchone()
     return str(row["status"]) if row is not None else None
 
@@ -698,8 +690,11 @@ def delete_workflow(name: str, *, actor: str = "web") -> WriteResult:
     before = _hash(_read_doc(target))
     target.unlink()
     with web_db.connect() as conn:
-        conn.execute("DELETE FROM web_workflows_state WHERE name = ?", (name,))
-        conn.execute("DELETE FROM web_watch_cursors WHERE pipeline = ?", (f"workflow:{name}",))
+        conn.execute("DELETE FROM web_workflows_state WHERE name = ?", (web_db.state_key(name),))
+        conn.execute(
+            "DELETE FROM web_watch_cursors WHERE pipeline = ?",
+            (web_db.state_key(f"workflow:{name}"),),
+        )
     web_db.audit(actor=actor, action="workflow.deleted", target=name, before_hash=before)
     return WriteResult(name=name, path=str(target), action="deleted")
 

@@ -15,12 +15,15 @@ audience: [developer]
 | `slow` | more than a few seconds | — |
 | `real_connection` / `real_cluster` | live services; opt-in | — |
 | `perf` / `endurance` | benchmarks | — |
+| `io_matrix` | engine × storage legs against Docker emulators | heavy CI |
+| `conformance` | every algorithm × every capable engine against its fixture | heavy CI |
 
 ```bash
 uv run pytest -m "unit or contract"
 uv run pytest tests/contract/                    # all invariants
 uv run pytest tests/unit/web -q                  # one area
 uv run pytest -m integration                     # needs Java + pyspark
+bash scripts/ci_checks.sh conformance            # algorithm × engine matrix
 ```
 
 ## Fixtures and helpers
@@ -55,5 +58,13 @@ it would take to verify it.
 ## Required tests
 
 Any change to `src/ovid2/core/`, `transformations/` or `formatters/` needs
-a unit or contract test in the same commit. A change to an invariant needs
+a unit or contract test in the same commit.
+
+A new algorithm (formatter adapter, mapper op, fixer, transform or health
+check) also needs a conformance fixture:
+`tests/fixtures/algorithms/<kind>/<name>/case.yaml` with input tables and the
+expected rows. The matrix runs it on every engine that has the capabilities
+the algorithm declares; set `OVID2_TEST_SNOWPARK_ENGINE` to include a live
+Snowpark engine. A difference between engines is fixed in the engine, never
+in the fixture. A change to an invariant needs
 an updated contract test and an ADR.

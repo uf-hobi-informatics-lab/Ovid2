@@ -1,0 +1,37 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+dataset: pcornet_small
+expected:
+  columns:
+  - source_table
+  - metric
+  - value_num
+  - value_str
+  - exception_flag
+  rows:
+  - - OBS_CLIN
+    - COVERAGE_PCT
+    - 33.3333
+    - null
+    - true
+tables:
+  obs_clin:
+    columns:
+    - OBSCLINID
+    - OBSCLIN_CODE
+    - OBSCLIN_RESULT_QUAL
+    - OBSCLIN_RESULT_UNIT
+    rows:
+    - - O1
+      - 1-1
+      - POS
+      - mg
+    - - O2
+      - 2-2
+      - null
+      - null
+    - - O3
+      - null
+      - NEG
+      - UN
+note: "coverage requires both the code and the qualifier \u2014 expected = PySpark reference, identical\
+  \ on DuckDB when recorded"

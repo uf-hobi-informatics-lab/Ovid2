@@ -31,6 +31,7 @@ from ovid2.config.settings import (
     DATA_DIR,
     DOCKER_IMAGE,
     LEGACY_CREDENTIALS_DIR,
+    LEGACY_SCRATCH_ROOT,
     SPARK_LOCAL_DIR_IN_CONTAINER,
     WORK_DIR,
 )
@@ -66,10 +67,23 @@ def _secret_shadow() -> dict[str, Any]:
     Mirrors :func:`ovid2.core.docker._scoped_secret_mounts`.
     """
     from ovid2.config.secrets import scope_enforced
+    from ovid2.core.docker import workspace_isolation
 
-    if not scope_enforced():
-        return {}
-    return {"tmpfs": ["/ovid2-user-config/ovid2/secrets.d:ro,size=64k"]}
+    host_xdg_config = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
+    _env, shadows, _pp = workspace_isolation(host_xdg_config)
+    # Other workspaces' trees are always hidden (adr-workspaces.md).
+    tmpfs = [f"{s}:ro,size=64k" for s in shadows]
+    if scope_enforced():
+        tmpfs.insert(0, "/ovid2-user-config/ovid2/secrets.d:ro,size=64k")
+    return {"tmpfs": tmpfs} if tmpfs else {}
+
+
+def _workspace_pythonpath() -> str:
+    """Return the Spark nodes' ``PYTHONPATH`` (adds the job's workspace packages)."""
+    from ovid2.core.docker import workspace_isolation
+
+    host_xdg_config = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
+    return workspace_isolation(host_xdg_config)[2]
 
 
 def _volume_mounts(
@@ -158,6 +172,11 @@ def _volume_mounts(
     # workers with ``Mkdirs failed to create file:/run/user/<uid>/ovid2/…``.
     WORK_DIR.mkdir(parents=True, exist_ok=True)
     mounts.append(f"{WORK_DIR}:{WORK_DIR}:rw")
+    # The legacy stage-boundary files themselves live on real disk
+    # (``LEGACY_SCRATCH_ROOT``), also at the identical path: executors
+    # write ``legacy_rt_*`` parts there and the driver reads them back.
+    LEGACY_SCRATCH_ROOT.mkdir(parents=True, exist_ok=True)
+    mounts.append(f"{LEGACY_SCRATCH_ROOT}:{LEGACY_SCRATCH_ROOT}:rw")
     for m in extra_mounts or []:
         mounts.append(m.as_compose_volume())
     return mounts
@@ -315,9 +334,10 @@ def build_compose_dict(
                 # workers at both the source tree and the ``ovid2_pipelines``
                 # PEP 420 namespace root so pickled closures shipped from
                 # the driver deserialise against the same code.
-                "PYTHONPATH=/app/src:/app/pipelines",
+                f"PYTHONPATH={_workspace_pythonpath()}",
                 "PYSPARK_PYTHON=python3",
                 f"SPARK_LOCAL_DIRS={SPARK_LOCAL_DIR_IN_CONTAINER}",
+                f"OVID2_LEGACY_SCRATCH_DIR={LEGACY_SCRATCH_ROOT}",
                 *nss_env,
             ],
             "volumes": volumes,

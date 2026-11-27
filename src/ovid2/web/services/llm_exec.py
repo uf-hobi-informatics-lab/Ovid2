@@ -76,9 +76,12 @@ def child_env() -> dict[str, str]:
     strips ``OVID2_MCP_API_TOKEN`` / ``OVID2_LLM_API_TOKEN`` (chat_stream
     injects a fresh per-turn token explicitly) and ``OVID2_SECRETS_FILE``.
     """
+    from ovid2.config.executor_env import stamp_workspace
+
     env = build_minimal_env(os.environ, WORKER_ENV_ALLOWLIST)
     env["PYTHONUNBUFFERED"] = "1"
-    return env
+    # The LLM executor reads LLM connections / keys of the active workspace.
+    return stamp_workspace(env)
 
 
 def _argv(*args: str) -> list[str]:

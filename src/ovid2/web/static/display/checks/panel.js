@@ -17,9 +17,10 @@
  * — the same dot vocabulary as the table console.
  *
  * The right pane shows each check's detail: a live/frozen MM:SS.s clock
- * (the check's wall-clock duration, from the server-measured
- * ``elapsed_ms`` on ``check.completed`` / ``check.failed``, or timed
- * client-side from ``check.started``), plus a
+ * (the check's wall-clock duration: the saved timing embedded in the page,
+ * the server-measured ``elapsed_ms`` on ``check.completed`` /
+ * ``check.failed``, or — while running — server time since the
+ * ``check.started`` timestamp), plus a
  * ``N metric(s), N exception(s)`` summary once complete.
  *
  * Event shapes consumed (see ovid2.core.events):
@@ -29,7 +30,13 @@
  *   check.failed     { check_id, check_name, part, error, elapsed_ms }
  */
 
-import { mountRunPanel, escapeHtml } from "/static/display/run/panel.js";
+import {
+  mountRunPanel,
+  escapeHtml,
+  isTerminalItem,
+  resolveElapsed,
+} from "/static/display/run/panel.js";
+import { parseTsMs } from "/static/display/tz.js";
 
 /**
  * Mount the per-check panel.
@@ -62,6 +69,7 @@ export function mountCheckPanel(opts) {
     // Checks now carry a wall-clock duration (elapsed_ms), so the shared
     // live timer is enabled — the same MM:SS.s clock as the ETL console.
     timed: true,
+    itemKind: "check",
     statusLabel: (s) => s || "",
     // Only ``check.*`` events belong to this panel; they key off
     // ``check_id`` (with the human name preferred for display).
@@ -80,9 +88,10 @@ export function mountCheckPanel(opts) {
       const name = ev.check_name || (ev.extra && ev.extra.check_name);
       if (name) rec.displayName = name;
       if (kind === "check.started") {
+        if (isTerminalItem(rec.status)) return;
         rec.status = "running";
-        rec.startedMs = performance.now();
-        rec.startedTsMs = parseTsMs(ev.ts);
+        const ts = parseTsMs(ev.ts);
+        if (ts != null) rec.startedTsMs = ts;
       } else if (kind === "check.completed") {
         rec.status = ev.check_status || "passed";
         const exc = num(ev.exception_count);
@@ -91,13 +100,11 @@ export function mountCheckPanel(opts) {
         if (met != null) rec.metrics = met;
         const el = resolveElapsed(rec, ev);
         if (el != null) rec.elapsedMs = el;
-        rec.startedMs = null;
       } else if (kind === "check.failed") {
         rec.status = "error";
         rec.error = String(ev.error || (ev.extra && ev.extra.error) || "");
         const el = resolveElapsed(rec, ev);
         if (el != null) rec.elapsedMs = el;
-        rec.startedMs = null;
       }
     },
     // Right-pane detail body for a check. The section header (rendered by
@@ -228,30 +235,6 @@ function dedupe(list) {
 
 function num(v) {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
-}
-
-// Local copies of the timing helpers the shared panel uses internally
-// (not exported). ``parseTsMs`` mirrors tz.js; ``resolveElapsed`` mirrors
-// run/panel.js so the checks folder can freeze the clock at completion.
-function parseTsMs(ts) {
-  if (!ts) return null;
-  const ms = Date.parse(ts);
-  return Number.isFinite(ms) ? ms : null;
-}
-
-function resolveElapsed(rec, ev) {
-  const server = Number(
-    (ev && ev.elapsed_ms) != null
-      ? ev.elapsed_ms
-      : ev && ev.extra && ev.extra.elapsed_ms,
-  );
-  if (Number.isFinite(server) && server >= 0) return server;
-  const endTsMs = parseTsMs(ev && ev.ts);
-  if (rec.startedTsMs != null && endTsMs != null && endTsMs >= rec.startedTsMs) {
-    return endTsMs - rec.startedTsMs;
-  }
-  if (rec.startedMs != null) return performance.now() - rec.startedMs;
-  return null;
 }
 
 export default { id: "check-panel", mount: mountCheckPanel };

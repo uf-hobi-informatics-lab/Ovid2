@@ -51,10 +51,60 @@ row is effectively corrupted in legacy), and values that start with
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import os
+import re
+import tempfile
+import threading
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from pyspark.sql import DataFrame
+
+
+_INSTANCE_RE = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{6}$")
+
+#: Prefix of the per-run folder holding every round-trip / inference
+#: scratch dir (``{LEGACY_SCRATCH_ROOT}/legacy_rt-<instance_id>/``).
+RUN_SCRATCH_PREFIX: str = "legacy_rt-"
+
+
+def run_scratch_dir() -> str:
+    """Return (and create) this run's legacy scratch folder.
+
+    Every ``legacy_rt_*`` / ``legacy_infer_*`` stage-boundary dir of a run
+    lives in one folder named after its instance id, so the runner removes
+    it as a whole when the run ends and
+    :func:`ovid2.core.isolation.cleanup_stale_instances` reaps a crashed
+    run's folder. It sits under
+    :data:`~ovid2.config.settings.LEGACY_SCRATCH_ROOT` (real disk, not the
+    ``WORK_DIR`` tmpfs). Falls back to that root when no instance id is set.
+    """
+    from ovid2.config.settings import LEGACY_SCRATCH_ROOT
+
+    base = str(LEGACY_SCRATCH_ROOT)
+    os.makedirs(base, exist_ok=True)
+    instance_id = os.environ.get("OVID2_INSTANCE_ID", "").strip()
+    if not _INSTANCE_RE.match(instance_id):
+        return base
+    path = os.path.join(base, RUN_SCRATCH_PREFIX + instance_id)
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _mkscratch(prefix: str) -> str:
+    """Create one stage-boundary scratch dir inside :func:`run_scratch_dir`."""
+    return tempfile.mkdtemp(prefix=prefix, dir=run_scratch_dir())
+
+
+def _is_spark(df: Any) -> bool:
+    """Return ``True`` when ``df`` is a real Spark DataFrame (Spark-family engine).
+
+    Spark keeps the original Spark-native implementation (Spark *is* the
+    oracle); every other engine uses the pinned univocity model
+    (:mod:`ovid2.core.engines.csv_text`) and :mod:`ovid2.legacy.text_io`.
+    """
+    return type(df).__module__.startswith("pyspark.")
+
 
 #: Writer options identical to the legacy ``write_pyspark_output_file``.
 _WRITE_OPTIONS: dict[str, str] = {"sep": "\t", "quote": ""}
@@ -91,19 +141,29 @@ LEGACY_TEXT_KEY: str = "legacy_ovid.frame_is_text"
 #: Reader-view frame (``id``) → the file text it was read from. Lets the
 #: ``legacy_select`` op re-read the *file* (``append_additional_fields``)
 #: without threading the text frame through the generic mapper engine.
-_SOURCE_TEXT: dict[int, DataFrame] = {}
+#: Thread-local: the legacy runner maps several tables at once, one per
+#: worker thread, and each thread has exactly one table in flight.
+_SOURCE_TEXT_LOCAL = threading.local()
+
+
+def _source_text_map() -> dict[int, DataFrame]:
+    mapping: dict[int, DataFrame] | None = getattr(_SOURCE_TEXT_LOCAL, "mapping", None)
+    if mapping is None:
+        mapping = _SOURCE_TEXT_LOCAL.mapping = {}
+    return mapping
 
 
 def remember_source_text(reader_view: DataFrame, text: DataFrame) -> DataFrame:
     """Record that ``reader_view`` is ``R(text)``; returns ``reader_view``."""
-    _SOURCE_TEXT.clear()  # one table in flight at a time (legacy runner)
-    _SOURCE_TEXT[id(reader_view)] = text
+    mapping = _source_text_map()
+    mapping.clear()  # one table in flight per thread (legacy runner)
+    mapping[id(reader_view)] = text
     return reader_view
 
 
 def source_text(reader_view: DataFrame) -> DataFrame:
     """Return the file text ``reader_view`` was read from (W of it if unknown)."""
-    text = _SOURCE_TEXT.get(id(reader_view))
+    text = _source_text_map().get(id(reader_view))
     return text if text is not None else legacy_write_normalise(reader_view)
 
 
@@ -118,10 +178,12 @@ def legacy_write_normalise(df: DataFrame) -> DataFrame:
         exactly the text the legacy writer would emit for that cell
         (``'""'`` for an empty string); nulls stay null.
     """
-    from pyspark.sql import functions as sf
-
     if not df.columns:
         return df
+    if not _is_spark(df):
+        return cast("DataFrame", _portable_write_normalise(df))
+    from pyspark.sql import functions as sf
+
     first, *rest = df.columns
 
     def _render(name: str, options: dict[str, str]) -> Any:
@@ -161,16 +223,22 @@ def legacy_read_normalise(df: DataFrame, *, reader: str = "spark_read") -> DataF
     Returns:
         The frame as the legacy reader saw it (header names made safe).
     """
-    import tempfile
-
-    from ovid2.config.settings import WORK_DIR
-
     if not df.columns:
         return df
     spark = df.sparkSession
-    scratch = tempfile.mkdtemp(prefix="legacy_rt_", dir=str(WORK_DIR))
-    # Scratch lives under WORK_DIR and must outlive the lazy read plan; it is
-    # removed with the run's work directory.
+    scratch = _mkscratch("legacy_rt_")
+    if not _is_spark(df):
+        from ovid2.legacy.text_io import read_tab_file, write_text_file
+
+        write_text_file(df, scratch, "t.csv")
+        return cast(
+            "DataFrame",
+            read_tab_file(
+                spark, scratch + "/t.csv", escape=READER_OPTIONS[reader].get("escape", "\\")
+            ),
+        )
+    # Scratch lives in the run's scratch folder (``run_scratch_dir``) and must
+    # outlive the lazy read plan; the runner removes the folder at run end.
     write_legacy_text(df, scratch, "t.csv")
     opts = dict(READER_OPTIONS[reader])
     return spark.read.csv(
@@ -229,6 +297,12 @@ def write_legacy_text(
     import os
     import shutil
 
+    if not _is_spark(df):
+        from ovid2.legacy.text_io import write_text_file
+
+        write_text_file(df, folder, output_file_name, header=header)
+        return
+
     from pyspark.sql import functions as sf
 
     os.makedirs(folder, exist_ok=True)
@@ -281,16 +355,15 @@ def legacy_infer_schema_view(text: DataFrame, spark: Any) -> DataFrame:
     Returns:
         A frame with the reader's safe header names; values as legacy saw them.
     """
-    import tempfile
+    if not _is_spark(text):
+        return cast("DataFrame", _portable_infer_schema_view(text, spark))
 
     from pyspark.sql import functions as sf
     from pyspark.sql.types import StringType
 
-    from ovid2.config.settings import WORK_DIR
-
-    scratch = tempfile.mkdtemp(prefix="legacy_infer_", dir=str(WORK_DIR))
-    # Scratch lives under WORK_DIR (``legacy_infer_*``) and must outlive the
-    # lazy plan; it is removed with the run's work directory.
+    scratch = _mkscratch("legacy_infer_")
+    # Scratch lives in the run's scratch folder (``legacy_infer_*``) and must
+    # outlive the lazy plan; the runner removes the folder at run end.
     write_legacy_text(text, scratch, "dedup.csv")
     # Legacy mapper sessions ran with Spark 3.3 defaults: JVM in UTC and the
     # default ``timeParserPolicy`` (EXCEPTION) — under Ovid2's production
@@ -326,3 +399,132 @@ def legacy_infer_schema_view(text: DataFrame, spark: Any) -> DataFrame:
                 spark.conf.set(k, v)
     result: DataFrame = spark.read.parquet(scratch + "/inferred").toDF(*inferred.columns)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Portable (non-Spark) implementations
+# ---------------------------------------------------------------------------
+
+
+#: DuckDB types whose ``VARCHAR`` cast equals ``python_value_text`` of the
+#: value Python receives (``str`` / ``int`` → ``str()``, ``bool`` →
+#: ``true``/``false``). Floats, decimals and temporals keep the exact
+#: Python converter (Java ``Double.toString`` / ``str(datetime)``).
+_NATIVE_TEXT_TYPES: tuple[str, ...] = (
+    "VARCHAR",
+    "BIGINT",
+    "INTEGER",
+    "SMALLINT",
+    "TINYINT",
+    "HUGEINT",
+    "UBIGINT",
+    "UINTEGER",
+    "USMALLINT",
+    "UTINYINT",
+    "BOOLEAN",
+    '"NULL"',
+    "NULL",
+)
+
+
+def _native_write_normalise(df: Any) -> Any | None:
+    """W as native DuckDB SQL, or ``None`` when ``df`` is not a DuckDB frame.
+
+    Columns of :data:`_NATIVE_TEXT_TYPES` are rendered with
+    :func:`ovid2.core.engines.csv_text.write_cell_sql` (parallel, no
+    Python per cell); every other column keeps the exact per-cell Python
+    converter, so the output text is identical to the UDF path.
+    """
+    select_native = getattr(df, "select_native", None)
+    dtypes = getattr(df, "dtypes", None)
+    if not callable(select_native) or not dtypes:
+        return None
+    from ovid2.core.engines.duckdb_stager import native_text_enabled
+
+    if not native_text_enabled():
+        return None
+    from ovid2.core.engines import dsl
+    from ovid2.core.engines._duck_column import ident
+    from ovid2.core.engines._duck_udf import python_value_text
+    from ovid2.core.engines.csv_text import write_cell, write_cell_sql
+    from ovid2.core.engines.types import StringType
+
+    native = [str(t).upper() in _NATIVE_TEXT_TYPES for _n, t in dtypes]
+    if not all(native):
+        cols = list(df.columns)
+        positional = df.toDF(*[f"_p{i}" for i in range(len(cols))])
+        first_udf = dsl.udf(
+            lambda v: write_cell(python_value_text(v), line_start=True), StringType()
+        )
+        mid_udf = dsl.udf(
+            lambda v: write_cell(python_value_text(v), line_start=False), StringType()
+        )
+        # Pre-render the Python-only columns, then run the native SQL on all.
+        positional = positional.select(
+            *[
+                dsl.col(f"_p{i}")
+                if native[i]
+                else (first_udf if i == 0 else mid_udf)(dsl.col(f"_p{i}")).alias(f"_p{i}")
+                for i in range(len(cols))
+            ]
+        )
+        items = [
+            (
+                f"{write_cell_sql(f'CAST(#{i + 1} AS VARCHAR)', line_start=i == 0)} AS {ident(name)}"
+                if native[i]
+                else f"#{i + 1} AS {ident(name)}"
+            )
+            for i, name in enumerate(cols)
+        ]
+        return positional.select_native(items)
+    items = [
+        f"{write_cell_sql(f'CAST(#{i + 1} AS VARCHAR)', line_start=i == 0)} AS {ident(name)}"
+        for i, (name, _t) in enumerate(dtypes)
+    ]
+    return select_native(items)
+
+
+def _portable_write_normalise(df: Any) -> Any:
+    """W on a non-Spark engine: each cell → the Spark writer's text for it."""
+    native = _native_write_normalise(df)
+    if native is not None:
+        return native
+    from ovid2.core.engines import dsl
+    from ovid2.core.engines._duck_udf import python_value_text
+    from ovid2.core.engines.csv_text import write_cell
+    from ovid2.core.engines.types import StringType
+
+    def _first(v: Any) -> str | None:
+        return write_cell(python_value_text(v), line_start=True)
+
+    def _mid(v: Any) -> str | None:
+        return write_cell(python_value_text(v), line_start=False)
+
+    first_udf = dsl.udf(_first, StringType())
+    mid_udf = dsl.udf(_mid, StringType())
+    cols = list(df.columns)
+    positional = df.toDF(*[f"_p{i}" for i in range(len(cols))])
+    return positional.select(
+        *[
+            (first_udf if i == 0 else mid_udf)(dsl.col(f"_p{i}")).alias(name)
+            for i, name in enumerate(cols)
+        ]
+    )
+
+
+def _portable_infer_schema_view(text: Any, spark: Any) -> Any:
+    """``legacy_infer_schema_view`` on a non-Spark engine.
+
+    Re-creates the dedup file from its text, then applies Spark 3.3's CSV
+    schema inference (``inferSchema=true``, UTC, ``EXCEPTION`` time
+    policy, no ``preferDate``) column by column: a column whose every
+    non-null value parses as int → long → decimal → double → timestamp →
+    boolean takes that type and is rendered with the writer's text for it.
+    """
+    from ovid2.legacy.spark33_infer import infer_and_render
+    from ovid2.legacy.text_io import read_tab_file, write_text_file
+
+    scratch = _mkscratch("legacy_infer_")
+    write_text_file(text, scratch, "dedup.csv")
+    view = read_tab_file(spark, scratch + "/dedup.csv", escape="\\")
+    return infer_and_render(view, spark)

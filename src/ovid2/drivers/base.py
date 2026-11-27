@@ -415,6 +415,11 @@ class Driver(ABC):
     #: ``tests/contract/test_driver_data_plane_declared.py``).
     spark_capable: ClassVar[bool] = True
 
+    #: ``True`` for storage no engine can write (Access). Refused as an
+    #: *output* at plan time for every engine alike
+    #: (:mod:`ovid2.drivers.engine_compat`); reads work on every engine.
+    read_only: ClassVar[bool] = False
+
     # ------------------------------------------------------------------
     # Metadata (classmethods, no heavy imports)
     # ------------------------------------------------------------------

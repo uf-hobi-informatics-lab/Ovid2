@@ -15,7 +15,7 @@ class DatabricksConnection(BaseConnection):
     def test(self) -> ConnectionTestResult:
         """Probe with a ``SELECT 1`` via ``databricks-sql-connector``."""
         try:
-            from databricks import sql  # type: ignore[import-not-found]
+            from databricks import sql  # type: ignore[import-not-found,attr-defined,unused-ignore]
         except ImportError:
             return ConnectionTestResult(
                 ok=False,

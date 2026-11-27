@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import TYPE_CHECKING, Any
 
+from ovid2.config.capabilities import Capability
 from ovid2.transformations.quality.results import MetricRow
 
 if TYPE_CHECKING:
@@ -62,15 +63,14 @@ class OpContext:
         run_date: Reference date for future-date checks.
         prior_tables: Optional map of uppercased table name -> DataFrame for
             the prior refresh (freshness delta). Empty when no prior input.
-        functions: The engine's column DSL. ``None`` means the Spark
-            family (back-compat for callers that pass a bare
-            ``SparkSession``).
+        functions: The engine's column DSL (required —
+            ``engine.get_functions()``).
         frames: Uppercased table name -> engine DataFrame registered by the
             runner. Consulted before ``session.table`` so non-Spark engines
             need no temp views.
         reference_reader: ``(path, delimiter) -> DataFrame`` used to load
-            packaged reference CSVs through the engine's stager. ``None``
-            falls back to the Spark ``session.read`` CSV reader.
+            packaged reference CSVs through the engine's stager (supplied by
+            the runner's caller).
     """
 
     session: Any
@@ -86,9 +86,9 @@ class OpContext:
 
     def __post_init__(self) -> None:
         if self.functions is None:
-            from ovid2.core.engines.pyspark import spark_functions
-
-            self.functions = spark_functions()
+            raise ValueError(
+                "OpContext needs the engine's functions DSL (functions=engine.get_functions())."
+            )
 
     def table(self, name: str) -> Any:
         """Return the engine DataFrame for ``name`` (case-insensitive)."""
@@ -118,10 +118,9 @@ class OpContext:
             path: Absolute path to the CSV inside the installed package.
             delimiter: Field separator.
         """
-        if self.reference_reader is not None:
-            return self.reference_reader(path, delimiter)
-        # Spark-family fallback (duck-typed; no pyspark import here).
-        return self.session.read.option("header", True).option("sep", delimiter).csv(path)
+        if self.reference_reader is None:
+            raise RuntimeError("OpContext: no reference_reader supplied for a reference file.")
+        return self.reference_reader(path, delimiter)
 
 
 class OperatorCollisionError(ValueError):
@@ -130,11 +129,20 @@ class OperatorCollisionError(ValueError):
 
 def operator(
     name: str,
+    *,
+    requires: frozenset[Capability] | set[Capability] = frozenset(),
 ) -> Callable[
     [Callable[[OpContext, CheckSpec], list[MetricRow]]],
     Callable[[OpContext, CheckSpec], list[MetricRow]],
 ]:
     """Register a function as the operator named ``name``.
+
+    Args:
+        name: Operator name (``operator:`` in a check spec).
+        requires: Engine capabilities the operator uses (``fn:*`` functions
+            plus features such as ``regex``), stored as ``fn.__requires__``.
+            Checked against the source by
+            ``tests/contract/test_algorithm_requires_declared.py``.
 
     Raises:
         OperatorCollisionError: When ``name`` is already registered by a
@@ -153,6 +161,7 @@ def operator(
                 f"health operator {name!r} already registered by "
                 f"{existing.__module__}.{existing.__qualname__}"
             )
+        fn.__requires__ = frozenset(requires)  # type: ignore[attr-defined]
         _OPERATORS[name] = fn
         return fn
 
@@ -377,7 +386,7 @@ def _pk_uniqueness(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
 # --------------------------------------------------------------------------- #
 
 
-@operator("future_date")
+@operator("future_date", requires={Capability.FN_COL, Capability.FN_LIT, Capability.FN_TO_DATE})
 def _future_date(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     """DC 2.02 / 2.01: date columns later than the run date are implausible.
 
@@ -440,7 +449,10 @@ def _future_date(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
 # --------------------------------------------------------------------------- #
 
 
-@operator("valueset_membership")
+@operator(
+    "valueset_membership",
+    requires={Capability.FN_COL, Capability.FN_LIT, Capability.FN_TRIM, Capability.FN_UPPER},
+)
 def _valueset_membership(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     """DC 1.06 (Table IIB): value out of the CDM-declared bounded valueset.
 
@@ -531,7 +543,10 @@ def _valueset_membership(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     return rows
 
 
-@operator("null_rate")
+@operator(
+    "null_rate",
+    requires={Capability.FN_COL, Capability.FN_LIT, Capability.FN_TRIM, Capability.FN_UPPER},
+)
 def _null_rate(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     """DC 3.09: per-column null / flavour-of-null rate (completeness heatmap)."""
     fn = ctx.functions
@@ -582,7 +597,7 @@ def _null_rate(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
 # --------------------------------------------------------------------------- #
 
 
-@operator("orphan_fk")
+@operator("orphan_fk", requires={Capability.FN_COL})
 def _orphan_fk(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     """Referential-integrity sweep over declared child->parent relationships.
 
@@ -652,7 +667,10 @@ def _orphan_fk(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     return rows
 
 
-@operator("mapping_coverage")
+@operator(
+    "mapping_coverage",
+    requires={Capability.FN_COL, Capability.FN_LIT, Capability.FN_TRIM, Capability.FN_UPPER},
+)
 def _mapping_coverage(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     """Mapping / vocabulary coverage rollup over the pipeline dictionaries."""
     import importlib
@@ -801,7 +819,7 @@ def _populated_expr(fn: Any, column: str, fon_upper: set[str]) -> Any:
     return present
 
 
-@operator("refresh_date_present")
+@operator("refresh_date_present", requires={Capability.FN_COL, Capability.FN_TO_DATE})
 def _refresh_date_present(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     """DC 1.18 (Table ID): a present CDM table has no valid data-refresh date.
 
@@ -854,7 +872,10 @@ def _refresh_date_present(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     return rows
 
 
-@operator("panel_loinc_rate")
+@operator(
+    "panel_loinc_rate",
+    requires={Capability.FN_COL, Capability.FN_LIT, Capability.FN_TRIM, Capability.FN_UPPER},
+)
 def _panel_loinc_rate(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     """DC 1.20 (Table IIG): >5% of LOINC records are panel-type LOINCs.
 
@@ -910,7 +931,10 @@ def _panel_loinc_rate(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     return rows
 
 
-@operator("code_placement")
+@operator(
+    "code_placement",
+    requires={Capability.FN_COL, Capability.FN_LIT, Capability.FN_TRIM, Capability.FN_UPPER},
+)
 def _code_placement(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     """DC 1.13 / 1.16 (Table IIF): code-type errors and misplaced codes.
 
@@ -955,7 +979,7 @@ def _code_placement(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     return rows
 
 
-@operator("illogical_date")
+@operator("illogical_date", requires={Capability.FN_COL, Capability.FN_TO_DATE})
 def _illogical_date(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     """DC 2.03 (Table IIIC): illogical date sequences for a patient's records.
 
@@ -1000,7 +1024,9 @@ def _illogical_date(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     return rows
 
 
-@operator("implausible_value")
+@operator(
+    "implausible_value", requires={Capability.FN_COL, Capability.FN_LIT, Capability.FN_TO_DOUBLE}
+)
 def _implausible_value(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     """DC 2.02 (Table IIIB): >10% of numeric values are implausibly low/high.
 
@@ -1050,7 +1076,10 @@ def _implausible_value(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     return rows
 
 
-@operator("encounter_per_visit")
+@operator(
+    "encounter_per_visit",
+    requires={Capability.FN_COL, Capability.FN_LIT, Capability.FN_TRIM, Capability.FN_UPPER},
+)
 def _encounter_per_visit(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     """DC 2.04 (Table IIID): >2 encounters per distinct visit for ED/EI/IP.
 
@@ -1092,7 +1121,10 @@ def _encounter_per_visit(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     return rows
 
 
-@operator("records_per_encounter")
+@operator(
+    "records_per_encounter",
+    requires={Capability.FN_COL, Capability.FN_LIT, Capability.FN_TRIM, Capability.FN_UPPER},
+)
 def _records_per_encounter(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     """DC 3.01 / 3.02 (Table IVA / IVB): too few dx/px records per encounter.
 
@@ -1145,7 +1177,10 @@ def _records_per_encounter(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     return rows
 
 
-@operator("field_completeness")
+@operator(
+    "field_completeness",
+    requires={Capability.FN_COL, Capability.FN_LIT, Capability.FN_TRIM, Capability.FN_UPPER},
+)
 def _field_completeness(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     """DC 3.03 (Table IVC / IVD): key fields missing/unmapped in >=10% of rows.
 
@@ -1185,7 +1220,10 @@ def _field_completeness(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     return rows
 
 
-@operator("known_value_coverage")
+@operator(
+    "known_value_coverage",
+    requires={Capability.FN_COL, Capability.FN_LIT, Capability.FN_TRIM, Capability.FN_UPPER},
+)
 def _known_value_coverage(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     """DC 3.08/3.09/3.12/3.15/3.16/3.17 (Table IVH/IVI): <80% populated coverage.
 
@@ -1288,7 +1326,16 @@ def _patient_coverage(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     return rows
 
 
-@operator("monthly_volume")
+@operator(
+    "monthly_volume",
+    requires={
+        Capability.FN_COL,
+        Capability.FN_COUNT,
+        Capability.FN_DATE_FORMAT,
+        Capability.FN_LIT,
+        Capability.FN_TO_DATE,
+    },
+)
 def _monthly_volume(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     """DC 2.08 / 3.07 / 3.11: most-recent-month volume anomaly.
 
@@ -1350,7 +1397,18 @@ def _monthly_volume(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     return rows
 
 
-@operator("monthly_volume_zscore")
+@operator(
+    "monthly_volume_zscore",
+    requires={
+        Capability.FN_COL,
+        Capability.FN_COUNT,
+        Capability.FN_DATE_FORMAT,
+        Capability.FN_LIT,
+        Capability.FN_TO_DATE,
+        Capability.FN_TRIM,
+        Capability.FN_UPPER,
+    },
+)
 def _monthly_volume_zscore(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     """DC 2.08 (Table IIIG): monthly-volume outlier via the SAS z-score/NSD test.
 
@@ -1528,7 +1586,9 @@ def _refresh_trend(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     return rows
 
 
-@operator("rxnorm_tier_coverage")
+@operator(
+    "rxnorm_tier_coverage", requires={Capability.FN_COL, Capability.FN_LIT, Capability.FN_TRIM}
+)
 def _rxnorm_tier_coverage(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     """DC 3.08 / 3.15 (Table IVH): Tier 1 RxNorm coverage below 80%.
 
@@ -1621,7 +1681,16 @@ def _rxnorm_tier_reference(ctx: OpContext) -> Any:
     )
 
 
-@operator("bad_zip")
+@operator(
+    "bad_zip",
+    requires={
+        Capability.FN_COL,
+        Capability.FN_LENGTH,
+        Capability.FN_LIT,
+        Capability.FN_TRIM,
+        Capability.REGEX,
+    },
+)
 def _bad_zip(ctx: OpContext, spec: CheckSpec) -> list[MetricRow]:
     """DC 1.17 (Table IID row 9): ZIP / FIPS-location conformance.
 

@@ -118,8 +118,8 @@ ops:
 | reshape | `select_columns`, `drop_columns`, `reduce`, `explode`, `unpivot`, `pivot`, `add_row_number`, `rank`, `dense_rank` |
 | sampling | `random_sample`, `limit`, `stratified_sample`, `head_by_group` |
 
-The window-based ops (`add_row_number`, `rank`, `dense_rank`,
-`stratified_sample`, `head_by_group`) need a Spark-family engine.
+Every op, including the window-based ones (`add_row_number`, `rank`,
+`dense_rank`, `stratified_sample`, `head_by_group`), runs on every engine.
 Parameters for every op: [Transforms catalogue](../10-reference/transforms.md).
 
 ## Discover and validate

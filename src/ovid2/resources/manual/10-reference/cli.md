@@ -188,7 +188,7 @@ Run the format → deduplicate → map → fix → write pipeline for one or mor
 | `--transformations` `TRANSFORMATIONS` | Transformations to run in canonical order. |  | `['all']` |
 | `--engine` `ENGINE` | Compute engine (default: pyspark). |  | `pyspark` |
 | `--overwrite` | Allow writing into an output location that already holds tables (the address is the exact write location; without this flag the run refuses to overwrite existing data). |  |  |
-| `--workers` `WORKERS` | Parallelism budget. Spark engines: number of Spark worker containers in the isolated cluster. DuckDB: number of tables run concurrently inside the single, host-sized driver container. |  | `25` |
+| `--workers` `WORKERS` | Spark engines: number of Spark worker containers in the isolated cluster. Ignored by DuckDB / Snowpark. Every engine runs tables one at a time. |  | `25` |
 | `--sf_database` `SF_DATABASE` | Deprecated: replaces the Snowflake address DATABASE (prefer an address naming DATABASE/SCHEMA). |  |  |
 | `--sf_account` `SF_ACCOUNT` | Snowflake ACCOUNT override. |  |  |
 | `--sf_schema` `SF_SCHEMA` | Deprecated: replaces the Snowflake address SCHEMA (prefer an address naming DATABASE/SCHEMA). |  |  |

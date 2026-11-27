@@ -38,6 +38,24 @@
  * ``onEvents`` hook (see mount.js). We keep an in-memory aggregate per
  * item and re-render the affected DOM on each batch.
  *
+ * Timers are anchored to *server* time, never to when an event was read:
+ *
+ *   - On mount the panel seeds every item from the saved timings the run
+ *     page embeds (``<script class="run-item-times">``, built by
+ *     ``run_items_svc``): a finished item shows its frozen saved duration
+ *     immediately, and a running item counts from its real start.
+ *   - A running clock is ``serverNow - startedTs`` where ``serverNow`` is
+ *     ``Date.now()`` corrected by the pane's ``data-server-now-ms`` skew,
+ *     so re-opening the page never restarts it from ``00:00``.
+ *   - Replayed events never reopen a finished item, and once the run is
+ *     over (``data-status`` terminal or ``instance.finished`` seen) no
+ *     clock ticks — a still-"running" item freezes at the run's end.
+ *   - Multi-phase runs (``legacy_ovid``) pause a table between phases with
+ *     per-table ``stage.progress`` events (``extra.state`` = ``waiting`` /
+ *     ``active``). A ``waiting`` table's clock is frozen; its time is the
+ *     sum of its active segments (``elapsedMs`` accumulated + the current
+ *     segment from ``activeSinceMs``).
+ *
  * Timestamps rendered in the detail list are converted to the operator's
  * configured display timezone (``data-display-tz`` on the console pane)
  * via the shared tz helper.
@@ -86,6 +104,8 @@ const AUTOSCROLL_SLOP_PX = 12;
  *   Omit for purely reactive panels.
  * @param {HTMLElement} [config.paneEl] - the ``.terminal-pane`` (for
  *   ``data-display-tz`` etc.); defaults to the summary element's closest.
+ * @param {string} [config.itemKind="table"] - which saved timings to seed
+ *   from the page's ``run-item-times`` island (``table`` / ``check``).
  * @returns {{ handleEvents:(events:Array<object>)=>void, close:()=>void }|null}
  */
 export function mountRunPanel(config) {
@@ -117,6 +137,21 @@ export function mountRunPanel(config) {
   const paneEl =
     cfg.paneEl || summaryEl.closest(".terminal-pane") || null;
   const tz = cfg.tz || readDisplayTz(paneEl);
+  const itemKind = cfg.itemKind || "table";
+
+  // Server-clock anchoring. ``clientSkewMs`` maps the browser clock onto
+  // the server's so ``serverNow() - startedTsMs`` is the real elapsed time.
+  const serverNowAttr = numData(paneEl, "serverNowMs");
+  const clientSkewMs = serverNowAttr > 0 ? Date.now() - serverNowAttr : 0;
+  function serverNow() {
+    return Date.now() - clientSkewMs;
+  }
+  // When the run is already over no clock may tick; a still-"running"
+  // item (no end event: crash / cancel) freezes at the run's end.
+  const paneStatus = String((paneEl && paneEl.dataset && paneEl.dataset.status) || "");
+  let runEndedTsMs = TERMINAL_RUN.has(paneStatus)
+    ? numData(paneEl, "endedAtMs") || serverNowAttr || null
+    : null;
 
   // name -> aggregate record.
   const items = new Map();
@@ -126,6 +161,7 @@ export function mountRunPanel(config) {
   // right pane auto-scrolls to the newest running item's section.
   let userPinned = false;
   let rafId = null;
+  let closed = false;
 
   // The detail pane scroll is driven by auto-follow unless the operator
   // scrolls it themselves. Programmatic scrolls (our own
@@ -185,8 +221,10 @@ export function mountRunPanel(config) {
       rec = {
         name: key,
         status: "pending",
-        startedMs: null,
         startedTsMs: null,
+        // Start of the current active segment; ``elapsedMs`` holds the
+        // active time accumulated before it (multi-phase runs).
+        activeSinceMs: null,
         elapsedMs: null,
         error: "",
         group: "",
@@ -206,34 +244,34 @@ export function mountRunPanel(config) {
   function defaultApply(ev, rec) {
     const kind = ev.kind || "";
     if (kind === "table.started") {
+      // A replayed start never reopens an item already known finished
+      // (seeded from the saved times, or its end event came first).
+      if (isTerminalItem(rec.status)) return;
+      // (Re)start the item's timing from its server start; a replay of the
+      // log re-folds any later pause / resume in order.
       rec.status = "running";
-      rec.startedMs = performance.now();
-      rec.startedTsMs = parseTsMs(ev.ts);
+      const ts = parseTsMs(ev.ts);
+      if (ts != null) rec.startedTsMs = ts;
+      rec.activeSinceMs = rec.startedTsMs;
+      rec.elapsedMs = null;
       if (!userPinned) {
         selected = rec.name;
         detailFollow = true;
       }
+    } else if (kind === "stage.progress") {
+      applyStageState(rec, ev);
     } else if (kind === "table.completed") {
-      rec.status = "completed";
-      const el = resolveElapsed(rec, ev);
-      if (el != null) rec.elapsedMs = el;
-      rec.startedMs = null;
+      finishItem(rec, ev, "completed");
     } else if (kind === "table.failed") {
-      rec.status = "failed";
       rec.error = String(extra(ev, "error", "") || "");
-      const el = resolveElapsed(rec, ev);
-      if (el != null) rec.elapsedMs = el;
-      rec.startedMs = null;
+      finishItem(rec, ev, "failed");
     } else if (kind === "error" || kind === "fix.failed") {
-      rec.status = "failed";
       const fix = String(extra(ev, "fix", "") || "");
       const msg = String(
         extra(ev, "error", "") || extra(ev, "message", "") || "",
       );
       rec.error = fix && msg ? fix + ": " + msg : msg || fix;
-      const el = resolveElapsed(rec, ev);
-      if (el != null) rec.elapsedMs = el;
-      rec.startedMs = null;
+      finishItem(rec, ev, "failed");
     }
     // stage / fix / other events only grow the detail log.
   }
@@ -243,6 +281,13 @@ export function mountRunPanel(config) {
     let summaryDirty = false;
     let detailDirty = false;
     for (const ev of events) {
+      if (ev && ev.kind === "instance.finished") {
+        // The run is over: freeze any clock still ticking at its end.
+        if (runEndedTsMs == null) runEndedTsMs = parseTsMs(ev.ts) || serverNow();
+        summaryDirty = true;
+        detailDirty = true;
+        continue;
+      }
       const name = cfg.itemKey ? cfg.itemKey(ev) : itemKeyFromPrefix(ev);
       if (!name) continue;
       const rec = ensure(name);
@@ -286,24 +331,21 @@ export function mountRunPanel(config) {
     );
   }
 
-  function timerText(rec, now) {
+  // A running item's clock, from its *server* start time. Once the run
+  // is over it freezes at the run's end instead of ticking forever.
+  function isTicking(rec) {
+    return rec.status === "running" && rec.startedTsMs != null && runEndedTsMs == null;
+  }
+
+  function timerText(rec) {
     if (!timed) return "";
-    if (rec.status === "running" && rec.startedMs != null) {
-      return fmtClock(now - rec.startedMs);
+    if (rec.status === "running" && rec.startedTsMs != null) {
+      const end = runEndedTsMs != null ? runEndedTsMs : serverNow();
+      const since = rec.activeSinceMs != null ? rec.activeSinceMs : rec.startedTsMs;
+      return fmtClock((rec.elapsedMs || 0) + Math.max(0, end - since));
     }
     if (rec.elapsedMs != null) return fmtClock(rec.elapsedMs);
     return "";
-  }
-
-  function resolveElapsed(rec, ev) {
-    const server = Number(extra(ev, "elapsed_ms", NaN));
-    if (Number.isFinite(server) && server >= 0) return server;
-    const endTsMs = parseTsMs(ev && ev.ts);
-    if (rec.startedTsMs != null && endTsMs != null && endTsMs >= rec.startedTsMs) {
-      return endTsMs - rec.startedTsMs;
-    }
-    if (rec.startedMs != null) return performance.now() - rec.startedMs;
-    return null;
   }
 
   /* -------- scroll helpers -------- */
@@ -459,14 +501,17 @@ export function mountRunPanel(config) {
     if (timed) {
       const dur = document.createElement("span");
       dur.className = "run-detail-dur mono small";
-      dur.textContent = timerText(rec, performance.now());
+      dur.textContent = timerText(rec);
       head.appendChild(dur);
     }
     section.appendChild(head);
 
     if (rec.error) {
       const errEl = document.createElement("div");
-      errEl.className = "flash error mono small";
+      // A row closed at the job's end ("run ended / cancelled before this
+      // item finished") is a note, not the item's own failure.
+      const note = /before this item finished$/.test(String(rec.error));
+      errEl.className = "flash error mono small" + (note ? " run-detail-note" : "");
       errEl.textContent = rec.error;
       section.appendChild(errEl);
     }
@@ -517,18 +562,36 @@ export function mountRunPanel(config) {
     }
   }
 
-  function tickTimers(now) {
+  function tickTimers() {
+    rafId = null;
+    // Once the run has ended nothing may tick: stop the loop for good.
+    if (closed || runEndedTsMs != null) return;
     if (timed) {
       for (const name of order) {
         const rec = items.get(name);
-        if (!rec || rec.status !== "running") continue;
+        if (!rec || !isTicking(rec)) continue;
         const dEl = detailEl.querySelector(
           '.run-detail-section[data-item="' + cssEscape(name) + '"] .run-detail-dur',
         );
-        if (dEl) dEl.textContent = timerText(rec, now);
+        if (dEl) dEl.textContent = timerText(rec);
       }
     }
     rafId = CLOCK_RAF ? requestAnimationFrame(tickTimers) : null;
+  }
+
+  // The server says the job is over (status poll) — freeze every clock
+  // at the job's end even when no ``instance.finished`` event was ever
+  // written (SIGKILLed worker, crashed container, cancelled run).
+  function setRunEnded(endTsMs) {
+    if (runEndedTsMs != null) return;
+    const end = Number(endTsMs);
+    runEndedTsMs = Number.isFinite(end) && end > 0 ? end : serverNow();
+    if (rafId != null && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(rafId);
+    }
+    rafId = null;
+    renderSummary();
+    renderDetail();
   }
 
   function select(name) {
@@ -594,25 +657,177 @@ export function mountRunPanel(config) {
     }
   }
 
+  /* -------- saved timings pre-seed -------- */
+
+  // Seed every item from the saved timings embedded in the page so each
+  // clock shows its real value on the very first paint.
+  function seedSavedTimes() {
+    const rows = readSavedTimes(paneEl);
+    let seeded = 0;
+    for (const row of rows) {
+      if (!row || row.kind !== itemKind || !row.item) continue;
+      const rec = ensure(row.item);
+      if (!rec) continue;
+      if (row.display_name) rec.displayName = String(row.display_name);
+      rec.status = String(row.status || "running");
+      const started = parseTsMs(row.started_at);
+      if (started != null) rec.startedTsMs = started;
+      const since = parseTsMs(row.active_since);
+      rec.activeSinceMs = since != null ? since : rec.status === "running" ? rec.startedTsMs : null;
+      const ms = Number(row.elapsed_ms);
+      if (row.elapsed_ms != null && Number.isFinite(ms) && ms >= 0) rec.elapsedMs = ms;
+      if (row.error) rec.error = String(row.error);
+      if (rec.status === "running" && !userPinned) selected = rec.name;
+      seeded += 1;
+    }
+    return seeded;
+  }
+
   function close() {
+    closed = true;
     if (rafId != null && typeof cancelAnimationFrame === "function") {
       cancelAnimationFrame(rafId);
     }
     rafId = null;
   }
 
-  // Initial paint + start the running-item timer loop.
+  // Initial paint (seeded from saved timings) + start the timer loop —
+  // only while the run is still live.
+  seedSavedTimes();
   renderSummary();
   renderDetail();
   initRoster();
-  rafId = CLOCK_RAF ? requestAnimationFrame(tickTimers) : null;
+  rafId = CLOCK_RAF && runEndedTsMs == null ? requestAnimationFrame(tickTimers) : null;
 
-  return { handleEvents, close };
+  return { handleEvents, close, setRunEnded };
 }
 
 /* ------------------------------------------------------------------ */
 /* shared helpers                                                     */
 /* ------------------------------------------------------------------ */
+
+//: Job statuses after which nothing in the run is still executing.
+const TERMINAL_RUN = new Set(["done", "failed", "cancelled"]);
+
+//: Item statuses that end an item (tables + checks vocabularies).
+const TERMINAL_ITEM = new Set([
+  "completed",
+  "failed",
+  "passed",
+  "exception",
+  "error",
+  "cancelled",
+]);
+
+/**
+ * Whether an item status is final (a replayed start must not reopen it).
+ *
+ * @param {string} status
+ * @returns {boolean}
+ */
+export function isTerminalItem(status) {
+  return TERMINAL_ITEM.has(String(status || ""));
+}
+
+/**
+ * Fold a per-table ``stage.progress`` pause / resume into ``rec``.
+ * ``extra.state`` ``waiting`` closes the current active segment (the
+ * clock freezes); ``active`` opens a new one. Other stage events are log
+ * lines only.
+ *
+ * @param {object} rec - item aggregate.
+ * @param {object} ev - the ``stage.progress`` event.
+ */
+export function applyStageState(rec, ev) {
+  const state = String(extra(ev, "state", "") || "");
+  if (!rec || isTerminalItem(rec.status)) return;
+  const ts = parseTsMs(ev && ev.ts);
+  if (state === "waiting" && rec.status === "running") {
+    const since = rec.activeSinceMs != null ? rec.activeSinceMs : rec.startedTsMs;
+    if (since != null && ts != null && ts >= since) {
+      rec.elapsedMs = (rec.elapsedMs || 0) + (ts - since);
+    }
+    rec.activeSinceMs = null;
+    rec.status = "waiting";
+  } else if (state === "active" && rec.status === "waiting") {
+    rec.activeSinceMs = ts;
+    rec.status = "running";
+  }
+}
+
+/**
+ * End an item: set its terminal ``status`` and final duration.
+ *
+ * The duration is the executor-measured ``elapsed_ms`` when present;
+ * else the active time — accumulated segments plus the open one (end
+ * ``ts`` minus ``activeSinceMs``); a waiting item keeps its accumulated
+ * time; an already-final item (seeded from saved times) keeps its value.
+ *
+ * @param {object} rec - item aggregate.
+ * @param {object} ev - the terminal event.
+ * @param {string} status - the terminal status.
+ */
+export function finishItem(rec, ev, status) {
+  const wasFinal = isTerminalItem(rec.status);
+  const wasWaiting = rec.status === "waiting";
+  rec.status = status;
+  const server = Number(extra(ev, "elapsed_ms", NaN));
+  if (Number.isFinite(server) && server >= 0) {
+    rec.elapsedMs = server;
+  } else if (rec.activeSinceMs != null) {
+    const end = parseTsMs(ev && ev.ts);
+    if (end != null && end >= rec.activeSinceMs) {
+      rec.elapsedMs = (rec.elapsedMs || 0) + (end - rec.activeSinceMs);
+    }
+  } else if (!wasWaiting && !(wasFinal && rec.elapsedMs != null)) {
+    const el = resolveElapsed(rec, ev);
+    if (el != null) rec.elapsedMs = el;
+  }
+  rec.activeSinceMs = null;
+}
+
+/**
+ * Elapsed ms for an item's end event: the executor-measured
+ * ``elapsed_ms`` when present, else end ``ts`` minus the item's server
+ * start. Never the browser's read time.
+ *
+ * @param {object} rec - item aggregate (``startedTsMs``).
+ * @param {object} ev - the terminal event.
+ * @returns {number|null}
+ */
+export function resolveElapsed(rec, ev) {
+  const server = Number(extra(ev, "elapsed_ms", NaN));
+  if (Number.isFinite(server) && server >= 0) return server;
+  const endTsMs = parseTsMs(ev && ev.ts);
+  if (rec && rec.startedTsMs != null && endTsMs != null && endTsMs >= rec.startedTsMs) {
+    return endTsMs - rec.startedTsMs;
+  }
+  return null;
+}
+
+/**
+ * Read the saved per-item timings the run page embeds
+ * (``<script type="application/json" class="run-item-times">``).
+ *
+ * @param {HTMLElement|null} pane
+ * @returns {Array<object>}
+ */
+export function readSavedTimes(pane) {
+  const el = pane && pane.querySelector ? pane.querySelector("script.run-item-times") : null;
+  if (!el) return [];
+  try {
+    const rows = JSON.parse(el.textContent || "[]");
+    return Array.isArray(rows) ? rows : [];
+  } catch (_e) {
+    return [];
+  }
+}
+
+function numData(el, key) {
+  const raw = el && el.dataset ? el.dataset[key] : "";
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
 
 function extra(rec, key, fallback) {
   if (rec && rec.extra && key in rec.extra) return rec.extra[key];

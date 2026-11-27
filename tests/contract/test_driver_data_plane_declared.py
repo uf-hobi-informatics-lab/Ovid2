@@ -8,12 +8,15 @@ bridge, so a Spark ``read`` / ``write`` raised a misleading
 
 Invariants:
 
-1. Every driver declares ``spark_capable`` as a ``bool``.
-2. A driver that is not Spark-capable is reachable by at least one
-   other engine stager (otherwise it has no data plane at all).
-3. A non-Spark-capable driver's ``read`` / ``write`` fail with an
-   actionable ``NotImplementedError`` — never the registry-internal
-   ``ValueError``.
+1. Every driver declares ``spark_capable`` (its *native* Spark data
+   plane) as a ``bool``, and it agrees with
+   :meth:`SparkEngineStager.native_supports`. Drivers without a native
+   Spark plane are still reachable from Spark through the Arrow bridge
+   (engine universality — see ``test_engine_storage_matrix_complete.py``).
+2. Every driver is reachable by every engine stager.
+3. A non-Spark-capable driver's *direct* Spark ``read`` / ``write``
+   (bypassing the stager) fails with an actionable
+   ``NotImplementedError`` — never the registry-internal ``ValueError``.
 4. Every native driver module imports cleanly (no silent fallback to the
    legacy adapter — see ``legacy_adapter.register_all_legacy_drivers``).
 """
@@ -44,32 +47,32 @@ _NATIVE_MODULES = (
 @pytest.mark.contract
 @pytest.mark.parametrize("type_name", sorted(DRIVERS))
 def test_driver_declares_spark_capability(type_name: str) -> None:
-    """``spark_capable`` is a bool and agrees with the Spark stager."""
+    """``spark_capable`` is a bool and agrees with the Spark stager's native plane."""
     cls = load_class(type_name)
     assert isinstance(cls.spark_capable, bool)
-    assert SparkEngineStager.supports(type_name) is cls.spark_capable
+    assert SparkEngineStager.native_supports(type_name) is cls.spark_capable
 
 
 @pytest.mark.contract
 @pytest.mark.parametrize("type_name", sorted(DRIVERS))
 def test_every_driver_has_some_data_plane(type_name: str) -> None:
-    """At least one engine stager can materialise / persist this driver."""
-    reachable = (
-        SparkEngineStager.supports(type_name)
-        or DuckDBEngineStager.supports(type_name)
-        or SnowparkEngineStager.supports(type_name)
-    )
-    assert reachable, f"driver {type_name!r} has no data plane on any engine"
+    """Every engine stager can materialise / persist this driver."""
+    reachable = {
+        "spark": SparkEngineStager.supports(type_name),
+        "duckdb": DuckDBEngineStager.supports(type_name),
+        "snowpark": SnowparkEngineStager.supports(type_name),
+    }
+    assert all(reachable.values()), f"driver {type_name!r} unreachable: {reachable}"
 
 
 @pytest.mark.contract
 @pytest.mark.parametrize("type_name", sorted(t for t in DRIVERS if not load_class(t).spark_capable))
 def test_non_spark_driver_fails_actionably(type_name: str) -> None:
-    """Spark ``read`` / ``write`` on a non-Spark driver say which engine to use."""
+    """Direct Spark ``read`` / ``write`` on a non-native driver point at the stager."""
     driver = load_class(type_name)(args={}, secrets={}, location={})
-    with pytest.raises(NotImplementedError, match="--engine duckdb"):
+    with pytest.raises(NotImplementedError, match="stager"):
         driver.read(object(), "p", "b", "t")  # type: ignore[arg-type]
-    with pytest.raises(NotImplementedError, match="--engine duckdb"):
+    with pytest.raises(NotImplementedError, match="stager"):
         driver.write(object(), object(), "p", "b", "t")  # type: ignore[arg-type]
 
 

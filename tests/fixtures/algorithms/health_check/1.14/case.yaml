@@ -1,0 +1,37 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+dataset: pcornet_small
+expected:
+  columns:
+  - source_table
+  - metric
+  - value_num
+  - value_str
+  - exception_flag
+  rows:
+  - - DEMOGRAPHIC
+    - CHILD_ROWS
+    - 5.0
+    - null
+    - false
+  - - DEMOGRAPHIC
+    - ORPHAN_PCT
+    - 40.0
+    - null
+    - false
+  - - DEMOGRAPHIC
+    - ORPHAN_ROWS
+    - 2.0
+    - null
+    - true
+tables:
+  hash_token:
+    columns:
+    - PATID
+    - TOKEN_01
+    rows:
+    - - P1
+      - t
+    - - P2
+      - u
+note: "DEMOGRAPHIC PATIDs missing from HASH_TOKEN \u2014 expected = PySpark reference, identical on DuckDB\
+  \ when recorded"

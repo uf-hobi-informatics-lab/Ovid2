@@ -86,3 +86,46 @@ def test_local_driver_memory_override(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_host_memory_reads_proc() -> None:
     assert sz.host_memory_gb() >= 1
     assert sz.host_cpu_count() >= 1
+
+
+def test_fit_executor_keeps_fitting_request() -> None:
+    conf = {
+        "spark.executor.cores": "8",
+        "spark.executor.memory": "48g",
+        "spark.executor.memoryOverhead": "8g",
+    }
+    fitted, messages = sz.fit_executor_to_worker(conf, worker_cores=8, worker_memory_gb=56)
+    assert fitted == conf
+    assert messages == []
+
+
+def test_fit_executor_lowers_cores_larger_than_worker() -> None:
+    # Regression: an engine config with spark.executor.cores=32 on 8-core
+    # workers left the app WAITING forever with stages at (0 + 0).
+    conf = {
+        "spark.executor.cores": "32",
+        "spark.executor.memory": "48g",
+        "spark.executor.memoryOverhead": "8g",
+    }
+    fitted, messages = sz.fit_executor_to_worker(conf, worker_cores=8, worker_memory_gb=56)
+    assert fitted["spark.executor.cores"] == "8"
+    assert fitted["spark.executor.memory"] == "48g"
+    assert len(messages) == 1
+    assert conf["spark.executor.cores"] == "32"  # input not mutated
+
+
+def test_fit_executor_lowers_memory_larger_than_worker() -> None:
+    conf = {"spark.executor.memory": "100g", "spark.executor.memoryOverhead": "8g"}
+    fitted, messages = sz.fit_executor_to_worker(conf, worker_cores=8, worker_memory_gb=56)
+    heap = sz._parse_memory_mb(fitted["spark.executor.memory"])
+    over = sz._parse_memory_mb(fitted["spark.executor.memoryOverhead"])
+    assert heap is not None and over is not None
+    assert heap + over <= 56 * 1024
+    assert messages
+
+
+def test_fit_executor_ignores_unparseable_values() -> None:
+    conf = {"spark.executor.cores": "lots", "spark.executor.memory": "huge"}
+    fitted, messages = sz.fit_executor_to_worker(conf)
+    assert fitted == conf
+    assert messages == []

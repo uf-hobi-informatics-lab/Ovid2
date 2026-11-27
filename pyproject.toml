@@ -366,6 +366,7 @@ markers = [
     "perf: performance benchmarks",
     "endurance: long-running stability tests",
     "io_matrix: engine x storage matrix against local docker emulators (opt-in)",
+    "conformance: every algorithm x every capable engine against its fixture (heavy gate)",
 ]
 filterwarnings = [
     "error",

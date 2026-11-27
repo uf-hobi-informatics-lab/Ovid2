@@ -46,18 +46,6 @@ class CustomAdapter(BaseAdapter):
                 f"class '{spec.class_path}' must subclass ovid2.formatters.base.BaseFormatter."
             )
 
-        required = getattr(formatter, "requires_family", None)
-        if required and ctx.engine is not None:
-            family = getattr(ctx.engine.family, "value", ctx.engine.family)
-            if str(required).lower() != str(family).lower():
-                from ovid2.core.engines.protocols import EngineOperationUnsupported
-
-                raise EngineOperationUnsupported(
-                    str(getattr(ctx.engine, "type_name", family)),
-                    f"formatter {spec.class_path}",
-                    f"requires engine family '{required}'",
-                )
-
         # Give multi-source custom formatters access to the runtime context
         # (Spark session, input address, pipeline, batch) so they can read
         # sibling OMOP source files through ``read_source`` with correct
@@ -78,5 +66,6 @@ class CustomAdapter(BaseAdapter):
             batch_id=ctx.batch_id,
             engine=ctx.engine,
             input_address_name=ctx.input_address_name,
+            source_handle=ctx.source,
         )
         return formatter.format(df)

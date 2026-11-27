@@ -398,18 +398,11 @@ class TestRejectedPairings:
             ["CHAR_ACME", "S3-Testing"],
         )
 
-    def test_snowpark_with_postgres_rejected(
+    def test_snowpark_with_postgres_accepted(
         self,
         config_env: Path,
     ) -> None:
-        """Postgres is still not reachable under --engine snowpark.
-
-        Serves as the residual "still-rejected pairing" test now that
-        S3, Azure Blob, and Databricks are supported (post-Phase-E).
-        No strategy for the postgres driver exists on the Snowpark
-        stager. Postgres is the natural next candidate for a
-        Phase-F-style follow-up.
-        """
+        """Postgres is reachable under --engine snowpark (Arrow bridge, engine universality)."""
         _conn(
             config_env,
             "sf",
@@ -443,15 +436,7 @@ class TestRejectedPairings:
             },
         )
         engine = _StubEngine("snowpark", "snowpark")
-        with pytest.raises(RuntimeError) as excinfo:
-            assert_engine_supports_drivers(
-                engine,
-                ["sf_addr", "pg_addr"],
-            )
-        msg = str(excinfo.value)
-        assert "pg_addr" in msg
-        assert "snowpark" in msg
-        assert "postgres" in msg
+        assert_engine_supports_drivers(engine, ["sf_addr", "pg_addr"], output_names=["sf_addr"])
 
     def test_snowpark_with_disc_source_accepted_since_phase_c(
         self,
@@ -562,33 +547,18 @@ class TestRejectedPairings:
         config_env: Path,
         tmp_path: Path,
     ) -> None:
-        # Uses postgres as the still-rejected driver type post-Phase-E
-        # (disc/s3/azure_blob/databricks are now compatible via their
-        # respective SnowparkStagingStrategies).
-        _conn(
-            config_env,
-            "pg_conn",
-            {
-                "type": "postgres",
-                "args": {"host": "db.example.com", "database": "d", "user": "u"},
-            },
-        )
-        _addr(
-            config_env,
-            "src",
-            {
-                "connection": "pg_conn",
-                "location": {"database": "d", "schema": "public"},
-            },
-        )
+        """The only refusal left — a read-only output — names engine-neutral facts."""
+        host = tmp_path / "h"
+        host.mkdir()
+        _conn(config_env, "acc", {"type": "access", "args": {"host_path": str(host)}})
+        _addr(config_env, "dst", {"connection": "acc", "location": {}})
         engine = _StubEngine("snowpark", "snowpark_prod")
         with pytest.raises(RuntimeError) as excinfo:
-            assert_engine_supports_drivers(engine, ["src"])
+            assert_engine_supports_drivers(engine, ["dst"], output_names=["dst"])
         msg = str(excinfo.value)
-        assert "snowpark_prod" in msg
-        assert "postgres" in msg
-        # Supported families should be listed for the driver.
-        assert "spark" in msg
+        assert "dst" in msg
+        assert "access" in msg
+        assert "read-only" in msg
 
 
 # ---------------------------------------------------------------------------
@@ -680,12 +650,12 @@ class TestStagerCapabilityDiscovery:
 
         assert SnowparkEngineStager.supports("databricks") is True
 
-    def test_snowpark_stager_rejects_postgres_today(self) -> None:
-        """Post-Phase-F residual — postgres/mssql strategies not yet landed."""
+    def test_snowpark_stager_bridges_postgres_mssql(self) -> None:
+        """Engine universality — postgres / mssql through the Arrow bridge."""
         from ovid2.core.engines.stager import SnowparkEngineStager
 
-        assert SnowparkEngineStager.supports("postgres") is False
-        assert SnowparkEngineStager.supports("mssql") is False
+        assert SnowparkEngineStager.supports("postgres") is True
+        assert SnowparkEngineStager.supports("mssql") is True
 
     def test_snowpark_stager_supports_gcs_since_phase_f(self) -> None:
         """Phase F landed :class:`SnowparkGcsStrategy`.
@@ -701,28 +671,24 @@ class TestStagerCapabilityDiscovery:
 
         assert SnowparkEngineStager.supports("gcs") is True
 
-    def test_spark_stager_supports_every_spark_capable_driver(self) -> None:
+    def test_spark_stager_supports_every_driver(self) -> None:
         from ovid2.core.engines.stager import SparkEngineStager
-        from ovid2.drivers.registry import DRIVERS, load_class
+        from ovid2.drivers.registry import DRIVERS
 
         for driver_type in sorted(DRIVERS):
-            expected = load_class(driver_type).spark_capable
-            assert SparkEngineStager.supports(driver_type) is expected, driver_type
+            assert SparkEngineStager.supports(driver_type) is True, driver_type
 
-    def test_pyspark_refuses_duckdb_only_driver_at_plan_time(self) -> None:
-        """postgres on pyspark is refused before any cluster starts."""
+    def test_pyspark_accepts_postgres_at_plan_time(self) -> None:
+        """postgres on pyspark passes the plan-time check (bridged, engine universality)."""
         from unittest import mock
 
         from ovid2.core.engines.stager import SparkEngineStager
         from ovid2.drivers.engine_compat import _assert_stager_supports_drivers
         from ovid2.drivers.registry import load_class
 
-        with (
-            mock.patch(
-                "ovid2.drivers.engine_compat._driver_class_for_address",
-                return_value=load_class("postgres"),
-            ),
-            pytest.raises(RuntimeError, match="driver 'postgres'"),
+        with mock.patch(
+            "ovid2.drivers.engine_compat._driver_class_for_address",
+            return_value=load_class("postgres"),
         ):
             _assert_stager_supports_drivers(
                 stager_cls=SparkEngineStager,
@@ -799,11 +765,11 @@ class TestAssertEngineTypeSupportsDrivers:
             ["disc_input", "CHAR_ACME"],
         )
 
-    def test_snowpark_still_rejected_with_postgres_source(
+    def test_snowpark_accepted_with_postgres_source(
         self,
         config_env: Path,
     ) -> None:
-        """Post-Phase-E residual: postgres strategy not yet landed."""
+        """Postgres source on snowpark is accepted (bridged, engine universality)."""
         from ovid2.drivers.engine_compat import (
             assert_engine_type_supports_drivers,
         )
@@ -824,15 +790,7 @@ class TestAssertEngineTypeSupportsDrivers:
                 "location": {"database": "d", "schema": "public"},
             },
         )
-        with pytest.raises(RuntimeError) as exc_info:
-            assert_engine_type_supports_drivers(
-                "snowpark",
-                ["pg_input"],
-            )
-        message = str(exc_info.value)
-        assert "snowpark" in message
-        assert "pg_input" in message
-        assert "--engine pyspark" in message
+        assert_engine_type_supports_drivers("snowpark", ["pg_input"])
 
     def test_pyspark_accepted_with_disc_and_snowflake(
         self,

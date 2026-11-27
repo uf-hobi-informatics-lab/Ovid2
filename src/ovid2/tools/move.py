@@ -190,6 +190,7 @@ def main(args: argparse.Namespace) -> int:
         assert_engine_supports_drivers(
             engine,
             [args.from_address, args.to_address],
+            output_names=[args.to_address],
         )
     except (ValueError, RuntimeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -473,9 +474,15 @@ def _run_container_mode(args: argparse.Namespace) -> int:
         bus.close()
         return 3
 
+    from ovid2.core.pause import gate as _pause_gate
+
+    hold = _pause_gate(
+        bus, instance_id=instance.instance_id, pipeline=args.pipeline, batch_id=args.batch_id
+    )
     failures = 0
     try:
         for spec in resolved:
+            hold()
             table_name = spec.table_name
             file_name = spec.file_name
             bus.emit(

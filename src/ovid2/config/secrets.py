@@ -139,9 +139,17 @@ def _secret_candidates(name: str) -> list[Path]:
     if override:
         candidates.append(Path(override))
 
-    xdg_config = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    candidates.append(Path(xdg_config) / "ovid2" / "secrets.d" / f"{name}.json")
-    candidates.append(Path("/etc/ovid2/secrets.d") / f"{name}.json")
+    from ovid2 import workspaces
+
+    file_name = f"{name}.json"
+    if workspaces.is_default() or workspaces.is_global_secret(file_name):
+        # ``default`` and the site-wide ``auth_*`` secrets (read by the web
+        # tier whatever the request's workspace) use the flat tree.
+        xdg_config = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+        candidates.append(Path(xdg_config) / "ovid2" / "secrets.d" / file_name)
+        candidates.append(Path("/etc/ovid2/secrets.d") / file_name)
+    else:
+        candidates.extend(d / file_name for d in workspaces.secret_dirs())
     return candidates
 
 

@@ -660,8 +660,20 @@ def users_index(request: Request, error: str | None = None) -> HTMLResponse:
     Returns:
         The rendered ``users.html`` page.
     """
+    from ovid2.web.services import workspaces_svc
+
     users = users_svc.list_users()
     pending = [u for u in users if u["status"] == "pending"]
+    # Workspaces each user belongs to (adr-workspaces.md), for the column
+    # linking to each workspace's members page.
+    names = {w["workspace_id"]: w["display_name"] for w in workspaces_svc.list_workspaces()}
+    memberships = {
+        u["user_id"]: [
+            {"workspace_id": ws, "display_name": names.get(ws, ws)}
+            for ws in workspaces_svc.user_workspace_ids(u["user_id"])
+        ]
+        for u in users
+    }
     return templates.TemplateResponse(
         request,
         "users.html",
@@ -669,6 +681,7 @@ def users_index(request: Request, error: str | None = None) -> HTMLResponse:
             "users": users,
             "pending": pending,
             "roles": [r.value for r in _ASSIGNABLE_ROLES],
+            "memberships": memberships,
             "error": error,
         },
     )
@@ -1070,8 +1083,21 @@ def _run_detail_context(identifier: str) -> dict[str, object]:
         display_tz = settings_svc.get_settings().ui.display_timezone
     except Exception:
         display_tz = "UTC"
+    # Saved per-table / per-check times, embedded so every clock starts
+    # from its real start / end the moment the page opens (instead of
+    # ticking from page load until the event replay catches up).
+    from ovid2.web.services import run_items_svc
+
+    run_live = job is None or job.status in ("queued", "running")
+    run_item_times = run_items_svc.times_for_page(
+        instance_id,
+        live=run_live,
+        job_status=job.status if job else None,
+        ended_at=job.ended_at if job else None,
+    )
     return {
         "run": run,
+        "run_item_times": run_item_times,
         "job": job,
         "identifier": identifier,
         "instance_id": instance_id,
@@ -1190,7 +1216,15 @@ def run_job_status_partial(request: Request, instance_id: str) -> HTMLResponse:
     """
     job = jobs_svc.get_job_by_instance(instance_id)
     queue = jobs_svc.queue_position(job.job_id) if job else None
-    return templates.TemplateResponse(request, "_run_job_status.html", {"job": job, "queue": queue})
+    return templates.TemplateResponse(
+        request,
+        "_run_job_status.html",
+        {
+            "job": job,
+            "queue": queue,
+            "ended_at_ms": _iso_to_epoch_ms(job.ended_at) if job else None,
+        },
+    )
 
 
 @router.get(
@@ -1375,42 +1409,53 @@ def navigator_page(
     p: str | None = None,
     t: str | None = None,
     f: str | None = None,
+    node: str | None = None,
     group_by: str = "cdm",
     include_unused: bool = False,
 ) -> HTMLResponse:
-    """The pipeline navigator: every package → table → field → chain of functions.
+    """The Ovid Atlas: the whole workspace as one lane board.
 
-    Left — a collapsible, filterable tree of packages grouped by a
-    switchable axis (target CDM, ETL profile, run kind, template).
-    Centre — an overview graph of the selected package or the per-field
-    *lanes* of a table (one row per CDM field, one column per stage).
-    Right — the shared spec editor (Form / YAML) opened at the clicked step.
-    Deep link: ``/navigator?p=<package>&t=<table>&f=<FIELD>``.
-
-    Everything after the first paint is read through the JSON API
-    (``static/navigator.js``); this handler only renders the shell and the
-    grouped package list.
+    Three orthogonal layers — storage, compute, algorithms. Every run config
+    is one pipeline component (name · shape · material · input → output)
+    and every workflow a DAG of those components, in grouped lanes that fit
+    the page; cards never expand in place — the dock opens editors, lineage lanes, Data Space samples and the live run
+    console (adr-atlas.md). Deep links: ``/navigator?p=<package>&t=<table>
+    &f=<FIELD>`` (the historical navigator links) or ``?node=<id>``. The
+    graph is embedded at render time so the first paint is complete; the
+    rest is read through ``/api/v1/atlas`` by ``static/atlas/atlas.js``.
+    ``group_by`` / ``include_unused`` are accepted for old links.
     """
-    from ovid2.web.services import pipeline_lineage_svc
+    from datetime import UTC, datetime
 
-    if group_by not in pipeline_lineage_svc.GROUP_BY:
-        group_by = "cdm"
-    tree = pipeline_lineage_svc.navigator_tree(group_by, include_unused=include_unused)
+    from ovid2.web.kinds import kind_choices
+    from ovid2.web.services import atlas_svc
+    from ovid2.web.templating import current_user_ctx, has_cap
+    from ovid2.workspaces import active_workspace
+
+    del group_by, include_unused
+    graph = atlas_svc.build_graph()
+    ctx = current_user_ctx(request)
+    user_label = (ctx.email or ctx.user_id) if ctx is not None else "you"
     response = templates.TemplateResponse(
         request,
         "navigator.html",
         {
-            "tree": tree,
-            "group_by": group_by,
-            "include_unused": include_unused,
-            "group_by_labels": _NAVIGATOR_GROUP_LABELS,
-            "stages": list(pipeline_lineage_svc.STAGES),
-            "initial": {"p": p or "", "t": t or "", "f": f or ""},
+            "nav_active": "navigator",
+            "boot": {"graph": graph},
+            "kind_choices": kind_choices(),
+            "layers": [("algorithm", "algorithms"), ("compute", "compute"), ("storage", "storage")],
+            "workspace": active_workspace(),
+            "initial": {"p": p or "", "t": t or "", "f": f or "", "node": node or ""},
             "can_write": _can_manage_config(request),
+            "can_run": bool(has_cap(request, "submit_jobs")),
+            "can_view_data": bool(has_cap(request, "view_pipeline_data")),
+            "poll_ms": RUN_EVENTS_POLL_MS,
+            "server_now_ms": int(datetime.now(UTC).timestamp() * 1000),
+            "user_label": str(user_label),
         },
     )
-    # The package list is embedded in the page: never let the browser (or
-    # its back/forward cache) replay a stale one.
+    # The graph is embedded in the page: never let the browser (or its
+    # back/forward cache) replay a stale one.
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -3426,6 +3471,13 @@ def _kind_choices() -> list[dict[str, Any]]:
     return kind_choices()
 
 
+def _engine_uses_workers(engine: str | None) -> bool:
+    """Return ``True`` when ``engine`` is sized by the *Workers* field (Spark)."""
+    from ovid2.config.engines import engine_uses_workers
+
+    return engine_uses_workers(engine)
+
+
 def _engine_families() -> dict[str, str]:
     """Return ``{engine_type: family}`` for every registered engine type."""
     from ovid2.config.engines import engine_family, list_engine_types
@@ -3912,6 +3964,7 @@ def pipeline_config_detail_page(
             "pipeline_config": detail,
             "flash": flash,
             "has_package": detail.pipeline in set(pipelines_meta_svc.discover_pipelines()),
+            "uses_workers": _engine_uses_workers(detail.engine),
         },
     )
 

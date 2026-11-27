@@ -1,0 +1,20 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  column: a
+  value: NI
+tables:
+  input:
+    columns:
+    - a
+    rows:
+    - - null
+    - - ''
+    - - x
+note: only null is filled; empty string is kept
+expected:
+  columns:
+  - a
+  rows:
+  - - NI
+  - - ''
+  - - x

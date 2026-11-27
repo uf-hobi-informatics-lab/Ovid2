@@ -219,7 +219,12 @@ def test_loop_turns_writes_into_proposals_without_calling_api() -> None:
     assert proposal and proposal[0]["method"] == "POST"
     assert proposal[0]["path"] == "/api/v1/jobs/j1/cancel"
     assert api.calls == []  # never executed by the executor
-    assert len(prov.seen) == 1  # turn ends on proposal
+    # The loop continues once more with action tools only (so a chain of
+    # cards / a draft and an answer can follow) — never with read tools.
+    assert len(prov.seen) == 2
+    follow_tools = [t["function"]["name"] for t in prov.seen[1][1]]
+    assert follow_tools == ["cancel_job"]
+    assert "proposal card is shown" in prov.seen[1][0][-1]["content"]
 
 
 def test_loop_rejects_tools_not_allowed_this_turn() -> None:
@@ -249,9 +254,10 @@ def test_loop_caps_iterations_and_drops_tools_on_last_step() -> None:
             ToolContext(("health",), api, max_iterations=3),
         )
     )
-    # 3 tool steps + 1 forced tool-free answer.
-    assert len(prov.seen) == 4
-    assert prov.seen[0][1] and prov.seen[2][1] is None  # health only: no write tools
+    # 3 tool steps + 2 refunded repeat-only steps (identical health calls)
+    # + 1 forced tool-free answer: the refund is bounded.
+    assert len(prov.seen) == 6
+    assert prov.seen[0][1] and prov.seen[4][1] is None  # health only: no write tools
     assert prov.seen[-1][1] is None
 
 
@@ -568,7 +574,7 @@ def test_set_appearance_accepts_every_shipped_theme() -> None:
         "clinical",
         "matrix",
         "super-mario-world",
-        "tatooine",
+        "dune",
         "financial",
         "lego",
         "spaceship",
@@ -617,15 +623,15 @@ def test_ui_action_tool_needs_no_method_or_path() -> None:
 
 
 def test_loop_emits_ui_action_without_api_and_continues() -> None:
-    args = {"theme": "tatooine", "colors": {"accent": "#ff0000"}}
+    args = {"theme": "dune", "colors": {"accent": "#ff0000"}}
     prov = _Scripted(
-        [[_call("set_appearance", args)], [{"type": "delta", "text": "Switched to Tatooine."}]]
+        [[_call("set_appearance", args)], [{"type": "delta", "text": "Switched to Dune."}]]
     )
     api = _FakeApi()
     events = list(
         run_tool_loop(
             prov,
-            [{"role": "user", "content": "tatooine, red accent"}],
+            [{"role": "user", "content": "dune, red accent"}],
             ToolContext(("set_appearance", "list_jobs"), api),
         )
     )
@@ -860,3 +866,112 @@ def test_prompt_and_catalogue_explain_input_cdm_and_canvas_fallback() -> None:
     assert "Undo button" in TOOL_PROMPT
     tool = get_tool("list_pipeline_configs")
     assert tool is not None and "input_cdm" in tool.description
+
+
+# ---------------------------------------------------------------------------
+# Proposal forms / understanding (2026-11-27)
+# ---------------------------------------------------------------------------
+
+
+def test_repeat_only_round_trip_is_refunded() -> None:
+    """A step that only repeats an earlier identical read does not burn budget."""
+    prov = _Scripted(
+        [
+            [_call("list_jobs", {"limit": 3}, "a")],
+            [_call("list_jobs", {"limit": 3}, "b")],
+            [_call("list_jobs", {"limit": 3}, "c")],
+            [{"type": "delta", "text": "done"}],
+        ]
+    )
+    api = _FakeApi()
+    events = list(
+        run_tool_loop(
+            prov,
+            [{"role": "user", "content": "q"}],
+            ToolContext(("list_jobs", "create_job_draft"), api, max_iterations=3),
+        )
+    )
+    assert len(api.calls) == 1
+    # Without the refund the 3rd model call would be the (read-less) final step.
+    assert prov.seen[2][1] and any(t["function"]["name"] == "list_jobs" for t in prov.seen[2][1])
+    assert events[-1] == {"type": "delta", "text": "done"}
+
+
+def test_default_budget_is_ten() -> None:
+    assert ToolContext(("health",), None).max_iterations == 10
+    assert RouteConfig.from_dict({}).max_tool_iterations == 10
+
+
+def test_create_connection_and_address_are_proposals() -> None:
+    conn = get_tool("create_connection")
+    addr = get_tool("create_address")
+    assert conn is not None and addr is not None
+    assert conn.kind == "proposal" and addr.kind == "proposal"
+    assert "secrets" not in conn.params["properties"]  # values are typed by the human
+    req = build_request(conn, {"name": "inbox_x", "type": "disc", "args": {"host_path": "/data/x"}})
+    assert req["path"] == "/api/v1/connections/inbox_x"
+    assert req["body"] == {"type": "disc", "args": {"host_path": "/data/x"}}
+    with pytest.raises(ToolCallError):
+        build_request(conn, {"name": "x", "type": "disc", "secrets": {"password": "p"}})
+    req = build_request(
+        addr, {"name": "CHAR_X", "connection": "sf", "location": {"database": "CHAR_X"}}
+    )
+    assert req["path"] == "/api/v1/addresses/CHAR_X"
+    assert req["body"] == {"connection": "sf", "location": {"database": "CHAR_X"}}
+
+
+def test_tool_prompt_teaches_watch_workflow_recipe() -> None:
+    from ovid2.llm.tool_loop import TOOL_PROMPT
+
+    for needle in ("watch", "create_connection", "create_address", "get_automation_status"):
+        assert needle in TOOL_PROMPT
+    assert "never say you cannot create one" in TOOL_PROMPT
+
+
+def test_proposal_chain_continues_then_draft_ends_turn() -> None:
+    """account → address → workflow draft in one turn; repeats are shown once."""
+    conn = {"name": "inbox_nu", "type": "disc", "args": {"host_path": "/data/inbox/NU"}}
+    prov = _Scripted(
+        [
+            [_call("create_connection", conn, "a")],
+            [
+                _call("create_connection", conn, "b"),
+            ],
+            [_call("create_address", {"name": "CHAR_X", "connection": "sf"}, "c")],
+            [
+                _call(
+                    "draft_workflow",
+                    {"name": "nu_auto", "steps": [{"id": "etl", "pipeline": "nu"}]},
+                    "d",
+                )
+            ],
+            [{"type": "delta", "text": "Three cards: account, address, workflow."}],
+        ]
+    )
+    api = _FakeApi()
+    events = list(
+        run_tool_loop(
+            prov,
+            [{"role": "user", "content": "automate"}],
+            ToolContext(
+                ("create_connection", "create_address", "draft_workflow", "list_jobs"), api
+            ),
+        )
+    )
+    kinds = [(e["type"], e.get("name")) for e in events if e["type"] != "tool_result"]
+    assert kinds == [
+        ("proposal", "create_connection"),
+        ("proposal", "create_address"),
+        ("open_draft", "draft_workflow"),
+        ("delta", None),
+    ]
+    dup = [e for e in events if e["type"] == "tool_result" and e.get("duplicate")]
+    assert len(dup) == 1
+    assert api.calls == []
+    # After the first proposal no read tool is ever offered.
+    for _msgs, tools in prov.seen[1:]:
+        assert "list_jobs" not in [t["function"]["name"] for t in tools or []]
+    # 4 action round-trips + one tool-free explanation of the cards.
+    assert len(prov.seen) == 5 and prov.seen[-1][1] is None
+    assert "what each card you showed does" in prov.seen[-1][0][-1]["content"]
+    assert events[-1] == {"type": "delta", "text": "Three cards: account, address, workflow."}

@@ -1,0 +1,28 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  src1: provider
+  src2: PROVIDERID
+tables:
+  input:
+    columns:
+    - PROVIDERID
+    - V
+    rows:
+    - - R1
+      - a
+    - - R9
+      - b
+  provider:
+    columns:
+    - PROVIDERID
+    rows:
+    - - R1
+expected:
+  columns:
+  - PROVIDERID
+  - V
+  rows:
+  - - R1
+    - a
+  - - null
+    - b

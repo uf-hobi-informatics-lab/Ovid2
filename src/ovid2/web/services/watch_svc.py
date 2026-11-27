@@ -59,7 +59,7 @@ def last_checked_at(pipeline: str, input_address: str) -> str | None:
         row = conn.execute(
             "SELECT last_checked_at FROM web_watch_cursors "
             "WHERE pipeline = ? AND input_address = ?",
-            (pipeline, input_address),
+            (web_db.state_key(pipeline), input_address),
         ).fetchone()
     if row is None:
         return None
@@ -74,7 +74,7 @@ def last_seen(pipeline: str, input_address: str) -> str | None:
         row = conn.execute(
             "SELECT last_seen_batch FROM web_watch_cursors "
             "WHERE pipeline = ? AND input_address = ?",
-            (pipeline, input_address),
+            (web_db.state_key(pipeline), input_address),
         ).fetchone()
     if row is None:
         return None
@@ -101,7 +101,7 @@ def record_seen(pipeline: str, input_address: str, batch_id: str) -> None:
             "ON CONFLICT(pipeline, input_address) DO UPDATE SET "
             "last_seen_batch = excluded.last_seen_batch, "
             "last_checked_at = excluded.last_checked_at",
-            (pipeline, input_address, new_value, now),
+            (web_db.state_key(pipeline), input_address, new_value, now),
         )
 
 
@@ -116,7 +116,7 @@ def _touch_checked(pipeline: str, input_address: str) -> None:
             "VALUES (?, ?, NULL, ?) "
             "ON CONFLICT(pipeline, input_address) DO UPDATE SET "
             "last_checked_at = excluded.last_checked_at",
-            (pipeline, input_address, now),
+            (web_db.state_key(pipeline), input_address, now),
         )
 
 

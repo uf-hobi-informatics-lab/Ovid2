@@ -250,11 +250,11 @@ are independent:
   registry, packaged reference CSVs (RxNorm tiers) through the engine's
   stager, and the `dcq_results` frame from
   `BaseEngine.create_typed_dataframe`.
-- **Compute** — `--engine pyspark|databricks_spark|snowpark` (or a named
-  engine config).
-- **Storage** — the input / output addresses. Spark-family runs use the
-  driver's Spark data plane; Snowpark reads and writes through its stager
-  (native table reads for Snowflake, `PUT`/`COPY` for disc, …).
+- **Compute** — `--engine pyspark|databricks_spark|duckdb|snowpark` (or a
+  named engine config).
+- **Storage** — the input / output addresses, on any driver. Each engine
+  uses its native data plane where one exists and the Arrow bridge
+  otherwise (see [engines.md](engines.md#engine--storage)).
 
 `tests/unit/quality/test_health_engine_parity.py` runs every operator on
 each engine and asserts identical metric rows (set
@@ -342,12 +342,10 @@ enumerate but not from the web host (e.g. Access jars only in the image),
 `all` is kept and the executor expands it at run time. A listing failure
 (missing folder, unknown schema) is a 400 that says why.
 
-**Largest table first.** `ovid2 tools copy` copies tables in parallel
-(`$OVID2_COPY_TABLE_CONCURRENCY`, default 8). Before starting, it asks the
+**Largest table first.** `ovid2 tools copy` copies tables one at a time
+(every engine, like every other run kind). Before starting, it asks the
 source driver for per-table sizes (`Driver.table_sizes`, metadata only — no
-data scan) and starts the largest tables first. Total run time is then
-close to the time of the single largest table, rather than that table's
-time plus however late the list order happened to start it. Tables with
+data scan) and copies the largest tables first. Tables with
 unknown size keep their relative order after the sized ones. Set
 `OVID2_COPY_ORDER=as_given` to keep the order you passed. `move` uses the
 same order (it is serial, so this does not shorten the run).

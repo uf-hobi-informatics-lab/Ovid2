@@ -213,3 +213,23 @@ def test_volume_mounts_include_work_dir_at_identical_path(
     mounts = compose_module._volume_mounts(instance=_instance)
     assert f"{work}:{work}:rw" in mounts
     assert work.is_dir()
+
+
+@pytest.mark.unit
+def test_compose_mounts_legacy_scratch_root_on_real_disk(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, _instance: OvidInstance
+) -> None:
+    """Workers mount ``LEGACY_SCRATCH_ROOT`` at the identical path and export it.
+
+    Regression: legacy stage-boundary files lived on the ``WORK_DIR`` tmpfs
+    (tens of GB on a full acme feed) and OOM-killed the driver container.
+    """
+    scratch = tmp_path / "legacy-scratch"
+    monkeypatch.setattr(compose_module, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(compose_module, "LEGACY_CREDENTIALS_DIR", tmp_path / "nope")
+    monkeypatch.setattr(compose_module, "LEGACY_SCRATCH_ROOT", scratch)
+    with mock.patch("ovid2.core.isolation.OvidInstance.ensure_directories"):
+        compose = compose_module.build_compose_dict(_instance, 2)
+    worker = compose["services"][_instance.worker_name(1)]
+    assert f"{scratch}:{scratch}:rw" in worker["volumes"]
+    assert f"OVID2_LEGACY_SCRATCH_DIR={scratch}" in worker["environment"]

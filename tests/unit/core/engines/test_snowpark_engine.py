@@ -634,6 +634,37 @@ def test_snowpark_checkpoint_sanitises_name() -> None:
     assert calls["name"] == "OVID2_CKPT_COMMON_OBSERVATION_99"
 
 
+@pytest.mark.unit
+def test_snowpark_checkpoint_keeps_snowframe_wrapper() -> None:
+    """A PySpark-shaped ``SnowFrame`` in → ``SnowFrame`` out (pcornet_to_omop regression)."""
+    from ovid2.core.engines._snow_frame import SnowFrame
+
+    handle = object()
+    written: list[str] = []
+
+    class _FakeWriter:
+        def mode(self, m: str) -> _FakeWriter:
+            return self
+
+        def save_as_table(self, name: str, table_type: str | None = None) -> None:
+            written.append(name)
+
+    class _FakeDF:
+        write = _FakeWriter()
+
+    class _FakeNative:
+        def table(self, name: str) -> Any:
+            return handle
+
+    engine = SnowparkEngine(args={"account": "a", "user": "u"}, secrets={"password": "p"})
+    engine._native = _FakeNative()  # type: ignore[assignment]
+    engine._session = object()  # type: ignore[assignment]  # short-circuit get_session
+    result = engine.checkpoint(SnowFrame(_FakeDF(), engine), "common_procedure")
+    assert isinstance(result, SnowFrame)
+    assert result.native is handle
+    assert written == ["OVID2_CKPT_COMMON_PROCEDURE"]
+
+
 # ---------------------------------------------------------------------------
 # cancel_running_queries (SIGTERM / SIGINT cooperative cancel)
 # ---------------------------------------------------------------------------

@@ -67,6 +67,7 @@ class DrugExposureFormatter(BaseFormatter):
             batch_id=ctx.batch_id,
             engine=ctx.engine,
             input_address_name=ctx.input_address_name,
+            source_handle=ctx.source,
         )
 
     def format(self, df: "DataFrame") -> "DataFrame":

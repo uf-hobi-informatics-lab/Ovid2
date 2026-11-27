@@ -51,7 +51,7 @@
         "table":       {"type": "string"},
         "stage": {
             "type": "string",
-            "enum": ["read", "format", "deduplicate", "map", "fix", "write"]
+            "enum": ["read", "format", "deduplicate", "transform", "map", "fix", "write", "paused"]
         },
         "level": {
             "type": "string",

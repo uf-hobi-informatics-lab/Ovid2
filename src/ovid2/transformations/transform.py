@@ -30,6 +30,8 @@ __all__ = ["TransformStageTransformer"]
 class TransformStageTransformer(BaseTransformer):
     """Apply the pipeline's per-table transform assignments."""
 
+    stage_name = "transform"
+
     def transform(self, df: DataFrame, context: dict[str, Any]) -> DataFrame:
         """Run every chain assigned to ``context['table_name']`` in order."""
         from ovid2.transforms import engine as transforms_engine

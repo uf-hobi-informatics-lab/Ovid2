@@ -56,7 +56,7 @@ configs. Each has a type (`pyspark`, `databricks_spark`, `snowpark` or
 | pyspark | Spark config overrides, e.g. `spark.executor.cores` |
 | databricks_spark | workspace host, cluster id, secret ref |
 | snowpark | `connection` (a Snowflake storage account) |
-| duckdb | `threads`, `memory_limit`, `temp_directory`, `table_concurrency` |
+| duckdb | `threads`, `memory_limit`, `temp_directory` |
 
 **Test** probes the engine from an executor subprocess. Engine choice is
 explained in [Engines](../02-concepts/engines.md).

@@ -8,13 +8,23 @@ Params:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
+from ovid2.config.capabilities import Capability
 from ovid2.transforms.base import BaseTransform, DataFrame, TransformContext
 
 
 class RegexReplaceTransform(BaseTransform):
     """Regex-substitute values across one or more columns."""
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.FN_COL,
+            Capability.FN_REGEXP_REPLACE,
+            Capability.REGEX,
+        }
+    )
 
     category = "formatting"
 
@@ -70,6 +80,15 @@ class StripNonNumericTransform(BaseTransform):
     ``"12,345 units"`` becomes ``"12345"``.
     """
 
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.FN_COL,
+            Capability.FN_REGEXP_REPLACE,
+            Capability.REGEX,
+        }
+    )
+
     category = "correction"
 
     @property
@@ -112,6 +131,15 @@ class StripNonNumericTransform(BaseTransform):
 
 class StripNonAlphaTransform(BaseTransform):
     """Remove every non-letter character from the named columns."""
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.FN_COL,
+            Capability.FN_REGEXP_REPLACE,
+            Capability.REGEX,
+        }
+    )
 
     category = "correction"
 

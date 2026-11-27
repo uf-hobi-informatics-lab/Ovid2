@@ -63,7 +63,13 @@ class SubmitRunArgs(BaseModel):
     )
     engine: str = Field("pyspark", description="Compute engine (default: pyspark).")
     workers: int = Field(
-        25, ge=1, le=200, description="Spark worker count. Ignored for kind=copy or kind=move."
+        25,
+        ge=1,
+        le=200,
+        description=(
+            "Spark worker containers (pyspark only). Ignored for DuckDB / Snowpark and "
+            "for kind=copy or kind=move; tables run one at a time on every engine."
+        ),
     )
     sf_account: str | None = Field(
         None, description="Snowflake ACCOUNT override. Ignored for kind=copy or kind=move."

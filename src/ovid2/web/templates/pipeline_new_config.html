@@ -414,7 +414,6 @@
             </h2>
           </div>
         </header>
-        <p class="flash" data-engine-hint hidden></p>
         {% set chosen_engine = f.get('engine') or 'pyspark' %}
         {% set engine_names = engines | map(attribute='name') | list %}
         <div class="nw-engine-tiles" role="radiogroup" aria-label="Engine">

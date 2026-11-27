@@ -427,10 +427,8 @@ def encrypt_id_udf(pipeline: str) -> Any:
     pipeline_prefix = encryption_prefix(pipeline)
     key_len = len(hashing_key)
 
-    # pyspark's .pyi predates the type-hint-based pandas_udf form and
-    # requires ``functionType``; the call is valid at runtime (Spark >= 3.0).
-    from pyspark.sql.pandas.functions import pandas_udf
-    from pyspark.sql.types import StringType
+    from ovid2.core.engines.dsl import pandas_udf
+    from ovid2.core.engines.types import StringType
 
     def _encrypt_batch(id_series):  # type: ignore[no-untyped-def]
         results: list[str | None] = []
@@ -445,11 +443,45 @@ def encrypt_id_udf(pipeline: str) -> Any:
             results.append(b64encode(encrypted).decode())
         return pd.Series(results, dtype=object)
 
-    # Explicit eval type: string annotations (``from __future__ import
-    # annotations``) defeat PySpark's type-hint inference.
-    from pyspark.sql.functions import PandasUDFType  # type: ignore[attr-defined]
+    # Engine-portable scalar pandas UDF (``ovid2.core.engines.dsl``):
+    # PySpark gets a real ``pandas_udf``; Snowpark a vectorised Python
+    # function with the same per-value code. DuckDB runs the same bytes as
+    # native SQL (see :class:`_EncryptIdColumn`).
+    return _EncryptIdColumn(pandas_udf(_encrypt_batch, StringType()), pipeline_prefix, hashing_key)
 
-    return pandas_udf(_encrypt_batch, StringType(), PandasUDFType.SCALAR)
+
+class _EncryptIdColumn:
+    """``encrypt_id_udf(...)`` result: native SQL on DuckDB, the pandas UDF elsewhere.
+
+    A Python UDF on DuckDB holds the GIL for every batch, so on a
+    many-core host the id encryption alone pinned a legacy run to one core
+    (~75 % of all samples in a py-spy profile of an ``acme`` run). DuckDB
+    computes the identical XOR + base64 natively
+    (``_DuckFunctions.xor_base64``); non-string inputs keep the UDF, whose
+    ``f"{prefix}{value}"`` text a SQL cast may not reproduce.
+    """
+
+    def __init__(self, udf: Any, prefix: str, key: bytes) -> None:
+        self._udf = udf
+        self._prefix = prefix
+        self._key = key
+        self.__name__ = "encrypt_id"
+
+    def __call__(self, column: Any) -> Any:
+        from ovid2.core.engines.dsl import active_engine
+
+        engine = active_engine()
+        functions = None
+        if engine is not None and not getattr(engine, "session_is_spark", True):
+            functions = engine.get_functions()
+        native = getattr(functions, "xor_base64", None)
+        if native is None or not self._prefix or not self._key:
+            return self._udf(column)
+        return native(column, self._prefix, self._key, fallback=self._udf(column))
+
+    def __getattr__(self, name: str) -> Any:
+        """Delegate UDF attributes (``func``, ``returnType`` …) to the wrapped UDF."""
+        return getattr(self._udf, name)
 
 
 # ---------------------------------------------------------------------------

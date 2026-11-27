@@ -102,6 +102,7 @@ Operator requirements
 from __future__ import annotations
 
 import contextlib
+import importlib
 import logging
 import re
 from typing import TYPE_CHECKING, Any
@@ -838,7 +839,9 @@ def _run_databricks_sql(merged: dict[str, Any], sql: str) -> None:
         )
 
     try:
-        from databricks import sql as dbx_sql  # type: ignore[import-not-found]
+        # importlib keeps mypy quiet whether or not the optional connector
+        # is installed (the CI image has no ``databricks`` package).
+        dbx_sql: Any = importlib.import_module("databricks.sql")
     except ImportError as exc:
         raise RuntimeError(
             "SnowparkDatabricksStrategy: databricks-sql-connector is "

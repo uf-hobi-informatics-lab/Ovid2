@@ -25,11 +25,11 @@ from __future__ import annotations
 
 import operator
 from functools import reduce
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
-from pyspark.sql import functions as sf
-
+from ovid2.config.capabilities import Capability
 from ovid2.config.settings import DEDUP_NULL_KEY_PASSTHROUGH, DEDUP_SALT_BUCKETS
+from ovid2.core.engines import dsl
 
 if TYPE_CHECKING:
     from pyspark.sql import Column, DataFrame
@@ -54,6 +54,15 @@ class Deduplicator:
             engine is ``None`` or Spark-compatible, the byte-identical
             pre-portability PySpark path runs.
     """
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.FN_COL,
+            Capability.FN_LIT,
+            Capability.FN_RAND,
+        }
+    )
 
     def __init__(
         self,
@@ -124,7 +133,9 @@ class Deduplicator:
         return cast("DataFrame", self._deduplicate_portable(df))
 
     # ------------------------------------------------------------------
-    # PySpark path (byte-identical to the pre-portability implementation)
+    # Salted path (Spark family). Column functions come from the engine-
+    # dispatching DSL, which resolves to ``pyspark.sql.functions`` on Spark,
+    # so the plan is byte-identical to the historical direct import.
     # ------------------------------------------------------------------
 
     def _deduplicate_spark(self, df: DataFrame) -> DataFrame:
@@ -146,8 +157,8 @@ class Deduplicator:
 
     def _build_full_key_predicate(self) -> Column:
         """Build a predicate that is true iff every key column is populated."""
-        predicates = [sf.col(k).isNotNull() & (sf.col(k) != sf.lit("")) for k in self.key_fields]
-        return reduce(operator.and_, predicates)
+        predicates = [dsl.col(k).isNotNull() & (dsl.col(k) != dsl.lit("")) for k in self.key_fields]
+        return cast("Column", reduce(operator.and_, predicates))
 
     def _dedup_with_skew_relief(self, df: DataFrame) -> DataFrame:
         """Apply salted two-stage dedup, or single-stage when salting is disabled."""
@@ -162,7 +173,7 @@ class Deduplicator:
         n_buckets = int(DEDUP_SALT_BUCKETS)
         salted = df.withColumn(
             salt_col,
-            (sf.rand(seed=42) * sf.lit(n_buckets)).cast("int"),
+            (dsl.rand(seed=42) * dsl.lit(n_buckets)).cast("int"),
         )
         stage1 = salted.dropDuplicates(self.key_fields + [salt_col])
         return stage1.drop(salt_col).dropDuplicates(self.key_fields)

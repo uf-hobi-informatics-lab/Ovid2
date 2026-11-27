@@ -123,6 +123,8 @@ def test_run_pipeline_puts_engine_in_transform_context(
         "_read_with_pipeline_hook",
         lambda **kwargs: fake_df,
     )
+    # Endpoints are legacy-address doubles the (fake) stager accepts as-is.
+    monkeypatch.setattr(pipeline_mod, "_resolve_endpoint", lambda engine, address, *a, **k: address)
 
     fake_session = MagicMock()
     fake_engine = MagicMock()
@@ -182,13 +184,28 @@ def test_read_hook_optional_primary_missing_degrades_to_empty(
         input_file_name = "*PREVENTABLE*"
         primary_source_optional = True
 
-    empty_marker = object()
+    class _Empty:
+        """Spark-like empty frame: dropping the sentinel leaves zero columns."""
+
+        columns: list[str] = []
+
+        def drop(self, *_cols: object) -> object:
+            return self
+
+    empty_marker = _Empty()
     fake_session = MagicMock()
     fake_session.createDataFrame.return_value = empty_marker
 
-    # No pipeline_settings module for a made-up pipeline → no hooks / datavant.
-    result = pipeline_mod._read_with_pipeline_hook(
-        spark=fake_session,
+    class _MissingStager:
+        def materialise(self, *a: object, **k: object) -> object:
+            raise FileNotFoundError("No files found matching pattern '*PREVENTABLE*'")
+
+    # No pipeline_settings hook for this table → the stager read runs.
+    result = pipeline_mod._read_primary(
+        engine=MagicMock(),
+        session=fake_session,
+        stager=_MissingStager(),
+        input_endpoint=_MissingAddress(),
         input_address=_MissingAddress(),
         table_name="pcornet_trial",
         formatter=_OptionalFormatter(),
@@ -209,8 +226,8 @@ def test_read_hook_required_primary_missing_reraises(
     """A missing *required* primary source still raises ``FileNotFoundError``."""
     from ovid2.core import pipeline as pipeline_mod
 
-    class _MissingAddress:
-        def read(self, *a: object, **k: object) -> object:
+    class _MissingStager:
+        def materialise(self, *a: object, **k: object) -> object:
             raise FileNotFoundError("No files found matching pattern '*demographic*'")
 
     class _RequiredFormatter:
@@ -218,9 +235,12 @@ def test_read_hook_required_primary_missing_reraises(
         primary_source_optional = False
 
     with pytest.raises(FileNotFoundError):
-        pipeline_mod._read_with_pipeline_hook(
-            spark=MagicMock(),
-            input_address=_MissingAddress(),
+        pipeline_mod._read_primary(
+            engine=MagicMock(),
+            session=MagicMock(),
+            stager=_MissingStager(),
+            input_endpoint=object(),
+            input_address=object(),
             table_name="demographic",
             formatter=_RequiredFormatter(),
             pipeline="acme_from_disc",

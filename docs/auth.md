@@ -93,7 +93,7 @@ concern:
 | `auth_<provider>.json` | `{"client_secret": "…"}` | OIDC client secret, per provider key (e.g. `auth_google.json`) |
 | `auth_session.json` | `{"signing_key": "…"}` | Session-cookie / CSRF signing key — **auto-generated on first use** if absent |
 | `auth_breakglass.json` | `{"password_hash": "…"}` | Break-glass admin argon2 hash — set via the CLI, not by hand |
-| `auth_service_tokens.json` | `{"<sha256hex>": "<role>"}` | MCP service-principal token→role map |
+| `auth_service_tokens.json` | `{"<sha256hex>": "<role>"}` or `{"<sha256hex>": {"role": …, "workspaces": […]}}` | MCP service-principal token→role (+ workspaces) map |
 
 Example (create with a restrictive umask):
 
@@ -173,6 +173,28 @@ The mapped role defaults to `pipeline_operator` and can **never** silently
 escalate to `system_admin`. The MCP client sends it as
 `Authorization: Bearer <token>` on every request.
 
+**Workspaces.** A plain role string binds the token to the `default`
+workspace. To let the agent act in other workspaces, use the object form
+and pick one per process with `OVID2_MCP_WORKSPACE`. The client sends it as
+`X-Ovid2-Workspace`, and any workspace not listed answers `404`:
+
+```json
+{"<sha256hex-of-token>": {"role": "pipeline_operator", "workspaces": ["default", "lab"]}}
+```
+
+## Workspaces
+
+Every user works inside a **workspace**: a shared space with its own
+pipelines, workflows, jobs, reports, connections, addresses, secrets,
+engines, LLM connections, transform library and pipeline packages. Your
+role still decides what you can do there; membership only decides where.
+System admins create workspaces and see all of them. A workspace's
+`admin` members can add and remove its members. Archiving or deleting a
+workspace needs approval from a second administrator. On upgrade,
+everything moves into `default`, and every active user is enrolled in it.
+See the manual page *Web panel → Workspaces* and
+the adr-workspaces design note.
+
 ## Roles → capabilities
 
 | Capability | guest | viewer | operator | admin |
@@ -180,7 +202,7 @@ escalate to `system_admin`. The MCP client sends it as
 | View public / CDMs / health / API docs | ✓ | ✓ | ✓ | ✓ |
 | View runs, run reports | | ✓ | ✓ | ✓ |
 | View pipeline data, submit/cancel jobs | | | ✓ | ✓ |
-| Manage config / secrets / users, settings, install | | | | ✓ |
+| Manage config / secrets / users / workspaces, settings, install | | | | ✓ |
 
 Pending users have **no** capabilities until activated.
 

@@ -39,6 +39,7 @@ resolved from a bearer token with a mapped role).
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -83,16 +84,32 @@ class AuthContext:
         anonymous_bypass: ``True`` only for the synthetic admin returned while
             ``settings.auth.enabled`` is ``False``. Real principals always have
             this ``False``.
+        workspace_id: The workspace this request runs in
+            (adr-workspaces.md); :data:`ovid2.workspaces.NO_WORKSPACE` when
+            the principal belongs to none. Resolved once per request by
+            :func:`current_user` and mirrored into the
+            :func:`ovid2.workspaces.active_workspace` context by
+            :class:`ovid2.web.auth.workspace_middleware.WorkspaceMiddleware`.
+        ws_role: The principal's membership role in that workspace
+            (``member`` / ``admin``), or ``None`` (system-admin visibility,
+            service principals).
+        session_id: The browser session id, when the principal came from one.
     """
 
     user_id: str
     role: Role
     email: str | None = None
     anonymous_bypass: bool = False
+    workspace_id: str = "default"
+    ws_role: str | None = None
+    session_id: str | None = None
 
 
 #: ``user_id`` of the break-glass admin's sessions (no ``web_users`` row).
 BREAKGLASS_USER_ID: str = "breakglass"
+
+#: ``user_id`` of the MCP service principal (bearer token, no ``web_users`` row).
+SERVICE_USER_ID: str = "mcp:service"
 
 
 def _synthetic_admin() -> AuthContext:
@@ -132,8 +149,96 @@ def _role_from_user(record: dict[str, object]) -> Role:
     return Role.PENDING
 
 
+#: ``request.state`` attribute caching the resolved principal for one request.
+_STATE_KEY: str = "ovid2_auth_ctx"
+
+#: Cookie carrying the chosen workspace while sign-in is off (no session row).
+WORKSPACE_COOKIE: str = "ovid2_workspace"
+
+
+class WorkspaceUnavailable(Exception):
+    """The requested workspace is not visible to the principal (→ 404)."""
+
+
 def current_user(request: Request) -> AuthContext | None:
-    """Resolve the authenticated principal for ``request``.
+    """Resolve the authenticated principal *and* its workspace for ``request``.
+
+    The result is cached on ``request.state`` so the workspace middleware,
+    the HTML redirect middleware and the route dependency share one
+    resolution. See :func:`_resolve_principal` for the identity rules.
+
+    Raises:
+        HTTPException: As :func:`_resolve_principal` (assistant-token
+            limits), or ``404`` when an explicitly requested workspace
+            (``X-Ovid2-Workspace``) is not visible to the principal.
+    """
+    cached = getattr(request.state, _STATE_KEY, None)
+    if cached is not None:
+        if isinstance(cached, WorkspaceUnavailable):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="workspace_not_found")
+        return cached if isinstance(cached, AuthContext) else None
+    ctx = _resolve_principal(request)
+    if ctx is None:
+        return None
+    try:
+        ctx = _attach_workspace(request, ctx)
+    except WorkspaceUnavailable as exc:
+        setattr(request.state, _STATE_KEY, exc)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="workspace_not_found"
+        ) from None
+    setattr(request.state, _STATE_KEY, ctx)
+    return ctx
+
+
+def _attach_workspace(request: Request, ctx: AuthContext) -> AuthContext:
+    """Return ``ctx`` stamped with the workspace it works in for this request."""
+    from ovid2.web.auth import llm_token, service_token
+    from ovid2.web.services import workspaces_svc
+    from ovid2.workspaces import WORKSPACE_HEADER
+
+    requested = (request.headers.get(WORKSPACE_HEADER) or "").strip() or None
+    allowed: tuple[str, ...] | None = None
+    if ctx.user_id.startswith(llm_token.LLM_PRINCIPAL_PREFIX):
+        grant = llm_token.lookup(_bearer(request) or "")
+        # The assistant is pinned to the workspace the user chatted from.
+        allowed = (grant.workspace_id,) if grant is not None else ()
+        requested = None
+    elif ctx.user_id == SERVICE_USER_ID:
+        allowed = service_token.token_workspaces(_bearer(request) or "")
+    elif ctx.role == Role.PENDING:
+        return dataclasses.replace(ctx, workspace_id=_no_workspace())
+    if ctx.anonymous_bypass and requested is None:
+        requested = (request.cookies.get(WORKSPACE_COOKIE) or "").strip() or None
+        try:
+            ws, ws_role = workspaces_svc.resolve_for(
+                user_id=ctx.user_id, is_system_admin=True, requested=requested
+            )
+        except workspaces_svc.WorkspaceNotFound:
+            # A stale cookie (workspace archived / deleted) falls back silently.
+            ws, ws_role = workspaces_svc.resolve_for(user_id=ctx.user_id, is_system_admin=True)
+        return dataclasses.replace(ctx, workspace_id=ws, ws_role=ws_role)
+    try:
+        ws, ws_role = workspaces_svc.resolve_for(
+            user_id=ctx.user_id,
+            is_system_admin=ctx.role == Role.SYSTEM_ADMIN and allowed is None,
+            requested=requested,
+            session_id=ctx.session_id,
+            allowed=allowed,
+        )
+    except workspaces_svc.WorkspaceNotFound:
+        raise WorkspaceUnavailable(requested or "") from None
+    return dataclasses.replace(ctx, workspace_id=ws, ws_role=ws_role)
+
+
+def _no_workspace() -> str:
+    from ovid2.workspaces import NO_WORKSPACE
+
+    return NO_WORKSPACE
+
+
+def _resolve_principal(request: Request) -> AuthContext | None:
+    """Resolve the authenticated principal for ``request`` (identity only).
 
     Args:
         request: The inbound request carrying (or lacking) the session cookie.
@@ -178,6 +283,7 @@ def current_user(request: Request) -> AuthContext | None:
             role=Role.SYSTEM_ADMIN,
             email=None,
             anonymous_bypass=False,
+            session_id=session_id,
         )
 
     record = users_svc.get_user(session.user_id)
@@ -195,6 +301,7 @@ def current_user(request: Request) -> AuthContext | None:
         role=_role_from_user(record),
         email=email,
         anonymous_bypass=False,
+        session_id=session_id,
     )
 
 
@@ -272,7 +379,7 @@ def _service_principal(request: Request) -> AuthContext | None:
     if role is None:
         return None
     return AuthContext(
-        user_id="mcp:service",
+        user_id=SERVICE_USER_ID,
         role=role,
         email=None,
         anonymous_bypass=False,

@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import logging
+import os
 import sys
 from collections.abc import Sequence
 
@@ -136,6 +137,15 @@ def _build_parser() -> argparse.ArgumentParser:
         default=0,
         help="Increase log verbosity (repeatable).",
     )
+    parser.add_argument(
+        "--workspace",
+        default=None,
+        metavar="SLUG",
+        help=(
+            "Workspace whose connections, addresses, engines, secrets and pipeline "
+            "packages this command uses (default: $OVID2_WORKSPACE, else 'default')."
+        ),
+    )
 
     subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
 
@@ -181,13 +191,26 @@ def main(argv: Sequence[str] | None = None) -> int:
     Returns:
         Process exit code.
     """
-    # Pipeline packages (``pipelines/ovid2_pipelines/<name>``) are not in
-    # the wheel; make a repo checkout's tree importable for every
-    # subcommand, mirroring ``ovid2 web``.
-    ensure_pipeline_packages_on_path()
     parser = _build_parser()
     args = parser.parse_args(argv)
     _configure_logging(getattr(args, "verbose", 0))
+    workspace = getattr(args, "workspace", None)
+    if workspace:
+        from ovid2.workspaces import WORKSPACE_ENV, WorkspaceSlugError, validate_slug
+
+        if workspace != "default":
+            try:
+                validate_slug(workspace)
+            except WorkspaceSlugError as exc:
+                print(f"ovid2: --workspace: {exc}", file=sys.stderr)
+                return 2
+        # Exported so every subprocess / container this command spawns
+        # runs in the same workspace (adr-workspaces.md).
+        os.environ[WORKSPACE_ENV] = workspace
+    # Pipeline packages (``pipelines/ovid2_pipelines/<name>``) are not in
+    # the wheel; make a repo checkout's tree — and the active workspace's
+    # own package root — importable for every subcommand.
+    ensure_pipeline_packages_on_path()
 
     entry = getattr(args, "_entry", None)
     if entry is None:

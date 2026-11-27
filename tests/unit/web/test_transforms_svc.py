@@ -21,7 +21,6 @@ def test_list_transforms_returns_full_catalogue() -> None:
             "name",
             "summary",
             "category",
-            "requires_family",
             "params_schema",
         }
 

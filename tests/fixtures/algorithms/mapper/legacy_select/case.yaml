@@ -1,0 +1,36 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  columns:
+  - id
+  - SEX:
+      dict: sex_dict
+      col: sex
+  - SRC:
+      lit: ACME
+spec:
+  dictionaries:
+    sex_dict:
+      M: Male
+tables:
+  input:
+    columns:
+    - id
+    - sex
+    rows:
+    - - '1'
+      - m
+    - - '2'
+      - F
+note: dict lookup on upper(col) with pass-through fallback
+expected:
+  columns:
+  - id
+  - SEX
+  - SRC
+  rows:
+  - - '1'
+    - Male
+    - ACME
+  - - '2'
+    - F
+    - ACME

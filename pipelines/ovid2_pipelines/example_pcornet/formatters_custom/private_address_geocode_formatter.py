@@ -21,7 +21,7 @@ INPUT_FILE_NAME: str = "*LDS_Address_History_*.txt"
 
 def _geo_accuracy_col(ruca_2020_col: "Column", ruca_zip5_col: "Column") -> "Column":
     """Determine geocoding accuracy: ``Z9`` / ``Z5`` / ``NI``."""
-    from pyspark.sql.functions import lit, when
+    from ovid2.core.engines.dsl import lit, when
 
     return (
         when(ruca_2020_col.isNull() & ruca_zip5_col.isNull(), lit("NI"))
@@ -32,7 +32,7 @@ def _geo_accuracy_col(ruca_2020_col: "Column", ruca_zip5_col: "Column") -> "Colu
 
 def _shapefile_col(ruca_2020_col: "Column", ruca_zip5_col: "Column") -> "Column":
     """Return the shapefile reference matching the geocoding source used."""
-    from pyspark.sql.functions import lit, when
+    from ovid2.core.engines.dsl import lit, when
 
     return (
         when(ruca_2020_col.isNull() & ruca_zip5_col.isNull(), lit("NI"))
@@ -43,7 +43,7 @@ def _shapefile_col(ruca_2020_col: "Column", ruca_zip5_col: "Column") -> "Column"
 
 def _zcta_col(zcta_col: "Column", zcta_zip5_col: "Column") -> "Column":
     """Coalesce the ZCTA from ZIP9, ZIP5, then ``NI``."""
-    from pyspark.sql.functions import lit, when
+    from ovid2.core.engines.dsl import lit, when
 
     return (
         when(zcta_col.isNull() & zcta_zip5_col.isNull(), lit("NI"))
@@ -54,9 +54,6 @@ def _zcta_col(zcta_col: "Column", zcta_zip5_col: "Column") -> "Column":
 
 class Private_address_geocodeFormatter(BaseFormatter):
     """Formatter for the example_pcornet ``private_address_geocode`` table."""
-
-    #: Uses ``monotonically_increasing_id`` and Spark map-literal lookups.
-    requires_family = "spark"
 
     @property
     def table_name(self) -> str:
@@ -70,7 +67,7 @@ class Private_address_geocodeFormatter(BaseFormatter):
 
     def format(self, df: "DataFrame") -> "DataFrame":  # noqa: A003 — CDM API
         """Enrich example_pcornet address data with geocoding lookups (lazy)."""
-        from pyspark.sql.functions import (
+        from ovid2.core.engines.dsl import (
             coalesce,
             col,
             concat,

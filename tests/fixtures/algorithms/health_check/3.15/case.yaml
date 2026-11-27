@@ -1,0 +1,31 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+dataset: pcornet_small
+expected:
+  columns:
+  - source_table
+  - metric
+  - value_num
+  - value_str
+  - exception_flag
+  rows:
+  - - MED_ADMIN
+    - COVERAGE_PCT
+    - 25.0
+    - null
+    - true
+tables:
+  med_admin:
+    columns:
+    - MEDADMINID
+    - MEDADMIN_CODE
+    rows:
+    - - M1
+      - '123'
+    - - M2
+      - null
+    - - M3
+      - NI
+    - - M4
+      - ''
+note: "known-value coverage: null, empty and flavour-of-null all count as unknown \u2014 expected = PySpark\
+  \ reference, identical on DuckDB when recorded"

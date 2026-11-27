@@ -1,0 +1,22 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  src1: DX_DATE
+  src2: REFRESH_DEMOGRAPHIC_DATE
+tables:
+  input:
+    columns:
+    - DX_DATE
+    rows:
+    - - null
+    - - '2023-01-01'
+  harvest:
+    columns:
+    - REFRESH_DEMOGRAPHIC_DATE
+    rows:
+    - - '2023-06-30'
+expected:
+  columns:
+  - DX_DATE
+  rows:
+  - - '2023-06-30'
+  - - '2023-01-01'

@@ -9,7 +9,7 @@ authorized`` failure seen on a live Snowpark ``pcornet_to_omop`` run:
 the previous table's ``stager.persist`` leaves the Snowpark session
 pointed at the *output* schema (``USE SCHEMA <output>``), so the next
 table's ``formatter.format`` would resolve the unqualified ``concept``
-temp view against the wrong schema. ``_run_pipeline_staged`` must
+temp view against the wrong schema. the one pipeline path (``_run_pipeline``) must
 re-bind the writable workspace namespace (``engine.prepare_workspace``)
 *before* formatting, which restores the schema the shared view was
 registered in.
@@ -19,16 +19,23 @@ from __future__ import annotations
 
 from typing import Any
 
-from ovid2.core.pipeline import _run_pipeline_staged
+from ovid2.core.engines.base import BaseEngine
+from ovid2.core.pipeline import _run_pipeline as _run_pipeline_staged
 
 
-class _RecordingEngine:
-    """Minimal non-Spark engine double that records the call order."""
+class _RecordingEngine(BaseEngine):
+    """Minimal Snowpark-like engine double that records the call order.
+
+    A :class:`BaseEngine` subclass so the pipeline's engine hooks
+    (``register_view`` / ``warm_reference`` / ``release_checkpoints``) use
+    their real defaults.
+    """
 
     session_is_spark = False
     type_name = "snowpark"
 
     def __init__(self, calls: list[str], session: Any, stager: Any) -> None:
+        super().__init__()
         self._calls = calls
         self._session = session
         self._stager = stager
@@ -36,10 +43,13 @@ class _RecordingEngine:
     def get_session(self) -> Any:
         return self._session
 
+    def stop_session(self) -> None:
+        pass
+
     def get_stager(self) -> Any:
         return self._stager
 
-    def prepare_workspace(self) -> None:
+    def prepare_workspace(self, fallback_databases: Any = ()) -> None:
         self._calls.append("prepare_workspace")
 
 
@@ -137,7 +147,7 @@ def test_prepare_workspace_runs_before_formatting(monkeypatch: Any) -> None:
 def test_register_engine_view_uses_snowpark_view(monkeypatch: Any) -> None:
     """The finished table is registered via the engine-agnostic view helper.
 
-    Sanity check that ``_run_pipeline_staged`` still registers the output
+    Sanity check that ``_run_pipeline`` still registers the output
     table as a temp view (so cross-table fixers can reference it) after
     the workspace re-bind change.
     """
@@ -211,7 +221,7 @@ def _run_staged(engine: Any, formatter: Any, table: str, cdm: Any) -> None:
 
 
 class _MaterialisingEngine(_RecordingEngine):
-    """DuckDB-shaped double: exposes ``materialise`` like ``DuckDBEngine``."""
+    """DuckDB-shaped double: warms reference tables like ``DuckDBEngine``."""
 
     type_name = "duckdb"
 
@@ -220,9 +230,9 @@ class _MaterialisingEngine(_RecordingEngine):
         self.materialised: list[tuple[Any, str]] = []
         self.result = _ViewDataFrame()
 
-    def materialise(self, df: Any, name: str) -> Any:
+    def warm_reference(self, session: Any, df: Any, name: str) -> Any:
         self._calls.append("engine.materialise")
-        self.materialised.append((df, name))
+        self.materialised.append((df, f"ref_{name}"))
         return self.result
 
 

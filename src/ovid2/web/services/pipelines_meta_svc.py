@@ -24,6 +24,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from ovid2.config.pipeline_packages import package_visible
 from ovid2.web.models import PipelineDetail, PipelineFileInfo, PipelineSummary
 
 
@@ -52,13 +53,18 @@ def discover_pipelines() -> list[str]:
         return []
     names: set[str] = set()
     for module_info in pkgutil.iter_modules(pkg.__path__):
-        if module_info.ispkg:
+        if module_info.ispkg and package_visible(module_info.name):
             names.add(module_info.name)
     return sorted(names)
 
 
 def _pipeline_path(pipeline: str) -> Path | None:
-    """Return the on-disk directory of a pipeline package, or None."""
+    """Return the on-disk directory of a pipeline package, or None.
+
+    A package owned by another workspace resolves to ``None``.
+    """
+    if not package_visible(pipeline):
+        return None
     try:
         pkg = importlib.import_module(f"ovid2_pipelines.{pipeline}")
     except ModuleNotFoundError:

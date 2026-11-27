@@ -1,128 +1,129 @@
 {% extends "base.html" %}
 {% import "_icons.html" as icons %}
 {% import "_help.html" as help %}
-{% block title %}Pipeline navigator &mdash; Ovid2{% endblock %}
+{% block title %}Atlas &mdash; Ovid2{% endblock %}
 {% block content %}
 {#
-  Pipeline navigator — every package → table → field → chain of functions.
+  Ovid Atlas — the workspace as a lane board (adr-atlas.md).
 
-  Left   tree: packages grouped by a switchable axis; packages expand to
-         tables, tables to fields, fields to their steps (lazy, via
-         /api/v1/pipeline-packages/{p}/lineage). One filter narrows every
-         level; stage checkboxes hide whole stages.
-  Centre graph: the package overview (d3 tree) or a table's *lanes*
-         (one row per CDM field × one column per stage, chips per step).
-  Right  the shared spec editor (spec_builder.js Editor) opened at the
-         step's document; vendored / generated sources open read-only.
-  All state after first paint lives in static/navigator.js.
+  One line per workflow and per pipeline (run config). A pipeline lane is
+  its beam in fixed columns: pipeline | input → engine → package → output;
+  a workflow lane is its steps in order, each with its beam. Lanes share
+  the canvas height exactly and are re-fitted on every resize; below a
+  one-line height only the lane list scrolls. Cards never expand in place:
+  editors, the Data Space browser, lineage lanes and the live run console
+  open in the resizable dock. "Running on top" floats live lanes to the
+  top. Everything after first paint is fetched from /api/v1/atlas and the
+  existing per-resource APIs by static/atlas/atlas.js.
 #}
-<section class="page pl-page nv-page" id="navigator"
-         data-kind="etl"
+<section class="page atlas-page nv-page" id="atlas"
          data-can-write="{{ 'true' if can_write else 'false' }}"
-         data-group-by="{{ group_by }}"
-         data-include-unused="{{ 'true' if include_unused else 'false' }}"
+         data-can-run="{{ 'true' if can_run else 'false' }}"
+         data-can-view-data="{{ 'true' if can_view_data else 'false' }}"
+         data-poll-ms="{{ poll_ms }}"
+         data-server-now-ms="{{ server_now_ms }}"
+         data-user="{{ user_label }}"
          data-initial-p="{{ initial.p }}"
          data-initial-t="{{ initial.t }}"
-         data-initial-f="{{ initial.f }}">
-  <header class="page-header pl-header">
-    <div class="pl-title">
-      <h1>Pipeline navigator
-        {% call help.tip_block(label="Pipeline navigator") %}
-          Browse every pipeline package by <strong>type</strong>, expand a package to its
-          <strong>tables</strong>, a table to its <strong>fields</strong>, and a field to the
-          ordered chain of <strong>functions</strong> applied to it across
-          format &rarr; deduplicate &rarr; transform &rarr; map &rarr; fix.
-          Click any step to open the YAML that defines it.
-          Legacy-parity ports are generated, so they are read-only here.
+         data-initial-f="{{ initial.f }}"
+         data-initial-node="{{ initial.node }}">
+  <header class="atlas-bar terminal-pane console-fill" aria-label="Atlas controls">
+    <div class="atlas-bar-left">
+      <span class="term-prompt-label atlas-wordmark" data-status="idle">ovid2</span>
+      <span class="atlas-sep">::</span>
+      <h1 class="atlas-title">atlas
+        {% call help.tip_block(label="Ovid Atlas") %}
+          The whole workspace as one board, one line per workflow and per
+          pipeline. A pipeline line reads left to right as its <em>beam</em>:
+          input location → engine → package → output location. A workflow
+          line shows its steps in order. The lines always fill the page; with
+          many of them they shrink to one line each and then scroll. Click any
+          card to open it in the dock below (editors, lineage, sample rows,
+          the live run console). The layer buttons hide the
+          <strong>algorithms</strong>, <strong>compute</strong> or
+          <strong>storage</strong> columns. Everyone in the workspace sees the
+          same Atlas and its saved views.
         {% endcall %}
       </h1>
+      <span class="atlas-ws mono small" title="Workspace">{{ workspace }}</span>
     </div>
-    <a class="button" href="/transforms">{{ icons.icon("zap", size=15) }} Transform library</a>
+    <div class="atlas-bar-mid" role="group" aria-label="Layers">
+      {% for layer, label in layers %}
+        <button type="button" class="atlas-layer-btn is-on" data-layer-toggle="{{ layer }}"
+                aria-pressed="true" title="Show / hide the {{ label }} layer (double-click to isolate)">
+          <span class="atlas-layer-swatch is-{{ layer }}"></span>{{ label }}
+        </button>
+      {% endfor %}
+      {{ help.tip("Show or hide the columns of a layer. Double-click a layer button to show only that layer.") }}
+    </div>
+    <div class="atlas-bar-right">
+      <input type="search" class="atlas-search mono" placeholder="find… (/)" data-atlas-search
+             aria-label="Find a node" autocomplete="off">
+      <label class="atlas-toggle mono" title="Float lines with a running, queued or paused job to the top (t)">
+        <input type="checkbox" data-atlas-float-running checked> running on top
+      </label>
+      <button type="button" class="term-prompt-btn atlas-btn" data-atlas-focus-running
+              title="Scroll to and open what is running now (r)">{{ icons.icon("activity", size=14) }} running</button>
+      <button type="button" class="term-prompt-btn atlas-btn" data-atlas-collapse
+              title="Clear search and highlights, back to the top (c)">{{ icons.icon("close", size=14) }} clear</button>
+      <details class="atlas-menu">
+        <summary class="term-prompt-btn atlas-btn" title="Overlays and views">{{ icons.icon("layers", size=14) }} overlays</summary>
+        <div class="atlas-menu-body">
+          <fieldset class="atlas-overlays" aria-label="Overlays">
+            <label><input type="checkbox" data-overlay="heat"> heat (time / failures)</label>
+            <label><input type="checkbox" data-overlay="health"> data health</label>
+            <label><input type="checkbox" data-overlay="drift"> changed since last success</label>
+            <label><input type="checkbox" data-overlay="presence" checked> who is here</label>
+          </fieldset>
+          {{ help.tip("Heat colours run configs and tables by their median duration over the last 30 days and marks failure rates. Data health pins the latest failed checks on the locations and tables they flag. Changed since last success badges anything edited after a config last ran cleanly. Who is here shows the other members looking at or editing a node.") }}
+          <div class="atlas-views">
+            <label class="atlas-tool">
+              <span class="atlas-tool-label">saved view</span>
+              <select data-atlas-view aria-label="Saved views"><option value="">—</option></select>
+            </label>
+            {% if can_write %}
+            <button type="button" class="button small" data-atlas-save-view>Save view…</button>
+            <button type="button" class="button small" data-atlas-delete-view hidden>Delete</button>
+            {% endif %}
+          </div>
+        </div>
+      </details>
+    </div>
   </header>
 
-  <div class="nv-layout">
-    <nav class="pb-tree nv-tree" aria-label="Pipelines, tables and fields" id="nv-tree">
-      <div class="nv-tree-tools">
-        <input type="search" class="pb-tree-search" placeholder="Filter pipelines, tables, fields, functions…"
-               aria-label="Filter the navigator" data-nv-filter>
-        <label class="nv-tool">
-          <span class="nv-tool-label">Group by</span>
-          <select data-nv-group aria-label="Group pipelines by">
-            {% for key, label in group_by_labels.items() %}
-              <option value="{{ key }}" {{ 'selected' if key == group_by else '' }}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label class="nv-tool">
-          <span class="nv-tool-label">Show</span>
-          <select data-nv-only aria-label="Only show">
-            <option value="">everything</option>
-            <option value="udf">fields with a UDF</option>
-            <option value="editable">editable packages</option>
-            <option value="opaque">opaque (Python) steps</option>
-            <option value="unmapped">unmapped / constant fields</option>
-          </select>
-        </label>
-        <label class="nv-tool nv-unused-toggle">
-          <input type="checkbox" data-nv-unused {{ 'checked' if include_unused else '' }}>
-          <span class="nv-tool-label">Unused packages <span class="nv-badge" data-nv-unused-count>{{ tree.unused_count }}</span></span>
-          {{ help.tip("Packages no run config uses are hidden by default, so deleting a pipeline's last run config removes it here. Tick to list every package on disk. Template sources always show. The list refreshes whenever you come back to this tab.") }}
-        </label>
-        <fieldset class="nv-stage-filter" aria-label="Stages">
-          {% for stage in stages %}
-            <label class="nv-stage-toggle" data-stage="{{ stage }}"><input type="checkbox" checked data-nv-stage="{{ stage }}"> {{ stage }}</label>
-          {% endfor %}
-          {{ help.tip("Untick a stage to hide its steps in the tree and the lanes.") }}
-        </fieldset>
-        <div class="nv-tree-actions">
-          <button type="button" class="button small" data-nv-expand>{{ icons.icon("chevrons-down", size=13) }} Expand</button>
-          <button type="button" class="button small" data-nv-collapse>Collapse</button>
-          <span class="nv-count small" data-nv-count></span>
-        </div>
+  <div class="atlas-shell" data-atlas-shell>
+    <div class="atlas-stage terminal-pane console-fill" data-atlas-stage tabindex="0"
+         aria-label="Atlas lanes">
+      <div class="atlas-lanes" data-atlas-lanes></div>
+      <div class="atlas-hud small mono" data-atlas-hud aria-live="polite"></div>
+      <div class="atlas-presence" data-atlas-presence aria-label="Who is here"></div>
+      <div class="atlas-transport" data-atlas-transport hidden aria-label="Running jobs"></div>
+      <div class="atlas-scrubber" data-atlas-scrubber hidden>
+        <button type="button" class="term-prompt-btn" data-scrub-play aria-label="Play">▶</button>
+        <input type="range" min="0" max="1000" value="1000" data-scrub-range aria-label="Replay position">
+        <span class="mono small" data-scrub-clock>live</span>
+        <button type="button" class="term-prompt-btn" data-scrub-close aria-label="Back to live">live</button>
       </div>
-      <div class="nv-tree-body" role="tree" aria-label="Pipelines" data-nv-tree-body>
-        {% if not tree.groups %}<p class="empty">No pipeline packages installed.</p>{% else %}<p class="tree-msg">Loading…</p>{% endif %}
+    </div>
+
+    <div class="atlas-resizer" data-atlas-resizer role="separator" aria-orientation="horizontal"
+         aria-label="Resize the dock" tabindex="0"></div>
+
+    <section class="atlas-dock terminal-pane console-fill" data-atlas-dock aria-label="Dock">
+      <div class="atlas-dock-head">
+        <div class="atlas-tabs" role="tablist" data-atlas-tabs></div>
+        <span class="pl-flex"></span>
+        <button type="button" class="term-prompt-btn" data-atlas-dock-side title="Dock to the side / bottom">⇆</button>
+        <button type="button" class="term-prompt-btn" data-atlas-dock-max title="Maximise the dock">▢</button>
+        <button type="button" class="term-prompt-btn" data-atlas-dock-min title="Minimise the dock">▁</button>
       </div>
-    </nav>
+      <div class="atlas-dock-body" data-atlas-dock-body>
+        <p class="empty">Select a card.</p>
+      </div>
 
-    <div class="nv-main">
-      <section class="pl-panel nv-graph-panel" id="nv-graph-panel">
-        <div class="pl-panel-head">
-          <span class="pl-card-badge">{{ icons.icon("workflow", size=16) }}</span>
-          <h2 data-nv-graph-title>Pick a pipeline</h2>
-          <span class="nw-muted small mono" data-nv-graph-sub></span>
-          <span class="pl-flex"></span>
-          <div class="pb-tabs nv-view-tabs" role="tablist" data-nv-views hidden>
-            <button type="button" class="pb-tab" role="tab" data-view="overview" aria-selected="true">{{ icons.icon("workflow", size=14) }} Overview</button>
-            <button type="button" class="pb-tab" role="tab" data-view="lanes" aria-selected="false">{{ icons.icon("table", size=14) }} Lanes</button>
-            <button type="button" class="pb-tab" role="tab" data-view="yaml" aria-selected="false">{{ icons.icon("file", size=14) }} YAML</button>
-          </div>
-          {{ help.tip("Overview: the package as a tree of tables and stages. Lanes: one row per field, one column per stage; each chip is a function applied to that field. Bands across all rows are table-wide steps (dedup, joins, row filters).") }}
-        </div>
-        <div class="nv-legend-row small" data-nv-legend hidden>
-          <span class="nv-chip-demo is-format">format</span>
-          <span class="nv-chip-demo is-deduplicate">deduplicate</span>
-          <span class="nv-chip-demo is-transform">transform</span>
-          <span class="nv-chip-demo is-map">map</span>
-          <span class="nv-chip-demo is-fix">fix</span>
-          <span class="nv-chip-demo is-opaque">opaque</span>
-          <span class="nv-chip-demo is-readonly">read-only</span>
-        </div>
-        <div class="nv-graph" data-nv-graph>
-          <p class="empty">Choose a pipeline on the left.</p>
-        </div>
-      </section>
-
-      <section class="pl-panel nv-step-panel" id="nv-step-panel" hidden>
-        <div class="pl-panel-head">
-          <span class="pl-card-badge">{{ icons.icon("zap", size=16) }}</span>
-          <h2 data-nv-step-title>Step</h2>
-          <span class="nw-muted small mono" data-nv-step-sub></span>
-        </div>
-        <div data-nv-step-body></div>
-      </section>
-
-      <section class="pl-panel" id="pb-editor-panel" hidden>
+      {# The shared spec editor (static/spec_builder.js Editor) — moved into a
+         dock tab by atlas.js when a step / spec is opened. #}
+      <section class="pl-panel atlas-editor" id="pb-editor-panel" hidden>
         <div class="pl-panel-head">
           <span class="pl-card-badge" data-editor-icon>{{ icons.icon("edit", size=16) }}</span>
           <h2 data-editor-title>Document</h2>
@@ -145,9 +146,10 @@
           <button type="button" class="button primary" data-editor-save {% if not can_write %}disabled title="Requires the manage-config capability"{% endif %}>{{ icons.icon("check", size=14) }} Save</button>
         </div>
       </section>
-    </div>
+    </section>
   </div>
 </section>
-<script type="application/json" id="nv-tree-data">{{ tree | tojson }}</script>
-<script type="module" src="/static/navigator.js"></script>
+<script type="application/json" id="atlas-boot">{{ boot | tojson }}</script>
+<script type="application/json" id="kind-flags">{{ kind_choices | tojson }}</script>
+<script type="module" src="/static/atlas/atlas.js"></script>
 {% endblock %}

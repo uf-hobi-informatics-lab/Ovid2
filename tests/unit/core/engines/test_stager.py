@@ -208,15 +208,17 @@ class _FakeDriver:
 
 
 class TestSparkStager:
-    def test_supports_every_spark_capable_driver(self) -> None:
+    def test_native_support_matches_spark_capable(self) -> None:
         from ovid2.drivers.registry import DRIVERS, load_class
 
         for name in DRIVERS:
-            assert SparkEngineStager.supports(name) is load_class(name).spark_capable, name
+            assert SparkEngineStager.native_supports(name) is load_class(name).spark_capable, name
 
-    def test_rejects_duckdb_only_hybrids(self) -> None:
+    def test_bridges_drivers_without_a_native_spark_plane(self) -> None:
+        """Engine universality: postgres / mssql / gcs / databricks via the Arrow bridge."""
         for name in ("postgres", "mssql", "gcs", "databricks"):
-            assert SparkEngineStager.supports(name) is False, name
+            assert SparkEngineStager.native_supports(name) is False, name
+            assert SparkEngineStager.supports(name) is True, name
 
     def test_supports_native_spark_drivers(self) -> None:
         for name in ("disc", "s3", "azure_blob", "snowflake", "access"):
@@ -225,11 +227,20 @@ class TestSparkStager:
     def test_supports_rejects_unknown_type(self) -> None:
         assert SparkEngineStager.supports("not_a_driver_type") is False
 
-    def test_supported_driver_types_are_the_spark_capable_ones(self) -> None:
-        from ovid2.drivers.registry import DRIVERS, load_class
+    def test_remote_spark_bridges_local_file_drivers(self) -> None:
+        """databricks_spark cannot see host files: disc / access go through the bridge."""
+        from ovid2.core.engines.registry import load_engine_class
 
-        expected = frozenset(t for t in DRIVERS if load_class(t).spark_capable)
-        assert SparkEngineStager.supported_driver_types() == expected
+        engine = load_engine_class("databricks_spark")()
+        assert engine.supports_local_files is False
+        stager = SparkEngineStager(engine)
+        for name in ("disc", "access"):
+            assert stager._use_native(_FakeDriver(name)) is False, name
+
+    def test_supported_driver_types_are_every_driver(self) -> None:
+        from ovid2.drivers.registry import DRIVERS
+
+        assert SparkEngineStager.supported_driver_types() == frozenset(DRIVERS)
 
     def test_materialise_is_pass_through(self) -> None:
         engine = _FakeEngine()
@@ -313,10 +324,11 @@ class TestSnowparkStager:
 
         assert SnowparkEngineStager.supports("gcs") is True
 
-    def test_does_not_support_postgres_today(self) -> None:
-        """Post-Phase-F residual: postgres/mssql strategies not yet landed."""
-        assert SnowparkEngineStager.supports("postgres") is False
-        assert SnowparkEngineStager.supports("mssql") is False
+    def test_bridges_postgres_mssql_access(self) -> None:
+        """Engine universality: no server-side strategy, reached through the Arrow bridge."""
+        for name in ("postgres", "mssql", "access"):
+            assert SnowparkEngineStager.native_supports(name) is False, name
+            assert SnowparkEngineStager.supports(name) is True, name
 
     def test_supported_driver_types_covers_phase_a_b_c_d_e_f(self) -> None:
         """Post-Phase-F the set is at least the six wired entries.
@@ -634,24 +646,62 @@ class TestSnowparkStager:
         # It did ensure the target schema exists (idempotent DDL).
         assert any("CREATE SCHEMA IF NOT EXISTS OUT_DB.OUT_SCHEMA" in q for q in session.sql_calls)
 
-    def test_materialise_raises_for_unsupported_driver(self) -> None:
+    def test_materialise_raises_for_unknown_driver(self) -> None:
         engine = _FakeEngine()
         stager = SnowparkEngineStager(engine)
-        # Use postgres — a driver type not yet supported post-Phase-E.
-        driver = _FakeDriver("postgres")
+        driver = _FakeDriver("not_a_driver_type")
         with pytest.raises(EngineStagerUnsupported) as exc_info:
             stager.materialise(driver, "demo", "20260101", "*ENC*")
         assert exc_info.value.engine_family == "snowpark"
-        assert exc_info.value.driver_type == "postgres"
+        assert exc_info.value.driver_type == "not_a_driver_type"
 
-    def test_persist_raises_for_unsupported_driver(self) -> None:
-        engine = _FakeEngine()
-        stager = SnowparkEngineStager(engine)
-        # mssql — driver type not yet supported post-Phase-E.
+    def test_bridged_driver_routes_to_the_arrow_bridge(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from ovid2.core.engines import bridge
+
+        calls: list[str] = []
+        monkeypatch.setattr(bridge, "bridge_read", lambda *a, **k: calls.append("read") or "df")
+        monkeypatch.setattr(bridge, "bridge_write", lambda *a, **k: calls.append("write"))
+        stager = SnowparkEngineStager(_FakeEngine())
         driver = _FakeDriver("mssql")
-        with pytest.raises(EngineStagerUnsupported) as exc_info:
-            stager.persist("df", driver, "demo", "20260101", "ENCOUNTER")
-        assert exc_info.value.driver_type == "mssql"
+        assert stager.materialise(driver, "p", "b", "T") == "df"
+        stager.persist("df", driver, "p", "b", "T")
+        assert calls == ["read", "write"]
+
+    def test_disc_write_takes_the_bridge_with_cdm_case(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Snowpark → disc writes go through the DuckDB disc writer, CDM case restored.
+
+        The native unload (COPY INTO @~ + GET) quotes every field and
+        upper-cases the header; the bridge writes Spark's bytes.
+        """
+        from ovid2.core.engines import bridge
+
+        seen: list[Any] = []
+        monkeypatch.setattr(bridge, "bridge_write", lambda _e, df, *a, **k: seen.append(df))
+
+        class _Df:
+            def __init__(self, cols: list[str]) -> None:
+                self.columns = cols
+
+            def to_df(self, *names: str) -> _Df:
+                return _Df(list(names))
+
+        stager = SnowparkEngineStager(_FakeEngine())
+        driver = _FakeDriverWithLocation("disc", {"cdm": "omop_5_3"})
+        stager.persist(_Df(["CARE_SITE_ID", '"extra"']), driver, "p", "b", "care_site")
+        assert seen[0].columns == ['"care_site_id"', '"extra"']
+
+    def test_cdm_case_restore_is_a_no_op_without_cdm(self) -> None:
+        from ovid2.core.engines.stager import _restore_cdm_case
+
+        class _Df:
+            columns = ["A"]
+
+        df = _Df()
+        assert _restore_cdm_case(df, _FakeDriverWithLocation("disc", {}), "t") is df
 
     def test_family_marker(self) -> None:
         assert SnowparkEngineStager.family == "snowpark"

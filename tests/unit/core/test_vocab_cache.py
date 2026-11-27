@@ -108,14 +108,20 @@ def test_spark_shared_view_uses_cache(spark: object, tmp_path: Path) -> None:
     """First read builds the Parquet cache; second read scans Parquet."""
     from types import SimpleNamespace
 
+    from ovid2.core.engines.pyspark import read_shared_view_spark
     from ovid2.core.events import NullEventBus
-    from ovid2.core.pipeline import _read_shared_view_spark
 
     src = _src(tmp_path, body="CONCEPT_ID\tCONCEPT_CODE\n1\tA\n2\tB\n")
     view = SimpleNamespace(source_path=src, delimiter="\t", header=True)
-    df1 = _read_shared_view_spark(spark, view, NullEventBus())
+
+    def _read() -> object:
+        return read_shared_view_spark(
+            spark, view.source_path, delimiter="\t", header=True, bus=NullEventBus()
+        )
+
+    df1 = _read()
     assert vc.cached_parquet(src, delimiter="\t", header=True) is not None
-    df2 = _read_shared_view_spark(spark, view, NullEventBus())
+    df2 = _read()
     assert sorted(map(tuple, df1.collect())) == [("1", "A"), ("2", "B")]
     assert sorted(map(tuple, df2.collect())) == [("1", "A"), ("2", "B")]
     assert "parquet" in df2._jdf.queryExecution().optimizedPlan().toString().lower()

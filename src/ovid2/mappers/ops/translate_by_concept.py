@@ -44,8 +44,9 @@ Lazy Spark guarantee:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
+from ovid2.config.capabilities import Capability
 from ovid2.mappers.base import BaseMapOp, MapOpContext
 
 if TYPE_CHECKING:
@@ -56,6 +57,17 @@ logger = logging.getLogger(__name__)
 
 class TranslateByConceptOp(BaseMapOp):
     """Apply a semantic vocabulary translation to one column."""
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.BROADCAST_JOIN,
+            Capability.FN_BROADCAST,
+            Capability.FN_COALESCE,
+            Capability.FN_COL,
+            Capability.FN_UPPER,
+        }
+    )
 
     @property
     def name(self) -> str:
@@ -153,7 +165,12 @@ class TranslateByConceptOp(BaseMapOp):
             result_expr = translated_expr
 
         # Preserve the input columns exactly, replacing/adding target_column.
-        input_columns = [f"{input_alias}.{c}" for c in df.columns if c != target_column]
+        # Column names are case-insensitive (Spark semantics); engines that
+        # report them upper-cased (Snowpark) must not keep the old column
+        # next to the translated one.
+        input_columns = [
+            f"{input_alias}.{c}" for c in df.columns if c.lower() != target_column.lower()
+        ]
         select_exprs = [col(c) for c in input_columns]
         select_exprs.append(result_expr.alias(target_column))
 

@@ -17,8 +17,11 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from ovid2.algorithms.adapters import Invocation
+from ovid2.algorithms.protocol import AlgorithmKind
+from ovid2.algorithms.registry import UnknownAlgorithm
+from ovid2.algorithms.registry import registry as algorithms
 from ovid2.mappers.base import MapOpContext
-from ovid2.mappers.registry import MAP_OPS
 from ovid2.mappers.spec import MapperSpec, MapperSpecValidationError
 
 if TYPE_CHECKING:
@@ -43,6 +46,10 @@ def _secrets_path(pipeline: str) -> Path:
     scoped = scoped_file(f"{pipeline}.json")
     if scoped is not None:
         return scoped
+    from ovid2 import workspaces
+
+    if not workspaces.is_default():
+        return workspaces.secrets_dir() / f"{pipeline}.json"
     root = os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")
     return Path(root) / "ovid2" / "secrets.d" / f"{pipeline}.json"
 
@@ -140,11 +147,12 @@ def run(
     )
 
     for op_spec in spec.ops:
-        op_class = MAP_OPS.get(op_spec.op)
-        if op_class is None:
+        try:
+            op = algorithms.get(AlgorithmKind.MAPPER, op_spec.op)
+        except UnknownAlgorithm:
             raise MapperSpecValidationError(
                 f"Unknown map op '{op_spec.op}' in pipeline '{spec.pipeline}' table '{spec.table}'."
-            )
-        df = op_class().apply(df, op_spec.params, ctx)
+            ) from None
+        df = op.apply(df, Invocation(ctx, op_spec.params))
 
     return df

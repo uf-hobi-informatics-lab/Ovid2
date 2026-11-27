@@ -1,6 +1,22 @@
 {
   "components": {
     "schemas": {
+      "ActiveWorkspaceRequest": {
+        "description": "Body of ``PUT /api/v1/me/active-workspace``.",
+        "properties": {
+          "workspace_id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id"
+        ],
+        "title": "ActiveWorkspaceRequest",
+        "type": "object"
+      },
       "AddressDetail": {
         "description": "Address config with masked ``src_args``.",
         "properties": {
@@ -313,6 +329,82 @@
         "title": "ApprovalSummary",
         "type": "object"
       },
+      "AtlasLayoutWrite": {
+        "description": "Body of ``PUT /atlas/layouts/{name}``: one shared saved view.",
+        "properties": {
+          "layout": {
+            "additionalProperties": true,
+            "description": "View state: any of layers, expanded, pinned, mode, offsets, dock, overlays, focus, zoom.",
+            "title": "Layout",
+            "type": "object"
+          }
+        },
+        "required": [
+          "layout"
+        ],
+        "title": "AtlasLayoutWrite",
+        "type": "object"
+      },
+      "AtlasPresenceBeat": {
+        "description": "Body of ``POST /atlas/presence``: one tab's heartbeat.",
+        "properties": {
+          "client_id": {
+            "description": "Random per-tab id (6-64 chars, [A-Za-z0-9_-]).",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "mode": {
+            "default": "view",
+            "description": "`view`, or `edit` while an editor is open (soft lock).",
+            "title": "Mode",
+            "type": "string"
+          },
+          "node": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Atlas node id the tab is focused on.",
+            "title": "Node"
+          }
+        },
+        "required": [
+          "client_id"
+        ],
+        "title": "AtlasPresenceBeat",
+        "type": "object"
+      },
+      "AtlasRebindCheck": {
+        "description": "Body of ``POST /atlas/rebind:check`` (dry run; nothing is saved).",
+        "properties": {
+          "config": {
+            "description": "Saved pipeline config name.",
+            "title": "Config",
+            "type": "string"
+          },
+          "role": {
+            "description": "`engine`, `input` or `output`.",
+            "title": "Role",
+            "type": "string"
+          },
+          "target": {
+            "description": "Engine name / address name to bind.",
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "config",
+          "role",
+          "target"
+        ],
+        "title": "AtlasRebindCheck",
+        "type": "object"
+      },
       "AuthProviderConfig": {
         "description": "Configuration for an authentication provider (OIDC).",
         "properties": {
@@ -352,6 +444,27 @@
           "client_id"
         ],
         "title": "AuthProviderConfig",
+        "type": "object"
+      },
+      "AutomationStatus": {
+        "description": "Read-only view of whether automatic triggers fire (``GET /automation``).\n\nLets the assistant and the UI warn that a watch / cron / interval\ntrigger will not start anything while route dispatch is off. Changing\nit stays on the Settings page (admin only).",
+        "properties": {
+          "dispatch_enabled": {
+            "description": "worker.route_dispatch_enabled \u2014 watch / cron / interval triggers fire.",
+            "title": "Dispatch Enabled",
+            "type": "boolean"
+          },
+          "poll_interval_seconds": {
+            "description": "Worker tick interval.",
+            "title": "Poll Interval Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "dispatch_enabled",
+          "poll_interval_seconds"
+        ],
+        "title": "AutomationStatus",
         "type": "object"
       },
       "BootstrapRequest": {
@@ -1866,6 +1979,12 @@
             ],
             "title": "Parent Job Id"
           },
+          "pause_requested": {
+            "default": false,
+            "description": "True while the operator asked the job to pause: it finishes the table it is on, then holds before the next one until resumed.",
+            "title": "Pause Requested",
+            "type": "boolean"
+          },
           "pid": {
             "anyOf": [
               {
@@ -1953,6 +2072,12 @@
               }
             ],
             "title": "Workflow Step Id"
+          },
+          "workspace_id": {
+            "default": "default",
+            "description": "Workspace the job belongs to.",
+            "title": "Workspace Id",
+            "type": "string"
           }
         },
         "required": [
@@ -2192,7 +2317,7 @@
           },
           "workers": {
             "default": 25,
-            "description": "Spark worker count for isolated cluster.",
+            "description": "Spark worker containers for the isolated cluster. Ignored by DuckDB / Snowpark (tables run one at a time on every engine).",
             "maximum": 200.0,
             "minimum": 1.0,
             "title": "Workers",
@@ -2984,6 +3109,66 @@
           "raw_text"
         ],
         "title": "MapperWrite",
+        "type": "object"
+      },
+      "MyWorkspace": {
+        "description": "A workspace the caller may switch into.",
+        "properties": {
+          "active": {
+            "default": false,
+            "description": "True for the workspace this request runs in.",
+            "title": "Active",
+            "type": "boolean"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          },
+          "ws_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Caller's membership role, or null (system-admin visibility).",
+            "title": "Ws Role"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "display_name"
+        ],
+        "title": "MyWorkspace",
+        "type": "object"
+      },
+      "MyWorkspacesResponse": {
+        "description": "Body of ``GET /api/v1/me/workspaces``.",
+        "properties": {
+          "active": {
+            "description": "Slug of the workspace this request runs in.",
+            "title": "Active",
+            "type": "string"
+          },
+          "workspaces": {
+            "items": {
+              "$ref": "#/components/schemas/MyWorkspace"
+            },
+            "title": "Workspaces",
+            "type": "array"
+          }
+        },
+        "required": [
+          "active",
+          "workspaces"
+        ],
+        "title": "MyWorkspacesResponse",
         "type": "object"
       },
       "OdsColumnModel": {
@@ -4902,20 +5087,21 @@
             "type": "string"
           },
           "principal": {
+            "default": "*",
             "maxLength": 200,
             "minLength": 1,
             "title": "Principal",
             "type": "string"
           },
           "principal_kind": {
-            "pattern": "^(user|role)$",
+            "description": "user / role / workspace (everyone in this workspace; principal '*').",
+            "pattern": "^(user|role|workspace)$",
             "title": "Principal Kind",
             "type": "string"
           }
         },
         "required": [
-          "principal_kind",
-          "principal"
+          "principal_kind"
         ],
         "title": "ReportShareRequest",
         "type": "object"
@@ -5922,7 +6108,7 @@
             "type": "integer"
           },
           "max_tool_iterations": {
-            "default": 6,
+            "default": 10,
             "description": "Upper bound on model round-trips per turn when tools are on.",
             "maximum": 20.0,
             "minimum": 1.0,
@@ -6353,18 +6539,6 @@
             "description": "JSON-schema fragment for this transform's params.",
             "title": "Params Schema",
             "type": "object"
-          },
-          "requires_family": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Compute family required (e.g. `spark`), or null for any family.",
-            "title": "Requires Family"
           },
           "summary": {
             "description": "One-line human/agent-readable description.",
@@ -7728,6 +7902,219 @@
         "title": "WorkflowWrite",
         "type": "object"
       },
+      "WorkspaceCreateRequest": {
+        "description": "Body of ``POST /api/v1/workspaces``.",
+        "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "workspace_id": {
+            "description": "Slug: 2-40 lowercase letters, digits, '-' or '_'.",
+            "maxLength": 40,
+            "minLength": 2,
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "display_name"
+        ],
+        "title": "WorkspaceCreateRequest",
+        "type": "object"
+      },
+      "WorkspaceMember": {
+        "description": "One member of a workspace.",
+        "properties": {
+          "added_at": {
+            "title": "Added At",
+            "type": "string"
+          },
+          "added_by": {
+            "title": "Added By",
+            "type": "string"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The user's global role.",
+            "title": "Role"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          },
+          "ws_role": {
+            "description": "member / admin (admin may manage members).",
+            "title": "Ws Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "ws_role",
+          "added_by",
+          "added_at"
+        ],
+        "title": "WorkspaceMember",
+        "type": "object"
+      },
+      "WorkspaceMemberRequest": {
+        "description": "Body of ``POST /api/v1/workspaces/{workspace_id}/members``.",
+        "properties": {
+          "user_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "User Id",
+            "type": "string"
+          },
+          "ws_role": {
+            "default": "member",
+            "enum": [
+              "member",
+              "admin"
+            ],
+            "title": "Ws Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "WorkspaceMemberRequest",
+        "type": "object"
+      },
+      "WorkspaceSummary": {
+        "description": "One workspace record.",
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "member_count": {
+            "default": 0,
+            "title": "Member Count",
+            "type": "integer"
+          },
+          "status": {
+            "description": "active / archived.",
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "workspace_id": {
+            "description": "Immutable slug (used in paths and headers).",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "display_name",
+          "status",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "WorkspaceSummary",
+        "type": "object"
+      },
+      "WorkspaceUpdateRequest": {
+        "description": "Body of ``PATCH /api/v1/workspaces/{workspace_id}``.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          }
+        },
+        "title": "WorkspaceUpdateRequest",
+        "type": "object"
+      },
       "WriteResult": {
         "description": "Common response envelope for successful writes.",
         "properties": {
@@ -8172,6 +8559,655 @@
           }
         },
         "summary": "Deny a pending destructive operation",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/atlas": {
+      "get": {
+        "description": "Return ``{workspace, layers, nodes, edges, digest}`` (static; no data read).",
+        "operationId": "api_atlas_graph_api_v1_atlas_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Atlas Graph Api V1 Atlas Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "The workspace's Atlas graph: storage, compute and algorithm layers",
+        "tags": [
+          "atlas"
+        ]
+      }
+    },
+    "/api/v1/atlas/forms/{kind}/{type_name}": {
+      "get": {
+        "description": "Return ``{args, secrets}`` field specs (``widget`` / ``choices`` included, UI rule U2).\n\n``kind`` is ``connection``, ``location`` or ``engine``. Secret *fields*\nare described (names, help) but never their values.",
+        "operationId": "api_atlas_form_api_v1_atlas_forms__kind___type_name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "type_name",
+            "required": true,
+            "schema": {
+              "title": "Type Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Atlas Form Api V1 Atlas Forms  Kind   Type Name  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Field catalogue of one connection / location / engine type (for in-place edit)",
+        "tags": [
+          "atlas"
+        ]
+      }
+    },
+    "/api/v1/atlas/impact": {
+      "get": {
+        "description": "Return ``{root, nodes, edges, fields?}``.",
+        "operationId": "api_atlas_impact_api_v1_atlas_impact_get",
+        "parameters": [
+          {
+            "description": "Node id, or `field:<package>/<table>/<FIELD>`.",
+            "in": "query",
+            "name": "node",
+            "required": true,
+            "schema": {
+              "description": "Node id, or `field:<package>/<table>/<FIELD>`.",
+              "title": "Node",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Atlas Impact Api V1 Atlas Impact Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Impact preview: everything downstream of a node (or a field)",
+        "tags": [
+          "atlas"
+        ]
+      }
+    },
+    "/api/v1/atlas/layouts": {
+      "get": {
+        "description": "Every member of the workspace sees the same views.",
+        "operationId": "api_atlas_layouts_api_v1_atlas_layouts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Api Atlas Layouts Api V1 Atlas Layouts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Shared saved views of the workspace's Atlas",
+        "tags": [
+          "atlas"
+        ]
+      }
+    },
+    "/api/v1/atlas/layouts/{name}": {
+      "delete": {
+        "description": "404 when absent, 403 when another member created it.",
+        "operationId": "api_atlas_delete_layout_api_v1_atlas_layouts__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete a saved Atlas view you created",
+        "tags": [
+          "atlas"
+        ],
+        "x-ovid2-owner-scoped": "Deletes only a saved canvas view the caller created; no data or config."
+      },
+      "put": {
+        "description": "Create or replace a view (layer toggles, expanded / pinned nodes, offsets).",
+        "operationId": "api_atlas_save_layout_api_v1_atlas_layouts__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AtlasLayoutWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Atlas Save Layout Api V1 Atlas Layouts  Name  Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save a shared Atlas view",
+        "tags": [
+          "atlas"
+        ]
+      }
+    },
+    "/api/v1/atlas/live": {
+      "get": {
+        "description": "Return ``{server_now_ms, jobs, workflow_runs}`` for the live animation.",
+        "operationId": "api_atlas_live_api_v1_atlas_live_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Atlas Live Api V1 Atlas Live Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Live state: running / queued / just-finished jobs with table and stage timings",
+        "tags": [
+          "atlas"
+        ]
+      }
+    },
+    "/api/v1/atlas/nodes/{node_id}": {
+      "get": {
+        "description": "Return the in-place detail of one node; 404 for an unknown node.",
+        "operationId": "api_atlas_node_api_v1_atlas_nodes__node_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "node_id",
+            "required": true,
+            "schema": {
+              "title": "Node Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Atlas Node Api V1 Atlas Nodes  Node Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Expand one Atlas node (lineage, saved config, address, engine, workflow)",
+        "tags": [
+          "atlas"
+        ]
+      }
+    },
+    "/api/v1/atlas/overlays/drift": {
+      "get": {
+        "description": "File modification times only.",
+        "operationId": "api_atlas_drift_api_v1_atlas_overlays_drift_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Atlas Drift Api V1 Atlas Overlays Drift Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Drift overlay: configs whose definition changed since their last successful run",
+        "tags": [
+          "atlas"
+        ]
+      }
+    },
+    "/api/v1/atlas/overlays/health": {
+      "get": {
+        "description": "Aggregates only; never row values.",
+        "operationId": "api_atlas_health_api_v1_atlas_overlays_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Atlas Health Api V1 Atlas Overlays Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health overlay: latest failed data-health checks per address and table",
+        "tags": [
+          "atlas"
+        ]
+      }
+    },
+    "/api/v1/atlas/overlays/heat": {
+      "get": {
+        "description": "Aggregates only (numbers).",
+        "operationId": "api_atlas_heat_api_v1_atlas_overlays_heat_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 365,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Atlas Heat Api V1 Atlas Overlays Heat Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Heat overlay: historical duration and failure rate per config / table / stage",
+        "tags": [
+          "atlas"
+        ]
+      }
+    },
+    "/api/v1/atlas/presence": {
+      "get": {
+        "description": "Live presence rows of the active workspace.",
+        "operationId": "api_atlas_presence_list_api_v1_atlas_presence_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Api Atlas Presence List Api V1 Atlas Presence Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Who else is viewing / editing which Atlas node",
+        "tags": [
+          "atlas"
+        ]
+      },
+      "post": {
+        "description": "An ``edit`` beat is a soft lock other members see; nothing is blocked.",
+        "operationId": "api_atlas_presence_api_v1_atlas_presence_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AtlasPresenceBeat"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Api Atlas Presence Api V1 Atlas Presence Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Heartbeat this tab's Atlas presence; returns everyone else's",
+        "tags": [
+          "atlas"
+        ]
+      }
+    },
+    "/api/v1/atlas/rebind:check": {
+      "post": {
+        "description": "Return ``{ok, reason, patch}``; the browser saves ``patch`` via PUT /pipelines.",
+        "operationId": "api_atlas_rebind_check_api_v1_atlas_rebind_check_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AtlasRebindCheck"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Atlas Rebind Check Api V1 Atlas Rebind Check Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dry-run a drag-to-rebind (engine / input / output) against the capability plan",
+        "tags": [
+          "atlas"
+        ]
+      }
+    },
+    "/api/v1/atlas/replay/{instance_id}": {
+      "get": {
+        "description": "Return ``{job, items}`` from ``web_run_items`` (survives the event log's loss).",
+        "operationId": "api_atlas_replay_api_v1_atlas_replay__instance_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "instance_id",
+            "required": true,
+            "schema": {
+              "title": "Instance Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Atlas Replay Api V1 Atlas Replay  Instance Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Saved per-table / per-stage timeline of a finished run (canvas replay)",
+        "tags": [
+          "atlas"
+        ]
+      }
+    },
+    "/api/v1/atlas/subgraph": {
+      "get": {
+        "description": "Node metadata and links only \u2014 no secret values, no row values.",
+        "operationId": "api_atlas_subgraph_api_v1_atlas_subgraph_get",
+        "parameters": [
+          {
+            "description": "Comma-separated node ids.",
+            "in": "query",
+            "name": "ids",
+            "required": true,
+            "schema": {
+              "description": "Comma-separated node ids.",
+              "title": "Ids",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "depth",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "maximum": 2,
+              "minimum": 0,
+              "title": "Depth",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Api Atlas Subgraph Api V1 Atlas Subgraph Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Row-free sub-graph around selected nodes (the assistant's context)",
+        "tags": [
+          "atlas"
+        ]
+      }
+    },
+    "/api/v1/automation": {
+      "get": {
+        "description": "Return the worker's route-dispatch flag (read-only, no secrets).",
+        "operationId": "api_get_automation_api_v1_automation_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomationStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Whether automatic (watch / cron / interval) triggers fire",
         "tags": [
           "v1"
         ]
@@ -10357,6 +11393,49 @@
         ]
       }
     },
+    "/api/v1/jobs/{job_id}/pause": {
+      "post": {
+        "description": "Ask a queued or running job to hold before its next table.\n\nThe table that is running finishes first (its write is already\nexecuting); the job then waits, clocks frozen, until it is resumed or\ncancelled. One-shot job kinds (export, workflow storage / probe) do\nnot pause.",
+        "operationId": "api_pause_job_api_v1_jobs__job_id__pause_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pause a job at its next table boundary",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
     "/api/v1/jobs/{job_id}/rerun": {
       "post": {
         "description": "Enqueue a retry of a finished job (same input, output, tables).\n\nA rerun writes to the same exact output location, so it answers\n``409 overwrite_required`` until ``confirm_overwrite=true``.",
@@ -10424,6 +11503,49 @@
           }
         },
         "summary": "Rerun a finished job",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/jobs/{job_id}/resume": {
+      "post": {
+        "description": "Clear a pause; the job continues with its next table.",
+        "operationId": "api_resume_job_api_v1_jobs__job_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume a paused job",
         "tags": [
           "v1"
         ]
@@ -11089,6 +12211,48 @@
         ]
       }
     },
+    "/api/v1/me/active-workspace": {
+      "put": {
+        "description": "Pin the session to ``workspace_id`` (404 when not visible to the caller).",
+        "operationId": "api_set_active_workspace_api_v1_me_active_workspace_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActiveWorkspaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyWorkspacesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Switch the caller's browser session to another workspace",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
     "/api/v1/me/appearance": {
       "get": {
         "description": "Return the caller's stored appearance (defaults when never saved).",
@@ -11146,6 +12310,28 @@
           }
         },
         "summary": "Replace the current user's appearance (cosmetic, not audited)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/me/workspaces": {
+      "get": {
+        "description": "Return the caller's workspaces and the one this request runs in.",
+        "operationId": "api_my_workspaces_api_v1_me_workspaces_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyWorkspacesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List the workspaces the caller may switch into",
         "tags": [
           "v1"
         ]
@@ -16353,7 +17539,7 @@
     },
     "/api/v1/transforms": {
       "get": {
-        "description": "Return the CDM-agnostic public transformations catalogue.\n\nReads the web-safe catalogue mirror\n(:mod:`ovid2.config.transforms_catalogue`); does not import pipeline\ncode. Each entry carries name / summary / category / requires_family\n/ params_schema so a user or Agent Ovid can pick and configure a\ntransform before composing it into a chain.",
+        "description": "Return the CDM-agnostic public transformations catalogue.\n\nReads the web-safe catalogue mirror\n(:mod:`ovid2.config.transforms_catalogue`); does not import pipeline\ncode. Each entry carries name / summary / category / params_schema so a user or Agent Ovid can pick and configure a\ntransform before composing it into a chain.",
         "operationId": "api_list_transforms_api_v1_transforms_get",
         "parameters": [
           {
@@ -17474,6 +18660,460 @@
           }
         },
         "summary": "Validate a workflow definition without saving it",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/workspaces": {
+      "get": {
+        "description": "Return the workspaces visible to the caller.",
+        "operationId": "api_list_workspaces_api_v1_workspaces_get",
+        "parameters": [
+          {
+            "description": "Include archived workspaces (admins).",
+            "in": "query",
+            "name": "include_archived",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Include archived workspaces (admins).",
+              "title": "Include Archived",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkspaceSummary"
+                  },
+                  "title": "Response Api List Workspaces Api V1 Workspaces Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List workspaces (all for system admins; memberships otherwise)",
+        "tags": [
+          "v1"
+        ]
+      },
+      "post": {
+        "description": "Create a workspace (and its on-disk tree). 400 on a bad / taken slug.",
+        "operationId": "api_create_workspace_api_v1_workspaces_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create a workspace",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}": {
+      "delete": {
+        "description": "Delete a workspace. 400 unless it is archived and holds nothing.",
+        "operationId": "api_delete_workspace_api_v1_workspaces__workspace_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Awaiting human approval (`workspace.delete`)."
+          },
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete an archived, empty workspace (human approval required)",
+        "tags": [
+          "v1"
+        ]
+      },
+      "get": {
+        "description": "Return one workspace (404 when not visible to the caller).",
+        "operationId": "api_get_workspace_api_v1_workspaces__workspace_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get one workspace",
+        "tags": [
+          "v1"
+        ]
+      },
+      "patch": {
+        "description": "Update the display name / description (the slug never changes).",
+        "operationId": "api_update_workspace_api_v1_workspaces__workspace_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rename / re-describe a workspace",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/archive": {
+      "post": {
+        "description": "Archive a workspace: members can no longer switch into it.",
+        "operationId": "api_archive_workspace_api_v1_workspaces__workspace_id__archive_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "202": {
+            "description": "Awaiting human approval (`workspace.archive`)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Archive a workspace (human approval required)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/members": {
+      "get": {
+        "description": "Return the members (visible to members and system admins).",
+        "operationId": "api_list_workspace_members_api_v1_workspaces__workspace_id__members_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkspaceMember"
+                  },
+                  "title": "Response Api List Workspace Members Api V1 Workspaces  Workspace Id  Members Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List a workspace's members",
+        "tags": [
+          "v1"
+        ]
+      },
+      "post": {
+        "description": "Add ``user_id``. System admins or the workspace's admins only.\n\nThe member keeps their global role; ``ws_role=admin`` only lets them\nmanage this workspace's members.",
+        "operationId": "api_add_workspace_member_api_v1_workspaces__workspace_id__members_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceMemberRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceMember"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add a member (or change their workspace role)",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/members/{user_id}": {
+      "delete": {
+        "description": "Remove ``user_id`` from the workspace (system admins / workspace admins).",
+        "operationId": "api_remove_workspace_member_api_v1_workspaces__workspace_id__members__user_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove a member",
+        "tags": [
+          "v1"
+        ],
+        "x-ovid2-owner-scoped": "Removes one membership row only; no pipeline, job, report or credential is deleted and an admin can re-add the member at any time."
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/restore": {
+      "post": {
+        "description": "Re-activate an archived workspace.",
+        "operationId": "api_restore_workspace_api_v1_workspaces__workspace_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restore an archived workspace",
         "tags": [
           "v1"
         ]

@@ -717,10 +717,8 @@ def test_duckdb_memory_limit_operator_override(monkeypatch: pytest.MonkeyPatch) 
 
 
 @pytest.mark.unit
-def test_duckdb_container_sized_from_host_and_workers(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """DuckDB: one host-sized container; Workers -> table concurrency."""
+def test_duckdb_container_sized_from_host(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """DuckDB: one host-sized container; Workers never reaches it (serial tables)."""
     monkeypatch.setattr(docker_module, "DATA_DIR", tmp_path)
     monkeypatch.setattr(docker_module, "LEGACY_CREDENTIALS_DIR", tmp_path / "absent")
     for var in (
@@ -739,7 +737,7 @@ def test_duckdb_container_sized_from_host_and_workers(
     cmd = docker_module.build_docker_command(args, OvidInstance())
     assert "--memory=718g" in cmd
     assert "--cpus=96" in cmd
-    assert "OVID2_DUCKDB_TABLE_CONCURRENCY=25" in cmd
+    assert not any("OVID2_DUCKDB_TABLE_CONCURRENCY" in t for t in cmd)
     assert "OVID2_DUCKDB_THREADS=96" in cmd
     assert "OVID2_DUCKDB_MEMORY_LIMIT=610GB" in cmd
 
@@ -754,3 +752,42 @@ def test_spark_container_keeps_driver_sizing(
     cmd = docker_module.build_docker_command(_make_args(), OvidInstance())
     assert not any(t.startswith("--cpus=") for t in cmd)
     assert not any(t.startswith("OVID2_DUCKDB_TABLE_CONCURRENCY=") for t in cmd)
+
+
+@pytest.mark.unit
+def test_build_docker_command_cluster_mode_passes_worker_shape(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Cluster mode tells the driver each worker's cores / memory.
+
+    ``PySparkEngine`` uses them to shrink an executor request no worker
+    could host (otherwise the Spark app waits forever).
+    """
+    from ovid2.config import spark_sizing
+
+    monkeypatch.setattr(docker_module, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(docker_module, "LEGACY_CREDENTIALS_DIR", tmp_path / "absent")
+    monkeypatch.setattr(docker_module, "SPARK_MODE", "cluster")
+    instance = OvidInstance(instance_id="20260101-000000-abcdef")
+    cmd = docker_module.build_docker_command(_make_args(), instance)
+    assert f"OVID2_SPARK_WORKER_CORES={spark_sizing.WORKER_CORES}" in cmd
+    assert f"OVID2_SPARK_WORKER_MEMORY_GB={spark_sizing.WORKER_MEMORY_GB}" in cmd
+
+
+@pytest.mark.unit
+def test_build_docker_command_mounts_legacy_scratch_root(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The driver mounts ``LEGACY_SCRATCH_ROOT`` (real disk) and exports it.
+
+    Regression: legacy scratch on the ``WORK_DIR`` tmpfs counted against the
+    driver container's ``--memory`` cap and the kernel OOM-killed it.
+    """
+    scratch = tmp_path / "legacy-scratch"
+    monkeypatch.setattr(docker_module, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(docker_module, "LEGACY_CREDENTIALS_DIR", tmp_path / "absent")
+    monkeypatch.setattr(docker_module, "LEGACY_SCRATCH_ROOT", scratch)
+    instance = OvidInstance(instance_id="20260101-000000-abcdef")
+    cmd = docker_module.build_docker_command(_make_args(), instance)
+    assert f"{scratch}:{scratch}:rw" in cmd
+    assert f"OVID2_LEGACY_SCRATCH_DIR={scratch}" in cmd

@@ -33,6 +33,13 @@ Rewrites (AST-level, on string constants and f-strings only):
 * ``spark.stop()`` → removed
 * ``<expr>.strftime(fmt)`` → ``legacy_strftime(<expr>, fmt)`` (CPython 3.10
   unpadded ``%Y``; see :func:`ovid2.legacy.udfs.legacy_strftime`)
+* every ``pyspark`` import → the engine-portable
+  :mod:`ovid2.core.engines.sparkapi` package (``import pyspark`` →
+  ``import ovid2.core.engines.sparkapi as pyspark``;
+  ``from pyspark.sql.functions import *`` →
+  ``from ovid2.core.engines.sparkapi.sql.functions import *``) — the
+  same names, dispatching to the active engine, so a port runs on every
+  engine (``adr-engine-universality.md``)
 * module-level ``cf``/``spark`` uses inside helper defs keep working
   because the generated module binds them per call.
 
@@ -137,6 +144,48 @@ def _rebuild(rest_template: str, holes: list[ast.expr]) -> ast.expr:
     if not holes:
         return ast.Constant(value="".join(v.value for v in values if isinstance(v, ast.Constant)))
     return ast.JoinedStr(values=values)
+
+
+_PORTABLE_PYSPARK = "ovid2.core.engines.sparkapi"
+
+
+def _portable_module(module: str) -> str:
+    """Map ``pyspark[.x.y]`` to the portable ``sparkapi`` module name."""
+    if module == "pyspark" or module.startswith("pyspark."):
+        return _PORTABLE_PYSPARK + module[len("pyspark") :]
+    return module
+
+
+class _PortableImports(ast.NodeTransformer):
+    """Rewrite every ``pyspark`` import to :mod:`ovid2.core.engines.sparkapi`."""
+
+    def visit_Import(self, node: ast.Import) -> ast.AST:
+        names = []
+        for alias in node.names:
+            if alias.name == "pyspark" or alias.name.startswith("pyspark."):
+                # ``import pyspark`` binds ``pyspark``; ``import pyspark.sql.x``
+                # binds ``pyspark`` too. Keep the bound name, point it at
+                # the portable package root.
+                bound = alias.asname or alias.name.split(".")[0]
+                target = _portable_module(alias.name if alias.asname else "pyspark")
+                names.append(ast.alias(name=target, asname=bound))
+            else:
+                names.append(alias)
+        node.names = names
+        return node
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> ast.AST:
+        if node.module and (node.module == "pyspark" or node.module.startswith("pyspark.")):
+            node.module = _portable_module(node.module)
+        return node
+
+
+def portable_imports(source: str) -> str:
+    """Return ``source`` with every ``pyspark`` import made engine-portable."""
+    tree = ast.parse(source)
+    tree = _PortableImports().visit(tree)
+    ast.fix_missing_locations(tree)
+    return ast.unparse(tree)
 
 
 class _PathRewriter(ast.NodeTransformer):
@@ -416,6 +465,8 @@ def port_formatter(source: str, *, pipeline: str, origin: str) -> FormatterPort:
             if s is not entry_fn
             and not (isinstance(s, ast.If) and "__main__" in ast.unparse(s.test))
         ]
+    tree = _PortableImports().visit(tree)
+    ast.fix_missing_locations(tree)
     for stmt in tree.body:
         if isinstance(stmt, (ast.Import, ast.ImportFrom)):
             if isinstance(stmt, ast.ImportFrom) and stmt.module == "commonFunctions":

@@ -20,7 +20,15 @@ class BaseTransformer(ABC):
     Concrete transformers extend this class and implement :meth:`transform`.
     Everything must remain lazy — contract tests reject ``.collect()`` and
     friends inside subclass implementations.
+
+    Attributes:
+        stage_name: Pipeline stage this transformer is reported under in
+            the live ``stage.progress`` events (``deduplicate`` /
+            ``transform`` / ``map`` / ``fix``). ``None`` for analysis /
+            quality transformers, which are reported under their class.
     """
+
+    stage_name: str | None = None
 
     @abstractmethod
     def transform(self, df: DataFrame, context: dict[str, Any]) -> DataFrame:

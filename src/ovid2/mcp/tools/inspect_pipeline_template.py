@@ -21,8 +21,8 @@ TOOL_NAME = "inspect_pipeline_template"
 TOOL_DESCRIPTION = (
     "Inspect a pipeline template before scaffolding: every CDM table with its "
     "formatter / source-file patterns / mapper / fix chain / assigned transforms, "
-    "the identity constants (current value + the clone's default), the required "
-    "engine family, and every name that must match other configuration "
+    "the identity constants (current value + the clone's default), "
+    "and every name that must match other configuration "
     "(bindings with ok/warn/error status). Read-only."
 )
 ARGS_MODEL = InspectPipelineTemplateArgs

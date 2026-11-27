@@ -7,8 +7,9 @@ Params:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
+from ovid2.config.capabilities import Capability
 from ovid2.mappers.base import BaseMapOp, MapOpContext
 
 if TYPE_CHECKING:
@@ -17,6 +18,16 @@ if TYPE_CHECKING:
 
 class CaseMapOp(BaseMapOp):
     """Apply upper/lower/title case to a column."""
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.FN_COL,
+            Capability.FN_INITCAP,
+            Capability.FN_LOWER,
+            Capability.FN_UPPER,
+        }
+    )
 
     @property
     def name(self) -> str:

@@ -1,0 +1,53 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  columns:
+  - name
+  pattern: '[aeiou]'
+  replacement: _
+tables:
+  input:
+    columns:
+    - id
+    - name
+    - sex
+    - n
+    rows:
+    - - '1'
+      - '  alice  smith '
+      - f
+      - '5'
+    - - '2'
+      - BOB
+      - M
+      - '-3.5'
+    - - '3'
+      - ''
+      - UN
+      - null
+    - - '4'
+      - null
+      - m
+      - '12'
+expected:
+  columns:
+  - id
+  - name
+  - sex
+  - n
+  rows:
+  - - '1'
+    - '  _l_c_  sm_th '
+    - f
+    - '5'
+  - - '2'
+    - BOB
+    - M
+    - '-3.5'
+  - - '3'
+    - ''
+    - UN
+    - null
+  - - '4'
+    - null
+    - m
+    - '12'

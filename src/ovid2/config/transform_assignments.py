@@ -55,14 +55,11 @@ def user_library_dir() -> Path:
     ``$XDG_CONFIG_HOME/ovid2/transforms``. Run containers see it through
     the read-only XDG config mount.
     """
-    import os
+    from ovid2.workspaces import write_dir
 
-    override = os.environ.get("OVID2_TRANSFORMS_DIR")
-    if override:
-        return Path(override)
-    from ovid2.config.paths import config_dir
-
-    return config_dir() / "transforms"
+    # Scoped to the active workspace (adr-workspaces.md): the ``default``
+    # workspace keeps ``$OVID2_TRANSFORMS_DIR`` / the flat XDG directory.
+    return write_dir("transforms", "OVID2_TRANSFORMS_DIR")
 
 
 class AssignmentsError(ValueError):

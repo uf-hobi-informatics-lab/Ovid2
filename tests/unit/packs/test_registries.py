@@ -200,8 +200,19 @@ def test_runner_marks_other_cdm_checks_not_applicable(acme: Path) -> None:
     assert "SUBJECT" not in all_candidate_tables([spec], "pcornet_7_0")
     assert "SUBJECT" in all_candidate_tables([spec], "acme")
 
+    class _Engine:
+        session_is_spark = True
+
+        def get_functions(self) -> object:
+            return object()
+
     runner = HealthCheckRunner(
-        session=None, cdm=get_cdm("pcornet_7_0"), pipeline="t", batch_id="b", instance_id="i"
+        session=None,
+        cdm=get_cdm("pcornet_7_0"),
+        pipeline="t",
+        batch_id="b",
+        instance_id="i",
+        engine=_Engine(),  # type: ignore[arg-type]
     )
     outcomes = runner.run([spec], available_tables=frozenset())
     assert outcomes[0].status == "not_applicable"

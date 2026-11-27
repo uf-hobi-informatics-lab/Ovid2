@@ -62,8 +62,9 @@ Deployment:
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
+from ovid2.config.capabilities import Capability
 from ovid2.config.settings import COMMON_LISTS_DIR
 from ovid2.core.engines.dsl import broadcast, col
 from ovid2.transformations.fixers.base import BaseFixer
@@ -84,6 +85,15 @@ class ListRemoverFixer(BaseFixer):
 
     All operations are lazy Spark DataFrame transformations.
     """
+
+    #: Engine capabilities this algorithm uses (checked by contract).
+    REQUIRES: ClassVar[frozenset[Capability]] = frozenset(
+        {
+            Capability.BROADCAST_JOIN,
+            Capability.FN_BROADCAST,
+            Capability.FN_COL,
+        }
+    )
 
     @property
     def name(self) -> str:

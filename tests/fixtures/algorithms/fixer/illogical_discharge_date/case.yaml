@@ -1,0 +1,43 @@
+# Conformance fixture — data only (tests/integration/_conformance.py).
+params:
+  src1: DX_DATE
+  src2: encounter
+tables:
+  input:
+    columns:
+    - ENCOUNTERID
+    - DX_DATE
+    rows:
+    - - E1
+      - '2023-01-30'
+    - - E1
+      - '2023-01-13'
+    - - E9
+      - '2023-09-09'
+  encounter:
+    columns:
+    - ENCOUNTERID
+    - ADMIT_DATE
+    - DISCHARGE_DATE
+    - ENC_TYPE
+    rows:
+    - - E1
+      - '2023-01-10'
+      - '2023-01-12'
+      - IP
+    - - E2
+      - '2023-02-01'
+      - '2023-02-01'
+      - AV
+note: 'date parsing: more than 5 days after discharge is replaced by DISCHARGE_DATE'
+expected:
+  columns:
+  - ENCOUNTERID
+  - DX_DATE
+  rows:
+  - - E1
+    - '2023-01-12'
+  - - E1
+    - '2023-01-13'
+  - - E9
+    - '2023-09-09'

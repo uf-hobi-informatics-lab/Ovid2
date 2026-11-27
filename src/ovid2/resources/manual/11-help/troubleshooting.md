@@ -20,7 +20,8 @@ audience: [user, developer, admin]
 | Warehouse output *names only a database* | outputs must be `DATABASE/SCHEMA` | pick or create a schema |
 | *Pipeline '<name>' is not installed under ovid2_pipelines* | an `etl` / `analysis` package isn't on `PYTHONPATH` or in the image | install the package, or set `OVID2_PIPELINE_PACKAGES_DIR`, then rebuild the image |
 | *watch triggers need a bound input storage account* | watch on an open input | bind the input, or use a manual or cron trigger |
-| Engine and driver refused at plan time | e.g. a DuckDB-only driver with `pyspark`, or `REQUIRES_FAMILY` | change the engine. See [Engines](../02-concepts/engines.md#engine-and-storage-compatibility). |
+| *Address '<name>' (driver 'access') is read-only* | an Access database chosen as the output; Access is read-only on every engine | pick a writable output. See [Engines](../02-concepts/engines.md#engine-and-storage-compatibility). |
+| A run on a bare Spark host is slow on s3 / azure_blob | the connector jars aren't on the classpath, so the driver goes through the Arrow bridge | use the Ovid2 image, or add the hadoop-aws / hadoop-azure jars |
 
 ## Running
 

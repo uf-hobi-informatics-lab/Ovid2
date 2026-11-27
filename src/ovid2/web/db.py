@@ -33,6 +33,7 @@ import logging
 import sqlite3
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from pathlib import Path
 
 from ovid2.web.settings import web_db_path
 
@@ -134,6 +135,28 @@ CREATE TABLE IF NOT EXISTS web_pipeline_runs (
 )
 """
 
+# Per-item (table / check) timings of a run, folded from the run's event
+# log by ``services.run_items_svc``. The event log lives on tmpfs, so this
+# is what lets the run page show every finished item's saved duration — and
+# anchor a running item's clock to its real start — the moment it opens.
+_WEB_RUN_ITEMS_DDL = """
+CREATE TABLE IF NOT EXISTS web_run_items (
+    workspace_id  TEXT NOT NULL DEFAULT 'default',
+    instance_id   TEXT NOT NULL,
+    item_kind     TEXT NOT NULL,
+    item          TEXT NOT NULL,
+    display_name  TEXT,
+    status        TEXT NOT NULL,
+    started_at    TEXT,
+    ended_at      TEXT,
+    elapsed_ms    INTEGER,
+    error         TEXT,
+    seq           INTEGER NOT NULL DEFAULT 0,
+    updated_at    TEXT NOT NULL,
+    PRIMARY KEY (workspace_id, instance_id, item_kind, item)
+)
+"""
+
 _WEB_PIPELINE_RUNS_INDEXES = [
     "CREATE INDEX IF NOT EXISTS ix_web_pipeline_runs_pipeline "
     "ON web_pipeline_runs(pipeline, created_at DESC)",
@@ -206,6 +229,9 @@ _WEB_JOBS_ADDED_COLUMNS: tuple[tuple[str, str], ...] = (
     # Last-line JSON result of a job-only tool whose answer the web tier
     # needs (``workflow_probe``: numbers only, never row values).
     ("result_json", "TEXT"),
+    # Operator pause (adr-atlas.md): 1 while the job should hold at its next
+    # table boundary. The worker mirrors it into the run's pause flag file.
+    ("pause_requested", "INTEGER NOT NULL DEFAULT 0"),
 )
 
 #: Columns added to ``web_workflow_steps`` for branching (adr-workflows.md):
@@ -416,13 +442,153 @@ _WEB_LLM_SESSIONS_DDL: tuple[str, ...] = (
 )
 
 
+# Ovid Atlas (adr-atlas.md): shared, workspace-wide saved views of the
+# /navigator canvas (layer toggles, pinned / expanded nodes, positions) and
+# the presence heartbeats behind "who is looking at / editing what" plus the
+# soft edit locks. Presence rows are short-lived and pruned on every write.
+_WEB_ATLAS_DDL: tuple[str, ...] = (
+    """
+    CREATE TABLE IF NOT EXISTS web_atlas_layouts (
+        workspace_id  TEXT NOT NULL DEFAULT 'default',
+        name          TEXT NOT NULL,
+        layout_json   TEXT NOT NULL,
+        created_by    TEXT NOT NULL,
+        updated_by    TEXT NOT NULL,
+        updated_at    TEXT NOT NULL,
+        PRIMARY KEY (workspace_id, name)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS web_atlas_presence (
+        workspace_id  TEXT NOT NULL DEFAULT 'default',
+        user_id       TEXT NOT NULL,
+        client_id     TEXT NOT NULL,
+        display_name  TEXT NOT NULL DEFAULT '',
+        node          TEXT,
+        mode          TEXT NOT NULL DEFAULT 'view',
+        seen_at       TEXT NOT NULL,
+        PRIMARY KEY (workspace_id, client_id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_web_atlas_presence_seen ON web_atlas_presence(seen_at)",
+)
+
+
+# Workspaces (adr-workspaces.md). ``workspace_id`` *is* the immutable slug
+# (used in paths and the ``X-Ovid2-Workspace`` header); ``display_name`` is
+# editable. A membership's ``ws_role`` is ``member`` or ``admin`` — the
+# latter may manage that workspace's members and nothing else; what a member
+# may *do* is still their global role.
+_WEB_WORKSPACES_DDL: tuple[str, ...] = (
+    """
+    CREATE TABLE IF NOT EXISTS web_workspaces (
+        workspace_id   TEXT PRIMARY KEY,
+        display_name   TEXT NOT NULL,
+        description    TEXT NOT NULL DEFAULT '',
+        status         TEXT NOT NULL DEFAULT 'active',
+        created_by     TEXT NOT NULL,
+        created_at     TEXT NOT NULL,
+        updated_at     TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS web_workspace_members (
+        workspace_id   TEXT NOT NULL,
+        user_id        TEXT NOT NULL,
+        ws_role        TEXT NOT NULL DEFAULT 'member',
+        added_by       TEXT NOT NULL,
+        added_at       TEXT NOT NULL,
+        PRIMARY KEY (workspace_id, user_id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_web_workspace_members_user ON web_workspace_members(user_id)",
+)
+
+#: Row tables that carry a ``workspace_id`` column (added idempotently; every
+#: pre-workspace row lands in ``default``). Pinned by
+#: ``tests/contract/test_workspace_scoped_queries.py``.
+WORKSPACE_SCOPED_TABLES: tuple[str, ...] = (
+    "web_jobs",
+    "web_workflow_runs",
+    "web_report_sources",
+    "web_reports",
+    "web_report_templates",
+    "web_approvals",
+    "web_audit",
+    "web_llm_sessions",
+    "web_run_items",
+    "web_atlas_layouts",
+    "web_atlas_presence",
+)
+
+
+def _add_column(conn: sqlite3.Connection, table: str, col: str, col_type: str) -> None:
+    """``ALTER TABLE … ADD COLUMN`` unless the column already exists."""
+    existing = {str(r[1]) for r in conn.execute("PRAGMA table_info(" + table + ")")}
+    if col not in existing:
+        with contextlib.suppress(sqlite3.OperationalError):
+            conn.execute("ALTER TABLE " + table + " ADD COLUMN " + col + " " + col_type)
+
+
+def _ensure_workspace_schema(conn: sqlite3.Connection) -> None:
+    """Create the workspace tables, scope columns and the ``default`` workspace.
+
+    Idempotent. The first run (upgrade) also enrols every *active* user in
+    ``default`` so nobody loses access; later activations enrol through
+    :func:`ovid2.web.services.workspaces_svc.enrol_default`.
+    """
+    for stmt in _WEB_WORKSPACES_DDL:
+        conn.execute(stmt)
+    for table in WORKSPACE_SCOPED_TABLES:
+        _add_column(conn, table, "workspace_id", "TEXT NOT NULL DEFAULT 'default'")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS ix_" + table + "_workspace ON " + table + "(workspace_id)"
+        )
+    _add_column(conn, "web_sessions", "active_workspace_id", "TEXT")
+    _add_column(conn, "web_users", "last_workspace_id", "TEXT")
+    now = datetime.now(UTC).isoformat()
+    created = conn.execute(
+        "INSERT OR IGNORE INTO web_workspaces "
+        "(workspace_id, display_name, description, status, created_by, created_at, updated_at) "
+        "VALUES ('default', 'Default', '', 'active', 'migration', ?, ?)",
+        (now, now),
+    ).rowcount
+    if created:
+        conn.execute(
+            "INSERT OR IGNORE INTO web_workspace_members "
+            "(workspace_id, user_id, ws_role, added_by, added_at) "
+            "SELECT 'default', user_id, 'member', 'migration', ? FROM web_users "
+            "WHERE status = 'active'",
+            (now,),
+        )
+
+
+#: Seconds a connection waits for another writer's lock before raising
+#: ``database is locked``. The web server, the worker and every job's
+#: ``ovid2`` process share this file; without a wait a single overlapping
+#: write crashed the worker (and SIGTERMed every running job).
+BUSY_TIMEOUT_S = 30.0
+
+
+def _open(path: Path) -> sqlite3.Connection:
+    """Open ``path`` in auto-commit mode with a busy wait and WAL."""
+    # ``timeout`` sets SQLite's busy handler (= PRAGMA busy_timeout).
+    conn = sqlite3.connect(path, isolation_level=None, timeout=BUSY_TIMEOUT_S)
+    try:
+        if conn.execute("PRAGMA journal_mode").fetchone()[0].lower() != "wal":
+            conn.execute("PRAGMA journal_mode = WAL")
+    except sqlite3.Error:
+        conn.close()
+        raise
+    return conn
+
+
 def ensure_schema() -> None:
     """Create web-tier tables and indexes if they do not already exist."""
     path = web_db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path, isolation_level=None)
+    conn = _open(path)
     try:
-        conn.execute("PRAGMA journal_mode = WAL")
         for stmt in _REPORT_STUDIO_DDL:
             conn.execute(stmt)
         conn.execute(_WEB_JOBS_DDL)
@@ -454,6 +620,10 @@ def ensure_schema() -> None:
         conn.execute(_WEB_PIPELINE_RUNS_DDL)
         for stmt in _WEB_PIPELINE_RUNS_INDEXES:
             conn.execute(stmt)
+        conn.execute(_WEB_RUN_ITEMS_DDL)
+        # Start of the item's current *active* segment (multi-phase runs
+        # pause a table between phases — see ``run_items_svc``).
+        _add_column(conn, "web_run_items", "active_since", "TEXT")
         conn.execute(_WEB_USERS_DDL)
         for stmt in _WEB_USERS_INDEXES:
             conn.execute(stmt)
@@ -463,6 +633,9 @@ def ensure_schema() -> None:
         conn.execute(_WEB_USER_PREFS_DDL)
         for stmt in _WEB_LLM_SESSIONS_DDL:
             conn.execute(stmt)
+        for stmt in _WEB_ATLAS_DDL:
+            conn.execute(stmt)
+        _ensure_workspace_schema(conn)
     finally:
         conn.close()
     logger.info("Ovid2 web-tier schema ensured at %s", path)
@@ -476,10 +649,9 @@ def connect() -> Iterator[sqlite3.Connection]:
     name. Journal mode is WAL and ``isolation_level=None`` (auto-commit),
     matching the scheduler's usage.
     """
-    conn = sqlite3.connect(web_db_path(), isolation_level=None)
+    conn = _open(web_db_path())
     conn.row_factory = sqlite3.Row
     try:
-        conn.execute("PRAGMA journal_mode = WAL")
         yield conn
     finally:
         conn.close()
@@ -504,12 +676,19 @@ def audit(
         before_hash: Optional pre-mutation content hash.
         after_hash: Optional post-mutation content hash.
         detail_json: Optional serialized JSON payload with extra context.
+
+    The row is stamped with the active workspace
+    (:func:`ovid2.workspaces.active_workspace`).
     """
+    from ovid2.web.request_context import resolve_actor
+    from ovid2.workspaces import active_workspace
+
+    actor = resolve_actor(actor)
     with connect() as conn:
         conn.execute(
             "INSERT INTO web_audit "
-            "(ts, actor, action, target, before_hash, after_hash, detail_json) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "(ts, actor, action, target, before_hash, after_hash, detail_json, workspace_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 datetime.now(UTC).isoformat(),
                 actor,
@@ -518,5 +697,22 @@ def audit(
                 before_hash,
                 after_hash,
                 detail_json,
+                active_workspace(),
             ),
         )
+
+
+def state_key(name: str, workspace: str | None = None) -> str:
+    """Return the key a per-name state row is stored under.
+
+    ``web_pipelines_state`` / ``web_workflows_state`` / ``web_watch_cursors``
+    are keyed by resource name. Two workspaces may both own a pipeline
+    called ``nightly``, so a non-default workspace's rows are namespaced
+    ``<slug>::<name>`` (resource names never contain ``::``); the
+    ``default`` workspace keeps the bare historical key, so upgrading
+    rewrites nothing.
+    """
+    from ovid2.workspaces import DEFAULT_WORKSPACE, active_workspace
+
+    ws = workspace or active_workspace()
+    return name if ws == DEFAULT_WORKSPACE else f"{ws}::{name}"
